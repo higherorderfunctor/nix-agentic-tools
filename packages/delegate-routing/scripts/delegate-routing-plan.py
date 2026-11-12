@@ -367,6 +367,17 @@ def collect(readers, now, shell, run=run_reader):
                     proc = run(argv, capture_output=True, text=True, timeout=READER_TIMEOUT)
                 if proc.returncode:
                     result = {"reason": f"Reader exited {proc.returncode}", "status": "unreachable"}
+                    # Only this closed diagnostic is safe on failed Reader stdout.
+                    # Arbitrary JSON, names and stderr never reach the warning.
+                    try:
+                        detail = json.loads(proc.stdout)
+                    except ValueError:
+                        pass  # Retain the observed exit failure, not parsed inventory.
+                    else:
+                        if (isinstance(detail, dict) and set(detail) == {"count", "reason"}
+                                and detail["reason"] == "unpriced-models"
+                                and type(detail["count"]) is int and detail["count"] > 0):
+                            result.update(detail)
                 else:
                     result = measure(proc.stdout, now)
             except subprocess.TimeoutExpired:
@@ -396,7 +407,10 @@ def pool_diagnostics(readers, pools):
         for window, reason in sorted(pool.get("windowErrors", {}).items()):
             warnings.append(warning(f"{name}: window {window} pace dropped: {reason}"))
     for names in sorted(failures.values()):
-        reason = pools[names[0]]["reason"]
+        pool = pools[names[0]]
+        reason = pool["reason"]
+        if reason == "unpriced-models":
+            reason = f"{pool['count']} models have no price in CPA Manager"
         warnings.append(warning(f"Reader for {', '.join(names)} failed: {reason}"))
     return warnings
 

@@ -1039,6 +1039,36 @@ class Routing(unittest.TestCase):
                 result, _ = self.run_plan(config, context(names=("sol", "other")), outputs=outputs)
                 self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["other"])
 
+    def test_unpriced_reader_diagnostic_is_closed_and_safe(self):
+        # Wrong: structured nonzero stdout is discarded or arbitrary detail leaks.
+        cases = [
+            ('{"count":2,"reason":"unpriced-models"}', {"count": 2, "reason": "unpriced-models", "status": "unreachable"}, "2 models have no price in CPA Manager"),
+            ('{"count":true,"reason":"unpriced-models"}', None, None),
+            ('{"count":0,"reason":"unpriced-models"}', None, None),
+            ('{"count":-1,"reason":"unpriced-models"}', None, None),
+            ('{"count":1.5,"reason":"unpriced-models"}', None, None),
+            ('{"count":"2","reason":"unpriced-models"}', None, None),
+            ('{"count":2,"reason":"secret-model"}', None, None),
+            ('{"count":2,"reason":"unpriced-models","model":"secret-model"}', None, None),
+            ('{"reason":"unpriced-models"}', None, None),
+            ('[]', None, None),
+            ('null', None, None),
+            ('secret-model', None, None),
+            ('{"count":2,"reason":"unpriced-models"} {}', None, None),
+        ]
+        for stdout, expected, message in cases:
+            with self.subTest(stdout=stdout):
+                config = manifest()
+                for reader in config["readers"]:
+                    reader["command"] = "reader-outside"
+                result, calls = self.run_plan(config, outputs={"reader-outside": subprocess.CompletedProcess("secret-command", 1, stdout, "secret-model secret-stderr")})
+                self.assertEqual(calls, ["reader-outside", "reader-outside"])
+                self.assertEqual(result["pools"]["outside"], expected or {"reason": "Reader exited 1", "status": "unreachable"})
+                self.assertEqual([w for w in result["warnings"] if "Reader for" in w],
+                                 [f"WARNING: Reader for hidden, outside, session failed: {message or 'Reader exited 1'}. Report this failure to the user."])
+                self.assertEqual(result["roles"]["writer"]["candidates"], [])
+                self.assertNotIn("secret-", json.dumps(result))
+
     def test_unmeasured_envelopes_and_exhausted_preference(self):
         # Wrong: exhaustion suppresses an independently observed unbound route.
         config = manifest([route(), route("unbound", pool=None)])
@@ -1090,17 +1120,18 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             config = manifest()
             for reader in config["readers"]:
-                reader["command"] = "printf '%s' 'private-reader-stderr' >&2; exit 7"
+                reader["command"] = "printf '%s' '{\"count\":2,\"reason\":\"unpriced-models\"}'; printf '%s' 'private-reader-stderr' >&2; exit 1"
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text(json.dumps(context()))
             proc = subprocess.run([sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--launch-context", str(root / "context.json"), "--reader-shell", SHELL, "--role", "writer", "--now", NOW.isoformat()], capture_output=True, text=True)
             result = json.loads(proc.stdout)
             self.assertEqual(proc.returncode, 1)
             self.assertEqual(result["roles"]["writer"]["candidates"], [])
+            self.assertEqual(result["pools"]["outside"], {"count": 2, "reason": "unpriced-models", "status": "unreachable"})
             for warning in result["warnings"]:
                 self.assertEqual(proc.stderr.count(warning), int(warning.startswith("WARNING:")))
-            self.assertTrue(proc.stderr.startswith("WARNING: Reader for hidden, outside, session failed: Reader exited 7."))
-            self.assertIn("WARNING: Reader for hidden, outside, session failed: Reader exited 7. Report this failure to the user.\n", proc.stderr)
+            self.assertTrue(proc.stderr.startswith("WARNING: Reader for hidden, outside, session failed: 2 models have no price in CPA Manager."))
+            self.assertIn("WARNING: Reader for hidden, outside, session failed: 2 models have no price in CPA Manager. Report this failure to the user.\n", proc.stderr)
             self.assertNotIn("private-reader-stderr", proc.stdout + proc.stderr)
 
     def test_inventory_one_snapshot_and_only_registered_commands(self):
@@ -1701,4 +1732,4 @@ class Routing(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

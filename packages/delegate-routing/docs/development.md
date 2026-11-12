@@ -675,9 +675,26 @@ has `usedPercent`, `remainingPercent`, a UTC RFC 3339 `resetsAt` (null only for
 an unstarted window at 0%, which z.ai reports without a reset time), `status`
 and `windowSeconds`; names derive from the duration (`5h`, `7d`, `monthly` for
 28–31 days, otherwise `<seconds>s`, with `:<model>` for scoped windows); missing
-windows are absent, and balances and bonuses are arrays. Codex reset credits
-carry expiry dates when available; if the extra proxy request fails, the helper
-still reports their count.
+windows are absent, and balances and bonuses are arrays. Claude and Codex also
+report `missingExtras` diagnostics; missing inventory is never a measured zero.
+Claude reads `GET /api/oauth/usage?cedar_ember=1&skip_spend=1` with its
+installed CLI version header, then the OAuth profile and organization prepaid
+credits. Actual promotional and purchased lots supply wallet balances;
+cap-minus-spend is not a wallet. Grants retain their opaque `handle`, remaining
+reset count, expiry, usability and observed `clears` targets. Only
+`gives_back_weekly=true` with `seven_day_overage_included` identifies the Fable
+target. Natural weekly reset times remain unchanged. Account-grant coverage of
+Fable and automatic free weekly resets remain unknown; no Reader redeems a
+grant.
+
+Codex requires an integer applicable count and supported available, unexpired
+detail rows. It selects exactly that many lots in chronological expiry order,
+preserving fractional seconds, with whole-pool `scope=null`. Insufficient or
+malformed details produce a diagnostic instead of guessing from inventory count.
+`DELEGATE_USAGE_NOW` freezes expiry eligibility at Unix seconds for offline
+fixtures; otherwise the Reader uses the current clock. Bonus lots carry
+`remaining`, `unit`, `funding`, `scope`, `usable` and `expiresAt`; wallet lots
+carry the same amount/provenance fields without `usable`.
 
 ### Proxy accounted usage
 
@@ -710,6 +727,13 @@ and coverage is judged from those analytics rows, not a price book. Calls that
 used no tokens cost nothing legitimately. A display model that merges a priced
 and an unpriced billing model shows a positive total and is not detected; that
 is the limit of the estimate, which is why the window's status is `estimated`.
+
+An unpriced-model failure emits only `{"count":N,"reason":"unpriced-models"}` on
+stdout and `N models have no price in CPA Manager` in its safe error. The
+routing helper preserves this reason and positive integer count in pool JSON and
+its shared-command warning. It accepts only those two diagnostic fields;
+malformed or absent diagnostics retain `Reader exited N`. Arbitrary stdout,
+stderr, account identities and model names never enter the warning.
 
 A consumer example with placeholder values:
 

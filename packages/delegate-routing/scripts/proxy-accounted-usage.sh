@@ -214,8 +214,10 @@ if ((proxy_usage_from < proxy_usage_current)); then
   proxy_usage_unpriced=$(jq -r '[.model_stats[]?
                                  | select(.total_tokens > 0 and .cost == 0)] | length' \
     <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
-  [[ $proxy_usage_unpriced == 0 ]] ||
-    usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
+  if [[ $proxy_usage_unpriced != 0 ]]; then
+    jq -cn --argjson count "$proxy_usage_unpriced" '{count: $count, reason: "unpriced-models"}'
+    usage_cpa_error "$proxy_usage_unpriced models have no price in CPA Manager"
+  fi
 else
   # The reset instant itself: an empty range, which Manager+ rejects, and
   # nothing has been spent in the new window yet.

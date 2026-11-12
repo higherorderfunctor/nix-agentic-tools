@@ -31,13 +31,28 @@ CLAUDE = {
     "spend": {"used": {"amount_minor": 1250, "currency": "USD", "exponent": 2},
               "limit": {"amount_minor": 20000, "currency": "USD", "exponent": 2}},
     "promo_credits": None,
+    "cedar_ember": {"eligible": True, "grants": []},
 }
+# Synthetic values, with keys from the sanitized OAuth profile/prepaid captures.
+CLAUDE_PROFILE = {"organization": {"uuid": "11111111-2222-3333-4444-555555555555"}}
+CLAUDE_PREPAID = {
+    "balance": {"money": None, "credits": {"amount_minor": 26089, "exponent": 2}},
+    "currency": "USD", "next_expires_at": RESET,
+    "promo_tranches": [{"remaining_amount_minor_units": 1089, "currency": "USD", "expires_at": RESET,
+                        "granted_amount_minor_units": 1089}],
+    "tranches": [{"remaining_amount_minor_units": 25000, "currency": "USD", "expires_at": None,
+                  "granted_amount_minor_units": 25000}],
+}
+CLAUDE_BALANCES = [
+    {"kind": "usage_credit", "funding": "promotional", "remaining": 10.89, "unit": "USD", "expiresAt": RESET, "scope": None},
+    {"kind": "usage_credit", "funding": "purchased", "remaining": 250, "unit": "USD", "expiresAt": None, "scope": None},
+]
 CODEX = {
     "plan_type": "test-plan",
     "rate_limit": {"primary_window": {"used_percent": 37, "reset_at": 1900000000, "limit_window_seconds": 604800},
                    "secondary_window": {"used_percent": 7, "reset_at": 1900000000, "limit_window_seconds": 18000}},
     "credits": {"has_credits": True, "balance": "1234.5000000000"},
-    "rate_limit_reset_credits": {"available_count": 2},
+    "rate_limit_reset_credits": {"available_count": 2, "applicable_available_count": 2},
 }
 CODEX_DIRECT = {
     "rateLimits": {
@@ -46,14 +61,14 @@ CODEX_DIRECT = {
         "secondary": {"usedPercent": 8, "resetsAt": 1900000000, "windowDurationMins": 300},
         "credits": {"hasCredits": True, "balance": "1234.5000000000"},
     },
-    "rateLimitResetCredits": {"availableCount": 2, "credits": [
-        {"status": "available", "expiresAt": 1900000000},
-        {"status": "available", "expiresAt": 1900000060},
+    "rateLimitResetCredits": {"availableCount": 2, "applicableAvailableCount": 2, "credits": [
+        {"status": "available", "isSupportedByPlan": True, "expiresAt": 1900000000},
+        {"status": "available", "isSupportedByPlan": True, "expiresAt": 1900000060},
     ]},
 }
 CODEX_RESETS = {"available_count": 2, "credits": [
-    {"status": "available", "expires_at": "2030-03-17T17:46:40.987654Z"},
-    {"status": "available", "expires_at": "2030-03-17T18:47:40+01:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2030-03-17T17:46:40.987654Z"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2030-03-17T18:47:40+01:00"},
 ]}
 ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
@@ -96,12 +111,21 @@ class UsageTests(unittest.TestCase):
         self.helpers["proxy"] = str(proxy)
         self.key = self.home / "management-key"
         self.key.write_text(SECRET + "\n")
+        binary = self.home / "version-bin"
+        binary.mkdir()
+        cli = binary / "claude"
+        cli.write_text(f"#!{sys.executable}\nimport sys\nassert sys.argv[1:] == ['--version']\nprint('2.1.99 (Claude Code)')\n")
+        cli.chmod(0o755)
+        self.version_bin = binary
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
         self.configs = {"claude": [], "openai-compatibility": []}
         self.requests = []
         self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zai": ZAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
+        self.claude_failure = {}
+        self.claude_profile = copy.deepcopy(CLAUDE_PROFILE)
+        self.claude_prepaid = copy.deepcopy(CLAUDE_PREPAID)
         self.management_redirect = None
         self.management_status = 200
         self.envelope = None
@@ -142,7 +166,22 @@ class UsageTests(unittest.TestCase):
                         self.send_error(404)
                         return
                 elif self.path == "/v0/management/api-call":
-                    if body["url"].endswith("/rate-limit-reset-credits"):
+                    if body["url"].endswith(("/profile", "/prepaid/credits")):
+                        endpoint = "profile" if body["url"].endswith("/profile") else "prepaid"
+                        failure = owner.claude_failure.get(endpoint)
+                        if failure == "transport":
+                            self.close_connection = True
+                            return
+                        if failure == "management":
+                            self.send_error(503)
+                            return
+                        data = owner.claude_profile if endpoint == "profile" else owner.claude_prepaid
+                        response = {"status_code": 503 if failure == "vendor" else 200,
+                                    "body": "private-response-body" if failure == "invalid_json" else json.dumps(data)}
+                        if failure == "malformed":
+                            response = {}
+                    elif body["url"].endswith("/rate-limit-reset-credits"):
+
                         if owner.reset_failure == "transport":
                             self.close_connection = True
                             return
@@ -176,7 +215,8 @@ class UsageTests(unittest.TestCase):
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("DELEGATE_USAGE_CPA_", "MANAGER_"))}
-        self.env.update(HOME=str(self.home), TZ="America/Denver")
+        self.env.update(HOME=str(self.home), TZ="America/Denver", DELEGATE_USAGE_NOW="1794700800",
+                        PATH=str(self.version_bin) + os.pathsep + self.env["PATH"])
 
     @staticmethod
     def account(provider, index, **extra):
@@ -204,7 +244,7 @@ class UsageTests(unittest.TestCase):
         return result
 
     def assert_schema(self, value, vendor):
-        self.assertEqual(set(value), {"pool", "account", "windows", "balances", "bonuses"})
+        self.assertEqual(set(value), {"pool", "account", "windows", "balances", "bonuses"} | ({"missingExtras"} if vendor in ("claude", "codex") else set()))
         self.assertEqual(value["pool"], vendor)
         self.assertEqual(set(value["account"]), {"auth_index", "name", "plan"})
         for field in value["account"].values():
@@ -224,10 +264,12 @@ class UsageTests(unittest.TestCase):
                 self.assertEqual(window["usedPercent"], 0)
             else:
                 self.assert_utc(window["resetsAt"])
-        for field, amount in [("balances", "remaining"), ("bonuses", "count")]:
+        for field, amount in [("balances", "remaining"), ("bonuses", "remaining")]:
             self.assertIsInstance(value[field], list)
             for entry in value[field]:
-                expected = {"kind", amount, "expiresAt"} | ({"unit"} if field == "balances" else set())
+                expected = {"kind", amount, "expiresAt", "funding", "scope", "unit"} | ({"usable"} if field == "bonuses" else set())
+                if vendor == "claude" and field == "bonuses":
+                    expected.add("handle")
                 self.assertEqual(set(entry), expected)
                 self.assertIsInstance(entry["kind"], str)
                 self.assertIsInstance(entry[amount], (int, float))
@@ -237,8 +279,8 @@ class UsageTests(unittest.TestCase):
                     self.assert_utc(entry["expiresAt"])
 
     def assert_utc(self, value):
-        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-        datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
+        datetime.fromisoformat(value)
 
     def direct_codex(self, usage=None):
         # The real direct helper must still initialize app-server and request the
@@ -450,9 +492,9 @@ for line in sys.stdin:
                 result = self.run_proxy(*self.proxy_command())
                 if count:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(result.stderr, f"usage: proxy analytics contain {count} unpriced models\n")
-                    self.assertNotIn("claude-mystery-5", result.stderr)
-                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.stderr, f"usage: proxy {count} models have no price in CPA Manager\n")
+                    self.assertEqual(json.loads(result.stdout), {"count": count, "reason": "unpriced-models"})
+                    self.assertNotIn("claude-mystery-5", result.stdout + result.stderr)
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
         # The rows that judge coverage must themselves be well typed.
@@ -670,8 +712,8 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
                     if method == "POST":
                         self.assertEqual(body["header"]["Authorization"], "Bearer $TOKEN$")
                         self.assertEqual(body["method"], "GET")
-                        expected_url = "https://api.anthropic.com/api/oauth/usage" if vendor == "claude" else "https://chatgpt.com/backend-api/wham/usage"
-                        self.assertIn(body["url"], [expected_url] + (["https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"] if vendor == "codex" else []))
+                        expected_url = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1" if vendor == "claude" else "https://chatgpt.com/backend-api/wham/usage"
+                        self.assertIn(body["url"], [expected_url] + (["https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"] if vendor == "codex" else ["https://api.anthropic.com/api/oauth/profile", "https://api.anthropic.com/api/oauth/organizations/11111111-2222-3333-4444-555555555555/prepaid/credits"]))
                 if vendor == "claude":
                     self.assertEqual(values[0]["windows"]["5h"]["usedPercent"], 23)
                     self.assertEqual(self.requests[1][3]["header"]["anthropic-beta"], "oauth-2025-04-20")
@@ -798,7 +840,59 @@ print({json.dumps(json.dumps(ZAI))})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid vendor usage response", result.stderr)
 
-    def test_claude_windows_spend_and_optional_promo(self):
+    def test_claude_capacity_projection(self):
+        # Wrong: cap headroom becomes a wallet, grant handles or targets disappear,
+        # or malformed optional inventory becomes measured zero. Real-shaped
+        # grant/tranche keys use synthetic values.
+        usage = copy.deepcopy(CLAUDE)
+        usage["cedar_ember"] = {"grants": [
+            {"id": "weekly-grant", "resets_left": 1, "ends_at": "2030-03-18T00:00:00+00:00", "clears": ["seven_day", "seven_day_overage_included"], "gives_back_weekly": False, "usable_now": True},
+            {"id": "fable-grant", "resets_left": 2, "ends_at": RESET, "clears": ["seven_day_overage_included"], "gives_back_weekly": True, "usable_now": False},
+            {"id": "unknown-grant", "resets_left": 9, "ends_at": RESET, "clears": ["unknown"], "usable_now": True},
+        ]}
+        prepaid = {"promo_tranches": [{"remaining_amount_minor_units": 1089, "currency": "USD", "expires_at": RESET}],
+                   "tranches": [{"remaining_amount_minor_units": 25000, "currency": "USD", "expires_at": None}]}
+        def project(body=usage, lots=prepaid):
+            return subprocess.run([shutil.which("bash"), "-c", 'set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nsource "$1"\nusage_project claude null null "$2"', "projection", str((SCRIPTS / "usage-cpa.sh").resolve()), json.dumps(lots)], input=json.dumps(body), text=True, capture_output=True)
+        result = project()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["balances"], [
+            {"kind": "usage_credit", "funding": "promotional", "remaining": 10.89, "unit": "USD", "expiresAt": RESET, "scope": None},
+            {"kind": "usage_credit", "funding": "purchased", "remaining": 250, "unit": "USD", "expiresAt": None, "scope": None}])
+        self.assertEqual(value["bonuses"], [
+            {"kind": "rate_limit_reset", "funding": "promotional", "remaining": 1, "unit": "resets", "expiresAt": "2030-03-18T00:00:00Z", "scope": ["7d"], "usable": True, "handle": "weekly-grant"},
+            {"kind": "rate_limit_reset", "funding": "promotional", "remaining": 2, "unit": "resets", "expiresAt": RESET, "scope": ["7d:fable"], "usable": False, "handle": "fable-grant"}])
+        self.assertEqual(json.loads(project(lots=None).stdout)["balances"], [])
+        self.assertEqual(sum(lot["remaining"] for lot in value["balances"]), 260.89)
+        self.assertEqual(value["windows"]["7d"]["resetsAt"], "2030-03-17T17:46:40Z")
+        body = copy.deepcopy(usage)
+        body["cedar_ember"]["grants"] = [{"id": "full-grant", "resets_left": 3,
+            "ends_at": RESET, "clears": ["seven_day", "five_hour"],
+            "gives_back_weekly": False, "usable_now": True}]
+        self.assertEqual(json.loads(project(body=body).stdout)["bonuses"], [
+            {"kind": "rate_limit_reset", "funding": "promotional", "remaining": 3,
+             "unit": "resets", "expiresAt": "2030-03-17T17:46:40Z", "scope": ["5h", "7d"],
+             "usable": True, "handle": "full-grant"}])
+        for key, bad in [("remaining_amount_minor_units", True), ("remaining_amount_minor_units", -1), ("currency", "EUR"), ("expires_at", "invalid")]:
+            lots = copy.deepcopy(prepaid)
+            lots["promo_tranches"][0][key] = bad
+            with self.subTest(key=key, bad=bad):
+                self.assertNotEqual(project(lots=lots).returncode, 0)
+
+        for lots in [{}, {"promo_tranches": None, "tranches": []}, {"promo_tranches": [], "tranches": "invalid"}]:
+            self.assertNotEqual(project(lots=lots).returncode, 0)
+        for key, bad in [("id", None), ("id", ""), ("clears", [1]), ("resets_left", True), ("resets_left", -1), ("resets_left", 1.5), ("usable_now", 1), ("clears", None), ("ends_at", "invalid")]:
+            body = copy.deepcopy(usage)
+            body["cedar_ember"]["grants"][0][key] = bad
+            with self.subTest(key=key, bad=bad):
+                self.assertNotEqual(project(body=body).returncode, 0)
+        body = copy.deepcopy(usage)
+        body["seven_day"] = None
+        body["limits"] = []
+        self.assertEqual(json.loads(project(body=body).stdout)["bonuses"], [])
+
+    def test_claude_windows_ignore_spend_and_legacy_promo(self):
         value = json.loads(self.run_helper("claude").stdout)
         self.assertEqual(set(value["windows"]), {"5h", "7d", "7d:opus", "7d:fable"})
         self.assertEqual(value["windows"]["5h"]["resetsAt"], RESET)
@@ -806,7 +900,8 @@ print({json.dumps(json.dumps(ZAI))})
         self.assertEqual(value["windows"]["7d:opus"]["usedPercent"], 12)
         self.assertEqual(value["windows"]["7d:fable"]["usedPercent"], 32)
         self.assertEqual(value["windows"]["7d:fable"]["status"], "inactive")
-        self.assertEqual(value["balances"], [{"kind": "extra_usage", "remaining": 187.5, "unit": "USD", "expiresAt": None}])
+        self.assertEqual(value["balances"], CLAUDE_BALANCES)
+        self.assertEqual(value["missingExtras"], [])
         self.assertIsNone(value["account"]["plan"])
         self.assertEqual(value["bonuses"], [])
         usage = self.usage["claude"]
@@ -814,38 +909,128 @@ print({json.dumps(json.dumps(ZAI))})
                      seven_day_sonnet={"utilization": 18, "resets_at": "2030-03-17T10:46:40-07:00"}, spend=None)
         usage["limits"][1]["is_active"] = True
         for promo, expected in [(None, []), ([], []), ("unknown", []), (2, []), ({"unknown": 3}, []),
-                                ({"count": 4}, [{"kind": "promo_credits", "count": 4, "expiresAt": None}])]:
+                                ({"count": 4}, [])]:
             with self.subTest(promo=promo):
                 usage["promo_credits"] = promo
                 value = json.loads(self.run_helper("claude").stdout)
                 self.assertEqual(set(value["windows"]), {"7d:sonnet", "7d:fable"})
                 self.assertEqual(value["windows"]["7d:sonnet"]["resetsAt"], RESET)
                 self.assertEqual(value["windows"]["7d:fable"]["status"], "active")
-                self.assertEqual(value["balances"], [])
+                self.assertEqual(value["balances"], CLAUDE_BALANCES)
                 self.assertEqual(value["bonuses"], expected)
 
-    def test_direct_claude_matches_proxy(self):
+    def direct_claude(self):
         credentials = self.home / "claude"
-        credentials.mkdir()
+        credentials.mkdir(exist_ok=True)
         (credentials / ".credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "direct-fixture-token"}}))
         executable = self.home / "bin/curl"
-        executable.parent.mkdir()
-        executable.write_text(f"#!{sys.executable}\n" + f'''import sys
+        executable.parent.mkdir(exist_ok=True)
+        responses = {
+            "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1": self.usage["claude"],
+            "https://api.anthropic.com/api/oauth/profile": self.claude_profile,
+            "https://api.anthropic.com/api/oauth/organizations/11111111-2222-3333-4444-555555555555/prepaid/credits": self.claude_prepaid,
+        }
+        executable.write_text(f"#!{sys.executable}\n" + f'''import json, sys
 config = sys.stdin.read()
-assert "Authorization: Bearer direct-fixture-token" in config
-assert "--config" in sys.argv
-assert "direct-fixture-token" not in " ".join(sys.argv)
-print({json.dumps(json.dumps(CLAUDE))})
+# Do not print request config or response payloads, even on assertion failures.
+if not all(item in config for item in ["Authorization: Bearer direct-fixture-token",
+    "User-Agent: claude-cli/2.1.99 (external, cli)", "anthropic-beta: oauth-2025-04-20"]):
+    raise SystemExit(1)
+if "--config" not in sys.argv or "direct-fixture-token" in " ".join(sys.argv):
+    raise SystemExit(1)
+url = next(line.split('"')[1] for line in config.splitlines() if line.startswith("url = "))
+responses = json.loads({json.dumps(json.dumps(responses))})
+if url not in responses:
+    raise SystemExit(1)
+endpoint = "profile" if url.endswith("/profile") else "prepaid" if url.endswith("/prepaid/credits") else "usage"
+failure = json.loads({json.dumps(json.dumps(self.claude_failure))}).get(endpoint)
+if failure in ["transport", "management", "vendor", "malformed"]:
+    raise SystemExit(1)
+with open({str(self.home / "direct-urls")!r}, "a") as output:
+    output.write(url + "\\n")
+print("private-response-body" if failure == "invalid_json" else json.dumps(responses[url]))
 ''')
         executable.chmod(0o755)
-        direct = self.run_helper("claude", cpa=False, CLAUDE_CONFIG_DIR=str(credentials), PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
+        return self.run_helper("claude", cpa=False, CLAUDE_CONFIG_DIR=str(credentials), PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
+
+    def test_direct_claude_matches_proxy(self):
+        direct = self.direct_claude()
         self.assertEqual(direct.returncode, 0, direct.stderr)
         self.assertNotIn("direct-fixture-token", direct.stdout + direct.stderr)
         value = json.loads(direct.stdout)
+        self.assertEqual(value["balances"], CLAUDE_BALANCES)
         self.assertEqual(value["account"], {"auth_index": None, "name": None, "plan": None})
         proxy = json.loads(self.run_helper("claude").stdout)
         proxy["account"] = value["account"]
         self.assertEqual(value, proxy)
+        urls = ["https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+                "https://api.anthropic.com/api/oauth/profile",
+                "https://api.anthropic.com/api/oauth/organizations/11111111-2222-3333-4444-555555555555/prepaid/credits"]
+        self.assertEqual((self.home / "direct-urls").read_text().splitlines(), urls)
+        calls = [body for _, path, _, body in self.requests if path.endswith("/api-call")]
+        self.assertEqual([body["url"] for body in calls], urls)
+        for body in calls:
+            self.assertEqual(body["header"]["User-Agent"], "claude-cli/2.1.99 (external, cli)")
+            self.assertEqual(body["header"]["anthropic-beta"], "oauth-2025-04-20")
+            self.assertEqual(body["auth_index"], "a")
+
+    def test_claude_optional_failures_preserve_usage(self):
+        # Wrong: optional endpoint failure fabricates zero funds or fails main usage.
+        for endpoint, reason in [("profile", "claude-prepaid-organization-unknown"), ("prepaid", "claude-prepaid-unavailable")]:
+            for failure in ["transport", "management", "vendor", "malformed", "invalid_json"]:
+                self.claude_failure = {endpoint: failure}
+                for cpa in [True, False]:
+                    with self.subTest(endpoint=endpoint, failure=failure, cpa=cpa):
+                        result = self.run_helper("claude") if cpa else self.direct_claude()
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stderr, "")
+                        value = json.loads(result.stdout)
+                        self.assertEqual(value["windows"]["7d"]["usedPercent"], 61)
+                        self.assertEqual(value["balances"], [])
+                        self.assertEqual(value["missingExtras"], [reason])
+                        self.assertNotIn("private-response-body", result.stdout + result.stderr)
+
+    def test_claude_invalid_profile_and_prepaid(self):
+        for profile in [{}, {"organization": {"uuid": None}}, {"organization": {"uuid": True}},
+                        {"organization": {"uuid": "../invalid"}}]:
+            self.claude_profile = profile
+            for cpa in [True, False]:
+                result = self.run_helper("claude") if cpa else self.direct_claude()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["missingExtras"], ["claude-prepaid-organization-unknown"])
+        self.claude_profile = copy.deepcopy(CLAUDE_PROFILE)
+        for prepaid in [None, {}, {"promo_tranches": {}, "tranches": []}, {"promo_tranches": None, "tranches": []},
+                        {"promo_tranches": [{"remaining_amount_minor_units": -1}], "tranches": []}]:
+            self.claude_prepaid = prepaid
+            for cpa in [True, False]:
+                result = self.run_helper("claude") if cpa else self.direct_claude()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                value = json.loads(result.stdout)
+                self.assertEqual(value["balances"], [])
+                self.assertEqual(value["missingExtras"], ["claude-prepaid-unavailable"])
+
+    def test_claude_missing_grants_are_diagnostic(self):
+        del self.usage["claude"]["cedar_ember"]
+        result = self.run_helper("claude")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["bonuses"], [])
+        self.assertEqual(value["missingExtras"], ["claude-grants-unavailable"])
+
+    def test_claude_version_failure_is_safe(self):
+        cli = self.version_bin / "claude"
+        for statement in ["raise SystemExit(1)", "print('invalid')", "print('2.1.99\\nprivate-response-body')"]:
+            cli.write_text(f"#!{sys.executable}\n{statement}\n")
+            for cpa in [True, False]:
+                # Direct credentials are synthetic; no machine login is consulted.
+                credentials = self.home / "version-credentials"
+                credentials.mkdir(exist_ok=True)
+                (credentials / ".credentials.json").write_text('{"claudeAiOauth":{"accessToken":"synthetic"}}')
+                result = self.run_helper("claude", cpa=cpa, CLAUDE_CONFIG_DIR=str(credentials))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("claude version unavailable or invalid", result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("private-response-body", result.stderr)
 
     def test_codex_balances_and_expiring_resets_on_both_paths(self):
         self.direct_codex()
@@ -860,10 +1045,92 @@ print({json.dumps(json.dumps(CLAUDE))})
                 self.assertEqual(value["windows"]["5h"]["usedPercent"], 7 if cpa else 8)
                 self.assertEqual(value["windows"]["7d"]["resetsAt"], RESET)
                 self.assertEqual(value["account"]["plan"], "test-plan" if cpa else None)
-                self.assertEqual(value["balances"], [{"kind": "credits", "remaining": 1234.5, "unit": "credits", "expiresAt": None}])
+                self.assertEqual(value["balances"], [{"kind": "credits", "funding": "unknown", "scope": None, "remaining": 1234.5, "unit": "credits", "expiresAt": None}])
                 self.assertEqual(value["bonuses"], [
-                    {"kind": "rate_limit_reset", "count": 1, "expiresAt": RESET},
-                    {"kind": "rate_limit_reset", "count": 1, "expiresAt": "2030-03-17T17:47:40Z"}])
+                    {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                     "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z" if cpa else "2030-03-17T17:46:40Z"},
+                    {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                     "remaining": 1, "expiresAt": "2030-03-17T17:47:40Z"}])
+
+    def test_codex_reset_eligibility_on_both_paths(self):
+        # Direct camelCase eligibility is a synthetic extension: app-server may
+        # omit these fields. Missing fields must never imply present eligibility.
+        cases = [
+            ("zero", 0, {}, None, []),
+            ("unsupported", 2, {"is_supported_by_plan": False}, "codex-reset-eligibility-unknown", []),
+            ("support-missing", 2, {"is_supported_by_plan": None}, "codex-reset-eligibility-unknown", []),
+            ("expired", 2, {"expires_at": "2000-01-01T00:00:00Z"}, "codex-reset-eligibility-unknown", []),
+            ("redeemed", 2, {"status": "redeemed"}, "codex-reset-eligibility-unknown", []),
+            ("not-available", 2, {"status": "pending"}, "codex-reset-eligibility-unknown", []),
+            ("missing", None, {}, "codex-reset-applicability-unknown", []),
+            ("fractional", 1.5, {}, "codex-reset-applicability-unknown", []),
+            ("negative", -1, {}, "codex-reset-applicability-unknown", []),
+            ("boolean", True, {}, "codex-reset-applicability-unknown", []),
+            ("too-few-lots", 3, {}, "codex-reset-eligibility-unknown", []),
+            ("string", "2", {}, "codex-reset-applicability-unknown", []),
+            ("invalid-expiry", 2, {"expires_at": "invalid"}, "codex-reset-details-unavailable", []),
+            ("missing-expiry", 2, {"expires_at": None}, "codex-reset-details-unavailable", []),
+            ("invalid-date", 2, {"expires_at": "2030-02-30T00:00:00Z"}, "codex-reset-details-unavailable", []),
+            # One applicable reset across two lots counts the earliest-expiring lot.
+            ("one-of-two", 1, {}, None, [
+                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z"}]),
+            # Chronological, not lexical: 40Z expires before 40.5Z.
+            ("fraction-order", 1, "fraction-order", None, [
+                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40Z"}]),
+            ("two-applicable", 2, {}, None, [
+                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z"},
+                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                 "remaining": 1, "expiresAt": "2030-03-17T17:47:40Z"}]),
+        ]
+        for cpa in [True, False]:
+            for name, applicable, patch, missing, expected in cases:
+                with self.subTest(cpa=cpa, case=name):
+                    self.usage["codex"] = copy.deepcopy(CODEX)
+                    self.resets = copy.deepcopy(CODEX_RESETS)
+                    # Apply the same eligibility change to every detail row.
+                    if patch == "fraction-order":
+                        self.resets["credits"][0]["expires_at"] = "2030-03-17T17:46:40.5Z"
+                        self.resets["credits"][1]["expires_at"] = "2030-03-17T17:46:40Z"
+                    else:
+                        for row in self.resets["credits"]:
+                            row.update(patch)
+                    self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = applicable
+                    if not cpa:
+                        usage = copy.deepcopy(CODEX_DIRECT)
+                        usage["rateLimitResetCredits"] = {
+                            "availableCount": 2, "applicableAvailableCount": applicable,
+                            "credits": [{key.replace("is_supported_by_plan", "isSupportedByPlan").replace("expires_at", "expiresAt"): val
+                                         for key, val in row.items()} for row in self.resets["credits"]]}
+                        self.direct_codex(usage)
+                    result = self.run_helper("codex", cpa=cpa)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    value = json.loads(result.stdout)
+                    self.assertEqual(value["bonuses"], expected)
+                    self.assertEqual(value["missingExtras"], [missing] if missing else [])
+
+    def test_codex_direct_missing_eligibility_and_numeric_expiry(self):
+        for omitted in ["applicableAvailableCount", "isSupportedByPlan", None]:
+            with self.subTest(omitted=omitted):
+                usage = copy.deepcopy(CODEX_DIRECT)
+                summary = usage["rateLimitResetCredits"]
+                summary["applicableAvailableCount"] = 2
+                if omitted == "applicableAvailableCount":
+                    del summary[omitted]
+                elif omitted:
+                    for row in summary["credits"]:
+                        del row[omitted]
+                self.direct_codex(usage)
+                value = json.loads(self.run_helper("codex", cpa=False).stdout)
+                if omitted:
+                    self.assertEqual(value["bonuses"], [])
+                else:
+                    self.assertEqual([row["expiresAt"] for row in value["bonuses"]],
+                                     [RESET, "2030-03-17T17:47:40Z"])
+                    self.assertTrue(all(row["usable"] is True and row["scope"] is None for row in value["bonuses"]))
+                    self.assertEqual(value["missingExtras"], [])
 
     def test_codex_optional_windows_credits_and_duration_names(self):
         for cpa in [True, False]:
@@ -900,6 +1167,7 @@ print({json.dumps(json.dumps(CLAUDE))})
         self.assertIn("invalid codex usage response", result.stderr)
 
     def test_codex_reset_details_fail_without_failing_usage(self):
+        self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = 2
         for failure in ["transport", "management", "vendor", "malformed", "invalid_json", "invalid_credits", "invalid_expiry"]:
             with self.subTest(failure=failure):
                 self.reset_failure = failure
@@ -911,7 +1179,8 @@ print({json.dumps(json.dumps(CLAUDE))})
                 self.assertEqual(result.stderr, "")
                 value = json.loads(result.stdout)
                 self.assertEqual(value["windows"]["7d"]["usedPercent"], 37)
-                self.assertEqual(value["bonuses"], [{"kind": "rate_limit_reset", "count": 2, "expiresAt": None}])
+                self.assertEqual(value["bonuses"], [])
+                self.assertIn("codex-reset-details-unavailable", value["missingExtras"])
 
 
     def test_opencode_transports_and_projection(self):
@@ -1085,4 +1354,4 @@ print({json.dumps(json.dumps(OPENCODE))})
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

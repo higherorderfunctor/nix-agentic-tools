@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # cspell:ignore fromdateiso noproxy todateiso
-readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
+readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
 readonly delegate_usage_opencode_url='https://opencode.ai/zen/go/v1/usage'
 readonly delegate_usage_zai_url='https://api.z.ai/api/monitor/usage/quota/limit'
@@ -15,7 +15,7 @@ declare -rA delegate_usage_api_keys=(
 # All usage techniques and the runtime fixtures read this common schema.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --argjson clock "${DELEGATE_USAGE_NOW:-null}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -46,13 +46,55 @@ usage_project() {
     def named_window($seconds; $scope; $used; $reset; $status):
       {key: (($seconds | duration) + (if $scope == null then "" else ":" + $scope end)),
        value: window($seconds; $used; $reset; $status)};
-    def bonuses($count):
-      if .credits != null then
-        [.credits[] | {kind: "rate_limit_reset", count: 1,
-                        expiresAt: ((.expires_at // .expiresAt) | if . == null then null else utc end)}]
-      elif ($count // 0) > 0 then
-        [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
-      else [] end;
+    def reset_bonus($remaining; $expiry; $funding; $scope; $usable):
+      {kind: "rate_limit_reset", remaining: $remaining, unit: "resets", funding: $funding,
+       scope: $scope, usable: $usable,
+       expiresAt: ($expiry | if . == null then null else utc end)};
+    # Applicability is a cap, never an attribution to an expiring inventory lot.
+    def codex_resets($summary):
+      def unavailable($reason): {bonuses: [], missingExtras: [$reason]};
+      def supported:
+        if has("is_supported_by_plan") then .is_supported_by_plan else .isSupportedByPlan end;
+      def expiry:
+        if type == "number" then utc else
+          . as $raw
+          | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") as $parts
+          | ($raw | utc | rtrimstr("Z")) + ($parts.fraction // "") + "Z"
+        end;
+      def valid_expiry:
+        if type == "number" then isfinite and floor == . and . >= 0 and . <= 253402300799
+        elif type != "string" then false
+        elif test("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$") | not then false
+        else .[0:19] + "Z" | . == (fromdateiso8601 | todateiso8601) end;
+      if (.credits | type) != "array" then unavailable("codex-reset-details-unavailable")
+      elif any(.credits[]; type != "object") then unavailable("codex-reset-details-unavailable")
+      elif any(.credits[]; (.expires_at // .expiresAt) | valid_expiry | not) then unavailable("codex-reset-details-unavailable") else
+        # Normalize all expiry values before selection; bad details never become
+        # an inventory-count fallback. Keep sub-second precision in emitted lots.
+        [.credits[] | . + {expiry: ((.expires_at // .expiresAt) | expiry)}] as $rows
+        | ($summary.applicable_available_count // $summary.applicableAvailableCount) as $count
+        | if ($count | type) != "number" or ($count | isfinite | not)
+            or $count < 0 or ($count | floor) != $count then
+            unavailable("codex-reset-applicability-unknown")
+          elif $count == 0 then {bonuses: [], missingExtras: []}
+          elif any($rows[]; (.status | type) != "string" or
+              (.status == "available" and (supported | type) != "boolean")) then
+            unavailable("codex-reset-eligibility-unknown")
+          else
+            [$rows[] | select(.status == "available")
+              | select(supported == true)
+              | . + {epoch: (.expiry | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?Z$")
+                  | (.date + "Z" | fromdateiso8601) + ("0" + (.fraction // "") | tonumber))}
+              | select(.epoch > ($clock // now))] as $eligible
+            # A Codex reset restores the 5-hour limit, the weekly limit, or both, so it
+            # covers the whole pool (scope null). The API reports only how many
+            # resets are applicable; count that many, earliest expiry first.
+            | if ($eligible | length) < $count then unavailable("codex-reset-eligibility-unknown") else
+              {bonuses: [$eligible | sort_by(.epoch) | .[:$count][]
+                  | reset_bonus(1; null; "unknown"; null; true) + {expiresAt: .expiry}],
+               missingExtras: []} end
+          end
+      end;
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -76,17 +118,39 @@ usage_project() {
               | named_window(604800; (.scope.model.display_name | ascii_downcase);
                   .percent; .resets_at; if .is_active then "active" else "inactive" end)
             ] | from_entries),
-            balances: [ .spend | select(. != null)
-              | {kind: "extra_usage", remaining: ((.limit.amount_minor - .used.amount_minor) / pow(10; .limit.exponent)),
-                 unit: .limit.currency, expiresAt: null}],
-            bonuses: [.promo_credits | select(type == "object") | select(.count | type == "number")
-              | {kind: "promo_credits", count: .count, expiresAt: null}]
+            balances: [$prepaid | select(. != null)
+              | if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
+                  then error("claude prepaid tranches") else . end
+              | ((.promo_tranches[] | . + {funding: "promotional"}),
+                 (.tranches[] | . + {funding: "purchased"}))
+              | if (.remaining_amount_minor_units | type) != "number"
+                  or (.remaining_amount_minor_units | isfinite | not) or .remaining_amount_minor_units < 0
+                  or .currency != "USD" or (has("expires_at") | not) then error("claude prepaid lot") else . end
+              | {kind: "usage_credit", funding, remaining: (.remaining_amount_minor_units / 100),
+                 unit: "USD", expiresAt: (.expires_at | if . == null then null else utc end), scope: null}],
+            bonuses: [.cedar_ember.grants[]?
+              | . as $grant
+              | if (.id | type) != "string" or .id == ""
+                  or (.clears | type) != "array" or any(.clears[]; type != "string") or (.usable_now | type) != "boolean"
+                  or (.resets_left | type) != "number" or .resets_left < 0
+                  or (.resets_left | isfinite | not) or (.resets_left | floor) != .resets_left
+                  then error("claude grant") else . end
+              | [.clears[] | if . == "seven_day" then "7d"
+                  elif . == "five_hour" then "5h"
+                  elif . == "seven_day_overage_included" and $grant.gives_back_weekly == true then "7d:fable"
+                  else empty end
+                | select(. as $name | $usage | if $name == "7d" then .seven_day != null
+                    elif $name == "5h" then .five_hour != null
+                    else any(.limits[]?; .kind == "weekly_scoped" and .scope.model.display_name == "Fable") end)]
+              | unique | select(length > 0)
+              | reset_bonus($grant.resets_left; ($grant.ends_at | utc); "promotional"; .; $grant.usable_now) + {handle: $grant.id}]
           }
       elif $vendor == "codex" then
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
         | ($limits.credits // .credits) as $credits
         | (.rate_limit_reset_credits // .rateLimitResetCredits) as $reset
-        | $base + {
+        | (($resets // $reset) | codex_resets($reset)) as $extras
+        | $base + $extras + {
             account: ($base.account + {plan: (.plan_type // null)}),
             windows: ([($limits.primary_window // $limits.primary), ($limits.secondary_window // $limits.secondary)]
               | map(select(. != null)
@@ -94,9 +158,7 @@ usage_project() {
                       (.used_percent // .usedPercent); (.reset_at // .resetsAt); null))
               | if . == [] then error("codex windows") else from_entries end),
             balances: [$credits | select(.has_credits // .hasCredits // false)
-              | {kind: "credits", remaining: (.balance | tonumber), unit: "credits", expiresAt: null}],
-            bonuses: (try (($resets // $reset) | bonuses($reset.available_count // $reset.availableCount))
-              catch (null | bonuses($reset.available_count // $reset.availableCount)))
+              | {kind: "credits", funding: "unknown", scope: null, remaining: (.balance | tonumber), unit: "credits", expiresAt: null}]
           }
       elif $vendor == "cloudflare" then
         $base + {windows: {daily: window(86400; .percent; .reset; null)}}
@@ -118,6 +180,64 @@ usage_project() {
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
       end
   ' 2>/dev/null
+}
+
+# Both Claude transports use the same headers, request sequence and projection.
+usage_claude_request() {
+  local url=$1 request envelope
+  if [[ $delegate_usage_claude_account != null ]]; then
+    request=$(jq -cn --argjson account "$delegate_usage_claude_account" --arg url "$url" \
+      --arg ua "$delegate_usage_claude_agent" --arg beta "$delegate_usage_claude_beta" '
+      {auth_index: $account.auth_index, method: "GET", url: $url,
+       header: {Authorization: "Bearer $TOKEN$", "Content-Type": "application/json",
+                "User-Agent": $ua, "anthropic-beta": $beta}}')
+    envelope=$(usage_cpa_request POST api-call "$request") || return 1
+    jq -er 'select(.status_code >= 200 and .status_code < 300) | .body | select(type == "string")' <<<"$envelope" 2>/dev/null
+  else
+    # shellcheck disable=SC2154 # The appended vendor script sets delegate_usage_token.
+    curl -q --fail --silent --show-error --max-time 75 --config - 2>/dev/null <<EOF_CLAUDE
+url = "$url"
+header = "Authorization: Bearer $delegate_usage_token"
+header = "anthropic-beta: $delegate_usage_claude_beta"
+header = "User-Agent: $delegate_usage_claude_agent"
+EOF_CLAUDE
+  fi
+}
+
+usage_claude() {
+  local delegate_usage_claude_account=${1:-null} delegate_usage_claude_agent version body result
+  local profile org prepaid projected missing=''
+  if ! version=$(claude --version 2>/dev/null) ||
+    [[ ! $version =~ ^([0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.-]+)?)(\ \(Claude\ Code\))?$ ]]; then
+    printf '%s\n' 'usage: claude version unavailable or invalid' >&2
+    return 1
+  fi
+  delegate_usage_claude_agent="claude-cli/${BASH_REMATCH[1]} (external, cli)"
+  body=$(usage_claude_request "$delegate_usage_claude_url") || {
+    printf '%s\n' 'usage: claude usage request failed' >&2
+    return 1
+  }
+  result=$(usage_project claude "$delegate_usage_claude_account" null null <<<"$body") || {
+    printf '%s\n' 'usage: invalid claude usage response' >&2
+    return 1
+  }
+  # Only the captured OAuth profile field establishes the token's organization.
+  # Optional failures preserve main usage without inventing a zero balance.
+  if profile=$(usage_claude_request 'https://api.anthropic.com/api/oauth/profile' 2>/dev/null) &&
+    org=$(jq -er '.organization.uuid | select(type == "string") | select(test("^[A-Za-z0-9-]+$"))' <<<"$profile" 2>/dev/null); then
+    if prepaid=$(usage_claude_request "https://api.anthropic.com/api/oauth/organizations/$org/prepaid/credits" 2>/dev/null) &&
+      prepaid=$(jq -ce 'select(type == "object")' <<<"$prepaid" 2>/dev/null) &&
+      projected=$(usage_project claude "$delegate_usage_claude_account" null "$prepaid" <<<"$body"); then
+      result=$projected
+    else
+      missing=claude-prepaid-unavailable
+    fi
+  else
+    missing=claude-prepaid-organization-unknown
+  fi
+  jq --argjson usage "$body" --arg missing "$missing" '. + {missingExtras:
+    ([$missing | select(. != "")] +
+      if ($usage.cedar_ember.grants | type) == "array" then [] else ["claude-grants-unavailable"] end)}' <<<"$result"
 }
 
 usage_cpa_error() {
@@ -224,21 +344,22 @@ except (AttributeError, TypeError, ValueError):
     [[ $accounts != '[]' ]] || usage_cpa_error "has no enabled $vendor login"
   fi
   while IFS= read -r account; do
+    if [[ $vendor == claude && -z $request_builder ]]; then
+      usage_claude "$account" || exit 1
+      continue
+    fi
     if [[ -n $request_builder ]]; then
       request=$("$request_builder" <<<"$account") || usage_cpa_error 'invalid vendor request'
     else
       request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
-        --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
         --arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
-      url: (if $vendor == "claude" then $claude_url
-            elif $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
+      url: (if $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
             elif $vendor == "opencode" then $opencode_url
             else $zai_url end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
-        if $vendor == "claude" then {"anthropic-beta": $claude_beta}
-        elif $vendor == "zai" then {"Accept-Language": "en-US,en"}
+        if $vendor == "zai" then {"Accept-Language": "en-US,en"}
         elif $vendor == "opencode" then {Accept: "application/json"}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""
