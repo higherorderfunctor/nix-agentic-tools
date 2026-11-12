@@ -76,6 +76,9 @@ class Observations(unittest.TestCase):
         # Synthetic exhaustion of the saved z.ai envelope with a known release time.
         window = self.snapshot["readers"]["z-ai"]["data"]["windows"]["5h"]
         self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
+        # An open gate with a known reset still has no opening time.
+        window.update(resetsAt="2026-11-12T03:35:00Z")
+        self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
         window.update(remainingPercent=0, usedPercent=100, resetsAt="2026-11-12T03:35:00Z")
         rolling = self.limit("z-ai", "rolling")
         self.assertEqual((rolling["remaining"], rolling["used"], rolling["role"], rolling["status"]), (0, 100, "gate", "valid"))
