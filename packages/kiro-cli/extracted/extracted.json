@@ -528,15 +528,12 @@
   "rolloutFeatures": [
     "background_execution",
     "c2s",
-    "cloud_config",
     "infra_safety",
+    "kmux",
     "kvim",
     "lite",
     "managed_settings",
-    "memory",
     "memory_cloud_sync",
-    "memory_controls",
-    "model_fallback_auto_refusal",
     "test",
     "test_internal_only",
     "test_nightly_only",
@@ -545,8 +542,8 @@
   "rolloutPatchability": {
     "background_execution": { "patchable": true, "unmatchedSites": 0 },
     "c2s": { "patchable": true, "unmatchedSites": 0 },
-    "cloud_config": { "patchable": true, "unmatchedSites": 0 },
     "infra_safety": { "patchable": true, "unmatchedSites": 0 },
+    "kmux": { "patchable": true, "unmatchedSites": 0 },
     "kvim": { "patchable": true, "unmatchedSites": 0 },
     "lite": { "patchable": true, "unmatchedSites": 0 },
     "managed_settings": {
@@ -555,15 +552,12 @@
         "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
       }
     },
-    "memory": { "patchable": true, "unmatchedSites": 0 },
     "memory_cloud_sync": {
       "patchable": false,
       "unmatchedSites": {
         "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
       }
     },
-    "memory_controls": { "patchable": true, "unmatchedSites": 0 },
-    "model_fallback_auto_refusal": { "patchable": true, "unmatchedSites": 0 },
     "test": { "patchable": true, "unmatchedSites": 0 },
     "test_internal_only": { "patchable": true, "unmatchedSites": 0 },
     "test_nightly_only": { "patchable": true, "unmatchedSites": 0 },
@@ -580,8 +574,12 @@
       "segment": "internal",
       "treatment_percent": 100
     },
-    "cloud_config": { "segment": "all", "treatment_percent": 100 },
     "infra_safety": { "segment": "internal", "treatment_percent": 100 },
+    "kmux": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
     "kvim": { "segment": "internal", "treatment_percent": 100 },
     "lite": { "segment": "internal", "treatment_percent": 100 },
     "managed_settings": {
@@ -589,16 +587,10 @@
       "segment": "internal",
       "treatment_percent": 0
     },
-    "memory": { "segment": "all", "treatment_percent": 100 },
     "memory_cloud_sync": {
       "channel": "nightly",
       "segment": "internal",
       "treatment_percent": 0
-    },
-    "memory_controls": { "segment": "all", "treatment_percent": 100 },
-    "model_fallback_auto_refusal": {
-      "segment": "all",
-      "treatment_percent": 100
     },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
@@ -637,10 +629,15 @@
     "chat.historyMode",
     "chat.keybindings.cancelStream",
     "chat.keybindings.closeMenu",
-    "chat.keybindings.moveToBackground",
+    "chat.keybindings.kmuxPrefix",
     "chat.keybindings.quit",
     "chat.keybindings.toggleInterruptBehavior",
     "chat.keybindings.toggleSessionDashboard",
+    "chat.keybindings.viewDiagram",
+    "chat.kmux.hiddenSidebarPanels",
+    "chat.memories.scope",
+    "chat.memories.sortBy",
+    "chat.memories.sortDirection",
     "chat.modelDefaults",
     "chat.modelPicker.hiddenModels",
     "chat.modelPicker.lastUsed",
