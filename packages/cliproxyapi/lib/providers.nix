@@ -2,8 +2,7 @@
 {lib}: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
-  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  fact = facts.get (facts.load {dir = ../extracted;}).aggregate;
+  catalogLib = import ../../ai-module/lib/catalog/resolve.nix {inherit lib;};
   # OpenCode Go serves each catalog model on one native API. Each lands on
   # that API only, so CPA translates every other protocol itself. A function
   # of the catalog (`opencodeGo.models`) so checks can feed it malformed ones.
@@ -71,9 +70,9 @@
     toolAliases = {};
   };
   vendors = {
-    opencode-go = opencodeGo (fact "opencodeGo").models;
+    opencode-go = opencodeGo catalogLib.opencodeGo.models;
     z-ai =
-      fact "zAi"
+      catalogLib.zAi
       // {
         codexShellArgCleanup = true;
         toolAliases.ToolSearch = "ToolSearch_";
@@ -218,6 +217,7 @@
     };
   };
 
+  harnessApis = provider: builtins.attrNames (lib.filterAttrs (api: _: apis.${api}.harnessApi) (served provider));
   served = provider: lib.filterAttrs (_: value: value != null) provider.apis;
   # The models one served API offers; null when neither level declares any,
   # which ../modules/instances.nix refuses.
@@ -239,7 +239,11 @@
             models = map (model:
               if apis.${api}.modelObjects
               then lib.filterAttrs (_: value: value != null) model
-              else {name = model;}) (lib.defaultTo [] (modelsOf provider api));
+              else
+                {name = model;}
+                // lib.optionalAttrs
+                ((provider.catalogAliases.${model} or model) != model)
+                {alias = provider.catalogAliases.${model};}) (lib.defaultTo [] (modelsOf provider api));
           }
           // lib.filterAttrs (_: field: field != null) (lib.getAttrs (apis.${api}.fields or []) value)
           // lib.optionalAttrs (headers != {}) {inherit headers;}
@@ -340,6 +344,7 @@
       if choice.api != null
       then {problem = "${path}: OAuth credential `${choice.credential}` does not select an API; remove api.";}
       else {
+        models = [];
         rule = {
           provider = credential.oauth.vendor;
           kind = "oauth";
@@ -352,7 +357,10 @@
     then {problem = "${path}: upstream credential `${choice.credential}` does not serve API `${api}`.";}
     else {
       inherit api;
-      models = lib.defaultTo [] (modelsOf credential.apiKey api);
+      models =
+        if apis.${api}.modelObjects
+        then modelsOf credential.apiKey api
+        else map (model: credential.apiKey.catalogAliases.${model} or model) (lib.defaultTo [] (modelsOf credential.apiKey api));
       rule = rule choice.credential credential.apiKey api;
     };
   # CPA marks every upstream header secret (extract/annotations.json), so a
@@ -368,7 +376,32 @@
       '';
     }));
 in {
-  inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
+  inherit apiKeys apis clientKeyType credentialType harnessApis literalHeader modelsOf opencodeGo route rule served vendors;
+  # Protocol choices stay on the existing routes; the shared graph supplies
+  # which credentials the client can reach, for API keys and OAuth alike.
+  project = graph: name: instance:
+    instance
+    // {
+      clientKeys = lib.mapAttrs (client: entry:
+        entry
+        // {
+          routes = graph.clientRoutes name client;
+        })
+      instance.clientKeys;
+      credentials = lib.mapAttrs (_: credential:
+        credential
+        // {
+          apiKey =
+            if credential.apiKey == null
+            then null
+            else
+              credential.apiKey
+              // {
+                catalogAliases = lib.genAttrs (lib.unique (lib.concatMap (api: lib.defaultTo [] (modelsOf credential.apiKey api)) (harnessApis credential.apiKey))) graph.canonical;
+              };
+        })
+      instance.credentials;
+    };
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
       blocks (lib.mapAttrs (_: literalHeader pkgs) (

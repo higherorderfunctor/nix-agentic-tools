@@ -77,6 +77,7 @@
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
+      catalog = args.catalog or null;
       inherit (args) runtime families models;
       inherit (args) picker;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
@@ -118,6 +119,7 @@
       };
       guards.parseCompare = true;
       passthru = {
+        inherit manifest;
         text = render args;
       };
       inherit (args) runtime;

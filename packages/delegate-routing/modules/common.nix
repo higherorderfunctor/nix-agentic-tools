@@ -117,10 +117,15 @@
       url = null;
     });
   };
-  resolvedAgentFiles = agentFiles.resolve (agentFiles.facts.models ++ map (row: row.model) pickerRows) (select portable.families models.claude);
+  resolvedAgentFiles = agentFiles.resolve (
+    if config.ai.catalog.resolved.runtimes ? claude
+    then config.ai.catalog.resolved.modelsFor "claude"
+    else agentFiles.facts.models ++ map (row: row.model) pickerRows
+  ) (select portable.families models.claude);
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit runtime models techniques resolvedAgentFiles;
+      catalog = config.ai.catalog.resolved;
       inherit (portable) families pools;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
@@ -164,6 +169,7 @@
           map (lib.getAttrs ["effort" "model" "technique"])
           (import ../lib/routing-view.nix {
             inherit lib runtime models techniques resolvedAgentFiles;
+            catalog = config.ai.catalog.resolved;
             inherit (portable) families pools;
             inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
           }).pickerEntries;

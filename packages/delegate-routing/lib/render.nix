@@ -1,5 +1,6 @@
 {
   lib,
+  catalog ? null,
   runtime,
   families,
   models,
@@ -14,7 +15,7 @@
   manualExternalDelegates ? [],
 }: let
   view = import ./routing-view.nix {
-    inherit lib runtime families models techniques pools resolvedAgentFiles extraRuntimes manualExternalDelegates;
+    inherit catalog lib runtime families models techniques pools resolvedAgentFiles extraRuntimes manualExternalDelegates;
   };
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   inherit (view) candidates;

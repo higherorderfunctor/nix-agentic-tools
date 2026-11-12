@@ -316,6 +316,7 @@ lockdown
 lockfiles
 logind
 logname
+longcat
 ltrimstr
 manpages
 materializer
@@ -600,5 +601,6 @@ zdiff
 zebrafish
 zereight
 zhipu
+zhipuai
 zstd
 gnupatch
