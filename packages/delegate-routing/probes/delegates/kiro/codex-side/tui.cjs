@@ -10,14 +10,14 @@ const ast = acorn.parse(src, {
 });
 const terms = new Set([
   "_session/steer",
-  "session/cancel",
-  "moveToBackground",
-  "defaultInterruptBehavior",
-  "cancelStream",
-  "forkSession",
   "agentSubtaskId",
-  "steerSession",
   "cancelPrompt",
+  "cancelStream",
+  "defaultInterruptBehavior",
+  "forkSession",
+  "quit",
+  "session/cancel",
+  "steerSession",
 ]);
 const out = [],
   seen = new Set();

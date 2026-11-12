@@ -42,12 +42,12 @@ friendly switch with a rollout feature implies it at default priority.
 Explicitly disabling that raw feature while leaving the friendly switch enabled
 fails an assertion on both backends.
 
-| `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                             |
-| ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------- |
-| `backgroundExecution.enable` | `background_execution` | No client setting. If needed, rebind `native.settings.chat.keybindings.moveToBackground` globally. |
-| `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing.             |
-| `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                                      |
-| `workflows.enable`           | none (3.1.0)           | Global `chat.enableWorkflows`; the rollout entry no longer exists.                                 |
+| `ai.kiro.cli` switch         | Raw rollout feature    | Additional requirement                                                                 |
+| ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `backgroundExecution.enable` | `background_execution` | No client setting.                                                                     |
+| `codeToSpec.enable`          | `c2s`                  | Global `chat.enableC2s`; Home Manager implies it, while devenv warns if it is missing. |
+| `kvim.enable`                | `kvim`                 | `nvim` on PATH; no editor package is installed automatically.                          |
+| `workflows.enable`           | none (3.1.0)           | Global `chat.enableWorkflows`; the rollout entry no longer exists.                     |
 
 Kiro 3.1.0 makes the local sandbox available without a rollout (per-run
 `--sandbox` still applies), and this package does not deliver its `sandbox.json`
@@ -100,10 +100,9 @@ object-valued settings.
 ### The scope boundary comes from the pinned client
 
 The TUI merges project-local `.kiro/settings/cli.json` over the global file
-through an allowlist. `chat.enableC2s`, `chat.enableWorkflows` and the
-background key binding are absent from the pinned allowlist. Home Manager writes
-the global file; devenv writes the project file, so devenv cannot satisfy those
-gates itself.
+through an allowlist. `chat.enableC2s` and `chat.enableWorkflows` are absent
+from the pinned allowlist. Home Manager writes the global file; devenv writes
+the project file, so devenv cannot satisfy those gates itself.
 
 The aggregate `workspaceOverridableSettings` fact under
 `packages/kiro-cli/extracted/` is extracted by `kiroSettingsExtractScript` in

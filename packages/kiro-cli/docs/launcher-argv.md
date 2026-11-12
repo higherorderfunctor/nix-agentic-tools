@@ -474,8 +474,8 @@ Home Manager implies it and devenv warns when it is absent. `codeToSpec`,
 names, with client-setting and launch prerequisites described in
 [`workflow-gating.md`](workflow-gating.md). Raw feature switches change
 availability only. Typed `cli.native.settings.chat.keybindings` declarations
-follow the extracted registry; background execution can be rebound with
-`moveToBackground` in the global settings.
+follow the extracted registry, which includes `quit` on 3.2.1. For example,
+`cli.native.settings.chat.keybindings.quit = "ctrl+x"` overrides that binding.
 
 ## Re-measuring on a version bump
 
