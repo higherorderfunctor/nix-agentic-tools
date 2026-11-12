@@ -66,7 +66,7 @@
   baseUrlType = types.strMatching "https?://[!-~]+";
   # CPA trims model names before registering them
   # (sdk/cliproxy/service_models.go); printable-ASCII edges make that trim a
-  # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
+  # no-op, so identity checks see the name CPA serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
   passthroughModelType = types.submodule {
@@ -189,6 +189,11 @@
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
+      exclusive = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Refuse overlapping conversational model offers from distinct credentials routed by the same client key. Passthrough is excluded.";
+      };
       oauth = mkOption {
         type = types.nullOr (types.submodule {
           # OAuth priority belongs to CPA login-file metadata; declaring
@@ -210,7 +215,13 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        # Built-in transport constructors need finite offers; reject maker-wide
+        # input here before either constructor maps over a null model list.
+        apply = vendor:
+          if vendor != null && catalog != null && catalog.vendors.${vendor}.models == null
+          then throw "ai.cliproxyapi credential vendor `${vendor}` requires a finite ai.catalog.vendors.${vendor}.models list for transport defaults; set maker = null and declare models, or omit vendor and configure apiKey explicitly."
+          else vendor;
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {

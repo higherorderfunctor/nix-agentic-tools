@@ -49,3 +49,17 @@ URL remain separate grants. The client key and rules stay available for
 `POST /v1/passthrough`, while the entire route is omitted from harness inference
 credentials and model lists. See `cliproxyapi-passthrough.md` for the named Nix
 shape, envelope options and secret path references.
+
+`credentials.<name>.exclusive` is an opt-in check scoped to each enabled
+instance's client key. If either of two distinct routed credentials sets it to
+`true`, their selected conversational model offers must be disjoint. Repeated
+routes to one credential are combined, including multiple selected APIs;
+unselected APIs, credentials the key does not route to, other client keys and
+passthrough routes do not participate. Diagnostics identify the instance, client
+key, both credentials and canonical overlapping models, without credential
+values.
+
+The check changes neither grants nor inference registry entries. With the
+default `exclusive = false`, overlapping credentials still provide fallback.
+Passthrough fallback remains allowed even when its credentials are exclusive.
+See `cliproxyapi-providers.md` for alias and OAuth maker resolution.
