@@ -567,7 +567,7 @@ KIRO_LAUNCH_VALUE_OPTIONS="$(nix eval --impure --raw --expr 'let lib = (builtins
 The suite uses small temporary fixtures and removes them afterward. It does not
 read real transcripts, databases, logs, captured payloads, or credentials.
 Fake-flow contracts validate the addon boundary and streaming behavior. The
-`kiro-usage-mitm-transport` Nix check also runs the pinned mitmproxy against a
+`kiro-usage-mitm-transport` Nix check also runs `pkgs.mitmproxy` against a
 loopback fake upstream, checking immediate first-byte delivery, exact compressed
 payloads and stored SQLite rows for an SSE `/v1/responses` call and an AWS
 event-stream GenerateAssistantResponse RPC call (`POST /` with its

@@ -29,9 +29,7 @@
   # A mitmproxy with no evaluable interpreter, such as a non-Python override, adds no entry.
   pythons = lib.filterAttrs (_: python: python != null) {
     inherit (pkgs) python3;
-    # This flake's patched build (packages/kiro-cli/overlay.nix), so the
-    # collector and its checks share one selection.
-    mitmproxy = pythonOf pkgs.ai.generic.mitmproxy;
+    mitmproxy = pythonOf pkgs.mitmproxy;
   };
   pythonRequirement = {
     assertion = lib.all (python: lib.versionAtLeast python.version "3.14") (lib.attrValues pythons);
@@ -109,7 +107,7 @@ in {
         "--port"
         (toString cfg.port)
         "--mitmdump"
-        "${pkgs.ai.generic.mitmproxy}/bin/mitmdump"
+        "${pkgs.mitmproxy}/bin/mitmdump"
         "--addon"
         "${../usage}/mitm_addon.py"
       ]

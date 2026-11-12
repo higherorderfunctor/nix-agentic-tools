@@ -32,7 +32,7 @@ this directory private and outside the repository. `dataDirectory` is a literal
 absolute path, with no shell expansion. Service and launcher must resolve the
 same runtime state directory.
 
-The service runs the flake's pinned nixpkgs `mitmproxy` package, binds only
+The service runs `pkgs.mitmproxy` from the module's package set, binds only
 `127.0.0.1`, and claims its port through `ai.services`. It intercepts only
 `runtime.us-east-1.kiro.dev:443`; the addon records `/v1/responses` (root turns)
 and the GenerateAssistantResponse AWS JSON RPC call (workflow steps, subagents
