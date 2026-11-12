@@ -282,8 +282,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-yckig1G1R/3yuwnurqKIW6ARb59p0ms4A//dQ0oRaGM=",
-      "kimchiVersion": "1.34.2",
+      "kimchiSourceHash": "sha256-Vv4ochuzu/O51DcNQ/lDJvGRUXKBEqqF1CkxsbFa5cQ=",
+      "kimchiVersion": "1.34.3",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -301,8 +301,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-yckig1G1R/3yuwnurqKIW6ARb59p0ms4A//dQ0oRaGM=",
-      "kimchiVersion": "1.34.2",
+      "kimchiSourceHash": "sha256-Vv4ochuzu/O51DcNQ/lDJvGRUXKBEqqF1CkxsbFa5cQ=",
+      "kimchiVersion": "1.34.3",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -3168,13 +3168,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "library": "fetch",
-      "line": 1433,
+      "line": 1436,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "pi-mcp-adapter/dist/server-manager.js:1433",
+          "origin": "pi-mcp-adapter/dist/server-manager.js:1436",
           "value": "input"
         }
       ]
@@ -3183,13 +3183,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1454,
+      "line": 1457,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "pi-mcp-adapter/dist/server-manager.js:1454",
+          "origin": "pi-mcp-adapter/dist/server-manager.js:1457",
           "value": "url"
         }
       ]
@@ -3198,13 +3198,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1455,
+      "line": 1458,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "pi-mcp-adapter/dist/server-manager.js:1455",
+          "origin": "pi-mcp-adapter/dist/server-manager.js:1458",
           "value": "url"
         }
       ]
@@ -3348,13 +3348,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/server-manager.ts",
       "library": "fetch",
-      "line": 1770,
+      "line": 1773,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "pi-mcp-adapter/server-manager.ts:1770",
+          "origin": "pi-mcp-adapter/server-manager.ts:1773",
           "value": "input"
         }
       ]
@@ -3363,13 +3363,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/server-manager.ts",
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1789,
+      "line": 1792,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "pi-mcp-adapter/server-manager.ts:1789",
+          "origin": "pi-mcp-adapter/server-manager.ts:1792",
           "value": "url"
         }
       ]
@@ -3378,13 +3378,13 @@
       "bundledModule": null,
       "file": "pi-mcp-adapter/server-manager.ts",
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1790,
+      "line": 1793,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "pi-mcp-adapter/server-manager.ts:1790",
+          "origin": "pi-mcp-adapter/server-manager.ts:1793",
           "value": "url"
         }
       ]
@@ -5248,7 +5248,7 @@
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "guards": [],
       "library": "fetch",
-      "line": 1433,
+      "line": 1436,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
@@ -5257,7 +5257,7 @@
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "guards": [],
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1454,
+      "line": 1457,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
@@ -5266,7 +5266,7 @@
       "file": "pi-mcp-adapter/dist/server-manager.js",
       "guards": [],
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1455,
+      "line": 1458,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
@@ -5356,7 +5356,7 @@
       "file": "pi-mcp-adapter/server-manager.ts",
       "guards": [],
       "library": "fetch",
-      "line": 1770,
+      "line": 1773,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
@@ -5365,7 +5365,7 @@
       "file": "pi-mcp-adapter/server-manager.ts",
       "guards": [],
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1789,
+      "line": 1792,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
@@ -5374,7 +5374,7 @@
       "file": "pi-mcp-adapter/server-manager.ts",
       "guards": [],
       "library": "sdk:@modelcontextprotocol/client",
-      "line": 1790,
+      "line": 1793,
       "readBy": "pi",
       "status": "no modeled local guard"
     },
