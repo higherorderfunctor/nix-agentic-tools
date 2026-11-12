@@ -82,7 +82,12 @@
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
-  apis = {
+  apis = lib.mapAttrs (_: entry:
+    {
+      harnessApi = true;
+      modelObjects = false;
+    }
+    // entry) {
     anthropic = {
       family = "claude";
       provider = _: "claude";
@@ -99,29 +104,10 @@
     };
     passthrough = {
       family = "passthrough";
-      fields = ["error-in-200" "path" "unwrap" "usage-path"];
+      fields = ["path" "unwrap" "usage-path"];
+      harnessApi = false;
       modelObjects = true;
       options = {
-        error-in-200 = mkOption {
-          type = types.nullOr (types.submodule {
-            options = {
-              equals = mkOption {
-                type = types.bool;
-                description = "Boolean that marks an upstream error.";
-              };
-              path = mkOption {
-                type = objectPathType;
-                description = "Object-key path of the error boolean.";
-              };
-              status = mkOption {
-                type = types.enum [429 500 502 503 504];
-                description = "Retryable failure status.";
-              };
-            };
-          });
-          default = null;
-          description = "Recognize a failure in an HTTP 200 response.";
-        };
         path = mkOption {
           type = passthroughPathType;
           description = "Upstream path, optionally containing redact references.";
@@ -193,12 +179,12 @@
                     };
                     models = mkOption ({
                         type =
-                          if entry.modelObjects or false
+                          if entry.modelObjects
                           then types.nonEmptyListOf passthroughModelType
                           else types.nullOr (types.nonEmptyListOf modelType);
                         description = "Models served on this API. Passthrough requires name/alias objects here; other APIs can use the credential's models.";
                       }
-                      // lib.optionalAttrs (!(entry.modelObjects or false)) {
+                      // lib.optionalAttrs (!entry.modelObjects) {
                         default = null;
                       });
                   }
@@ -244,7 +230,7 @@
   # The models one served API offers; null when neither level declares any,
   # which ../modules/instances.nix refuses.
   modelsOf = provider: api:
-    if apis.${api}.modelObjects or false
+    if apis.${api}.modelObjects
     then provider.apis.${api}.models
     else lib.defaultTo provider.models provider.apis.${api}.models;
 
@@ -259,7 +245,7 @@
             inherit (value) base-url;
             keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
             models = map (model:
-              if apis.${api}.modelObjects or false
+              if apis.${api}.modelObjects
               then lib.filterAttrs (_: value: value != null) model
               else {name = model;}) (lib.defaultTo [] (modelsOf provider api));
           }

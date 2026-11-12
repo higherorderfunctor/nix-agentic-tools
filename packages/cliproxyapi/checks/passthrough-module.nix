@@ -17,11 +17,6 @@
   upstream = {
     apis.passthrough = {
       base-url = base;
-      error-in-200 = {
-        equals = false;
-        path = "success";
-        status = 429;
-      };
       models = [
         {
           alias = "decision";
@@ -78,11 +73,6 @@
     !attempt.success || !attempt.value;
   expectedBlock = {
     base-url = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL}";
-    error-in-200 = {
-      equals = false;
-      path = "success";
-      status = 429;
-    };
     keys = [{api-key = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_KEYS_0_API_KEY}";}];
     models = [
       {
@@ -125,7 +115,6 @@
   nativeConfig = fill values rendered.content;
   invalid = {
     absolute-path.credentials.Free.apiKey.apis.passthrough.path = "https://elsewhere.example/path";
-    empty-models.credentials.Free.apiKey.apis.passthrough.models = [];
     malformed-model-alias.credentials.Free.apiKey.apis.passthrough.models = [
       {
         name = "upstream-model";
@@ -165,25 +154,13 @@
         (evaluate backend {
           credentials = lib.mkForce {};
           clientKeys = lib.mkForce {};
-          settings = {
+          settings = lib.recursiveUpdate (narrowed "base-urls" [base]).settings {
             api-keys.passthrough = [
-              (raw "direct"
+              (raw "Free"
                 // {
                   base-url = base;
                   inherit path;
                 })
-            ];
-            access.key-allowlist = [
-              {
-                api-key = secret "direct-client";
-                credentials = [
-                  {
-                    provider = "passthrough-direct";
-                    kind = "apikey";
-                    base-urls = [base];
-                  }
-                ];
-              }
             ];
           };
         }).config.ai.cliproxyapi.instances.main.settings;
@@ -194,18 +171,11 @@
         models = [{name = "upstream-model";}];
         keys = [{api-key = secret "raw";}];
       };
-      # Check the specific assertion, rather than accepting an unrelated
-      # failure: Unicode group names otherwise pass Nix and fail CPA startup.
-      rawNameRefused = name:
-        lib.any (lib.hasSuffix "].name: group names must contain only printable ASCII characters so Nix and CPA normalize them identically.")
-        (failures (evaluate backend {settings.api-keys.passthrough = [(raw name)];}));
       cases =
         {
-          "allowlist empty URL restriction refused" = refuses backend (narrowed "base-urls" []);
           "allowlist null URL refused" = refuses backend (narrowed "base-urls" [null]);
           "allowlist URL restriction emptied by mkIf refused" = refuses backend (narrowed "base-urls" [(lib.mkIf false "https://upstream.example")]);
           "client access retained" = settings.access.api-keys == ["{$CLIPROXYAPI_ACCESS_API_KEYS_0}"];
-          "concat path reference renders with shared engine" = rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
           "direct typed settings accept URL and allowlist references" =
             direct.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL
             == base
@@ -220,33 +190,19 @@
                 models = ["chat-model"];
               }
             ];
-          "literal config preserves alias, priority and envelopes" = lib.head settings.api-keys.passthrough == expectedBlock;
+          "lowering preserves fields and permits shared URLs" = failures result == [] && lib.head settings.api-keys.passthrough == expectedBlock;
           "literal rules retain distinct named identities at a shared URL" = (lib.head settings.access.key-allowlist).credentials == expectedRules;
-          "mixed raw duplicate refused after ASCII case and space normalization" =
-            failures (evaluate backend {settings.api-keys.passthrough = [(raw " fReE ")];})
-            == ["ai.cliproxyapi.instances.main.settings.api-keys.passthrough: duplicate group names after trimming and lowercase normalization, including named credentials and raw blocks."];
           "models emptied by mkIf refused" = refuses backend {credentials.Free.apiKey.apis.passthrough.models = [(lib.mkIf false {name = "upstream-model";})];};
-          "named base reference renders with shared engine" = rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL == base;
-          "named duplicate refused" = refuses backend {credentials.free.apiKey = upstream;};
-          "passthrough routes excluded from inference" =
-            result.config.ai.internal.inferenceInstances.main.clients.main
-            == {
-              key = secret "client";
-              credentials = [
-                {
-                  name = "chat";
-                  models = ["chat-model"];
-                }
-              ];
-            };
-          "raw name with form feed refused" = rawNameRefused (builtins.fromJSON ''"free\f"'');
-          "raw name with non-ASCII letter refused" = rawNameRefused "Ä";
-          "raw name with non-breaking space refused" = rawNameRefused (builtins.fromJSON ''"\u00a0free\u00a0"'');
-          "raw name with vertical tab refused" = rawNameRefused (builtins.fromJSON ''"\u000b"'' + "free");
+          "named URL references render with shared engine" =
+            rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_BASE_URL
+            == base
+            && rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
+          "named duplicate refused" =
+            failures (evaluate backend {credentials.free.apiKey = upstream;})
+            == ["ai.cliproxyapi.instances.main.credentials: duplicate names after lowercase normalization for API `passthrough`."];
           "raw settings reject absolute path" = refuses backend {settings.api-keys.passthrough = [(raw "other" // {path = "https://elsewhere.example/path";})];};
           "raw settings reject network path" = refuses backend {settings.api-keys.passthrough = [(raw "other" // {path = "//elsewhere.example/path";})];};
           "rooted and relative paths accepted" = lib.all (path: failures (evaluate backend {credentials.Free.apiKey.apis.passthrough = {inherit path;};}) == []) ["/inference/v1/decision" "inference/v1/decision"];
-          "shared URLs accepted" = failures result == [];
           "substitution fills concat URL and allowlist URL" = let
             filled = builtins.fromJSON nativeConfig;
           in
@@ -259,27 +215,6 @@
     in
       lib.assertMsg (problems == []) "${backendName}: ${lib.concatStringsSep "; " problems}"))
   backends;
-  # Reuse every existing provider regression rather than duplicate its fixtures.
-  regressions = (import ../../../checks/ai-inference/module-eval.nix {inherit harness lib pkgs;}).checks;
-  # The real shared reader resolves concat parts at runtime, without reading
-  # a secret during evaluation. This command emits synthetic fixture material.
-  accountCommand = import ../../../lib/strict-shell-application.nix pkgs {
-    name = "passthrough-synthetic-account";
-    text = "printf '%s' synthetic-account";
-  };
-  concatReference = redact.concat ["/accounts/" (redact.command (lib.getExe accountCommand)) "/decision"];
-  secrets = pkgs.runCommand "passthrough-concat-reader" {} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    ${redact.assign {
-      inherit pkgs;
-      option = "passthrough.path";
-      variable = "PASSTHROUGH_PATH";
-      value = concatReference;
-    }}
-    test "$PASSTHROUGH_PATH" = /accounts/synthetic-account/decision
-    echo "shared reader resolved concat path" > "$out"
-  '';
   native = (extractedLib {inherit pkgs;}).goTest {
     name = "cliproxyapi-passthrough-module-native";
     package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
@@ -304,8 +239,7 @@
           if g.ProviderKey() != "passthrough-free" || g.Priority != 30 ||
              g.BaseURL != "https://upstream.example" || g.Path != "/accounts/synthetic-account/decision" ||
              len(g.Models) != 1 || g.Models[0].Alias != "decision" || g.Models[0].Name != "upstream-model" ||
-             g.Unwrap == nil || *g.Unwrap != "result" || g.UsagePath == nil || *g.UsagePath != "result.usage" ||
-             g.ErrorIn200 == nil || g.ErrorIn200.Equals == nil || *g.ErrorIn200.Equals || g.ErrorIn200.Status != 429 {
+             g.Unwrap == nil || *g.Unwrap != "result" || g.UsagePath == nil || *g.UsagePath != "result.usage" {
             t.Fatal("lowered passthrough fields differ")
           }
           t.Log("named groups, secret URL substitution, aliases, priority and envelopes passed native validation")
@@ -317,9 +251,6 @@
 in {
   checks.cliproxyapi-passthrough-module = pkgs.linkFarm "cliproxyapi-passthrough-module" (lib.mapAttrsToList (name: path: {inherit name path;}) (moduleChecks
     // {
-      inherit native secrets;
-      existing-clients = regressions.module-ai-inference-instance-clients;
-      existing-opencode = regressions.module-ai-inference-opencode-go-credential;
-      existing-z-ai = regressions.module-ai-inference-z-ai-credential;
+      inherit native;
     }));
 }

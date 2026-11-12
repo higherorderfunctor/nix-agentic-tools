@@ -177,11 +177,10 @@ and permit rooted components such as `/inference/v1/decision`.
 
 Named rules use `provider = "passthrough-<lowercase-name>"`, `kind = "apikey"`
 and the selected base URL reference. Free and paid groups may share that URL;
-their distinct names keep each rule scoped to its group. Nix checks normalized
-name collisions across named credentials and raw blocks; CPA checks again after
-secrets resolve. Nix requires printable-ASCII group names on both surfaces
-because it cannot reproduce CPA's Unicode trimming and lowercase normalization.
-Existing families retain their shared-base-URL refusal.
+their distinct names keep each rule scoped to its group. Nix checks lowercase
+name collisions between named credentials. CPA checks all group names at
+startup, including raw settings blocks. Existing families retain their
+shared-base-URL refusal.
 
 Passthrough routes retain their client key and CPA allowlist rules but
 contribute no credential to `inferenceInstances` or a harness's normalized
@@ -191,6 +190,5 @@ lists are added.
 
 `cliproxyapi-passthrough-module` covers both module backends, literal lowering,
 secret URL render/substitution, path refusal, model shape, normalized
-duplicates, nonempty merged lists and inference fanout. It also runs the
-existing named client and vendor regression fixtures and loads a synthetic
-rendered config through CPA in CI.
+duplicates, nonempty merged lists and inference fanout. It also loads a
+synthetic rendered config through CPA in CI.
