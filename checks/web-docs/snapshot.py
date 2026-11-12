@@ -1,4 +1,4 @@
-"""Exercise both configured owners and the shared updater's publish boundary."""
+"""Exercise the index owner, explicit sources and the shared updater's publish boundary."""
 
 import importlib.util
 import json
@@ -15,8 +15,6 @@ spec.loader.exec_module(snapshot)
 kimchi = json.loads(Path(sys.argv.pop(1)).read_text())
 kimchi_tree = Path(sys.argv.pop(1))
 kimchi_date = (kimchi_tree / "ATTRIBUTION").read_text().split("Snapshot date: ")[1].splitlines()[0]
-kiro = json.loads(Path(sys.argv.pop(1)).read_text())
-kiro_tree = Path(sys.argv.pop(1))
 nix = sys.argv.pop(1)
 
 
@@ -35,7 +33,11 @@ class DocumentationSnapshot(unittest.TestCase):
         self.root = Path(self.work.name)
         self.pin = self.root / "package.nix"
         self.pin.write_text('  snapshotDate = "2026-10-12";\n  contentHash = "old";\n  hash = "old";\n')
-        self.fetch = lambda _: (kiro_tree / "models.md").read_bytes()
+        self.fetch = lambda _: b"example documentation"
+        validator = self.root / "validate"
+        validator.write_text(f"#!{sys.executable}\nimport pathlib, sys\nassert (pathlib.Path(sys.argv[1]) / 'page.md').read_bytes() == b'example documentation'\n")
+        validator.chmod(0o755)
+        self.explicit = {"contentHash": "", "name": "fixture", "sources": [{"path": "page.md", "url": "https://example.test/page"}], "validate": str(validator)}
 
     def test_kimchi_walk_preserves_snapshot_bytes_and_hash(self):
         output = self.root / "kimchi"
@@ -62,25 +64,28 @@ class DocumentationSnapshot(unittest.TestCase):
         self.assertFalse(snapshot.update(config, self.pin, nix, "2099-02-02", captured_fetch(kimchi_tree)))
 
     def test_changed_content_publishes_hashes_then_noop_preserves_date(self):
-        self.assertTrue(snapshot.update(kiro, self.pin, nix, "2099-01-01", self.fetch))
+        self.assertTrue(snapshot.update(self.explicit, self.pin, nix, "2099-01-01", self.fetch))
         fields = snapshot.pin_fields(self.pin.read_text())
         self.assertEqual(fields["snapshotDate"], "2099-01-01")
-        self.assertEqual(fields["contentHash"], snapshot.content_hash(kiro_tree))
-        self.assertEqual(fields["hash"], tree_hash(kiro_tree))
+        expected = self.root / "expected"
+        expected.mkdir()
+        (expected / "page.md").write_bytes(b"example documentation")
+        self.assertEqual(fields["contentHash"], snapshot.content_hash(expected))
+        self.assertEqual(fields["hash"], tree_hash(expected))
         before = self.pin.read_bytes(), self.pin.stat().st_mtime_ns
-        self.assertFalse(snapshot.update(kiro, self.pin, nix, "2099-02-02", self.fetch))
+        self.assertFalse(snapshot.update(self.explicit, self.pin, nix, "2099-02-02", self.fetch))
         self.assertEqual((self.pin.read_bytes(), self.pin.stat().st_mtime_ns), before)
 
     def test_fetch_or_owner_parser_failure_preserves_pin(self):
         original = self.pin.read_bytes()
-        for fetch in (lambda _: b"<html>login</html>", lambda _: b"## Quick comparison\n| Model | Context |\n| --- | --- |\n| Auto | 1M |\n| Mystery 99 |\n"):
+        for fetch in (lambda _: b"<html>login</html>", lambda _: b"malformed documentation"):
             with self.assertRaises(subprocess.CalledProcessError):
-                snapshot.update(kiro, self.pin, nix, "2099-01-01", fetch)
+                snapshot.update(self.explicit, self.pin, nix, "2099-01-01", fetch)
             self.assertEqual(self.pin.read_bytes(), original)
         def broken_fetch(_):
             raise OSError("upstream unavailable")
         with self.assertRaises(OSError):
-            snapshot.update(kiro, self.pin, nix, "2099-01-01", broken_fetch)
+            snapshot.update(self.explicit, self.pin, nix, "2099-01-01", broken_fetch)
         self.assertEqual(self.pin.read_bytes(), original)
 
     def test_checked_publish_refuses_concurrent_change_and_ambiguous_pin(self):

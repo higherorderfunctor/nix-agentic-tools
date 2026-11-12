@@ -466,3 +466,13 @@ tail with traceback frames and the pipeline's own trailer lines removed.
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run
 inside the required `test` job without evaluating or building Nix themselves.
+
+### Authenticated Kiro catalog refresh
+
+Only the `kiro-model-catalog` preparation step receives `KIRO_API_KEY`; PR CI
+and offline catalog checks receive no key. A `HELD BACK` result for this target
+fails the lane on the first sweep, after publication preserves any existing PR
+and uploads its receipt, even if the branch is preserved. Other targets retain
+the existing hold-back escalation policy. The
+[catalog contract](../../../packages/kiro-model-catalog/docs/model-catalog.md)
+owns refresh validation and isolation.

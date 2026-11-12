@@ -1268,7 +1268,7 @@ in
                       default = null;
                       description = ''
                         Default chat model. Suggestions are generated from Kiro's
-                        independently pinned public model documentation in kiro-model-catalog.
+                        authenticated CLI model catalog in kiro-model-catalog.
                         Availability depends on your account; any string is accepted.
                       '';
                     };

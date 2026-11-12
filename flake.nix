@@ -227,7 +227,7 @@
       ownerCheck = name: self.checks.${system}."${name}-extracted".passthru;
       selected = lib.filterAttrs (name: dir:
         if system == "x86_64-linux"
-        then (ownerCheck name).handled != []
+        then self.ciPackages.${system}.${name}.passthru ? extracted && (ownerCheck name).handled != []
         else facts.hostRunOn system dir)
       owners;
     in

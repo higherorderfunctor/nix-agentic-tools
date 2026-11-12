@@ -31,8 +31,8 @@ see `launcher-argv.md`, "Consumer options for `chat` and `acp`".
 ### Model suggestions
 
 `cli.native.settings.chat.defaultModel` accepts any string and suggests model
-slugs from the independently pinned `kiro-model-catalog` package. Its
-public-document source, refresh and parsing contract live in
+IDs from the authenticated `kiro-model-catalog` update target. Its CLI source,
+refresh and validation contract live in
 [model-catalog.md](../../kiro-model-catalog/docs/model-catalog.md). The binary
 facts under `packages/kiro-cli/extracted/` contain only engine and settings
 measurements.

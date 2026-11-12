@@ -430,3 +430,14 @@ belt-and-braces, not the mechanism.
 | `lib/update.nix`                                | Declares `config.update.targets` (the option declaration)      |
 | `packages/<owner>/registry.nix`                 | Owner update targets, source paths, and cache metadata         |
 | `.github/workflows/update.yml`                  | CI workflow (Renovate-style per-dependency PRs)                |
+
+### Authenticated Kiro catalog refresh
+
+`kiro-model-catalog` keeps the existing custom update-script lane with a stable
+package version. Its script changes committed facts directly, so a changed
+catalog is a source update even when the version stays the same. The updater
+validates JSON from the pinned unwrapped CLI before replacement and preserves
+suggestions on failure. See
+[the catalog contract](../../../packages/kiro-model-catalog/docs/model-catalog.md)
+and
+[workflow credential and failure handling](ci-update-workflow.md#authenticated-kiro-catalog-refresh).

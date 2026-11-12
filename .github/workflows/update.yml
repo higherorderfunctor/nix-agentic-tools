@@ -149,6 +149,9 @@ jobs:
         timeout-minutes: ${{ fromJSON(steps.budget.outputs.minutes || '1') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KIRO_API_KEY:
+            ${{ matrix.name == 'kiro-model-catalog' && secrets.KIRO_API_KEY ||
+            '' }}
           NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
           UPDATE_TARGET_JSON: ${{ toJSON(matrix) }}
         run: |
@@ -187,7 +190,7 @@ jobs:
       # the verdict (and its ::error) when publish or auto-merge arming fails.
       # Successful preparation must have written prepared.json first; a failed
       # or timed-out preparation has no completed verification to report.
-      - name: Fail on failed build verification
+      - name: Fail on build verification or catalog refresh failure
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: |
           set -euETo pipefail

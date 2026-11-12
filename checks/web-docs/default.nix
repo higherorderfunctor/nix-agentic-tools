@@ -1,6 +1,6 @@
 {pkgs, ...}: let
   certificateBundle = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-  snapshots = [pkgs.docs.kimchi-docs pkgs.docs.kiro-model-catalog.src pkgs.docs.slack-mcp.src];
+  snapshots = [pkgs.docs.kimchi-docs pkgs.docs.slack-mcp.src];
 in {
   checks.web-docs-fixtures =
     # Both variables must be pinned: OpenSSL prefers NIX_SSL_CERT_FILE, and
@@ -11,7 +11,6 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.python3}/bin/python3 ${./snapshot.py} ${../../lib/web-docs/snapshot.py} \
           ${pkgs.docs.kimchi-docs.snapshotConfig} ${pkgs.docs.kimchi-docs} \
-          ${pkgs.docs.kiro-model-catalog.src.snapshotConfig} ${pkgs.docs.kiro-model-catalog.src} \
           ${pkgs.nix}/bin/nix
         touch "$out"
       '';
