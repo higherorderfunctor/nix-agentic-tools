@@ -1007,6 +1007,8 @@
         && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
         && lib.all (route: route.family.defaultEffort == "medium") (lib.filter (route: route.family.name == "opus") routingView.routes)
         && routingView.runtimes == ["claude" "codex"]
+        && map (route: route.maker) routingView.routes == ["anthropic" "anthropic"]
+        && map (route: route.maker) routingView.manualRoutes == ["anthropic"]
         && routes
         == [
           {
@@ -1082,7 +1084,7 @@
         resolver = import ../lib/agent-files.nix {inherit lib;};
         off = change {ai.programs.delegate-routing.runtimes.claude.techniques."Agent with generated agent file".enable = false;};
         missing = change {ai.programs.delegate-routing.runtimes.claude.models = [{families = ["flash"];}];};
-        example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4-6";};
         glmExample = change {
           ai.programs.delegate-routing = {
             families.zhipu.glm = {
@@ -1132,7 +1134,7 @@
         && lib.hasInfix "effort: \"medium\"" fixedResult.config.ai.claude.agents.fable
         && lib.hasInfix "model: \"test-opus-5-10\"" fixedResult.config.ai.claude.agents.opus
         && lib.hasInfix "This file pins the model, and the family's default effort when Claude's agent-file format accepts it" agents.haiku
-        && lib.hasInfix "model: \"claude-opus-4.6\"" example.config.ai.claude.agents.opus
+        && lib.hasInfix "model: \"claude-opus-4-6\"" example.config.ai.claude.agents.opus
         # Numeric segment order: 10 > 9, 5-1 > 5, 6.1 > 6 > 5.6, and zero-padded
         # dated segments compare as numbers instead of aborting.
         && lib.all (case:
@@ -1197,12 +1199,18 @@
             passes evaluation && lib.hasInfix "effort: \"${effort}\"" evaluation.config.ai.claude.agents.opus) ["low" "medium" "high" "xhigh"]
           && (let
             evaluation = change {
-              ai.programs.delegate-routing = {
-                families.served.flash = {
-                  defaultEffort = "max";
-                  example.claude = "test-flash-1";
+              ai = {
+                catalog.models.test-flash-1 = {
+                  maker = "fixture-maker";
+                  source = "synthetic unsupported-effort fixture";
                 };
-                runtimes.claude.models = [{families = ["flash"];}];
+                programs.delegate-routing = {
+                  families.served.flash = {
+                    defaultEffort = "max";
+                    example.claude = "test-flash-1";
+                  };
+                  runtimes.claude.models = [{families = ["flash"];}];
+                };
               };
             };
           in
@@ -1387,7 +1395,7 @@
     "module-delegate-routing-${name}-launch-routes" = mkTest "delegate-routing-${name}-launch-routes" (
       let
         noWorkflow = fixedSkill {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;};
-        withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4-6";};
         glm = skill {
           ai.programs.delegate-routing = {
             families.zhipu.glm = {
@@ -1414,7 +1422,7 @@
         && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
         && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id the highest id matching `test-opus-*`" noWorkflow
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4-6`, else `Workflow` with full model id `claude-opus-4-6`" withExample
         && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
         && lib.hasInfix "glm (zhipu) `glm-*`" glm
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
@@ -2264,6 +2272,20 @@ in {
           skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
         });
         fallback = content.passthru.mkSkill {
+          catalog = let
+            identities = import ../../ai-module/lib/catalog/resolve.nix {inherit lib;};
+          in
+            identities.resolve {
+              models =
+                identities.defaults.models
+                // {
+                  test-opus-5-2 = {
+                    aliases = {};
+                    maker = "anthropic";
+                    source = "synthetic standalone builder fixture";
+                  };
+                };
+            };
           runtime = "claude";
           skill = withFamilies content.passthru.skill;
           families = lib.recursiveUpdate content.passthru.families {

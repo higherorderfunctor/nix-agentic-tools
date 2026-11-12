@@ -38,6 +38,10 @@
     if catalog != null && catalog.runtimes ? ${target} && id != null && !lib.elem id ids
     then throw "delegate-routing: model ${id} is not reachable in catalog runtime ${target}."
     else id;
+  modelIdentity = id:
+    if catalog != null
+    then catalog.modelFor id
+    else ((import ../../ai-module/lib/catalog/resolve.nix {inherit lib;}).resolve {}).modelFor id;
   selected = target:
     lib.filter (family:
       catalog == null || !(catalog.runtimes ? ${target}) || resolvedModel family target != null)
@@ -86,19 +90,41 @@
       # spelling here; disabled/non-launch techniques never enter this list.
       if lib.trim node.modelArg == ""
       then throw "ai.programs.delegate-routing.runtimes.${target}.techniques.${lib.strings.escapeNixIdentifier name}.modelArg: name the model value spelling for techniques that pin model and effort"
-      else {
-        inherit agent name node;
-        model = {
-          isPattern = lib.trim id == "";
-          value =
-            if lib.trim id != ""
-            then id
-            else family.match;
+      else
+        builtins.seq (
+          if lib.trim id == ""
+          then null
+          else (modelIdentity id).maker
+        ) {
+          inherit agent name node;
+          model = {
+            isPattern = lib.trim id == "";
+            value =
+              if lib.trim id != ""
+              then id
+              else family.match;
+          };
         };
-      };
+    launches = map technique names;
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
+    # The selected family is associated with concrete model identities without
+    # treating its provider grouping as the maker.
+    maker = let
+      ids = lib.unique (lib.filter (id: id != null)
+        (map (technique:
+          if technique.model.isPattern
+          then null
+          else technique.model.value)
+        launches));
+      makers = lib.unique (map (id: (modelIdentity id).maker) ids);
+    in
+      if makers == []
+      then null
+      else if lib.length makers == 1
+      then lib.head makers
+      else throw "delegate-routing: selected family ${family.name} spans multiple model makers.";
     pool = selection.poolFor catalog family target (resolvedModel family target);
     techniques =
       if names == []
@@ -108,7 +134,7 @@
           then "; from another harness it must be an external technique, otherwise ${target} must not be reached"
           else ""
         }"
-      else map technique names;
+      else launches;
   };
   routes = lib.concatMap (family:
     map (reach family) (builtins.filter (target: builtins.elem family (selected target)) runtimes))
