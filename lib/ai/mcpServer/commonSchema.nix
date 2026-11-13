@@ -283,7 +283,10 @@ in {
             '';
           };
           host = lib.mkOption {
-            type = lib.types.str;
+            # A bare address or hostname. Brackets and a `%` zone suffix are
+            # refused here: the client url adds its own brackets, and neither
+            # form is a usable `bind` value or a valid url authority.
+            type = lib.types.strMatching "[^][%[:space:]]+";
             default = "127.0.0.1";
             description = ''
               Address the proxy listens on. Emitted as the Caddy `bind`

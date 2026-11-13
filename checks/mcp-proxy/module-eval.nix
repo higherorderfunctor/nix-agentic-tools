@@ -235,6 +235,17 @@ in {
           && !(lib.hasInfix "{\${" cf)
       );
 
+      # An IPv6 loopback bind must still hand clients a parseable URL: the
+      # literal goes in brackets in the url, while Caddy's `bind` keeps it bare.
+      module-mcp-proxy-client-entry-brackets-ipv6 = mkTest "mcp-proxy-client-entry-brackets-ipv6" (
+        let
+          server = lib.recursiveUpdate proxySampleServer {proxy.host = "::1";};
+        in
+          (mcpProxyLib.clientEntry "example" server).url
+          == "http://[::1]:9501/"
+          && lib.hasInfix "bind ::1\n" (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" server)).text
+      );
+
       # The property under test is NEGATIVE and easy to regress silently: a
       # proxied server must hand the client NOTHING secret. Assert the
       # loopback url is there AND that no header, no secret path, and no
@@ -351,6 +362,32 @@ in {
           };
         })
         true)).success);
+
+      # `proxy.host` takes a bare address: the client url brackets IPv6 itself,
+      # so a pre-bracketed host would render `[[::1]]`, and a `%` zone suffix is
+      # neither a valid url authority nor a usable `bind`. `::1` is the control.
+      module-mcp-proxy-host-refuses-brackets-and-zones = mkTest "mcp-proxy-host-refuses-brackets-and-zones" (
+        let
+          hostAccepted = host:
+            (builtins.tryEval (builtins.deepSeq
+              (evalHm {
+                ai.mcpServers.example = lib.recursiveUpdate proxySampleServer {proxy.host = host;};
+              })
+              .config
+              .ai
+              .mcpServers
+              .example
+              .proxy
+              .host
+              null))
+            .success;
+        in
+          hostAccepted "::1"
+          && hostAccepted "127.0.0.1"
+          && !(hostAccepted "[::1]")
+          && !(hostAccepted "fe80::1%eth0")
+          && !(hostAccepted "")
+      );
 
       # A plain-string header on a proxied server is NOT a credential and must
       # keep working — the guard above has to reject secrets without rejecting

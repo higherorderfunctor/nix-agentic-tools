@@ -150,7 +150,15 @@
   clientEntry = _name: srv:
     {
       type = "http";
-      url = "http://${srv.proxy.host}:${toString srv.proxy.port}/";
+      # An IPv6 literal such as `::1` needs brackets in a URL authority
+      # (RFC 3986 §3.2.2); `bind` takes it bare, so only the url wraps it.
+      url = let
+        inherit (srv.proxy) host;
+        authority =
+          if lib.hasInfix ":" host
+          then "[${host}]"
+          else host;
+      in "http://${authority}:${toString srv.proxy.port}/";
     }
     // lib.optionalAttrs ((srv.headers or {}) != {}) {
       inherit (srv) headers;
