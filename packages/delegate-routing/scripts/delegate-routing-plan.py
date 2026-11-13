@@ -177,10 +177,10 @@ def run_picker(entry, payload, shell, state, feedback=None):
     prompt = prompt.encode("utf-8")
     if len(prompt) > PICKER_PROMPT_LIMIT:
         raise ValueError("picker prompt limit")
-    prompt_path, output_path, events_path = (directory / name for name in ("prompt.json", "result.json", "events.jsonl"))
+    prompt_path, output_path, events_path, stderr_path = (directory / name for name in ("prompt.json", "result.json", "events.jsonl", "stderr"))
     prompt_path.write_bytes(prompt)
     (directory / "schema.json").write_text(schema)
-    for path in (output_path, events_path):
+    for path in (output_path, events_path, stderr_path):
         path.unlink(missing_ok=True)
     command = entry["resumeCommand"] if resume else entry["command"]
     if not resume and entry.get("sessionIdSource") == "generated":
@@ -193,10 +193,10 @@ def run_picker(entry, payload, shell, state, feedback=None):
     # One pass: a substituted value is never scanned for a later token.
     command = re.sub("|".join(map(re.escape, values)), lambda token: shlex.quote(values[token.group()]), command)
     argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
-    with subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, cwd=state.get("cwd"), env=state.get("env")) as process:
+    with stderr_path.open("wb") as stderr, subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True, cwd=state.get("cwd"), env=state.get("env")) as process:
         deadline = time.monotonic() + PICKER_TIMEOUT
         while process.poll() is None:
-            if any(path.exists() and path.stat().st_size > PICKER_OUTPUT_LIMIT for path in (output_path, events_path)):
+            if any(path.exists() and path.stat().st_size > PICKER_OUTPUT_LIMIT for path in (output_path, events_path, stderr_path)):
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
                 raise ValueError("picker output limit")
@@ -219,7 +219,11 @@ def run_picker(entry, payload, shell, state, feedback=None):
                 if isinstance(identifier, str) and 0 < len(identifier) <= 128 and identifier.isascii() and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", identifier):
                     state["session_id"] = identifier
                 break
+    stderr = picker_read(stderr_path)
     if process.returncode:
+        # A CLI can fail before saving the generated/captured session ID.
+        if resume and any(b"no conversation found" in data.lower() for data in (stderr, raw, events)):
+            state.pop("session_id", None)
         raise subprocess.CalledProcessError(process.returncode, argv)
     if not raw:
         raise ValueError("picker wrote no output")
@@ -231,17 +235,26 @@ def run_picker(entry, payload, shell, state, feedback=None):
     return raw
 
 
+PICKER_FAILURE_MESSAGES = {
+    "duplicate JSON key": "invalid JSON: duplicate key",
+    "incomplete picker coverage": "incomplete picker coverage",
+    "invalid picker decision": "invalid decisions: invalid picker decision",
+    "invalid picker envelope": "invalid picker envelope",
+    "invalid picker schema": "invalid decisions: invalid picker schema",
+    "non-finite JSON number": "invalid JSON: non-finite number",
+    "picker output limit": "picker output limit",
+    "picker prompt limit": "picker prompt limit",
+    "picker wrote no output": "picker wrote no output",
+}
+
+
 def picker_feedback(error):
     """Only locally authored validation diagnostics become correction data."""
     if isinstance(error, json.JSONDecodeError):
         return f"{error.msg}: line {error.lineno} column {error.colno} (char {error.pos})"
     if isinstance(error, UnicodeError):
         return "invalid Unicode"
-    if type(error) is ValueError and str(error) in {
-        "duplicate JSON key", "incomplete picker coverage", "invalid picker decision",
-        "invalid picker envelope", "invalid picker schema", "non-finite JSON number",
-        "picker wrote no output",
-    }:
+    if type(error) is ValueError and str(error) in PICKER_FAILURE_MESSAGES and str(error) not in {"picker output limit", "picker prompt limit"}:
         return str(error)
     return None
 
@@ -284,19 +297,8 @@ def picker_failure_reason(error):
     if isinstance(error, subprocess.CalledProcessError):
         return f"exited {error.returncode}"
     # Only these locally authored ValueErrors may supply text to the warning.
-    messages = {
-        "duplicate JSON key": "invalid JSON: duplicate key",
-        "incomplete picker coverage": "incomplete picker coverage",
-        "invalid picker decision": "invalid decisions: invalid picker decision",
-        "invalid picker envelope": "invalid picker envelope",
-        "invalid picker schema": "invalid decisions: invalid picker schema",
-        "non-finite JSON number": "invalid JSON: non-finite number",
-        "picker output limit": "picker output limit",
-        "picker prompt limit": "picker prompt limit",
-        "picker wrote no output": "picker wrote no output",
-    }
-    if type(error) is ValueError and str(error) in messages:
-        return messages[str(error)]
+    if type(error) is ValueError and str(error) in PICKER_FAILURE_MESSAGES:
+        return PICKER_FAILURE_MESSAGES[str(error)]
     for kind, reason in (
         (json.JSONDecodeError, "invalid JSON"),
         (UnicodeError, "invalid Unicode"),
@@ -708,9 +710,12 @@ def request_errors(manifest, context, roles):
             for field, choices in (("outputFormat", ("claude-json", "json")), ("sessionIdSource", (None, "codex-events", "generated"))):
                 if entry.get(field, "json" if field == "outputFormat" else None) not in choices:
                     refuse(f"{path}.{field}", f"{CONFIGURATION_FAULT}invalid picker protocol")
+            # Standalone --manifest JSON bypasses the Nix technique type.
             resume = entry.get("resumeCommand")
             if resume is not None and (not isinstance(resume, str) or not resume.strip() or "<session-id>" not in resume):
                 refuse(f"{path}.resumeCommand", f"{CONFIGURATION_FAULT}must be a non-empty template binding <session-id>")
+            if isinstance(resume, str) and (re.search(r"--continue|--last", resume) or (resume.startswith("claude ") and re.search(r"(?:^|\s)-c(?:\s|$)", resume))):
+                refuse(f"{path}.resumeCommand", f"{CONFIGURATION_FAULT}latest-session selectors are forbidden")
             source_token = {"codex-events": "<events-file>", "generated": "<session-id>"}.get(entry.get("sessionIdSource")) if isinstance(entry.get("sessionIdSource"), str) else None
             if source_token and (not isinstance(entry.get("command"), str) or source_token not in entry["command"]):
                 refuse(f"{path}.command", f"{CONFIGURATION_FAULT}session ID source requires {source_token}")

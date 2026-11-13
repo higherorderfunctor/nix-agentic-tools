@@ -6,7 +6,15 @@
   codexCommand = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
   # The initial and resumed picker share pins, native schema and tool removal.
   claudePicker = session: ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --system-prompt 'Return JSON only.' --json-schema <schema-json> --output-format json ${session} < <prompt-file> > <output-file>'';
-  codexPicker = subcommand: session: ''codex exec ${subcommand} --model <model> --config model_reasoning_effort=<effort> -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --skip-git-repo-check -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' --output-schema <schema-file> --json --output-last-message <output-file> ${session} - < <prompt-file> > <events-file>'';
+  codexPicker = subcommand: session: ''codex exec ${
+      if subcommand == ""
+      then ""
+      else subcommand + " "
+    }--model <model> --config model_reasoning_effort=<effort> -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --skip-git-repo-check -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' --output-schema <schema-file> --json --output-last-message <output-file> ${
+      if session == ""
+      then ""
+      else session + " "
+    }- < <prompt-file> > <events-file>'';
   usageNotes = "prints the usage schema: windows{usedPercent,remainingPercent,resetsAt,status,windowSeconds}, balances, bonuses";
 in {
   claude = {
@@ -75,7 +83,8 @@ in {
     "codex exec" = {
       command = codexCommand;
       # routing-plan-runtime.py: native initial/resume calls send no `tools` key to the
-      # Responses request. Flags alone leave code-mode exec and wait; the helper's
+      # Responses request when CODEX_PICKER_COMMAND and CODEX_PICKER_RESUME_COMMAND
+      # supply raw CLI templates; otherwise it skips. Flags alone leave code-mode exec and wait; the helper's
       # one-model <catalog-file> (tool_mode direct, shell disabled, no apply_patch)
       # removes them. One live ChatGPT-authenticated check is still owed.
       pickerCommand = {

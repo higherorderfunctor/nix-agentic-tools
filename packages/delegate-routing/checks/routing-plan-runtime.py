@@ -301,6 +301,45 @@ class Routing(unittest.TestCase):
                 self.assertIn(json.dumps(payload).encode(), original)
                 self.assertEqual((directory / "retry-id").read_text(), identifier)
 
+    def test_picker_unsaved_session_retries_fresh_with_full_request(self):
+        # Wrong: all remaining attempts resume an ID the CLI never saved.
+        config, ctx = self.picker_fixture()
+        valid = self.decisions(("writer", "sol", "keep"))
+        with tempfile.TemporaryDirectory() as directory:
+            marker = shlex.quote(str(Path(directory) / "started"))
+            prompt = Path(directory) / "fresh-prompt"
+            config["pickerEntries"][0].update({
+                "command": "true ; if test -f " + marker + "; then printf '%s' " + shlex.quote(valid.decode()) + " > <output-file>; cp <prompt-file> " + shlex.quote(str(prompt)) + "; else touch " + marker + "; exit 1; fi # <session-id>",
+                "resumeCommand": "printf 'No conversation found with session ID private' >&2; exit 1 # <session-id>",
+                "sessionIdSource": "generated",
+            })
+            with patch.object(helper, "run_picker", wraps=helper.run_picker) as picker, patch.object(helper.time, "sleep"):
+                result = helper.plan(config, ctx, ("writer",), NOW, SHELL, lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stream()))
+            self.assertEqual(picker.call_count, 3)
+            self.assertIn(ctx["taskSummary"], prompt.read_text())
+            self.assertIn('"families"', prompt.read_text())
+            self.assertIn("picker", result)
+            self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
+
+    def test_picker_invalid_envelope_repairs_and_warns_safely(self):
+        # Wrong: malformed Claude envelopes skip correction or leak their contents.
+        config, ctx = self.picker_fixture()
+        valid = json.loads(self.decisions(("writer", "sol", "keep")))
+        good = json.dumps({"type": "result", "subtype": "success", "is_error": False, "structured_output": valid}).encode()
+        bad = b'{"type":"result","subtype":"error","private":"secret"}'
+        config["pickerEntries"][0].update(command="true", outputFormat="claude-json")
+        for replies, attempts in (([b"", bad, b"", b"", good, b""], 2), ([b"", bad, b""] * 3, 3)):
+            with patch.object(helper, "picker_read", side_effect=replies), patch.object(helper, "run_picker", wraps=helper.run_picker) as picker, patch.object(helper.time, "sleep"):
+                result = helper.plan(config, ctx, ("writer",), NOW, SHELL, lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stream()))
+            self.assertEqual(picker.call_count, attempts)
+            self.assertEqual(picker.call_args.args[4], "invalid picker envelope")
+            self.assertNotIn("secret", json.dumps(result))
+            if attempts == 2:
+                self.assertIn("picker", result)
+                self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
+            else:
+                self.assert_picker_warning(result, "invalid picker envelope")
+
     def test_picker_missing_or_malformed_session_events_use_fresh_repairs(self):
         # Wrong: missing/unusable telemetry selects the latest or stale session.
         for events in (b"", b"broken", b'[]', b'{"type":"thread.started","thread_id":false}', b'{"type":"thread.started","thread_id":"--last"}'):
@@ -350,7 +389,7 @@ class Routing(unittest.TestCase):
 
     def test_picker_protocol_manifest_refuses_inconsistent_metadata(self):
         # Wrong: bad protocol declarations reach Readers/subprocesses.
-        for fields, key in [({"outputFormat": "unknown"}, "outputFormat"), ({"sessionIdSource": []}, "sessionIdSource"), ({"resumeCommand": "cli --last"}, "resumeCommand"), ({"resumeCommand": "cli <session-id>"}, "sessionIdSource"), ({"sessionIdSource": "generated"}, "command"), ({"sessionIdSource": "codex-events"}, "command")]:
+        for fields, key in [({"outputFormat": "unknown"}, "outputFormat"), ({"sessionIdSource": []}, "sessionIdSource"), ({"command": "cli <session-id>", "resumeCommand": "cli --last <session-id>", "sessionIdSource": "generated"}, "resumeCommand"), ({"command": "claude <session-id>", "resumeCommand": "claude -c <session-id>", "sessionIdSource": "generated"}, "resumeCommand"), ({"resumeCommand": "cli <session-id>"}, "sessionIdSource"), ({"sessionIdSource": "generated"}, "command"), ({"sessionIdSource": "codex-events"}, "command")]:
             config, ctx = self.picker_fixture()
             config["pickerEntries"][0].update(fields)
             errors = self.request_errors(config, ctx)

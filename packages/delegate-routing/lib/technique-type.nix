@@ -36,10 +36,12 @@ lib.types.submodule {
       description = "Runtime-specific controls and constraints.";
     };
     pickerCommand = lib.mkOption {
-      type = lib.types.nullOr (lib.types.submodule {
+      type = lib.types.nullOr (lib.types.submodule ({config, ...}: {
         options = {
           command = lib.mkOption {
-            type = lib.types.nonEmptyStr;
+            type = lib.types.addCheck lib.types.nonEmptyStr (command:
+              (config.sessionIdSource != "generated" || lib.hasInfix "<session-id>" command)
+              && (config.sessionIdSource != "codex-events" || lib.hasInfix "<events-file>" command));
             description = "Initial template using <model>, <effort>, <prompt-file>, <output-file>, <events-file>, <schema-file>, <schema-json>, <session-id> and, for Codex, <catalog-file> (a one-model tool-free catalog the helper writes), each substituted as a shell literal. The first word must be a bare executable name found on PATH; the helper skips a picker whose executable is not.";
           };
           outputFormat = lib.mkOption {
@@ -49,11 +51,14 @@ lib.types.submodule {
           };
           resumeCommand = lib.mkOption {
             # Latest-session selectors can override the explicit ID in custom templates.
-            type =
-              lib.types.nullOr (lib.types.addCheck lib.types.nonEmptyStr (command:
-                  !(lib.any (selector: lib.hasInfix selector command) ["--continue" "--last"])));
+            type = lib.types.nullOr (lib.types.addCheck lib.types.nonEmptyStr (command:
+              config.sessionIdSource
+              != null
+              && lib.hasInfix "<session-id>" command
+              && !(lib.any (selector: lib.hasInfix selector command) ["--continue" "--last"])
+              && (!(lib.hasPrefix "claude " command) || builtins.match ".*[[:space:]]-c([[:space:]]|$).*" command == null)));
             default = null;
-            description = "Same-session correction template, binding <session-id> and retaining initial model, effort and tool restrictions; --continue and --last are forbidden.";
+            description = "Same-session correction template, binding <session-id> and retaining initial model, effort and tool restrictions; --continue and --last are forbidden, as is Claude’s -c.";
           };
           sessionIdSource = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["codex-events" "generated"]);
@@ -66,7 +71,7 @@ lib.types.submodule {
             description = "Whether source or offline provider capture proves this command exposes no executable tools, including MCP and delegation; a native structured-output protocol tool may only submit the result. Unproven templates are unavailable.";
           };
         };
-      });
+      }));
       default = null;
       description = "Technique-owned bounded picker command and verified tool removal; null cannot serve as a picker.";
     };

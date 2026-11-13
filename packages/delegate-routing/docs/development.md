@@ -492,11 +492,12 @@ successful `structured_output` is extracted; free text is not a substitute.
 
 Each entry gets at most three subprocess calls total, including transport
 failures and validation repairs, with two seconds only between calls. Each call
-has a 90-second timeout and 65536-byte result and event limits; prompt bytes are
-bounded at `7 * 65536` to accommodate escaped task data. Timeout/output overrun
-kills the process group. Prompt/output overflow and unavailable catalogs end the
-entry immediately. Exhaustion advances to the next entry and preserves safe
-fallback warnings, without subprocess stderr or model replies.
+has a 90-second timeout and 65536-byte result, event and stderr limits; prompt
+bytes are bounded at `7 * 65536` to accommodate escaped task data.
+Timeout/output overrun kills the process group. Prompt/output overflow and
+unavailable catalogs end the entry immediately. Exhaustion advances to the next
+entry and preserves safe fallback warnings, without subprocess stderr or model
+replies.
 
 Claude receives a generated UUID; Codex captures the `thread.started` ID from
 JSONL events while reading its answer from the last-message file. A rejected
@@ -504,18 +505,23 @@ reply resumes that exact session with only “Correct your previous submission�
 and the exact local validator error as JSON-string data. JSON syntax diagnostics
 include position, never the rejected document. A transport failure with a known
 session ID resumes that session and sends again the full original request when
-no validator error is available. Missing IDs or non-resumable commands use the
-full original request plus the latest error. Repairs retain model, effort,
-task/pair set, working directory and tool restrictions. Each call clears
-result/event files so stale output cannot be accepted.
+no validator error is available. A resume reporting “No conversation found”
+clears the ID so the next budgeted call starts fresh. Missing IDs or
+non-resumable commands use the full original request plus the latest error.
+Repairs retain model, effort, task/pair set, working directory and tool
+restrictions. Each call clears result/event files so stale output cannot be
+accepted.
 
 Both native templates retain normal CLI session logging: neither
 `--no-session-persistence` nor `--ephemeral` is passed. Scratch is deleted after
-the entry; native session histories are retained. Codex resolves `CODEX_HOME`
-before entering stable scratch and writes one tool-free model catalog from its
-`models_cache.json`. Missing/unreadable models make the entry unavailable.
-Claude keeps its working directory and normal auth/provider settings, with
-hooks, slash commands and MCP disabled and an empty executable tool set.
+the entry; native session histories are retained. Claude runs in the caller’s
+project directory, so its picker session appears in that project’s `/resume`
+history and is what `claude --continue` would pick up there. Codex resolves
+`CODEX_HOME` before entering stable scratch and writes one tool-free model
+catalog from its `models_cache.json`. Missing/unreadable models make the entry
+unavailable. Claude keeps its working directory and normal auth/provider
+settings, with hooks, slash commands and MCP disabled and an empty executable
+tool set.
 
 Offline tests with Codex 0.169.0 and Claude 2.1.323 exercise native schema,
 initial/resumed requests and session-store persistence against localhost fake

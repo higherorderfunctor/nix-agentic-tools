@@ -984,53 +984,25 @@
         && (lib.head cross).sessionIdSource == "generated"
         && (lib.last cross).outputFormat == "json"
         && (lib.last cross).sessionIdSource == "codex-events"
-        && lib.hasInfix "--session-id <session-id>" (lib.head cross).command
-        && lib.hasInfix "--resume <session-id>" (lib.head cross).resumeCommand
-        && lib.hasPrefix "codex exec resume " (lib.last cross).resumeCommand
-        && lib.all (command:
-          lib.all (part: lib.hasInfix part command) [
-            "--disable-slash-commands"
-            "--effort <effort>"
-            "--json-schema <schema-json>"
-            ''--mcp-config '{"mcpServers":{}}' ''
-            "--model <model>"
-            "--output-format json"
-            ''--settings '{"disableAllHooks":true}' ''
-            "--strict-mcp-config"
-            ''--tools ""''
-          ]
-          && !(lib.hasInfix "--no-session-persistence" command)) [(lib.head cross).command (lib.head cross).resumeCommand]
-        && lib.all (command:
-          lib.all (part: lib.hasInfix part command) [
-            "--config model_reasoning_effort=<effort>"
-            "--disable apps"
-            "--disable goals"
-            "--disable image_generation"
-            "--disable plugins"
-            "--disable shell_tool"
-            "--disable tool_suggest"
-            "--disable view_image"
-            "--ignore-rules"
-            "--ignore-user-config"
-            "--json"
-            "--model <model>"
-            "--output-last-message <output-file>"
-            "--output-schema <schema-file>"
-            "--skip-git-repo-check"
-            "-c agents.enabled=false"
-            ''-c 'approval_policy="never"' ''
-            "-c model_catalog_json=<catalog-file>"
-            ''-c 'sandbox_mode="read-only"' ''
-            "-c tools.experimental_request_user_input.enabled=false"
-            ''-c 'web_search="disabled"' ''
-            "> <events-file>"
-          ]
-          && !(lib.hasInfix "--ephemeral" command)) [(lib.last cross).command (lib.last cross).resumeCommand]
+        && (lib.head cross).command == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --system-prompt 'Return JSON only.' --json-schema <schema-json> --output-format json --session-id <session-id> < <prompt-file> > <output-file>''
+        && (lib.head cross).resumeCommand == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --system-prompt 'Return JSON only.' --json-schema <schema-json> --output-format json --resume <session-id> < <prompt-file> > <output-file>''
+        && (lib.last cross).command == ''codex exec --model <model> --config model_reasoning_effort=<effort> -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --skip-git-repo-check -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' --output-schema <schema-file> --json --output-last-message <output-file> - < <prompt-file> > <events-file>''
+        && (lib.last cross).resumeCommand == ''codex exec resume --model <model> --config model_reasoning_effort=<effort> -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --skip-git-repo-check -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' --output-schema <schema-file> --json --output-last-message <output-file> <session-id> - < <prompt-file> > <events-file>''
         # Wrong: a custom resume template selects the latest session beside its ID.
         && lib.all (selector:
           skillFails {
             ai.programs.delegate-routing.runtimes.claude.techniques."claude -p".pickerCommand.resumeCommand = "claude -p --resume <session-id> ${selector}";
-          }) ["--continue" "--last"]
+          }) ["--continue" "--last" "-c"]
+        # Wrong: inconsistent session metadata reaches helper execution.
+        && lib.all (pickerCommand:
+          skillFails {
+            ai.programs.delegate-routing.runtimes.claude.techniques."claude -p".pickerCommand = pickerCommand;
+          }) [
+          {resumeCommand = "claude --resume";}
+          {sessionIdSource = null;}
+          {command = "claude";}
+          {sessionIdSource = "codex-events";}
+        ]
         && refused [entry entry]
         && refused [(entry // {model = "unknown";})]
         && refused [(entry // {technique = "Workflow";})]

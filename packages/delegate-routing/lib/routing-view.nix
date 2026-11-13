@@ -108,10 +108,7 @@
     else {
       inherit (entry) effort model technique;
       runtime = route.target;
-      inherit (node.pickerCommand) command toolFree;
-      outputFormat = node.pickerCommand.outputFormat or "json";
-      resumeCommand = node.pickerCommand.resumeCommand or null;
-      sessionIdSource = node.pickerCommand.sessionIdSource or null;
+      inherit (node.pickerCommand) command outputFormat resumeCommand sessionIdSource toolFree;
       family = route.family.name;
       inherit (route) pool;
     };
