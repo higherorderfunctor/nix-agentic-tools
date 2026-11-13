@@ -75,7 +75,8 @@ generic `ai.services` launcher before it execs upstream argv.
 | ---------------------------- | --------------------------- | ---------------------------------------------- |
 | Client-launched stdio server | `lib/mcp.nix` stdio wrapper | Next client launch                             |
 | Managed MCP daemon           | `ai.services` launcher      | File references derive shared restart triggers |
-| Proxy daemon                 | `ai.services` launcher      | File references derive shared restart triggers |
+| Proxy daemon, file headers   | Caddy request variable      | Next request, without restart                  |
+| Proxy daemon, redact values  | `ai.services` launcher      | File references derive shared restart triggers |
 
 Home Manager compares trigger file content after the secrets point and
 try-restarts a running daemon when its recorded fingerprint changes. The first
@@ -93,9 +94,9 @@ helpers (`envRef`, `globalBlock`, `strippedHopHeaders`, `proxyTuning`,
 `checks/mcp-proxy/example.Caddyfile` pins the proxy's rendering byte for byte.
 `lib/ai/sharedOptions.nix` owns declaration identity and declares
 `ai.internal.services.mcp-proxy-<name>`. ai-module lowers its ordinary service
-lifecycle. The daemon reads each secret from its file at START, injects the
-headers outbound, and listens UNAUTHENTICATED on loopback. Clients get
-`{ type = "http"; url = "http://127.0.0.1:<port>/"; }`.
+lifecycle. The daemon resolves redact values at START and file headers per
+REQUEST, injects the headers outbound, and listens UNAUTHENTICATED on loopback.
+Clients get `{ type = "http"; url = "http://127.0.0.1:<port>/"; }`.
 
 Ownership is explicit and keyed by the MCP server attribute name:
 
@@ -128,7 +129,8 @@ wrong.** It also stops being Kiro-only: `renderServer` throws when a credential
 reaches Claude/the shared pool, and the proxied entry contains none, so those
 ecosystems can consume it.
 
-**Where the secret is, and is not** — the measurement that decides the design:
+**Where a redact-backed secret is, and is not** — the measurement that decides
+its delivery:
 
 | Location                               | Secret there?                          |
 | -------------------------------------- | -------------------------------------- |
@@ -173,8 +175,9 @@ there.
 substitution BEFORE `execve()`, so the kernel stores the literal value and any
 local user can read it. Measured 2026-08-06: a process spawned as
 `… -H X-Token "$(cat f)"` shows `FAKE-SECRET-abc123` in a world-readable
-`cmdline`. This is why nothing is passed as an argument and everything goes
-through the environment.
+`cmdline`. This is why redact-reference proxy headers pass credentials through
+the daemon environment instead of arguments. File headers are read per request,
+so replacing their files needs no restart.
 
 **Three traps worth knowing before editing `mcpProxy.nix` or `caddy.nix`:**
 
@@ -201,9 +204,10 @@ through the environment.
   after the host, `${_rest#*/}` returns `_rest` unchanged and the path silently
   becomes the hostname.
 
-Every consumer uses `redact.assign`: missing, unreadable, empty, NUL-bearing
-references and failed commands abort before launch or materialization. Errors
-name the consumer option without printing values or command output.
+Every redact consumer uses `redact.assign`: missing, unreadable, empty,
+NUL-bearing references and failed commands abort before launch or
+materialization. Errors name the consumer option without printing values or
+command output.
 
 ### Two header surfaces, and which one is which
 
@@ -214,9 +218,44 @@ Since 2026-08-13 the two are SPLIT, and the split is the whole interface:
 | `<server>.headers` | what the CLIENT sends            | **no — asserts**       |
 | `proxy.headers`    | what the DAEMON injects upstream | yes, that is the point |
 
-`proxy.headers` takes three value shapes: a credential (read from its file at
+`proxy.headers` takes four value shapes: a credential (read from its file at
 daemon start and injected), a plain string (injected literally), or **`null`**
-(DELETED, so a header the client sent never reaches the upstream).
+(DELETED, so a header the client sent never reaches the upstream), or a
+request-time file header:
+
+```nix
+proxy.headers.Authorization = {
+  file = "/run/credentials/mcp-token";
+  prefix = "Bearer "; # Optional public literal; defaults to empty.
+};
+```
+
+File headers capture the file once per request and overwrite the client's
+header, ignoring case. Caddy strips one terminal LF or CRLF. The remaining value
+must be a nonempty token matching `[A-Za-z0-9._~+/-]+=*`; missing, unreadable,
+empty or malformed files return `503 Credential unavailable` locally without an
+upstream request. This checks syntax only, not expiry or remote authorization.
+Publish replacements by atomic rename: the next request uses the replacement
+without a restart, while an already-open stream continues with its original
+request. File paths never enter `redact` or service restart triggers.
+
+Paths must be absolute strings without Nix string context, outside the Nix
+store, containing only letters, digits, underscore, dot, slash and hyphen.
+Empty, `.` and `..` path segments are refused, so lexical aliases cannot bypass
+the store-path check; symlinks are not resolved. Prefixes accept letters,
+digits, spaces and `._~+/ :=@-` punctuation; braces, quotes, backslashes and
+controls are refused at the schema. File header names accept letters, digits and
+hyphens, cannot duplicate another configured name ignoring case, and cannot name
+the stripped `Via` or `X-Forwarded-*` headers. Existing string, redact and null
+declarations retain their behavior.
+
+Both Home Manager and devenv use `lib/ai/mcpProxy.nix`. Only the path and public
+prefix enter the store-backed Caddyfile; file contents stay out of client
+configuration, argv and environment. The whole request-header log filter remains
+unconditional. `module-mcp-proxy-file-headers` runs the pinned Caddy with a
+local upstream, real atomic file replacement, POST bodies and an open SSE
+stream. It does not simulate a production publisher, remote TLS, systemd/devenv
+supervision or remote authorization.
 
 Before this, `<server>.headers` were ABSORBED into the daemon whenever
 `proxy.enable` was set — so one key meant "the client sends this" normally and
@@ -480,7 +519,9 @@ value a runtime or backend cannot carry warns through its
   and anchors relative readers to the project root on devenv only.
 - `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
   leak; the factory wrapper forces `--v3`.
-- Static tokens only; rotate = re-export + restart (no refresh hook).
+- Redact-reference proxy headers use static tokens; rotation needs re-export +
+  restart (no refresh hook). File headers are read per request and pick up
+  replacement files without a restart.
 
 Claude's files are not merge candidates: its `.claude/settings.json` and its
 `.mcp.json` files (the Home Manager personal plugin's and the devenv project's)

@@ -11,7 +11,8 @@
 # dev/fragments/mcp-secrets/mcp-secrets.md.
 #
 # This moves the credential to a DAEMON instead. A systemd user service
-# runs Caddy, reads each secret from its file at START, and exposes an
+# runs Caddy, resolves redact secrets at START and file headers per REQUEST,
+# and exposes an
 # UNAUTHENTICATED loopback endpoint. Proxy ownership is keyed by the MCP
 # server attribute name: a used top-level declaration owns one shared unit,
 # while a runtime-scoped declaration owns its unit directly. Reusing a key
@@ -21,7 +22,7 @@
 # Copilot, wrapped or not, it makes no difference.
 #
 # ── Where the secret is, and is NOT ───────────────────────────────────
-#   * in the daemon's environment  — a same-uid process can read
+#   * redact values in environment — a same-uid process can read
 #                                    /proc/<pid>/environ; Yama
 #                                    ptrace_scope=1 does not block it
 #   * NOT in argv                  — /proc/<pid>/cmdline is 0444, i.e.
@@ -32,7 +33,7 @@
 #                                    without the two-word form on purpose —
 #                                    checks/shell/bare-commands.nix scans comments
 #                                    too and would read it as a bare call.)
-#   * NOT in the Caddyfile         — it holds `{$VAR}` placeholders only
+#   * NOT in the Caddyfile         — it holds environment/file placeholders
 #   * NOT in Caddy autosave        — `persist_config off` prevents it;
 #                                    older generations may have left
 #                                    autosave.json behind
@@ -201,12 +202,22 @@
       rendered = value;
       secrets = {};
     }
+    else if value ? file
+    then {
+      rendered = "${value.prefix or ""}{vars.file_${builtins.hashString "sha256" field}}";
+      secrets = {};
+    }
     else let
       var = envVarFor serverName "header_${field}";
     in {
       rendered = envRef var;
       secrets = {${var} = value;};
     };
+
+  # Hash the exact field name to avoid collisions between distinct headers.
+  fileHeadersFor = declared:
+    lib.mapAttrs' (name: value: lib.nameValuePair "file_${builtins.hashString "sha256" name}" value.file)
+    (filterAttrs (_: value: builtins.isAttrs value && value ? file) declared);
 
   # ── Per-server proxy spec ───────────────────────────────────────────
   # The upstream url is split into ORIGIN and PATH at RUNTIME by the
@@ -251,6 +262,7 @@
       then null
       else url;
 
+    fileHeaders = fileHeadersFor declared;
     headers = mapAttrs (_: r: r.rendered) headerResults;
     headerSecrets = foldl' (acc: r:
       if lib.any (var: acc ? ${var} && acc.${var} != r.secrets.${var}) (builtins.attrNames r.secrets)
@@ -279,7 +291,7 @@
   # header is not exactly `127.0.0.1:9501` now 400s, loopback included
   # once a client addresses it any other way. Use `bind`.
   #
-  # Holds `{$VAR}` placeholders only, so it is safe in the
+  # Holds environment/file placeholders only, so it is safe in the
   # world-readable store. `flush_interval -1` disables response
   # buffering, which is what keeps MCP streamable-HTTP / SSE responses
   # incremental rather than arriving in one lump at the end.
@@ -309,16 +321,46 @@
       ++ (map (line: "\t\t${line}") caddy.proxyTuning)
     );
 
-  caddyfileFor = spec:
+  # Route preserves ordering: capture each file once, validate that snapshot,
+  # then use it upstream. Failed reads expand to empty and fail the matcher.
+  fileRoute = spec: let
+    captures = mapAttrsToList (name: path: "vars ${name} {file.${path}}") spec.fileHeaders;
+    usable = concatStringsSep " && " (map (name: "{vars.${name}}.matches('^[A-Za-z0-9._~+/-]+=*$')") (builtins.attrNames spec.fileHeaders));
+  in
+    concatStringsSep "\n" (
+      ["route {"]
+      ++ captures
+      ++ [
+        "@usable expression `${usable}`"
+        "handle @usable {"
+        "rewrite * ${envRef spec.pathVar}"
+        "reverse_proxy ${envRef spec.originVar} {"
+        (reverseProxyBody spec)
+        "}"
+        "}"
+        ''respond "Credential unavailable" 503''
+        "}"
+      ]
+    );
+
+  caddyfileFor = spec: let
+    forwarding =
+      if spec.fileHeaders != {}
+      then fileRoute spec
+      else
+        concatStringsSep "\n" [
+          "\trewrite * ${envRef spec.pathVar}"
+          "\treverse_proxy ${envRef spec.originVar} {"
+          (reverseProxyBody spec)
+          "\t}"
+        ];
+  in
     pkgs.writeText "mcp-proxy-${spec.name}-Caddyfile" ''
       ${globalBlock}
 
       :${toString spec.port} {
-      	bind ${spec.host}
-      	rewrite * ${envRef spec.pathVar}
-      	reverse_proxy ${envRef spec.originVar} {
-      ${reverseProxyBody spec}
-      	}
+      ${"\t"}bind ${spec.host}
+      ${forwarding}
       }
     '';
 
