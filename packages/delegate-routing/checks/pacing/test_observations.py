@@ -1,19 +1,17 @@
 """Frozen production shapes and hand-written quota boundary expectations."""
 
 import copy
-import importlib.util
 import json
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import unittest
 
 sys.dont_write_bytecode = True
 SCRIPTS = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2] / "scripts"
-SPEC = importlib.util.spec_from_file_location("usage_normalize", SCRIPTS / "usage-normalize.py")
-NORMALIZE = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = NORMALIZE
-SPEC.loader.exec_module(NORMALIZE)
+# Reuse the CLI's sibling loader, preserving the scripts' hyphenated filenames.
+NORMALIZE = runpy.run_path(str(SCRIPTS / "pacing-list.py"))["normalizer"]
 FIXTURE = Path(__file__).with_name("reader-snapshots.json")
 NOW = "2026-11-12T01:35:00Z"
 
@@ -21,6 +19,9 @@ NOW = "2026-11-12T01:35:00Z"
 class Observations(unittest.TestCase):
     def setUp(self):
         self.snapshot = json.loads(FIXTURE.read_text())
+        # Decode once for mutations; the committed fixture exercises stdout via the CLI.
+        for capture in self.snapshot["readers"].values():
+            capture["data"] = json.loads(capture.pop("stdout"))
 
     def result(self):
         return NORMALIZE.normalize(self.snapshot, NOW)
@@ -32,34 +33,42 @@ class Observations(unittest.TestCase):
         return [item["reason"] for item in self.result()["diagnostics"]]
 
     def test_production_envelopes(self):
-        self.assertEqual(len(self.snapshot["readers"]), 5)
-        for capture in self.snapshot["readers"].values():
-            self.assertEqual(set(capture), {"command", "data", "exit", "finishedAt", "startedAt", "stderrBytes"})
-            self.assertEqual(set(capture["data"]), {"account", "balances", "bonuses", "pool", "windows"})
         codex = self.limit("codex", "weekly")
-        self.assertEqual((codex["capacity"], codex["remaining"], codex["used"], codex["windowSeconds"]), (100, 49, 51, 604800))
+        self.assertEqual((codex["capacity"], codex["remaining"], codex["used"], codex["windowSeconds"]),
+            (100, 49, 51, 604800))
         self.assertEqual(codex["naturalResetAt"], 1794491425)
         self.assertEqual(codex["observedAt"], 1794447287)
         metadata = self.result()["pools"]["codex"]["readerMetadata"]
-        self.assertEqual(metadata["balances"], [{"expiresAt": None, "kind": "credits", "remaining": 62500.0, "unit": "credits"}])
-        self.assertEqual(metadata["bonuses"], [{"count": 1, "expiresAt": 1796070039, "kind": "rate_limit_reset"}, {"count": 1, "expiresAt": 1796165426, "kind": "rate_limit_reset"}])
+        self.assertEqual(metadata["balances"],
+            [{"expiresAt": None, "kind": "credits", "remaining": 12, "unit": "credits"}])
+        self.assertEqual(metadata["bonuses"], [
+            {"count": 1, "expiresAt": 1893456000, "kind": "rate_limit_reset"},
+            {"count": 1, "expiresAt": 1893542400, "kind": "rate_limit_reset"},
+        ])
 
     def test_api_native_usd_and_billing_pool(self):
         api = self.limit("anthropic-api", "monthly")
-        self.assertEqual((api["unit"], api["capacity"], api["readerStatus"]), ("USD", 200, "estimated"))
-        self.assertAlmostEqual(api["remaining"], 134.225226705)
-        self.assertAlmostEqual(api["used"], 65.774773295)
+        self.assertEqual((api["unit"], api["capacity"], api["readerStatus"]), ("USD", 40, "estimated"))
+        self.assertAlmostEqual(api["remaining"], 30)
+        self.assertAlmostEqual(api["used"], 10)
         self.assertEqual(self.limit("opencode-go", "monthly")["windowSeconds"], 2678400)
         self.assertEqual(self.limit("z-ai", "weekly")["remaining"], 37)
 
-    def test_scoped_inactive_retained(self):
+    def test_reader_statuses_and_scope(self):
         fable = self.limit("claude", "fable")
-        self.assertEqual((fable["models"], fable["remaining"], fable["readerStatus"], fable["status"]), (["synthetic-fable"], 87, "inactive", "valid"))
+        self.assertEqual((fable["models"], fable["remaining"], fable["readerStatus"], fable["status"]),
+            (["synthetic-fable"], 87, "active", "valid"))
         self.assertIsNone(self.limit("codex", "weekly")["enforced"])
-        self.assertIsNone(fable["enforced"])
+        self.assertTrue(fable["enforced"])
         self.assertTrue(self.limit("claude", "weekly")["enforced"])
         self.assertIn("unknown-enforcement", self.reasons())
         windows = self.snapshot["readers"]["claude"]["data"]["windows"]
+        self.assertEqual(self.limit("claude", "weekly")["readerStatus"], "warning")
+        for status in ("critical", "inactive", "new-reader-status", None):
+            windows["7d:fable"]["status"] = status
+            fable = self.limit("claude", "fable")
+            self.assertEqual((fable["readerStatus"], fable["status"]), (status, "valid"))
+            self.assertEqual(fable["enforced"], True if status == "critical" else None)
         windows["7d:unknown"] = windows.pop("7d:fable")
         self.assertEqual(self.limit("claude", "fable")["status"], "missing")
         self.assertIn("unregistered-window", self.reasons())
@@ -67,13 +76,20 @@ class Observations(unittest.TestCase):
 
     def test_gate_and_idle_reset(self):
         rolling = self.limit("z-ai", "rolling")
-        self.assertEqual((rolling["role"], rolling["remaining"], rolling["windowSeconds"], rolling["status"]), ("gate", 100, 18000, "valid"))
+        self.assertEqual((rolling["role"], rolling["remaining"], rolling["windowSeconds"], rolling["status"]),
+            ("gate", 100, 18000, "valid"))
         self.assertIsNone(rolling["naturalResetAt"])
-        self.assertEqual((self.limit("opencode-go", "rolling")["role"], self.limit("opencode-go", "rolling")["status"]), ("gate", "valid"))
+        self.assertEqual((self.limit("opencode-go", "rolling")["role"], self.limit("opencode-go", "rolling")["status"]),
+            ("gate", "valid"))
         self.snapshot["readers"]["opencode-go"]["data"]["windows"]["5h"]["resetsAt"] = "2026-11-12T06:34:47Z"
+        self.assertEqual(self.limit("opencode-go", "rolling")["status"], "valid")
+        self.snapshot["readers"]["opencode-go"]["data"]["windows"]["5h"]["resetsAt"] = "2026-11-12T06:34:48Z"
         self.assertEqual(self.limit("opencode-go", "rolling")["status"], "invalid")
-        self.snapshot["pools"]["z-ai"]["limits"]["rolling"]["role"] = "pace"
-        self.assertEqual(self.limit("z-ai", "rolling")["status"], "invalid")
+        self.assertEqual(self.limit("codex", "rolling")["status"], "valid")
+        self.assertIsNone(self.limit("codex", "rolling")["naturalResetAt"])
+        window = self.snapshot["readers"]["codex"]["data"]["windows"]["5h"]
+        window.update(remainingPercent=99, usedPercent=1)
+        self.assertEqual(self.limit("codex", "rolling")["status"], "invalid")
 
     def test_closed_rolling_gate(self):
         # Synthetic exhaustion of the saved z.ai envelope with a known release time.
@@ -83,7 +99,8 @@ class Observations(unittest.TestCase):
         self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
         window.update(remainingPercent=0, usedPercent=100, resetsAt="2026-11-12T03:35:00Z")
         rolling = self.limit("z-ai", "rolling")
-        self.assertEqual((rolling["remaining"], rolling["used"], rolling["role"], rolling["status"]), (0, 100, "gate", "valid"))
+        self.assertEqual((rolling["remaining"], rolling["used"], rolling["role"], rolling["status"]),
+            (0, 100, "gate", "valid"))
         self.assertEqual(rolling["gateOpensAt"], 1794454500)
         self.assertEqual(rolling["naturalResetAt"], 1794454500)
         self.assertNotIn("refused", rolling)
@@ -99,20 +116,45 @@ class Observations(unittest.TestCase):
         self.assertIsNone(pool["readerMetadata"]["bonuses"])
         self.assertNotIn("resets", pool)
         self.assertNotIn("credits", pool)
-        self.assertEqual(pool["readerMetadata"]["balances"][0]["remaining"], 100)
+        self.assertEqual(pool["readerMetadata"]["balances"][0]["remaining"], 7)
         self.assertEqual(self.limit("claude", "weekly")["remaining"], 74)
 
     def test_failed_readers_safe_reasons(self):
         capture = self.snapshot["readers"]["anthropic-api"]
-        capture.update(exit=1, data={"diagnostic": {"reason": "unpriced-models", "count": 3}}, stderr="private text must not escape")
+        capture.update(exit=1, data={"diagnostic": {"reason": "unpriced-models", "count": 3}},
+                       stderr="private text must not escape")
         diagnostics = self.result()["diagnostics"]
-        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 3, "exitStatus": 1}, diagnostics)
+        self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1}, diagnostics)
         capture["stdout"] = json.dumps(capture.pop("data"))
-        self.assertIn({"pool": "anthropic-api", "reason": "unpriced-models", "count": 3, "exitStatus": 1}, self.result()["diagnostics"])
+        self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1},
+            self.result()["diagnostics"])
         capture["stdout"] = ""
-        self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1}, self.result()["diagnostics"])
+        self.assertIn({"pool": "anthropic-api", "reason": "exit-nonzero", "exitStatus": 1},
+            self.result()["diagnostics"])
         self.assertNotIn("private text", json.dumps(self.result()))
         self.assertIsNone(self.limit("anthropic-api", "monthly")["remaining"])
+
+    def test_bonus_kinds_and_unknown_capture_fields(self):
+        capture = self.snapshot["readers"]["claude"]
+        capture["command"] = ["private-command"]
+        capture["unknown"] = "private-extra"
+        result = self.result()
+        self.assertEqual(result["pools"]["claude"]["readerMetadata"]["bonuses"],
+                         [{"count": 2, "expiresAt": None, "kind": "promo_credits"}])
+        self.assertEqual(self.limit("claude", "weekly")["status"], "valid")
+        self.assertNotIn("private-", json.dumps(result))
+
+    def test_deep_stdout_failure_isolated(self):
+        self.snapshot["readers"]["codex"]["stdout"] = "[" * 100000 + "0" + "]" * 100000
+        command = [sys.executable, "-I", "-B", str(SCRIPTS / "pacing-list.py"),
+                   "--snapshot", "/dev/stdin", "--now", NOW]
+        result = subprocess.run(command, input=json.dumps(self.snapshot), text=True, capture_output=True)
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        output = json.loads(result.stdout)
+        self.assertEqual(output["routes"], self.snapshot["routes"])
+        self.assertIn({"pool": "codex", "reason": "invalid-json"}, output["diagnostics"])
+        self.assertEqual(output["pools"]["claude"]["limits"][0]["status"], "valid")
+        self.assertIsNone(self.limit("codex", "weekly")["remaining"])
 
     def test_stdout_transport_and_ambiguous_accounts(self):
         capture = self.snapshot["readers"]["codex"]
@@ -125,7 +167,11 @@ class Observations(unittest.TestCase):
     def test_malformed_windows_isolated(self):
         windows = self.snapshot["readers"]["claude"]["data"]["windows"]
         original = copy.deepcopy(windows["7d:fable"])
-        for field, value in [("remainingPercent", True), ("remainingPercent", float("nan")), ("usedPercent", 101), ("windowSeconds", 0), ("resetsAt", "2026-11-17T13:00:00-07:00"), ("status", 12)]:
+        for field, value in [
+            ("remainingPercent", True), ("remainingPercent", float("nan")),
+            ("usedPercent", 101), ("windowSeconds", 0),
+            ("resetsAt", "2026-11-17T13:00:00-07:00"), ("status", 12),
+        ]:
             with self.subTest(field=field, value=value):
                 windows["7d:fable"] = {**original, field: value}
                 self.assertEqual(self.limit("claude", "fable")["status"], "invalid")
@@ -202,7 +248,9 @@ class Observations(unittest.TestCase):
         result = self.result()
         self.assertNotIn("private-", json.dumps(result))
         self.assertEqual(len(result["pools"]["codex"]["readerMetadata"]["bonuses"]), 2)
-        for value in [None, {}, "private-array", [{"kind": "credits", "unit": "credits", "remaining": 4, "expiresAt": "private-time"}]]:
+        for value in [None, {}, "private-array", [
+            {"kind": "credits", "unit": "credits", "remaining": 4, "expiresAt": "private-time"},
+        ]]:
             document["balances"] = value
             self.assertEqual(self.limit("codex", "weekly")["remaining"], 49)
             self.assertIn("invalid-extras", self.reasons())
@@ -240,7 +288,7 @@ class Observations(unittest.TestCase):
                 if field == "exit" and value is True:
                     self.assertIn("invalid-exit-status", self.reasons())
         self.snapshot["readers"]["codex"] = original
-        for value in [[], {}, "private-status"]:
+        for value in [[], {}, {"secret": "private-status"}]:
             original["data"]["windows"]["7d"]["status"] = value
             self.assertEqual(self.limit("codex", "weekly")["remaining"], 49)
             self.assertNotIn("private-status", json.dumps(self.result()))
@@ -252,7 +300,8 @@ class Observations(unittest.TestCase):
 
     def test_cli_safe_errors_and_failed_route_replay(self):
         # Refuse timestamp/parser payload leaks through the source CLI itself.
-        command = [sys.executable, "-I", "-B", str(SCRIPTS / "pacing-list.py"), "--snapshot", "/dev/stdin", "--now", NOW]
+        command = [sys.executable, "-I", "-B", str(SCRIPTS / "pacing-list.py"),
+                   "--snapshot", "/dev/stdin", "--now", NOW]
         for capture in self.snapshot["readers"].values():
             capture.update(exit=7, stderr="private-stderr")
         first = subprocess.run(command, input=json.dumps(self.snapshot), text=True, capture_output=True)
@@ -267,7 +316,15 @@ class Observations(unittest.TestCase):
     def test_replay_has_no_command_execution(self):
         # An audit hook refuses process/network events; even capture commands are data.
         source = SCRIPTS / "pacing-list.py"
-        code = "import runpy, sys; sys.dont_write_bytecode=True\ndef audit(event, args):\n if event in {'subprocess.Popen','os.system','os.posix_spawn','socket.connect'}: raise RuntimeError('execution forbidden')\nsys.addaudithook(audit)\nsys.argv=" + repr([str(source), "--snapshot", str(FIXTURE), "--now", NOW]) + ";runpy.run_path(" + repr(str(source)) + ",run_name='__main__')"
+        code = (
+            "import runpy, sys; sys.dont_write_bytecode=True\n"
+            "def audit(event, args):\n"
+            " if event in {'subprocess.Popen','os.system','os.posix_spawn','socket.connect'}:\n"
+            "  raise RuntimeError('execution forbidden')\n"
+            "sys.addaudithook(audit)\nsys.argv="
+            + repr([str(source), "--snapshot", str(FIXTURE), "--now", NOW])
+            + ";runpy.run_path(" + repr(str(source)) + ",run_name='__main__')"
+        )
         result = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(json.loads(result.stdout)["routes"]), 5)

@@ -3,7 +3,7 @@
     "anthropic-api": {
       "limits": {
         "monthly": {
-          "capacity": 200,
+          "capacity": 40,
           "models": ["synthetic-fable"],
           "role": "pace",
           "unit": "USD",
@@ -33,6 +33,13 @@
     },
     "codex": {
       "limits": {
+        "rolling": {
+          "capacity": 100,
+          "models": ["synthetic-code"],
+          "role": "pace",
+          "unit": "percentagePoint",
+          "window": "5h"
+        },
         "weekly": {
           "capacity": 100,
           "models": ["synthetic-code"],
@@ -58,13 +65,6 @@
           "role": "gate",
           "unit": "percentagePoint",
           "window": "5h"
-        },
-        "weekly": {
-          "capacity": 100,
-          "models": ["synthetic-go"],
-          "role": "pace",
-          "unit": "percentagePoint",
-          "window": "7d"
         }
       },
       "readerPool": "opencode"
@@ -91,187 +91,29 @@
   },
   "readers": {
     "anthropic-api": {
-      "command": ["fake-reader", "anthropic-api"],
-      "data": {
-        "account": {
-          "auth_index": "fixture-account",
-          "name": "fixture-account",
-          "plan": null
-        },
-        "balances": [],
-        "bonuses": [],
-        "pool": "anthropic-api",
-        "windows": {
-          "monthly": {
-            "remainingPercent": 67.11261335249999,
-            "resetsAt": "2026-12-01T00:00:00Z",
-            "status": "estimated",
-            "usedPercent": 32.88738664750001,
-            "windowSeconds": 2592000
-          }
-        }
-      },
       "exit": 0,
-      "finishedAt": "2026-11-12T01:34:46.680413+00:00",
-      "startedAt": "2026-11-12T01:34:46.351130+00:00",
-      "stderrBytes": 0
+      "finishedAt": 1794447286,
+      "stdout": "{\"account\":{\"auth_index\":\"fixture-account\",\"name\":\"fixture-account\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"anthropic-api\",\"windows\":{\"monthly\":{\"remainingPercent\":75,\"resetsAt\":\"2026-12-01T00:00:00Z\",\"status\":\"estimated\",\"usedPercent\":25,\"windowSeconds\":2592000}}}"
     },
     "claude": {
-      "command": ["fake-reader", "claude"],
-      "data": {
-        "account": {
-          "auth_index": "fixture-account",
-          "name": "fixture-account",
-          "plan": null
-        },
-        "balances": [
-          {
-            "expiresAt": null,
-            "kind": "extra_usage",
-            "remaining": 100,
-            "unit": "USD"
-          }
-        ],
-        "bonuses": [],
-        "pool": "claude",
-        "windows": {
-          "7d": {
-            "remainingPercent": 74,
-            "resetsAt": "2026-11-17T13:00:00Z",
-            "status": "normal",
-            "usedPercent": 26.0,
-            "windowSeconds": 604800
-          },
-          "7d:fable": {
-            "remainingPercent": 87,
-            "resetsAt": "2026-11-17T13:00:00Z",
-            "status": "inactive",
-            "usedPercent": 13,
-            "windowSeconds": 604800
-          }
-        }
-      },
       "exit": 0,
-      "finishedAt": "2026-11-12T01:34:47.104291+00:00",
-      "startedAt": "2026-11-12T01:34:46.352082+00:00",
-      "stderrBytes": 0
+      "finishedAt": 1794447287,
+      "stdout": "{\"account\":{\"auth_index\":\"fixture-account\",\"name\":\"fixture-account\",\"plan\":null},\"balances\":[{\"expiresAt\":null,\"kind\":\"extra_usage\",\"remaining\":7,\"unit\":\"USD\"}],\"bonuses\":[{\"count\":2,\"expiresAt\":null,\"kind\":\"promo_credits\"}],\"pool\":\"claude\",\"windows\":{\"7d\":{\"remainingPercent\":74,\"resetsAt\":\"2026-11-17T13:00:00Z\",\"status\":\"warning\",\"usedPercent\":26.0,\"windowSeconds\":604800},\"7d:fable\":{\"remainingPercent\":87,\"resetsAt\":\"2026-11-17T13:00:00Z\",\"status\":\"active\",\"usedPercent\":13,\"windowSeconds\":604800}}}"
     },
     "codex": {
-      "command": ["fake-reader", "codex"],
-      "data": {
-        "account": {
-          "auth_index": "fixture-account",
-          "name": "fixture-account",
-          "plan": "pro"
-        },
-        "balances": [
-          {
-            "expiresAt": null,
-            "kind": "credits",
-            "remaining": 62500.0,
-            "unit": "credits"
-          }
-        ],
-        "bonuses": [
-          {
-            "count": 1,
-            "expiresAt": "2026-11-30T20:20:39Z",
-            "kind": "rate_limit_reset"
-          },
-          {
-            "count": 1,
-            "expiresAt": "2026-12-01T22:50:26Z",
-            "kind": "rate_limit_reset"
-          }
-        ],
-        "pool": "codex",
-        "windows": {
-          "7d": {
-            "remainingPercent": 49,
-            "resetsAt": "2026-11-12T13:50:25Z",
-            "status": null,
-            "usedPercent": 51,
-            "windowSeconds": 604800
-          }
-        }
-      },
       "exit": 0,
-      "finishedAt": "2026-11-12T01:34:47.623238+00:00",
-      "startedAt": "2026-11-12T01:34:46.352801+00:00",
-      "stderrBytes": 0
+      "finishedAt": 1794447287,
+      "stdout": "{\"account\":{\"auth_index\":\"fixture-account\",\"name\":\"fixture-account\",\"plan\":\"synthetic-plan\"},\"balances\":[{\"expiresAt\":null,\"kind\":\"credits\",\"remaining\":12,\"unit\":\"credits\"}],\"bonuses\":[{\"count\":1,\"expiresAt\":\"2030-01-01T00:00:00Z\",\"kind\":\"rate_limit_reset\"},{\"count\":1,\"expiresAt\":\"2030-01-02T00:00:00Z\",\"kind\":\"rate_limit_reset\"}],\"pool\":\"codex\",\"windows\":{\"5h\":{\"remainingPercent\":100,\"resetsAt\":null,\"status\":null,\"usedPercent\":0,\"windowSeconds\":18000},\"7d\":{\"remainingPercent\":49,\"resetsAt\":\"2026-11-12T13:50:25Z\",\"status\":null,\"usedPercent\":51,\"windowSeconds\":604800}}}"
     },
     "opencode-go": {
-      "command": ["fake-reader", "opencode-go"],
-      "data": {
-        "account": {
-          "auth_index": "fixture-account",
-          "name": "fixture-account",
-          "plan": null
-        },
-        "balances": [],
-        "bonuses": [],
-        "pool": "opencode",
-        "windows": {
-          "5h": {
-            "remainingPercent": 100,
-            "resetsAt": "2026-11-12T06:34:46Z",
-            "status": "ok",
-            "usedPercent": 0,
-            "windowSeconds": 18000
-          },
-          "7d": {
-            "remainingPercent": 52,
-            "resetsAt": "2026-11-16T00:00:00Z",
-            "status": "ok",
-            "usedPercent": 48,
-            "windowSeconds": 604800
-          },
-          "monthly": {
-            "remainingPercent": 16,
-            "resetsAt": "2026-11-30T15:25:16Z",
-            "status": "ok",
-            "usedPercent": 84,
-            "windowSeconds": 2678400
-          }
-        }
-      },
       "exit": 0,
-      "finishedAt": "2026-11-12T01:34:46.909890+00:00",
-      "startedAt": "2026-11-12T01:34:46.353431+00:00",
-      "stderrBytes": 0
+      "finishedAt": 1794447286,
+      "stdout": "{\"account\":{\"auth_index\":\"fixture-account\",\"name\":\"fixture-account\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"opencode\",\"windows\":{\"5h\":{\"remainingPercent\":100,\"resetsAt\":\"2026-11-12T06:34:46Z\",\"status\":\"ok\",\"usedPercent\":0,\"windowSeconds\":18000},\"monthly\":{\"remainingPercent\":16,\"resetsAt\":\"2026-11-30T15:25:16Z\",\"status\":\"ok\",\"usedPercent\":84,\"windowSeconds\":2678400}}}"
     },
     "z-ai": {
-      "command": ["fake-reader", "z-ai"],
-      "data": {
-        "account": {
-          "auth_index": "fixture-account",
-          "name": "fixture-account",
-          "plan": "max"
-        },
-        "balances": [],
-        "bonuses": [],
-        "pool": "zai",
-        "windows": {
-          "5h": {
-            "remainingPercent": 100,
-            "resetsAt": null,
-            "status": null,
-            "usedPercent": 0,
-            "windowSeconds": 18000
-          },
-          "7d": {
-            "remainingPercent": 37,
-            "resetsAt": "2026-11-14T00:17:30Z",
-            "status": null,
-            "usedPercent": 63,
-            "windowSeconds": 604800
-          }
-        }
-      },
       "exit": 0,
-      "finishedAt": "2026-11-12T01:34:47.251368+00:00",
-      "startedAt": "2026-11-12T01:34:46.353696+00:00",
-      "stderrBytes": 0
+      "finishedAt": 1794447287,
+      "stdout": "{\"account\":{\"auth_index\":\"fixture-account\",\"name\":\"fixture-account\",\"plan\":\"synthetic-plan\"},\"balances\":[],\"bonuses\":[],\"pool\":\"zai\",\"windows\":{\"5h\":{\"remainingPercent\":100,\"resetsAt\":null,\"status\":null,\"usedPercent\":0,\"windowSeconds\":18000},\"7d\":{\"remainingPercent\":37,\"resetsAt\":\"2026-11-14T00:17:30Z\",\"status\":null,\"usedPercent\":63,\"windowSeconds\":604800}}}"
     }
   },
   "routes": [
