@@ -221,7 +221,7 @@ class Observations(unittest.TestCase):
         result = self.result()
         self.assertEqual(result["routes"], [
             {"id": "synthetic-code", "maker": "synthetic-maker", "model": "synthetic-code"},
-            {"id": "synthetic-fable", "maker": "synthetic-maker", "model": "synthetic-fable"},
+            {"id": "synthetic-fable", "maker": "synthetic-maker", "model": "served-fable"},
             {"id": "synthetic-go", "maker": None, "model": "synthetic-go"},
             {"id": "synthetic-second", "maker": "synthetic-maker", "model": "synthetic-second"},
             {"id": "synthetic-z", "maker": "synthetic-maker", "model": "synthetic-z"},

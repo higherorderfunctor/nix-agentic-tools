@@ -283,7 +283,7 @@
     {
       "id": "synthetic-fable",
       "maker": "synthetic-maker",
-      "model": "synthetic-fable"
+      "model": "served-fable"
     },
     {
       "id": "synthetic-go",
