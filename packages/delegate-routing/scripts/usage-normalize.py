@@ -20,7 +20,7 @@ def utc(value):
     if not isinstance(value, str):
         raise ValueError("invalid-time")
     try:
-        if value.isdecimal():
+        if value.isascii() and value.isdigit():
             return int(value)
         instant = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
         if instant.utcoffset() != dt.timedelta(0):
