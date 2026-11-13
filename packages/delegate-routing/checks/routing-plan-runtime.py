@@ -1,9 +1,11 @@
 """Offline, literal routing expectations: no catalogs, live readers or launches."""
 # cspell:ignore hihg pidfile rescanned sool
+from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
 import gzip
 import http.server
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -44,8 +46,12 @@ def route(name="sol", tier="strong", pool="outside", target="codex", techniques=
     return {"family": {"avoidFor": "sole judge", "defaultEffort": default, "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
+def pool_families(routes, pools):
+    return {pool: sorted({r["family"]["name"] for r in routes if r["pool"] == pool}) for pool in pools}
+
+
 def manifest(routes=None, session=None):
-    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "poolFamilies": pool_families(routes or [route()], ("hidden", "outside", "session")), "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
@@ -110,7 +116,7 @@ class Routing(unittest.TestCase):
         self.assertEqual([x["launch"]["family"] for x in result["roles"]["writer"]["candidates"]], ["sol"])
         self.assertEqual([x["launch"]["family"] for x in result["roles"]["judge"]["candidates"]], ["other"])
         self.assertEqual(result["picker"]["provenance"], {"runtime": "codex", "technique": "one-shot", "family": "sol", "model": "gpt-6.1-sol", "effort": "medium"})
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_picker_hard_gates_and_avoid_partition_are_prompt_data(self):
         # Wrong: excluded, unreachable, exhausted or scoped-refused families reach
@@ -139,7 +145,7 @@ class Routing(unittest.TestCase):
             config["pickerEntries"] = [original]
             with self.subTest(identity=identity), patch.object(helper, "run_picker", side_effect=AssertionError("unavailable picker ran")):
                 result, _ = self.run_plan(config, ctx)
-                self.assertIn(helper.PICKER_WARNING, result["warnings"])
+                self.assertTrue(any(w.startswith(helper.PICKER_WARNING + " Unavailable: ") for w in result["warnings"]))
                 self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
     def test_unknown_non_null_proposer_is_rejected_before_readers(self):
@@ -186,8 +192,88 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", side_effect=OSError("private")) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_count, 4)
-        self.assertEqual(result["warnings"].count(helper.PICKER_WARNING), 1)
+        self.assertEqual(result["warnings"].count(helper.PICKER_WARNING + " Unavailable: picker I/O failure. Unavailable: picker I/O failure."), 1)
         self.assertNotIn("private", json.dumps(result))
+
+    def assert_picker_warning(self, result, reason):
+        warning = helper.PICKER_WARNING + " Unavailable: " + reason + "."
+        self.assertIn(warning, result["warnings"])
+        # Wrong: the JSON reason is present but CLI stderr drops its suffix.
+        stderr = io.StringIO()
+        argv = ["routing-plan", "--manifest", "unused", "--launch-context", "unused", "--reader-shell", SHELL, "--role", "writer"]
+        with patch.object(sys, "argv", argv), patch.object(helper, "load_json", return_value=({}, [])), patch.object(helper, "plan", return_value=result), redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+            self.assertEqual(helper.main(), 0)
+        self.assertIn(warning, stderr.getvalue().splitlines())
+        self.assertNotIn("secret", stderr.getvalue())
+
+    def test_picker_process_failures_have_safe_reasons(self):
+        # Wrong: failed claude -p calls fall back silently, leak diagnostics, or
+        # retry malformed output. A shell function stands in for the CLI; no
+        # provider is contacted, and timeout/size bounds are shortened for speed.
+        valid = self.decisions(("writer", "sol", "keep")).decode()
+        cases = [
+            ("coverage", """printf '%s' '{"decisions":[],"schemaVersion":1}'""", {}, "incomplete picker coverage", 1),
+            ("empty", "true", {}, "picker wrote no output", 1),
+            ("exit", "printf secret >&2; return 1", {}, "exited 1", 2),
+            ("json", "printf secret", {}, "invalid JSON", 1),
+            ("long", "printf '%s' " + shlex.quote(valid.replace("bounded role fit", "x" * 241)), {}, None, 1),
+            ("missing", "true", {}, "picker wrote no output", 1),
+            ("output", "printf secret", {"PICKER_OUTPUT_LIMIT": 2}, "picker output limit", 1),
+            ("prompt", "printf secret", {"PICKER_PROMPT_LIMIT": 2}, "picker prompt limit", 1),
+            ("schema", "printf '{}'", {}, "invalid decisions: invalid picker schema", 1),
+            ("timeout", "while :; do :; done", {"PICKER_TIMEOUT": 0.02}, "timed out after 0.02s", 2),
+            ("unicode", r"printf '\377'", {}, "invalid Unicode", 1),
+        ]
+        for name, body, limits, reason, attempts in cases:
+            with self.subTest(case=name):
+                config, ctx = self.picker_fixture()
+                config["pickerEntries"][0]["command"] = "bash -c " + shlex.quote("set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nclaude() { " + body + "; }; claude -p") + (" > <output-file>" if name != "missing" else "")
+                with patch.multiple(helper, PICKER_RETRY_DELAY=0, **limits), patch.object(helper, "run_picker", wraps=helper.run_picker) as picker:
+                    result = helper.plan(config, ctx, ("writer",), NOW, SHELL, lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stream()))
+                self.assertEqual(picker.call_count, attempts)
+                if reason is None:
+                    self.assertEqual(result["picker"]["decisions"][0]["reason"], "x" * 240)
+                else:
+                    self.assert_picker_warning(result, reason)
+                    self.assertNotIn("secret", json.dumps(result))
+
+    def test_picker_exception_failures_have_safe_reasons(self):
+        # Wrong: non-process exceptions vanish or expose their raw payload.
+        cases = [
+            (OSError("secret"), "picker I/O failure", 2),
+            (subprocess.SubprocessError("secret"), "picker subprocess failure", 2),
+            (TypeError("secret"), "invalid decisions: invalid type", 1),
+            (ValueError("secret"), "invalid decisions", 1),
+            (ValueError("picker wrote no output"), "picker wrote no output", 1),
+        ]
+        for error, reason, attempts in cases:
+            with self.subTest(error=type(error), reason=reason):
+                config, ctx = self.picker_fixture()
+                with patch.object(helper, "run_picker", side_effect=error) as picker:
+                    result, _ = self.run_plan(config, ctx)
+                self.assertEqual(picker.call_count, attempts)
+                self.assert_picker_warning(result, reason)
+                self.assertNotIn("secret", json.dumps(result))
+
+    def test_picker_reason_validates_before_truncating(self):
+        # Wrong: rejecting long printable reasons, or truncating before checking
+        # emptiness/control characters, discards good judgments or accepts bad ones.
+        valid = self.decisions(("writer", "sol", "keep")).decode()
+        for reason in ("", " " * 241, "x" * 240 + "\n", "x" * 240 + "\x7f"):
+            with self.subTest(reason=repr(reason)), self.assertRaises(ValueError):
+                helper.picker_decisions(valid.replace('"bounded role fit"', json.dumps(reason)).encode(), {("writer", "sol")})
+
+    def test_picker_reason_truncation_preserves_nonblank_characters(self):
+        # Wrong: leading spaces consume the limit, or UTF-8 byte slicing cuts
+        # a multibyte character and loses valid characters near the boundary.
+        valid = self.decisions(("writer", "sol", "keep")).decode()
+        cases = ((" " * 300 + "x", "x"), ("x" * 238 + "é界🙂", "x" * 238 + "é界"))
+        for reason, expected in cases:
+            with self.subTest(reason=reason):
+                decisions = helper.picker_decisions(valid.replace('"bounded role fit"', json.dumps(reason)).encode(), {("writer", "sol")})
+                self.assertEqual(decisions[0]["reason"], expected)
+                self.assertTrue(decisions[0]["reason"].strip())
+                self.assertLessEqual(len(decisions[0]["reason"]), 240)
 
     def test_picker_strict_pair_coverage_and_all_excluded(self):
         # Wrong: duplicate keys/pairs, non-finite values, bad Unicode, unknown roles,
@@ -202,7 +288,7 @@ class Routing(unittest.TestCase):
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(result["roles"]["writer"]["candidates"], [])
         self.assertIn("error", result["roles"]["writer"])
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_closed_context_refuses_essays_before_readers(self):
         # Wrong: old family qualification essays survive the schema boundary.
@@ -440,7 +526,7 @@ class Routing(unittest.TestCase):
                 with patch.object(helper, "collect", return_value={name: {"status": "unmeasured"} for name in ("hidden", "outside", "session")}):
                     result = helper.plan(config, ctx, ("writer",), NOW, SHELL)
                 self.assertEqual(result["picker"]["decisions"], [{"decision": "keep", "family": "sol", "reason": "bounded role fit", "role": "writer"}])
-                self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+                self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_cli_invalid_request_is_json_on_stdout_and_exit_two(self):
         # Wrong: schema errors surface as a traceback or bare stderr text, run a
@@ -450,6 +536,7 @@ class Routing(unittest.TestCase):
             log = root / "reads"
             config = manifest()
             config["readers"] = [{"name": "outside", "command": f"printf x >> '{log}'"}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text('{"taskSummary": "ok",\n "roles": {}, oops}')
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json")]
@@ -538,11 +625,11 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", return_value=self.decisions(("writer", "sol", "keep"))) as picker:
             result, _ = self.run_plan(config, ctx)
         self.assertEqual(picker.call_count, 1)
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
         config["pickerEntries"][0]["command"] = "no-such-delegate-binary --flag"
         with patch.object(helper, "run_picker", side_effect=AssertionError("absent executable ran")):
             result, _ = self.run_plan(config, ctx)
-        self.assertIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertTrue(any(w.startswith(helper.PICKER_WARNING + " Unavailable: ") for w in result["warnings"]))
 
     def codex_home(self, models=None):
         """A scratch CODEX_HOME seeded from the fixture cache, with OPENAI* and CODEX* variables scrubbed."""
@@ -631,7 +718,7 @@ class Routing(unittest.TestCase):
         with patch.object(helper, "run_picker", side_effect=AssertionError("empty catalog judged")):
             result, _ = self.run_plan(config, ctx, ("judge",))
         self.assertEqual(result["roles"]["judge"]["candidates"], [])
-        self.assertNotIn(helper.PICKER_WARNING, result["warnings"])
+        self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
 
     def test_highest_version_among_observed_models_for_one_family(self):
         # Wrong: several observed models matching one pattern exclude the family,
@@ -660,6 +747,7 @@ class Routing(unittest.TestCase):
         self.assertEqual(corpus["readers"]["opencode-go"]["windows"]["monthly"]["windowSeconds"], 2678400)
         config = manifest([route("fable" if name == "claude" else name, pool=name) for name in expected])
         config["readers"] = [{"command": f"reader-{name}", "name": name} for name in expected]
+        config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
         ctx = context(names=tuple(r["family"]["name"] for r in config["routes"]))
         ctx["roles"]["writer"].update({"avoid": [], "exclude": []})
         outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
@@ -897,6 +985,7 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             config = manifest([route(default=None)])
             config["readers"] = [{"name": "outside", "command": "printf '%s' " + shlex.quote(stream())}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             ctx = context(effort=None)
             ctx["techniques"][0]["efforts"] = []
             ctx["roles"]["writer"]["avoid"] = ["sol"]
@@ -1004,12 +1093,12 @@ class Routing(unittest.TestCase):
     def test_dropped_window_warning_reports_failure_to_user(self):
         # Wrong: a dropped window warning omits the user-report instruction.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(50, 0, None)})})
-        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
+        self.assertEqual([w for w in result["warnings"] if w.startswith("WARNING:") and not w.startswith(helper.PICKER_WARNING)], ["WARNING: outside: window 5h pace dropped: invalid windowSeconds. Report this failure to the user."])
 
     def test_window_warning_cannot_forge_stderr_lines(self):
         # Wrong: Reader-controlled window names inject extra stderr lines.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"5h\nFORGED\x1b": window(50, 0, None)})})
-        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and w != helper.PICKER_WARNING]
+        warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and not w.startswith(helper.PICKER_WARNING)]
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
@@ -1082,7 +1171,7 @@ class Routing(unittest.TestCase):
             result = json.loads(proc.stdout)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertIn("provider-vendor identity is provisional; trial/maker independence remain caller assessments", result["warnings"])
-            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
+            self.assertEqual(proc.stderr.splitlines(), [helper.PICKER_WARNING + " Unavailable: proposer family is unknown."] + [item["line"] for item in result["roles"]["writer"]["candidates"]])
 
     def test_cli_degradation_uses_json_warnings(self):
         # Wrong: advisory notes precede failures, failures are silent, or all-failed returns success.
@@ -1107,6 +1196,7 @@ class Routing(unittest.TestCase):
         # Wrong: per-role reads, current-runtime filtering, trusting reader .pool.
         config = manifest()
         config["readers"].append({"command": "reader-outside", "name": "alias"})
+        config["poolFamilies"]["alias"] = []
         result, calls = self.run_plan(config, context(("writer", "judge")), ("writer", "judge"))
         self.assertEqual(calls, ["reader-outside", "reader-session", "reader-hidden-runtime"])
         self.assertEqual(sorted(result["pools"]), ["alias", "hidden", "outside", "session"])
@@ -1244,6 +1334,42 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
 
+    def test_scope_inventory_is_independent_of_launch_routes(self):
+        # Wrong: launch routes define scope membership, or global family names
+        # let a scope name a family bound only to another pool.
+        config = manifest([route("sol", pool="session")])
+        config["familyNames"].append("fable")
+        config["poolFamilies"]["hidden"] = ["fable"]
+        outputs = {"reader-hidden-runtime": stream({
+            "7d": window(52, 604800, "2026-11-18T12:00:00Z"),
+            "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z"),
+            "7d:sol": window(0, 604800, "2026-11-18T12:00:00Z"),
+        })}
+        for reachable in (False, True):
+            with self.subTest(reachable=reachable):
+                if reachable:
+                    config["routes"].append(route("fable", pool="hidden"))
+                result, _ = self.run_plan(config, outputs=outputs)
+                self.assertFalse(any("7d:fable" in warning for warning in result["warnings"]))
+                self.assertIn("WARNING: hidden: scoped window 7d:sol matches no configured family. Report this failure to the user.", result["warnings"])
+                candidates = result["roles"]["writer"]["candidates"]
+                fable = [item for item in candidates if item["launch"]["family"] == "fable"]
+                self.assertEqual([item["pace"] for item in fable], [0.34] if reachable else [])
+
+    def test_scope_inventory_validation(self):
+        # Wrong: malformed inventory crashes matching or bypasses pool membership.
+        for inventory, path in (
+            (None, "manifest.poolFamilies"),
+            ({}, "manifest.poolFamilies.hidden"),
+            ({"hidden": "fable"}, "manifest.poolFamilies.hidden"),
+            ({"hidden": ["missing"]}, "manifest.poolFamilies.hidden"),
+            ({"unregistered": []}, "manifest.poolFamilies.unregistered"),
+        ):
+            with self.subTest(inventory=inventory):
+                config = manifest()
+                config["poolFamilies"] = inventory
+                self.assertIn(path, [error["path"] for error in self.request_errors(config)])
+
     def test_unknown_scope_warns_without_failing_pool(self):
         # Wrong: silently ignoring a scope, or failing its otherwise valid pool.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:unknown-model": window(0, 604800, "2026-11-18T12:00:00Z")})})
@@ -1351,6 +1477,7 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(names=("sol", "unknown")))
         self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol"])
         config["readers"] = []
+        config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
         config["routes"] = [route(pool=None)]
         result, _ = self.run_plan(config)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
@@ -1479,6 +1606,7 @@ class Routing(unittest.TestCase):
                     helper.check_plan(artifact, changed, root)
             config = manifest([route(pool=None)])
             config["readers"] = []
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             fit_only, _ = self.run_plan(config, roles=roles)
             self.assertEqual(helper.check_plan(artifact, fit_only, root)["status"], "valid")
             self.assertEqual(fit_only["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
@@ -1647,6 +1775,7 @@ class Routing(unittest.TestCase):
             config = manifest()
             log = root / "reads"
             config["readers"] = [{"command": f"printf 'outside\\n' >> '{log}'; printf '%s' '{stream()}'", "name": "outside"}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             roles = ("writer", "first-check", "second-check", "judge")
             for name, value in (("plan", artifact), ("manifest", config), ("context", context(roles))):
                 (root / f"{name}.json").write_text(json.dumps(value))
@@ -1684,6 +1813,7 @@ class Routing(unittest.TestCase):
                 for name in ("outside", "session", "hidden")
             ]
             config["readers"].append({"name": "alias", "command": config["readers"][0]["command"]})
+            config["poolFamilies"]["alias"] = []
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text(json.dumps(context()))
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--now", "2026-11-15T00:00:00Z", "--role", "writer"]

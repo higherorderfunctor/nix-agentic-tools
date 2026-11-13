@@ -75,8 +75,10 @@ def picker_decision(item, pairs, found):
     texts = all(isinstance(item[key], str) for key in ("family", "reason", "role"))
     if not texts or pair not in pairs - found or item["decision"] not in ("keep", "exclude"):
         raise ValueError("invalid picker decision")
-    if not reason.strip() or len(reason) > 240 or not reason.isprintable():
+    if not reason.strip() or not reason.isprintable():
         raise ValueError("invalid picker decision")
+    # Validate the entire reason, then strip and keep the first 240 characters.
+    item["reason"] = reason.strip()[:240]
     return pair
 
 
@@ -160,6 +162,8 @@ def run_picker(entry, payload, shell):
             raise ValueError("picker wrote no output")
         with output_path.open("rb") as handle:
             raw = handle.read(PICKER_OUTPUT_LIMIT + 1)
+        if not raw:
+            raise ValueError("picker wrote no output")
         if len(raw) > PICKER_OUTPUT_LIMIT:
             raise ValueError("picker output limit")
         return raw
@@ -196,8 +200,40 @@ def picker_runnable(entry, manifest, context, pools, family_paces, invalid_famil
     )
 
 
+def picker_failure_reason(error):
+    """Describe a failed call without copying commands, output or exception payloads."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return f"timed out after {PICKER_TIMEOUT:g}s"
+    if isinstance(error, subprocess.CalledProcessError):
+        return f"exited {error.returncode}"
+    # Only these locally authored ValueErrors may supply text to the warning.
+    messages = {
+        "duplicate JSON key": "invalid JSON: duplicate key",
+        "incomplete picker coverage": "incomplete picker coverage",
+        "invalid picker decision": "invalid decisions: invalid picker decision",
+        "invalid picker schema": "invalid decisions: invalid picker schema",
+        "non-finite JSON number": "invalid JSON: non-finite number",
+        "picker output limit": "picker output limit",
+        "picker prompt limit": "picker prompt limit",
+        "picker wrote no output": "picker wrote no output",
+    }
+    if type(error) is ValueError and str(error) in messages:
+        return messages[str(error)]
+    for kind, reason in (
+        (json.JSONDecodeError, "invalid JSON"),
+        (UnicodeError, "invalid Unicode"),
+        (OSError, "picker I/O failure"),
+        (subprocess.SubprocessError, "picker subprocess failure"),
+        (TypeError, "invalid decisions: invalid type"),
+        (ValueError, "invalid decisions"),
+    ):
+        if isinstance(error, kind):
+            return reason
+
+
 def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, invalid_families, shell, reasons):
     if context.get("proposerFamily") is None:
+        reasons.append("proposer family is unknown")
         return None
     payload = {"taskSummary": context["taskSummary"], "nonInteractive": context["nonInteractive"], "roles": {role: context["roles"].get(role, {}) for role in eligible_by_role}, "families": catalog}
     for entry in manifest["pickerEntries"]:
@@ -209,13 +245,16 @@ def pick(manifest, context, catalog, eligible_by_role, pools, family_paces, inva
                 return {"decisions": decisions, "provenance": {key: entry[key] for key in ("effort", "family", "model", "runtime", "technique")}}
             except PickerUnavailable as error:
                 reasons.append(str(error))
-            except (OSError, subprocess.SubprocessError):
+            except (OSError, subprocess.SubprocessError) as error:
                 if attempt == 0:
                     time.sleep(PICKER_RETRY_DELAY)
                     continue
-            except (TypeError, ValueError, UnicodeError):
-                pass
+                reasons.append(picker_failure_reason(error))
+            except (TypeError, ValueError, UnicodeError) as error:
+                reasons.append(picker_failure_reason(error))
             break
+    if not reasons:
+        reasons.append("no runnable picker entry")
     return None
 
 
@@ -460,7 +499,7 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
-MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "poolFamilies", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
 def request_errors(manifest, context, roles):
@@ -549,6 +588,21 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}must be a list of strings")
             else:
                 name_lists[key] = values
+        inventory = manifest["poolFamilies"]
+        if not isinstance(inventory, dict):
+            refuse("manifest.poolFamilies", f"{CONFIGURATION_FAULT}must be an object")
+        else:
+            for pool in sorted(set(pool_names) | set(inventory)):
+                path = f"manifest.poolFamilies.{pool}"
+                if pool not in pool_names:
+                    refuse(path, pool_fault % pool)
+                values = inventory.get(pool)
+                if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+                    refuse(path, f"{CONFIGURATION_FAULT}must be a list of strings for each registered pool")
+                elif "familyNames" in name_lists:
+                    for value in values:
+                        if value not in name_lists["familyNames"]:
+                            refuse(path, f"{CONFIGURATION_FAULT}unknown configured family {value}")
         for kind in ("routes", "manualRoutes"):
             if not isinstance(manifest[kind], list):
                 refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
@@ -636,10 +690,10 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
-    # Include manual routes so warnings describe configuration, not availability.
+    # The inventory includes bindings outside automatic and manual launch reach.
     family_paces, invalid_families = {}, set()
     for name, pool in pools.items():
-        families = {route["family"]["name"] for route in manifest["routes"] + manifest["manualRoutes"] if route["pool"] == name}
+        families = manifest["poolFamilies"][name]
         for window, pace in pool.get("scopedPaces", {}).items():
             scope = window.split(":", 1)[1]
             error = pool.get("scopedErrors", {}).get(window)

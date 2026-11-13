@@ -146,6 +146,12 @@ in {
         else resolved)
       picker.entries;
   familyNames = map (family: family.name) (selection.flatten families);
+  # Reader scopes name configured families even outside this runtime's reach.
+  poolFamilies = lib.mapAttrs (pool: _:
+    lib.sort builtins.lessThan (lib.unique (map (family: family.name)
+      (builtins.filter (family: builtins.elem pool (builtins.attrValues (family.pools or {})))
+        (selection.flatten families)))))
+  pools;
   inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
   readers =

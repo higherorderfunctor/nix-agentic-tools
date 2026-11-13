@@ -60,21 +60,21 @@ problem as `{"path", "message"}` records in a stdout `invalid-request` document
 and runs no Reader or picker; fix the named paths, and report a `manifest.` path
 to the user as a configuration fault. The helper judges hard-eligible families
 with its tool-free one-shot picker before pool ranking. Missing/null proposer
-identity or no usable picker emits the model-picker-unavailable warning (it may
-end with ` Unavailable: <reason>.` per entry the helper could not build); report
-it to the user and use the returned tier/pool fallback. For finder, first-check,
-second-check and judge, never step down a tier. Try the shared avoided-family
-fallback before reporting a loop failure when no qualified strong/frontier route
-remains. Each role accepts unordered `avoid` and `exclude` lists of exact
-configured family names, empty by default. Exclude removes routes with reason
-"excluded by caller" and wins overlap; avoid never removes a route by itself.
-Eligible non-avoided candidates precede eligible avoided candidates; measured
-preference applies within each partition. Session pace still compares all
-otherwise fitting measured candidates, including avoided ones. Retained avoided
-alternatives carry fallback metadata; warn once per role only when its first
-candidate is a fallback, naming its family and launch effort and asking the
-caller to report the notice to the user. Preserve every trial, mode, tier and
-session gate. The helper may run its configured tool-free picker even in
-nonInteractive contexts; it launches no worker delegates; canonical launch lines
-are routing specifications for the orchestrator to bind to native tools or named
-launchers.
+identity or no usable picker emits the model-picker-unavailable warning
+(followed by ` Unavailable: <reason>.` for each failed entry, or for missing
+identity or no runnable entry); report it to the user and use the returned
+tier/pool fallback. For finder, first-check, second-check and judge, never step
+down a tier. Try the shared avoided-family fallback before reporting a loop
+failure when no qualified strong/frontier route remains. Each role accepts
+unordered `avoid` and `exclude` lists of exact configured family names, empty by
+default. Exclude removes routes with reason "excluded by caller" and wins
+overlap; avoid never removes a route by itself. Eligible non-avoided candidates
+precede eligible avoided candidates; measured preference applies within each
+partition. Session pace still compares all otherwise fitting measured
+candidates, including avoided ones. Retained avoided alternatives carry fallback
+metadata; warn once per role only when its first candidate is a fallback, naming
+its family and launch effort and asking the caller to report the notice to the
+user. Preserve every trial, mode, tier and session gate. The helper may run its
+configured tool-free picker even in nonInteractive contexts; it launches no
+worker delegates; canonical launch lines are routing specifications for the
+orchestrator to bind to native tools or named launchers.

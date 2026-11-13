@@ -509,16 +509,20 @@ limits are 65536 bytes, timeout 90 seconds; transient execution failures retry
 once after two seconds, malformed results advance without retry. Duplicate JSON
 keys, non-finite values, invalid Unicode, extra fields/documents and incomplete
 coverage are refused, as is a run that exits without writing its output file.
-Template values are substituted in one pass, so a value never rewrites a later
-token. Event streams and stderr are discarded. The helper's authorized picker
-subprocess may run with `nonInteractive: true`.
+Decision reasons must be nonempty and printable throughout; valid reasons longer
+than 240 characters retain their first 240 characters. Template values are
+substituted in one pass, so a value never rewrites a later token. Event streams
+and stderr are discarded. The helper's authorized picker subprocess may run with
+`nonInteractive: true`.
 
 When identity is absent/null, no entry is runnable, or all entries fail, report
 exactly
 `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`
-(followed by ` Unavailable: <reason>.` for each entry the helper could not build
-from local state, such as a Codex model missing from its models cache) and use
-hard-eligible tier/pool routes. Picker failure alone does not erase routes.
+followed by ` Unavailable: <reason>.` for each failed entry, or for missing
+identity/no runnable entry, and use hard-eligible tier/pool routes. Failure
+reasons describe timeouts, exit status, limits and invalid decisions without
+including prompts, raw output or stderr. Picker failure alone does not erase
+routes.
 
 Observed `efforts: []` always means launch without effort, regardless of role
 request, family default or avoidance. JSON keeps effort null; canonical lines
@@ -551,12 +555,17 @@ validation text, never Reader stderr, command text or exception payloads.
 The pace formula is
 `(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)`. The pool uses
 the minimum unscoped pace and remaining share; a candidate uses the minimum of
-pool and matching scoped paces. Remaining shares must be finite numbers in
-[0,100], excluding booleans. Used windows require a UTC reset and retain the
-strict reset-duration bound; reported calendar-month durations remain intact.
-Idle windows bypass reset validation; all-idle pools use pace 1.0 and full
-buffer. Scoped `status` is ignored because inactive has unknown meaning. Ties
-sort non-session pools first, then family/runtime deterministically.
+pool and matching scoped paces. A scoped key such as `7d:fable` matches the
+exact family name in the manifest's `poolFamilies` inventory for that pool. The
+inventory collects all configured runtime pool bindings, including families
+outside the current runtime's automatic and manual launch routes. A family
+configured only in another pool still produces an unmatched-scope warning.
+Remaining shares must be finite numbers in [0,100], excluding booleans. Used
+windows require a UTC reset and retain the strict reset-duration bound; reported
+calendar-month durations remain intact. Idle windows bypass reset validation;
+all-idle pools use pace 1.0 and full buffer. Scoped `status` is ignored because
+inactive has unknown meaning. Ties sort non-session pools first, then
+family/runtime deterministically.
 
 JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
 stderr includes failure warnings and the fallback notice; advisory notes stay
