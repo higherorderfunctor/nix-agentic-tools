@@ -1,28 +1,29 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-09 — shared avoid/exclude fallback and
-> all-technique machine defaults preserve floors, session gates and intentional
-> null omission; failure warnings and the fallback notice reach stderr; advisory
-> notes stay JSON-only; the renderer consumes the private shared routing view
-> for launch reaches and registered readers; Plan saves bounded units,
-> role-qualified launches and verbatim-rubric briefs, and check-plan validates
-> them against fresh helper output; planner has a strong/frontier floor; the
-> packaged non-launching helper consumes the same view and runtime sessionPool
-> binding, rejects incomplete Reader envelopes, and keeps runtime-specific
-> commands in skills so shared router rules remain byte-identical; Pool drain
-> and Review use the helper as the canonical decision and retain named launch
-> fallbacks; per-runtime mode evidence below leaves automatic detection unknown;
-> routing ships an always-on "Pool drain" entry and a "Tune these rules" entry,
-> the Review step holds the one review rule, the Work and review workflow builds
-> a branch as units each reviewed by one check before the next starts (all three
-> checks at the branch-level review when the PR goes ready), the usage helpers
-> share one schema with UTC reset times, portable pools resolve usage readers
-> and label family reaches on both backends, proxy-accounted-usage reads a
-> Manager+ accounted monthly budget, and the always-on stub names the source for
-> steering its rules; OpenCode Go joins z.ai as an API-key pool found by base
-> URL, with opt-in Go preset families. Packaged-helper checks execute every
-> runtime’s delivered helper on both backends and reject null sessionPool
-> manifests.
+> **Last verified:** 2026-11-13 — native picker schema and bounded repairs
+> preserve logged sessions and executable-tool removal; shared avoid/exclude
+> fallback and all-technique machine defaults preserve floors, session gates and
+> intentional null omission; failure warnings and the fallback notice reach
+> stderr; advisory notes stay JSON-only; the renderer consumes the private
+> shared routing view for launch reaches and registered readers; Plan saves
+> bounded units, role-qualified launches and verbatim-rubric briefs, and
+> check-plan validates them against fresh helper output; planner has a
+> strong/frontier floor; the packaged non-launching helper consumes the same
+> view and runtime sessionPool binding, rejects incomplete Reader envelopes, and
+> keeps runtime-specific commands in skills so shared router rules remain
+> byte-identical; Pool drain and Review use the helper as the canonical decision
+> and retain named launch fallbacks; per-runtime mode evidence below leaves
+> automatic detection unknown; routing ships an always-on "Pool drain" entry and
+> a "Tune these rules" entry, the Review step holds the one review rule, the
+> Work and review workflow builds a branch as units each reviewed by one check
+> before the next starts (all three checks at the branch-level review when the
+> PR goes ready), the usage helpers share one schema with UTC reset times,
+> portable pools resolve usage readers and label family reaches on both
+> backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
+> the always-on stub names the source for steering its rules; OpenCode Go joins
+> z.ai as an API-key pool found by base URL, with opt-in Go preset families.
+> Packaged-helper checks execute every runtime’s delivered helper on both
+> backends and reject null sessionPool manifests.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth
@@ -473,47 +474,73 @@ patterns and refuses duplicate tuples, unresolved models, invalid efforts or
 techniques without enabled external reach, model/effort pinning and a nonempty
 picker command. Direct `mkSkill` callers receive the same manifest field.
 
-Technique-owned `pickerCommand` templates carry enforceable tool removal;
-`toolFree` defaults false and is true only with source or offline provider
-evidence of an empty emitted tool set including MCP and delegation. Claude
-2.1.319 offline capture with `--tools ""`, strict empty MCP configuration and
-disabled slash commands emitted `tools: []` while retaining normal auth/provider
-settings. The native `--settings '{"disableAllHooks":true}'` overlay disabled
-the ordinary settings hook canary; the positive control ran it. Picker commands
-retain normal credential/provider settings instead of clearing setting sources.
-Codex's feature switches alone leave code-mode `exec` and `wait` registered, so
-its picker command also names a per-call model catalog, `<catalog-file>`. The
-helper writes it in the call's temporary directory (deleted after) from the
-picked model's live entry in `${CODEX_HOME:-$HOME/.codex}/models_cache.json`,
-with `tool_mode` direct, `shell_type` disabled, no `apply_patch`, no
-experimental tools, no multi-agent, no node REPL and no search tool, and runs
-Codex from that directory. Offline codex-cli 0.167.0 captures against a fake
-Responses provider sent no `tools` key and no tool item. A missing or unreadable
-cache, or a cache without the model, makes that entry unavailable and the
-helper's warning names the reason; the helper never runs Codex on a guessed
-catalog. One live ChatGPT-authenticated run, capturing its request, is still
-owed: image generation, connectors and plugin suggestions depend on real auth
-and are only disabled, not observed. The fake-provider test needs the real
-`codex` binary and the shipped command in `CODEX_PICKER_COMMAND`, so it skips in
-the Nix sandbox; the catalog and warning tests always run.
+Technique-owned `pickerCommand` data carries initial and optional resume
+commands, `outputFormat` (`json` or `claude-json`), and `sessionIdSource`
+(`generated`, `codex-events` or null). The common routing view delivers these
+fields to Python on both backends. Commands bind shell-literal placeholders for
+the model, effort, prompt, result, schema file/JSON, session ID and event file.
+Custom raw-JSON commands default to fresh calls. Resume templates must bind the
+exact ID; latest-session selectors are never used.
 
-Readers and hard eligibility run before judgment. A picker runs when its family
-is not the proposer, its pool and scopes allow it, and the first word of its
-command is on PATH; the caller does not list it among observed techniques, since
-the helper launches it itself. With no eligible family in any role there is
-nothing to judge and no model call. The bounded one-shot picker sees only
-eligible role/family guidance and task context. It returns strict keep/exclude
-decisions with exact coverage and safe provenance; only kept families enter pool
-ranking. Commands are technique data, never duplicated in Python. Prompt/output
-limits are 65536 bytes, timeout 90 seconds; transient execution failures retry
-once after two seconds, malformed results advance without retry. Duplicate JSON
-keys, non-finite values, invalid Unicode, extra fields/documents and incomplete
-coverage are refused, as is a run that exits without writing its output file.
-Decision reasons must be nonempty and printable throughout; valid reasons longer
-than 240 characters retain their first 240 characters. Template values are
-substituted in one pass, so a value never rewrites a later token. Event streams
-and stderr are discarded. The helper's authorized picker subprocess may run with
-`nonInteractive: true`.
+One Python `PICKER_SCHEMA` supplies the native schema and prompt contract.
+Strict decoding and semantic validation remain the sole acceptance gate:
+duplicate keys/pairs, non-finite values, invalid Unicode, wrong keys/types or
+version, unasked pairs and missing coverage are rejected. Reasons must be
+nonblank and printable throughout, then are stripped and truncated to 240
+characters. Claude's complete result envelope is strictly decoded before its
+successful `structured_output` is extracted; free text is not a substitute.
+
+Each entry gets at most three subprocess calls total, including transport
+failures and validation repairs, with two seconds only between calls. Each call
+has a 90-second timeout and 65536-byte result, event and stderr limits; prompt
+bytes are bounded at `7 * 65536` to accommodate escaped task data.
+Timeout/output overrun kills the process group. Prompt/output overflow and
+unavailable catalogs end the entry immediately. Exhaustion advances to the next
+entry and preserves safe fallback warnings, without subprocess stderr or model
+replies.
+
+Claude receives a generated UUID; Codex captures the `thread.started` ID from
+JSONL events while reading its answer from the last-message file. A rejected
+reply resumes that exact session with only “Correct your previous submission”
+and the exact local validator error as JSON-string data. JSON syntax diagnostics
+include position, never the rejected document. A transport failure with a known
+session ID resumes that session and sends again the full original request when
+no validator error is available. A resume reporting “No conversation found”
+clears the ID so the next budgeted call starts fresh. Missing IDs or
+non-resumable commands use the full original request plus the latest error.
+Repairs retain model, effort, task/pair set, working directory and tool
+restrictions. Each call clears result/event files so stale output cannot be
+accepted.
+
+Both native templates retain normal CLI session logging: neither
+`--no-session-persistence` nor `--ephemeral` is passed. Scratch is deleted after
+the entry; native session histories are retained. Claude runs in the caller’s
+project directory, so its picker session appears in that project’s `/resume`
+history and is what `claude --continue` would pick up there. Codex resolves
+`CODEX_HOME` before entering stable scratch and writes one tool-free model
+catalog from its `models_cache.json`. Missing/unreadable models make the entry
+unavailable. Claude keeps its working directory and normal auth/provider
+settings, with hooks, slash commands and MCP disabled and an empty executable
+tool set.
+
+Offline tests with Codex 0.169.0 and Claude 2.1.323 exercise native schema,
+initial/resumed requests and session-store persistence against localhost fake
+providers using synthetic homes. Codex sends no tools; Claude sends only the
+`StructuredOutput` protocol tool, which submits JSON rather than executing a
+command. Both requests retain the same schema and model; Codex's wire effort and
+Claude's disabled hook canary are checked. These optional tests require raw CLI
+binaries in `CODEX_PICKER_COMMAND`, `CODEX_PICKER_RESUME_COMMAND`,
+`CLAUDE_PICKER_COMMAND` and `CLAUDE_PICKER_RESUME_COMMAND`, populated with the
+shipped templates. They skip without those inputs. Stub protocol, strict
+validation and bound tests always run. Live authenticated compatibility remains
+unverified; offline captures do not establish provider behavior or tool
+availability that depends on authentication.
+
+Readers and hard eligibility still precede judgment. A picker must be distinct
+from the proposer, allowed by pool/scoped limits and available on PATH; an empty
+eligible catalog spends no call. Its keep/exclude decisions cover every eligible
+role/family pair, including avoided fallbacks. Only kept families enter pool
+ranking. The authorized internal picker may run with `nonInteractive: true`.
 
 When identity is absent/null, no entry is runnable, or all entries fail, report
 exactly

@@ -18,7 +18,7 @@ export CLAUDE_BIN="${CLAUDE_BIN:-$(probe_pkg claude-code)/bin/claude}"
 # Claude writes <plugin>/.claude-plugin/types/ at load time, so plugin cases load a scratch copy.
 mw="$work/mods/prompt-mw"
 rm -rf "$mw" && mkdir -p "$work/mods" && cp -r "$here/mods/prompt-mw" "$mw" && rm -rf "$mw/.claude-plugin/types"
-P=(-p --no-session-persistence --model haiku)
+P=(-p --model haiku)
 APP=(--append-system-prompt "Inline append sentinel: APPINLINE-1313.")
 SUB=(--append-subagent-system-prompt "Subagent append: SUBAPP-1414.")
 SDK=(--input-format stream-json --output-format stream-json --verbose)

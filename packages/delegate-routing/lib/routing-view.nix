@@ -108,7 +108,7 @@
     else {
       inherit (entry) effort model technique;
       runtime = route.target;
-      inherit (node.pickerCommand) command toolFree;
+      inherit (node.pickerCommand) command outputFormat resumeCommand sessionIdSource toolFree;
       family = route.family.name;
       inherit (route) pool;
     };

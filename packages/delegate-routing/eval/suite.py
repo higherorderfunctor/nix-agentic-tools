@@ -225,7 +225,7 @@ def claude_setup(ctx):
     return {
         "argv": [ctx["exe"], "-p", "--setting-sources", "project", "--settings", str(ctx["dir"] / "claude-overlay.json"),
                  *ctx["baseline_argv"], "--permission-mode", "auto", "--max-turns", str(TURN_CAP),
-                 "--max-budget-usd", str(BUDGET_USD), "--no-session-persistence", "--output-format", "stream-json",
+                 "--max-budget-usd", str(BUDGET_USD), "--output-format", "stream-json",
                  "--debug-file", str(ctx["logs"] / "claude-debug.log"), "--verbose", "--include-hook-events", "--forward-subagent-text", ctx["prompt"]],
         "env": {
             "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
