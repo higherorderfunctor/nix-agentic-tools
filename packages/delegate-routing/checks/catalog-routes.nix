@@ -153,7 +153,7 @@
       runtime = "claude";
       techniques = selection.effectiveTechniques config;
     };
-    view = extra: import ../lib/routing-view.nix ({inherit lib;} // args // extra);
+    view = extra: import ../lib/routing-view.nix ({inherit lib;} // builtins.removeAttrs args ["skill"] // extra);
     pinned = builtins.head (builtins.head (view {}).routes).techniques;
     manual = content.mkSkill args;
     text = builtins.readFile "${manual}/SKILL.md";
@@ -203,6 +203,16 @@
       "finite OAuth alias loses spelling or identity" = let offer = lib.head (oauth "finite"); in offer.model == "short" && offer.id == "test-alpha-1" && offer.maker == "alpha";
       "maker-wide OAuth misses synthetic identities" = map (offer: offer.id) (oauth "wide") == ["test-alpha-1" "test-alpha-2"];
       "manual builder diverges from module" = withoutHelper text == withoutHelper moduleText && lib.hasInfix "pinning `test-alpha-1`" text;
+      "missing clientKey silently falls back" =
+        refuses
+        (project (change {
+          ai.claude.settings.inference.clientKey = lib.mkForce null;
+          ai.cliproxyapi.instances.test.clientKeys = lib.mkForce {};
+        })).claude;
+      "missing OAuth vendor silently empties reach" = refuses (project (change {
+        ai.cliproxyapi.instances.test.credentials.finite.oauth.vendor = lib.mkForce "missing";
+        ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [{credential = "finite";}];
+      }));
       "missing route API silently chooses first" = refuses (clientRoutes [{credential = "first";}]);
       "multiple credentials choose first budget" = (lib.head (view {cpaRoutes = overlapping;}).routes).pool == null && lib.length overlapping.claude == 3;
       "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";

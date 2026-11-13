@@ -22,12 +22,8 @@
         then credential.oauth.vendor
         else credential.vendor;
       declared =
-        catalog.vendors.${
-          vendor
-        } or {
-          models = [];
-          maker = null;
-        };
+        catalog.vendors.${vendor}
+        or (throw "${path}: OAuth credential `${choice.credential}` names vendor `${vendor}`, which is absent from ai.catalog.vendors.");
       ids =
         routed.models or (
           if declared.models != null
@@ -62,10 +58,10 @@
   in
     if selection.instance == null || instance == null
     then null
+    # Standalone importers must also refuse a disabled selected CPA instance.
     else if !instance.enable
     then throw "${path}: selected CPA instance is disabled."
-    else if instance.clientKeys == {} && selection.clientKey == null
-    then null
+    # Standalone importers must also refuse a missing or undeclared CPA clientKey.
     else if selection.clientKey == null || client == null
     then throw "${path}: select a declared CPA clientKey."
     else lib.concatMap offers client.routes;
