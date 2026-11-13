@@ -990,22 +990,26 @@
               id = "proxy-opus-123";
             };
           });
-        # Wrong: configured scopes disappear when their runtime is not selected.
-        codexOnly = import ../lib/routing-view.nix (routingArgs
-          // {
-            extraRuntimes = [];
-            manualExternalDelegates = [];
-            picker.entries = [];
-            runtime = "codex";
-          });
+        # Every runtime's manifest lists each pool's configured families, whatever it can launch.
+        perRuntimeViews = lib.genAttrs (builtins.attrNames routingFixture.config.ai.programs.delegate-routing.runtimes) (runtime:
+          import ../lib/routing-view.nix (routingArgs
+            // {
+              extraRuntimes = [];
+              manualExternalDelegates = [];
+              picker.entries = [];
+              inherit runtime;
+            }));
         agent = builtins.head (builtins.head resolved.routes).techniques;
       in
         passes routingFixture
-        && builtins.elem "opus" codexOnly.poolFamilies.measured
-        && codexOnly.poolFamilies == routingView.poolFamilies
-        && lib.all (route: route.target == "codex") codexOnly.routes
-        && codexOnly.manualRoutes == []
-        && lib.any (reader: reader.name == "measured" && reader.command != null) codexOnly.readers
+        && lib.all (runtime: let
+          view = perRuntimeViews.${runtime};
+        in
+          builtins.elem "opus" view.poolFamilies.measured
+          && view.poolFamilies == routingView.poolFamilies
+          && lib.all (route: route.target == runtime) view.routes
+          && view.manualRoutes == []
+          && lib.any (reader: reader.name == "measured" && reader.command != null) view.readers) (builtins.attrNames perRuntimeViews)
         && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
         && lib.all (route: route.family.defaultEffort == "medium") (lib.filter (route: route.family.name == "opus") routingView.routes)
         && routingView.runtimes == ["claude" "codex"]
