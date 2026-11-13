@@ -19,6 +19,12 @@ backend: {
     inherit lib;
     catalog = config.ai.catalog;
   };
+  # Assertions consume CPA's per-client comparison without rewriting routes or grants.
+  exclusive = import ../lib/exclusive.nix {
+    inherit lib;
+    catalog = config.ai.catalog;
+    providers = providersLib;
+  };
   # A named client key also written by hand could widen its allowlist rules.
   handWritten = name: instance: let
     clients = lib.mapAttrsToList (clientName: client: client // {option = "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}";}) instance.clientKeys;
@@ -125,6 +131,7 @@ in {
         };
         credentials = lib.mkOption {
           type = lib.types.attrsOf providersLib.credentialType;
+          apply = lib.mapAttrs providersLib.normalizeCredential;
           default = {};
           description = "Declare each upstream credential once by name, as OAuth or API key.";
         };
@@ -231,18 +238,6 @@ in {
               message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.apis.${api}.models${lib.optionalString (!providersLib.apis.${api}.modelObjects) " or apiKey.models"}; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
-          # A vendor that refuses some models refuses them on every served API,
-          # whether its defaults or a definition put them there.
-          ++ lib.concatLists (lib.mapAttrsToList (credentialName: credential: let
-              vendor = providersLib.vendors.${credential.vendor};
-              refused = lib.filter vendor.refuses (lib.concatMap (api: lib.defaultTo [] (providersLib.modelsOf credential.apiKey api)) (harnessApis credential.apiKey));
-            in [
-              {
-                assertion = refused == [];
-                message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}: vendor `${credential.vendor}` refuses models ${lib.concatMapStringsSep ", " (model: "`${model}`") (lib.unique refused)}. ${vendor.refusal}";
-              }
-            ])
-            (lib.filterAttrs (_: credential: credential.vendor != null && credential.apiKey != null && providersLib.vendors.${credential.vendor} ? refuses) instance.credentials))
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
             map (choice: let
               result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
@@ -251,7 +246,13 @@ in {
               message = result.problem or "";
             })
             client.routes)
-          instance.clientKeys)))
+          instance.clientKeys)
+          # Disabled instances and unresolved routes are excluded by the checker;
+          # existing route diagnostics above remain the first refusal.
+          ++ map (message: {
+            assertion = false;
+            inherit message;
+          }) (exclusive name instance)))
       config.ai.cliproxyapi.instances)
       ++ map (message: {
         assertion = false;

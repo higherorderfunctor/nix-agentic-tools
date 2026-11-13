@@ -28,7 +28,7 @@
         ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
     })
     extracted;
-  # Full offers are static even while credential defaults retain prefix exclusions.
+  # Full extracted offers supply defaults; consumers choose their own model subsets.
   catalog = {
     models = identities;
     vendors.opencode-go.models = builtins.attrNames extracted;
@@ -45,10 +45,6 @@
       messages = "anthropic";
       responses = "responses";
     };
-    # Preserve the existing credential-default exclusions and matching refusal
-    # in ../../modules/instances.nix; the static catalog still includes these offers.
-    refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
-    catalog = lib.filterAttrs (id: _: !(refuses id)) models;
     placed = lib.mapAttrsToList (id: entry: let
       natives = builtins.attrNames entry.api;
       native = lib.head natives;
@@ -64,7 +60,7 @@
         api = apiOf.${native};
         inherit (entry.api.${native}) base_url;
       })
-    catalog;
+    models;
     onApi = api: lib.filter (model: model.api == api) placed;
     # The base URL comes from the API's own native models; the exception's
     # URL is another protocol's. CPA's claude executor appends
@@ -92,8 +88,6 @@
     # identifier (internal/util/header_helpers.go).
     headers.x-opencode-session = "$CPA-SESSION-ID";
     models = null;
-    refusal = "OpenCode Go may not serve claude-*, glm-* or gpt-* models; the Claude OAuth, z.ai and Codex OAuth credentials serve them.";
-    inherit refuses;
     toolAliases = {};
   };
 in {
@@ -110,6 +104,6 @@ in {
     merged.vendors.opencode-go.models));
   # Static definitions are read by modules/catalog.nix and standalone construction.
   inherit catalog;
-  # module-eval.nix supplies synthetic catalogs to exercise placement refusals.
+  # checks/catalog.nix supplies synthetic catalogs to exercise placement refusals.
   inherit opencodeGo;
 }

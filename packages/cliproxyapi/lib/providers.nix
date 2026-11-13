@@ -66,7 +66,7 @@
   baseUrlType = types.strMatching "https?://[!-~]+";
   # CPA trims model names before registering them
   # (sdk/cliproxy/service_models.go); printable-ASCII edges make that trim a
-  # no-op, so a vendor's refusal sees the name CPA serves. The interior is free.
+  # no-op, so identity checks see the name CPA serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
   passthroughModelType = types.submodule {
@@ -153,6 +153,86 @@
     then provider.apis.${api}.models
     else lib.defaultTo provider.models provider.apis.${api}.models;
 
+  # Exact canonical ids win; scoped aliases never borrow another vendor's spelling.
+  canonical = vendor: spelling: let
+    matches = builtins.attrNames (lib.filterAttrs (_: model:
+      lib.elem spelling (
+        if vendor == null
+        then lib.concatLists (builtins.attrValues model.aliases)
+        else model.aliases.${vendor} or []
+      ))
+    catalog.models);
+  in
+    if catalog.models ? ${spelling}
+    then {
+      id = spelling;
+      errors = [];
+    }
+    # An undeclared finite spelling still has an identity, but no inferred maker.
+    else if matches == []
+    then {
+      id = spelling;
+      errors = [];
+    }
+    else if lib.length matches == 1
+    then {
+      id = lib.head matches;
+      errors = [];
+    }
+    # Never choose the first ambiguous alias, including for unscoped custom vendors.
+    else {
+      id = spelling;
+      errors = ["ambiguous model alias `${spelling}`: ${lib.concatStringsSep ", " matches}; use a canonical catalog id."];
+    };
+  # Normalize each credential once so rendering, grants and overlap checks share filtered offers.
+  normalizeCredential = name: credential: let
+    # Name the credential and exclusion option in each refusal.
+    path = "ai.cliproxyapi credential `${name}`.excludeMakers";
+    # Reject maker names absent from the merged catalog.
+    unknown = lib.subtractLists (lib.unique (map (model: model.maker or null) (builtins.attrValues catalog.models))) credential.excludeMakers;
+    # Keep offers unless their resolved maker is excluded.
+    keep = model: let
+      # Resolve strings and passthrough model objects in the credential vendor scope.
+      resolved = canonical credential.vendor (
+        if builtins.isAttrs model
+        then model.name
+        else model
+      );
+      # Unknown identities have no inferred maker and remain available.
+      maker = catalog.models.${resolved.id}.maker or null;
+    in
+      if resolved.errors != []
+      then throw "${path}: ${lib.concatStringsSep "; " resolved.errors}"
+      else !(lib.elem maker credential.excludeMakers);
+    # Remove excluded offers and drop APIs left with no models.
+    filtered = lib.mapAttrs (api: value:
+      if value == null
+      then null
+      else let
+        # Use the API model list or its credential-level default.
+        models = modelsOf credential.apiKey api;
+        # Preserve null so the missing-model assertion can report it.
+        remaining =
+          if models == null
+          then null
+          else lib.filter keep models;
+      in
+        if remaining == []
+        then null
+        else value // {models = remaining;})
+    credential.apiKey.apis;
+  in
+    if credential.excludeMakers == []
+    then credential
+    else if credential.oauth != null
+    then throw "${path}: OAuth credentials cannot exclude makers; remove excludeMakers."
+    else if unknown != []
+    then throw "${path}: unknown catalog makers ${lib.concatStringsSep ", " unknown}."
+    # Neither-kind credentials with valid exclusions must reach the exactly-one assertion.
+    else if credential.apiKey == null
+    then credential
+    else credential // {apiKey = credential.apiKey // {apis = filtered;};};
+
   # One upstream credential's blocks: { <family> = [block]; }. `headers` are
   # its vendor's, already references; CPA applies a group's headers to each
   # of its keys (internal/config/config_v8.go, sharedKeyFields).
@@ -189,6 +269,16 @@
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
+      excludeMakers = mkOption {
+        type = types.listOf types.nonEmptyStr;
+        default = [];
+        description = "Remove models whose catalog maker is listed from every API of this credential. Unknown makers and nonempty OAuth exclusions are refused; models without a catalog maker remain available.";
+      };
+      exclusive = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Refuse overlapping conversational model offers from distinct credentials routed by the same client key. Passthrough is excluded.";
+      };
       oauth = mkOption {
         type = types.nullOr (types.submodule {
           # OAuth priority belongs to CPA login-file metadata; declaring
@@ -210,7 +300,13 @@
       vendor = mkOption {
         type = types.nullOr (types.enum (builtins.attrNames vendors));
         default = null;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, without claude-*, glm-* or gpt-* models, which it refuses, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        # Built-in transport constructors need finite offers; reject maker-wide
+        # input here before either constructor maps over a null model list.
+        apply = vendor:
+          if vendor != null && catalog != null && catalog.vendors.${vendor}.models == null
+          then throw "ai.cliproxyapi credential vendor `${vendor}` requires a finite ai.catalog.vendors.${vendor}.models list for transport defaults; set maker = null and declare models, or omit vendor and configure apiKey explicitly."
+          else vendor;
+        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
@@ -295,7 +391,7 @@
       '';
     }));
 in {
-  inherit apiKeys apis clientKeyType credentialType literalHeader modelsOf opencodeGo route rule served vendors;
+  inherit apiKeys apis canonical clientKeyType credentialType literalHeader modelsOf normalizeCredential opencodeGo route rule served vendors;
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
       blocks (lib.mapAttrs (_: literalHeader pkgs) (

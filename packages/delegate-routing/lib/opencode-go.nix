@@ -5,9 +5,11 @@
 {lib}: let
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   fact = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
-  inherit ((import ../../cliproxyapi/lib/providers.nix {inherit lib;}).vendors.opencode-go) refuses;
+  # This preset-scope rule limits which Go models need routing guidance here;
+  # it does not restrict the models a CPA credential may serve.
+  refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
   vendor = "opencode-go";
-  # Catalog ids a Go credential may serve; the Claude OAuth credential owns the rest.
+  # Catalog ids covered by this consumer's routing presets.
   catalog = lib.filter (id: !(refuses id)) (builtins.attrNames fact.models);
 
   # Shell-style glob as a full-match POSIX regex: `*`, `?` and `[...]`/`[!...]`.

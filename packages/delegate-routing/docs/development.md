@@ -218,14 +218,15 @@ highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
-catalog that CPA's `opencode-go` vendor serves; ids the vendor refuses
-(`vendors.opencode-go.refuses`, the ids the operator's other credentials serve)
-get no preset. They come from per-model research, and every tier is provisional:
-whenever a consumer `{families}` block renders an `opencode-go` family, one line
-under the tables says so. Each family is named `go-` plus the exact Go id,
-except `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research
-found share a role. The `go-` prefix keeps them apart from hand-written families
-such as `kimi-k3`. Presets render only when a runtime selects them, for example
+catalog that CPA's `opencode-go` vendor serves. Its local preset-scope rule
+(`refuses`: `claude-*`, `glm-*` and `gpt-*` ids) leaves some ids without a
+preset; it limits routing guidance only, not what a CPA credential serves. They
+come from per-model research, and every tier is provisional: whenever a consumer
+`{families}` block renders an `opencode-go` family, one line under the tables
+says so. Each family is named `go-` plus the exact Go id, except
+`go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
+share a role. The `go-` prefix keeps them apart from hand-written families such
+as `kimi-k3`. Presets render only when a runtime selects them, for example
 `models = [{vendors = ["opencode-go"];}]`; a tier-only selector picks them up
 like any other vendor's. Setting `opencodeGo.plan` fills each preset's `pool`
 field from the plan's documented monthly limit in the cliproxyapi `opencodeGo`
