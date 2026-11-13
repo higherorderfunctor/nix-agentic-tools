@@ -47,6 +47,38 @@ and `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude,
 Codex, Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix`
 and expose the same surface.
 
+## Static identities and CPA launch routes
+
+`ai.catalog.models` and `ai.catalog.vendors` contain static owner contributions.
+Delegate-routing reads those identities to validate concrete launch pins: an
+undeclared identity or a null maker is refused. Pattern-only native launches
+still use runtime introspection. The content package assembles its default
+catalog with the existing catalog type module and Claude, Codex and CPA owner
+modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
+
+`lib/cpa-routes.nix` reads each selected client's computed credentials from
+`ai.internal.inferenceInstances`. CPA owns API selection and credential
+filtering; the shared inference options refuse a disabled instance or an
+undeclared client. OAuth offers expand catalog identities of the vendor's maker;
+finite vendor lists do not define OAuth reach. A missing OAuth vendor is
+refused. Canonical identities use vendor-scoped aliases while launches retain
+the served spelling.
+
+The projection feeds agent-file selection and `lib/routing-view.nix`.
+Unknown-maker offers remain inspectable in the projection but cannot become a
+concrete launch. Multiple credential offers remain available when CPA permits
+overlap. Route pools retain the configured `family.pools` bindings; credential
+names do not supply budget attribution. Native launches and external URLs retain
+the existing fallback selection. Inherited picker entries outside a selected
+client's reach are dropped; explicit entries are refused.
+
+Module and manual builders pass the same `catalog`, `cpaRoutes` and resolved
+agent data to prose and manifest rendering. Manual callers projecting CPA routes
+supply evaluated instance options, inference-instance exports and runtime
+selections. The `delegate-routing-cpa-routes` check uses synthetic identities,
+checks projection and launch validation once, and checks module wiring on both
+Home Manager and devenv.
+
 ## Named guidance
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or

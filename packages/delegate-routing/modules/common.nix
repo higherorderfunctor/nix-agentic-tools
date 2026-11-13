@@ -117,10 +117,33 @@
       url = null;
     });
   };
-  resolvedAgentFiles = agentFiles.resolve (agentFiles.facts.models ++ map (row: row.model) pickerRows) (select portable.families models.claude);
+  # Owner contributions supply identity validation for all concrete launch pins.
+  catalog = config.ai.catalog;
+  # One projection supplies both generated agents and the skill/manifest builder.
+  cpaRoutes = import ../lib/cpa-routes.nix {
+    inherit lib catalog;
+    instances = config.ai.cliproxyapi.instances or {};
+    inferenceInstances = config.ai.internal.inferenceInstances or {};
+    selections = lib.genAttrs supportedRuntimes (runtime:
+      config.ai.${
+        runtime
+      }.settings.inference or {
+        instance = null;
+        clientKey = null;
+      });
+  };
+  # Native/external picker fallback remains available when no CPA routes are declared.
+  resolvedAgentFiles =
+    lib.mapAttrs (_: agent: agent // {id = familyFunctions.validateId catalog cpaRoutes.claude agent.id;})
+    (agentFiles.resolve (
+        if cpaRoutes.claude == null
+        then agentFiles.facts.models ++ map (row: row.model) pickerRows
+        else map (offer: offer.model) cpaRoutes.claude
+      )
+      (select portable.families models.claude));
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
-      inherit runtime models techniques resolvedAgentFiles;
+      inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles;
       inherit (portable) families pools;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
@@ -163,7 +186,7 @@
         default =
           map (lib.getAttrs ["effort" "model" "technique"])
           (import ../lib/routing-view.nix {
-            inherit lib runtime models techniques resolvedAgentFiles;
+            inherit lib catalog cpaRoutes runtime models techniques resolvedAgentFiles;
             inherit (portable) families pools;
             inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
           }).pickerEntries;

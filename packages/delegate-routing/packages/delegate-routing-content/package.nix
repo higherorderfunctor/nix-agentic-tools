@@ -60,7 +60,22 @@
         }
       ];
     }).config;
-  defaults = rawDefaults // {inherit (normalized) routing skill workflows techniques;};
+  # Manual builders merge the same owner contributions as module callers.
+  catalog =
+    (lib.evalModules {
+      modules = [
+        ../../../ai-module/modules/catalog.nix
+        ../../../chatgpt-codex/modules/catalog.nix
+        ../../../claude-code/modules/catalog.nix
+        ../../../cliproxyapi/modules/catalog.nix
+      ];
+    }).config.ai.catalog;
+  defaults =
+    rawDefaults
+    // {
+      inherit catalog;
+      inherit (normalized) routing skill workflows techniques;
+    };
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   # The skill in the house prose style. No table check: this package set's
   # pkgs carries no overlay, so the overlay's linters are not in it.
@@ -77,7 +92,8 @@
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
-      inherit (args) runtime families models;
+      inherit (args) catalog runtime families models;
+      cpaRoutes = args.cpaRoutes or {};
       inherit (args) picker;
       resolvedAgentFiles = args.resolvedAgentFiles or null;
       extraRuntimes = args.extraRuntimes or [];
