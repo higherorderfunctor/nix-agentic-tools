@@ -1084,7 +1084,7 @@
         example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
         glmExample = change {
           ai.programs.delegate-routing = {
-            families.zhipu.glm = {
+            families.zhipuai.glm = {
               defaultEffort = "high";
               example.claude = "glm-5.3";
               match = "glm-*";
@@ -1103,7 +1103,7 @@
               clientKey = "reader";
             };
             programs.delegate-routing = {
-              families.zhipu.glm = {
+              families.zhipuai.glm = {
                 match = "glm-[0-9]*.[0-9]";
                 tier = "strong";
               };
@@ -1180,7 +1180,7 @@
         && result.config.ai.programs.delegate-routing.families.openai.sol.defaultEffort == "medium"
         && result.config.ai.programs.delegate-routing.families.opencode-go."go-kimi-k3.1-pro".defaultEffort == "max"
         && result.config.ai.programs.delegate-routing.families.opencode-go."go-mimo-v2.6-pro".defaultEffort == null
-        && glmExample.config.ai.programs.delegate-routing.families.zhipu.glm.defaultEffort == "high"
+        && glmExample.config.ai.programs.delegate-routing.families.zhipuai.glm.defaultEffort == "high"
         && !(builtins.tryEval (builtins.deepSeq (change {ai.programs.delegate-routing.families.anthropic.opus.defaultEffort = "invalid";}).config.ai.programs.delegate-routing.families true)).success
         # Wrong: evaluation failures or unsupported effort pins in delivered Claude
         # files, missing supported pins, a hard-coded family allowlist, or evaluation
@@ -1389,7 +1389,7 @@
         withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
         glm = skill {
           ai.programs.delegate-routing = {
-            families.zhipu.glm = {
+            families.zhipuai.glm = {
               example.claude = "glm-5.3";
               match = "glm-*";
               pools.claude = "zai-coding";
@@ -1415,7 +1415,7 @@
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id the highest id matching `test-opus-*`" noWorkflow
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
         && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
-        && lib.hasInfix "glm (zhipu) `glm-*`" glm
+        && lib.hasInfix "glm (zhipuai) `glm-*`" glm
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
         && skillFails {

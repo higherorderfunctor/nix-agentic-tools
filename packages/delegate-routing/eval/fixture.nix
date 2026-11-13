@@ -1,4 +1,4 @@
-# cspell:ignore nemotron zhipu
+# cspell:ignore nemotron
 # cases.nix tests routing delivery without the operator's personal devenv config.
 {
   config,
@@ -26,7 +26,7 @@
         tier = "mid";
         useFor = "well-scoped code to a spec; screenshot or image input";
       };
-      moonshot = {
+      moonshotai = {
         kimi-k2 = {
           avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
           effort = "always thinks";
@@ -49,7 +49,7 @@
         tier = "small";
         useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
       };
-      zhipu = lib.mapAttrs (_: family:
+      zhipuai = lib.mapAttrs (_: family:
         family // {pools = lib.genAttrs ["claude" "codex" "kimchi"] (_: "zai-coding");}) {
         glm = {
           avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
@@ -128,7 +128,7 @@
           };
         };
       };
-      kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
+      kimchi.models = [{vendors = ["deepseek" "minimax" "moonshotai" "nvidia" "zhipuai"];}];
       # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
       # only, and not Fable, which this account does not have.
       kiro = {

@@ -19,8 +19,6 @@
       maker =
         if id == "iceman-contributor-free"
         then "iceman"
-        else if namespace == "zhipuai"
-        then "zhipu"
         else namespace;
       source =
         ["cliproxyapi:opencodeGo.models.${id}"]

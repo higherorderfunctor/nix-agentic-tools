@@ -1106,7 +1106,7 @@ observed `efforts: []` to certify omission of the actual effort argument, flag
 or pin. The fixed package scale is
 `minimal < low < medium < high < xhigh < max`; observed support is unordered.
 Sol defaults to medium and Go Kimi K3.1 Pro to max; configure
-`families.zhipu.glm.defaultEffort = "high"` for a custom glm (no preset is
+`families.zhipuai.glm.defaultEffort = "high"` for a custom glm (no preset is
 shipped). Go Crouton Alpha Free's medium is a provisional package choice.
 Quality versus spend remains consumer policy. Each runtime's `models` is a list
 of selectors over `vendors`, `tiers` and `families`: selectors are alternatives,
