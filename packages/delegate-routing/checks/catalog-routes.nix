@@ -175,6 +175,24 @@
       };
     };
     preview = overrides: (import ../lib/pacing.nix {inherit lib;}) (lib.recursiveUpdate previewArgs overrides);
+    # USD transport fixtures vary the Reader label to exercise shell quoting.
+    usdPreview = readerPool:
+      preview {
+        pools."test/first" = {
+          usage = {inherit readerPool;};
+          window = {
+            limit = 200;
+            resetDay = 3;
+            unit = "USD";
+          };
+          limits.weekly = {
+            capacity = 200;
+            models = ["test-alpha-1"];
+            unit = "USD";
+            window = "monthly";
+          };
+        };
+      };
     selection = import ../lib/select-families.nix {inherit lib;};
     validate = selection.validateId catalog;
     content = config.ai.internal.roots.delegate-routing-content;
@@ -216,22 +234,11 @@
         "preview missing label infers vendor" = (preview {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
         "preview disabled Reader accepted" = refuses (preview {techniques.claude.read.enable = false;});
         "preview independent USD budget accepted" = refuses (preview {pools."test/first".limits.weekly.unit = "USD";});
+        "preview Reader pool label loses shell quoting" =
+          (usdPreview "observed pool").claude.pools."test/first".command
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool' --now-ms <now-ms>";
         "preview USD transport ignores retained runtime limits" = let
-          usd = preview {
-            pools."test/first" = {
-              window = {
-                limit = 200;
-                resetDay = 3;
-                unit = "USD";
-              };
-              limits.weekly = {
-                capacity = 200;
-                models = ["test-alpha-1"];
-                unit = "USD";
-                window = "monthly";
-              };
-            };
-          };
+          usd = usdPreview "observed";
         in
           usd.claude.pools."test/first".command
           == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed --now-ms <now-ms>"
