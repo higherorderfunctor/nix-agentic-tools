@@ -123,6 +123,7 @@
   cpaRoutes = import ../lib/cpa-routes.nix {
     inherit lib catalog;
     instances = config.ai.cliproxyapi.instances or {};
+    inferenceInstances = config.ai.internal.inferenceInstances or {};
     selections = lib.genAttrs supportedRuntimes (runtime:
       config.ai.${
         runtime

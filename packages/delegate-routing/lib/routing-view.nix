@@ -22,6 +22,7 @@
   resolvedModel = family: target: let
     offers = offered target;
     resolved = agentFiles.resolve (map (offer: offer.model) offers) [
+      # agent-files.resolve reads only example.claude, including for other runtimes.
       (family // {example.claude = family.example.${target} or "";})
     ];
   in
@@ -100,18 +101,7 @@
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
-    # A concrete route through several credentials has no singular budget attribution.
-    pool =
-      if offered target == null
-      then family.pools.${target} or null
-      else let
-        credentials =
-          lib.unique (map (offer: offer.credential)
-            (lib.filter (offer: offer.model == resolvedModel family target) (offered target)));
-      in
-        if lib.length credentials == 1
-        then lib.head credentials
-        else null;
+    pool = family.pools.${target} or null;
     techniques =
       if names == []
       then
@@ -146,6 +136,8 @@
   in
     if builtins.length matches != 1 || !usable || !concrete || !(builtins.elem entry.effort effortLevels)
     then null
+    else if picker == null && offered route.target != null && !lib.any (offer: offer.model == entry.model) (offered route.target)
+    then null
     else
       builtins.seq (selection.validateId catalog (offered route.target) entry.model) {
         inherit (entry) effort model technique;
@@ -155,7 +147,7 @@
         inherit (route) pool;
       };
 in {
-  inherit candidates cpaRoutes effortLevels runtimes;
+  inherit candidates effortLevels runtimes;
   pickerEntries = let
     # A family-named default takes the family's resolved id and is dropped when
     # none resolves; a model-named default passes through.

@@ -55,29 +55,27 @@ still use runtime introspection. The content package assembles its default
 catalog with the existing catalog type module and Claude, Codex and CPA owner
 modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
 
-`lib/cpa-routes.nix` projects each runtime's selected
-`ai.<runtime>.settings.inference` client from `ai.cliproxyapi.instances`. It
-calls CPA's existing `providers.route` and `providers.canonical`; the client and
-API select the offers, including credential maker filtering. Disabled instances,
-missing clients and invalid routes fail. OAuth offers expand a finite vendor
-list or all catalog identities of its maker. Canonical identities use
-vendor-scoped aliases while launches retain the served spelling.
+`lib/cpa-routes.nix` reads each selected client's computed credentials from
+`ai.internal.inferenceInstances`. CPA owns API selection, disabled-instance and
+client validation, and credential filtering. OAuth offers expand catalog
+identities of the vendor's maker; finite vendor lists do not define OAuth reach.
+A missing OAuth vendor is refused. Canonical identities use vendor-scoped
+aliases while launches retain the served spelling.
 
-The projection feeds both agent-file selection and `lib/routing-view.nix`.
-Unknown-maker offers remain in `cpaRoutes` for inspection, but cannot become a
+The projection feeds agent-file selection and `lib/routing-view.nix`.
+Unknown-maker offers remain inspectable in the projection but cannot become a
 concrete launch. Multiple credential offers remain available when CPA permits
-overlap; a launch with more than one matching credential has null pool
-attribution. A single matching credential supplies its name as the pool binding.
-Native launches and external URLs without declared CPA routes retain the
-existing fallback selection, without inferred CPA credential reach.
+overlap. Route pools retain the configured `family.pools` bindings; credential
+names do not supply budget attribution. Native launches and external URLs retain
+the existing fallback selection. Inherited picker entries outside a selected
+client's reach are dropped; explicit entries are refused.
 
 Module and manual builders pass the same `catalog`, `cpaRoutes` and resolved
-agent data to prose and manifest rendering. Manual callers supplying CPA routes
-use the projection with their evaluated instance and selection options. The
-`delegate-routing-cpa-routes` check uses synthetic identities and real Home
-Manager/devenv option shapes to reject client/API leakage, alias confusion,
-unknown concrete pins, lost overlap and divergent builder pins. Existing module
-checks retain native and external-endpoint fallback coverage.
+agent data to prose and manifest rendering. Manual callers projecting CPA routes
+supply evaluated instance options, inference-instance exports and runtime
+selections. The `delegate-routing-cpa-routes` check uses synthetic identities,
+checks projection and launch validation once, and checks module wiring on both
+Home Manager and devenv.
 
 ## Named guidance
 
