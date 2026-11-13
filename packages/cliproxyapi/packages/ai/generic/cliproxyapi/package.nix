@@ -35,7 +35,8 @@
           ../../../../patches/passthrough-provider.patch
         ];
         # A CPA release that changes the patched context fails here, loudly.
-        patchFlags = ["-p1" "--fuzz=0"];
+        # GNU patch writes backups when hunks apply at an offset.
+        patchFlags = ["-p1" "--fuzz=0" "--no-backup-if-mismatch"];
       };
       vendorHash = sources.vendorHash or lib.fakeHash;
       passthru =
