@@ -7,7 +7,9 @@ from pathlib import Path
 import sys
 
 sys.dont_write_bytecode = True
+# Locate the hyphenated sibling without relying on the caller's import path.
 SPEC = importlib.util.spec_from_file_location("usage_normalize", Path(__file__).with_name("usage-normalize.py"))
+# Register the module before execution so dataclass annotations can resolve it.
 normalizer = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = normalizer
 SPEC.loader.exec_module(normalizer)

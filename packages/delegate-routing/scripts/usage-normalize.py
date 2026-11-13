@@ -47,7 +47,11 @@ class LimitSpec:
         number(result.capacity)
         if result.capacity == 0 or result.unit not in {"percentagePoint", "USD"} or result.role not in {"gate", "pace"}:
             raise ValueError("invalid-limit-spec")
-        if not isinstance(result.window, str) or not result.window or not isinstance(result.models, list) or not result.models or any(not isinstance(m, str) or not m for m in result.models):
+        if (
+            not isinstance(result.window, str) or not result.window
+            or not isinstance(result.models, list) or not result.models
+            or any(not isinstance(m, str) or not m for m in result.models)
+        ):
             raise ValueError("invalid-limit-spec")
         return result
 
@@ -58,7 +62,7 @@ def stdout_document(capture):
     if "stdout" in capture:
         try:
             document = json.loads(capture["stdout"])
-        except (TypeError, ValueError):
+        except (RecursionError, TypeError, ValueError):
             raise ValueError("invalid-json") from None
     return document
 
@@ -73,17 +77,33 @@ def envelope(capture):
     if not isinstance(document, dict) or not isinstance(document.get("account"), dict):
         raise Invalid("invalid-envelope")
     account = document["account"]
-    if any(k not in account or (account[k] is not None and not isinstance(account[k], str)) for k in ("auth_index", "name", "plan")):
+    if any(k not in account or (account[k] is not None and not isinstance(account[k], str))
+           for k in ("auth_index", "name", "plan")):
         raise Invalid("invalid-account")
-    if not isinstance(document.get("pool"), str) or not document["pool"].strip() or not isinstance(document.get("windows"), dict):
+    if (not isinstance(document.get("pool"), str) or not document["pool"].strip()
+            or not isinstance(document.get("windows"), dict)):
         raise Invalid("invalid-envelope")
     return document
+
+
+def count(value):
+    # Bonus counts are whole nonnegative quantities.
+    if type(value) is not int:
+        raise ValueError("invalid-count")
+    return number(value)
+
+
+# Each extras array declares its identity fields, accepted identities and quantity parser.
+EXTRAS = {
+    "balances": (("kind", "unit"), {("credits", "credits"), ("extra_usage", "USD")}, "remaining", number),
+    "bonuses": (("kind",), {("promo_credits",), ("rate_limit_reset",)}, "count", count),
+}
 
 
 def metadata(document, diagnostic):
     # Extras are inspection facts, not wallet balances or redemption rights.
     result = {}
-    for field in ("balances", "bonuses"):
+    for field, (keys, identities, quantity, parse) in EXTRAS.items():
         items = document.get(field)
         result[field] = None
         if field not in document:
@@ -94,19 +114,19 @@ def metadata(document, diagnostic):
         result[field] = []
         for item in items:
             try:
-                if field == "balances":
-                    if (item["kind"], item["unit"]) not in (("credits", "credits"), ("extra_usage", "USD")):
-                        raise ValueError
-                    clean = {"kind": item["kind"], "remaining": number(item["remaining"]), "unit": item["unit"]}
-                else:
-                    if item["kind"] != "rate_limit_reset" or type(item["count"]) is not int:
-                        raise ValueError
-                    clean = {"count": number(item["count"]), "kind": "rate_limit_reset"}
+                if tuple(item[key] for key in keys) not in identities:
+                    raise ValueError
+                clean = {key: item[key] for key in keys}
+                clean[quantity] = parse(item[quantity])
                 clean["expiresAt"] = None if item["expiresAt"] is None else utc(item["expiresAt"])
                 result[field].append(clean)
             except (KeyError, TypeError, ValueError, OverflowError):
                 diagnostic("invalid-extras", component=field)
     return result
+
+
+# Known Reader statuses establish enforcement; other strings remain inspection facts.
+ENFORCEMENT = dict.fromkeys(("active", "critical", "estimated", "normal", "ok", "warning"), True)
 
 
 def window_observation(identifier, spec, window, observed, now, diagnostic):
@@ -142,21 +162,25 @@ def window_observation(identifier, spec, window, observed, now, diagnostic):
         invalid = True
     try:
         reset = None if window["resetsAt"] is None else utc(window["resetsAt"])
-        if reset is None and not (spec.role == "gate" and result["remaining"] is not None and result["remaining"] > 0):
+        idle = result["used"] == 0 and result["remaining"] == spec.capacity
+        open_gate = spec.role == "gate" and result["remaining"] is not None and result["remaining"] > 0
+        if reset is None and not (idle or open_gate):
             raise ValueError
         result["naturalResetAt"] = reset
-        if reset is not None and observed is not None and result["windowSeconds"] is not None and reset - observed > result["windowSeconds"]:
+        # Reader resets may round up while capture seconds are truncated.
+        if (reset is not None and observed is not None and result["windowSeconds"] is not None
+                and reset - observed > result["windowSeconds"] + 1):
             raise ValueError
     except (KeyError, TypeError, ValueError, OverflowError):
         diagnostic("invalid-reset")
         invalid = True
     status = window.get("status")
-    if "status" not in window or (status is not None and status not in ("estimated", "inactive", "normal", "ok")):
+    if "status" not in window or (status is not None and not isinstance(status, str)):
         diagnostic("invalid-status")
         invalid = True
     else:
         result["readerStatus"] = status
-        result["enforced"] = True if status in ("estimated", "normal", "ok") else None
+        result["enforced"] = ENFORCEMENT.get(status)
         if result["enforced"] is None:
             diagnostic("unknown-enforcement")
     reset = result["naturalResetAt"]
@@ -167,76 +191,91 @@ def window_observation(identifier, spec, window, observed, now, diagnostic):
     return result
 
 
-def normalize(snapshot, now):
-    """Inspect saved routes and explicitly scoped limits without executing Readers."""
-    now = utc(now)
-    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("runtime"), str) or not snapshot["runtime"] or not isinstance(snapshot.get("pools"), dict) or not isinstance(snapshot.get("readers"), dict) or not isinstance(snapshot.get("routes"), list):
+def snapshot_routes(snapshot):
+    # Refuse malformed snapshots and routes before inspecting their captures.
+    if (not isinstance(snapshot, dict) or not isinstance(snapshot.get("runtime"), str)
+            or not snapshot["runtime"] or not isinstance(snapshot.get("pools"), dict)
+            or not isinstance(snapshot.get("readers"), dict) or not isinstance(snapshot.get("routes"), list)):
         raise Invalid("invalid-snapshot")
     routes = snapshot["routes"]
     for route in routes:
-        if not isinstance(route, dict) or set(route) != {"id", "maker", "model"} or any(not isinstance(route[k], str) or not route[k] for k in ("id", "model")) or (route["maker"] is not None and not isinstance(route["maker"], str)):
+        if (not isinstance(route, dict) or set(route) != {"id", "maker", "model"}
+                or any(not isinstance(route[k], str) or not route[k] for k in ("id", "model"))
+                or (route["maker"] is not None and not isinstance(route["maker"], str))):
             raise Invalid("invalid-route")
-    models = {r["id"] for r in routes}  # limits name canonical catalog ids, not served spellings
+    return routes
+
+
+def limit_specs(registration, models):
+    # Registration scopes name canonical catalog ids, never served spellings.
+    if (not isinstance(registration, dict) or not isinstance(registration.get("limits"), dict)
+            or not isinstance(registration.get("readerPool"), str) or not registration["readerPool"]):
+        raise Invalid("invalid-registration")
+    specs = {key: LimitSpec.parse(value) for key, value in sorted(registration["limits"].items())}
+    if any(set(spec.models) - models for spec in specs.values()):
+        raise Invalid("unknown-model")
+    if len({spec.window for spec in specs.values()}) != len(specs):
+        raise Invalid("duplicate-window-registration")
+    return specs
+
+
+def capture_observation(capture, reader_pool, now, diagnostic):
+    # Isolate capture failures so other captures and reachable routes survive.
+    if capture is None:
+        diagnostic("missing-capture")
+        return None, None
+    if not isinstance(capture, dict):
+        diagnostic("invalid-capture")
+        return None, None
+    observed, document = None, None
+    try:
+        observed = utc(capture["finishedAt"])
+        if observed > now:
+            observed = None
+            raise Invalid("future-observation")
+    except Invalid as error:
+        diagnostic(str(error))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        diagnostic("invalid-observation-time")
+    try:
+        exit_status = capture["exit"]
+        if type(exit_status) is not int:
+            raise Invalid("invalid-exit-status")
+        if exit_status != 0:
+            diagnostic("exit-nonzero", exitStatus=exit_status)
+        else:
+            candidate = envelope(capture)
+            if candidate["pool"] != reader_pool:
+                raise Invalid("pool-mismatch")
+            document = candidate
+    except Invalid as error:
+        diagnostic(str(error))
+    except (KeyError, TypeError, ValueError, OverflowError, RecursionError):
+        diagnostic("invalid-json" if "stdout" in capture else "invalid-capture")
+    return observed, document
+
+
+def normalize(snapshot, now):
+    """Inspect saved routes and explicitly scoped limits without executing Readers."""
+    now = utc(now)
+    routes = snapshot_routes(snapshot)
+    models = {r["id"] for r in routes}
     diagnostics, pools = [], {}
     for pool, registration in sorted(snapshot["pools"].items()):
         def diagnostic(reason, **details):
             diagnostics.append({"pool": pool, "reason": reason, **details})
 
-        if not isinstance(registration, dict) or not isinstance(registration.get("limits"), dict) or not isinstance(registration.get("readerPool"), str) or not registration["readerPool"]:
-            raise Invalid("invalid-registration")
-        specs = {key: LimitSpec.parse(value) for key, value in sorted(registration["limits"].items())}
-        if any(set(spec.models) - models for spec in specs.values()):
-            raise Invalid("unknown-model")
-        windows = {spec.window for spec in specs.values()}
-        if len(windows) != len(specs):
-            raise Invalid("duplicate-window-registration")
-        capture = snapshot["readers"].get(pool)
-        observed, document = None, None
-        if capture is None:
-            diagnostic("missing-capture")
-        elif not isinstance(capture, dict):
-            diagnostic("invalid-capture")
-        else:
-            try:
-                observed = utc(capture["finishedAt"])
-                if observed > now:
-                    observed = None
-                    raise Invalid("future-observation")
-            except Invalid as error:
-                diagnostic(str(error))
-            except (KeyError, TypeError, ValueError, OverflowError):
-                diagnostic("invalid-observation-time")
-            try:
-                exit_status = capture["exit"]
-                if type(exit_status) is not int:
-                    raise Invalid("invalid-exit-status")
-                if exit_status != 0:
-                    try:
-                        payload = stdout_document(capture)
-                    except (ValueError, TypeError):
-                        payload = None
-                    failure = payload.get("diagnostic") if isinstance(payload, dict) else None
-                    failure = failure if isinstance(failure, dict) else {}
-                    reason = failure.get("reason")
-                    reason = reason if reason in ("invalid-json", "refused", "timeout", "unpriced-models") else "exit-nonzero"
-                    detail = {"exitStatus": exit_status}
-                    if type(failure.get("count")) is int and failure["count"] >= 0:
-                        detail["count"] = failure["count"]
-                    diagnostic(reason, **detail)
-                else:
-                    candidate = envelope(capture)
-                    if candidate["pool"] != registration["readerPool"]:
-                        raise Invalid("pool-mismatch")
-                    document = candidate
-            except Invalid as error:
-                diagnostic(str(error))
-            except (KeyError, TypeError, ValueError, OverflowError):
-                diagnostic("invalid-json" if "stdout" in capture else "invalid-capture")
-        observations = []
-        for identifier, spec in specs.items():
-            observations.append(window_observation(identifier, spec, document["windows"].get(spec.window) if document else None, observed, now,
-                                                   lambda reason: diagnostic(reason, limit=identifier)))
-        unresolved = len(set(document["windows"]) - windows) if document else 0
+        specs = limit_specs(registration, models)
+        observed, document = capture_observation(
+            snapshot["readers"].get(pool), registration["readerPool"], now, diagnostic
+        )
+        windows = document["windows"] if document else {}
+        observations = [
+            window_observation(identifier, spec, windows.get(spec.window), observed, now,
+                               lambda reason: diagnostic(reason, limit=identifier))
+            for identifier, spec in specs.items()
+        ]
+        unresolved = len(set(windows) - {spec.window for spec in specs.values()})
         if unresolved:
             diagnostic("unregistered-window", count=unresolved)
         pools[pool] = {"limits": observations, "readerMetadata": metadata(document or {}, diagnostic),
