@@ -142,6 +142,39 @@
       inherit credential;
       api = "chat";
     }) ["first" "second"]);
+    # Preview scope properties use actual CPA projections, never a copied reach graph.
+    previewArgs = {
+      cpaRoutes = overlapping;
+      pools."test/first" = {
+        usage = {
+          readerPool = "observed";
+          runtime = "claude";
+          technique = "read";
+        };
+        limits = {
+          scoped = {
+            capacity = 100;
+            models = ["test-alpha-1"];
+            role = "pace";
+            unit = "percentagePoint";
+            window = "7d:fable";
+          };
+          weekly = {
+            capacity = 100;
+            models = null;
+            role = "pace";
+            unit = "percentagePoint";
+            window = "7d";
+          };
+        };
+      };
+      techniques.claude.read = {
+        command = "fake-reader";
+        enable = true;
+        kind = "usage";
+      };
+    };
+    preview = overrides: (import ../lib/pacing.nix {inherit lib;}) (lib.recursiveUpdate previewArgs overrides);
     selection = import ../lib/select-families.nix {inherit lib;};
     validate = selection.validateId catalog;
     content = config.ai.internal.roots.delegate-routing-content;
@@ -168,6 +201,38 @@
         "rendered agent and launch pins differ" = pinned.model.value == "test-alpha-1" && lib.hasInfix "model: \"test-alpha-1\"" config.ai.claude.agents.alpha;
       }
       // lib.optionalAttrs projection {
+        "credential replaced by vendor or first overlapping offer" = map (offer: offer.credential) overlapping.claude == ["test/first" "test/first" "test/second"];
+        "preview loses overlap or unmeasured credential" =
+          lib.length (preview {}).claude.routes
+          == 3
+          && (preview {}).claude.pools."test/second".command == null;
+        "preview null scope uses family names or another credential" = (preview {}).claude.pools."test/first".limits.weekly.models == ["test-alpha-1" "test-unknown-1"];
+        "preview explicit scope expands to every offer" = (preview {}).claude.pools."test/first".limits.scoped.models == ["test-alpha-1"];
+        "preview scope ignores runtime API" = (preview {}).codex.pools."test/first".limits.weekly.models == ["test-beta-1"] && !(preview {}).codex.pools."test/first".limits ? scoped;
+        "preview vendor label accepted as credential" = refuses (preview {pools.vendor.limits.weekly = previewArgs.pools."test/first".limits.weekly;});
+        "preview unknown canonical scope accepted" = refuses (preview {pools."test/first".limits.scoped.models = ["missing"];});
+        "preview empty explicit scope accepted" = refuses (preview {pools."test/first".limits.scoped.models = [];});
+        "preview duplicate window accepted" = refuses (preview {pools."test/first".limits.scoped.window = "7d";});
+        "preview missing label infers vendor" = (preview {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
+        "preview disabled Reader accepted" = refuses (preview {techniques.claude.read.enable = false;});
+        "preview independent USD budget accepted" = refuses (preview {pools."test/first".limits.weekly.unit = "USD";});
+        "preview USD transport drops configured budget" = let
+          usd = preview {
+            pools."test/first" = {
+              window = {
+                limit = 200;
+                resetDay = 3;
+                unit = "USD";
+              };
+              limits.weekly = {
+                capacity = 200;
+                unit = "USD";
+                window = "monthly";
+              };
+            };
+          };
+        in
+          usd.claude.pools."test/first".command == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed' --now-ms <now-ms>";
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
           ai.catalog.models.test-alpha-2.aliases.z-ai = ["short"];
