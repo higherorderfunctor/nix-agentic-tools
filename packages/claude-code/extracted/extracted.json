@@ -65,9 +65,11 @@
     "internalKeys": [
       "awaySummaryEnabled",
       "breakReminder",
+      "clawdFileProgressEnabled",
       "doneMeansMerged",
       "modelProposedGoals",
       "policyHelpers",
+      "precomputeArmTokens",
       "quietHours",
       "remoteControl",
       "remoteTools",
@@ -140,6 +142,12 @@
       "additionalMarketplaces.*.source|9.plugins[]": { "type": "object" },
       "additionalMarketplaces.*.source|9.plugins[].description": {
         "type": "string"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].engines": {
+        "type": "object"
+      },
+      "additionalMarketplaces.*.source|9.plugins[].engines.*": {
+        "type": "any"
       },
       "additionalMarketplaces.*.source|9.plugins[].headers": {
         "type": "object"
@@ -336,6 +344,8 @@
       "allowedMarketplaces[]|9.plugins": { "type": "array" },
       "allowedMarketplaces[]|9.plugins[]": { "type": "object" },
       "allowedMarketplaces[]|9.plugins[].description": { "type": "string" },
+      "allowedMarketplaces[]|9.plugins[].engines": { "type": "object" },
+      "allowedMarketplaces[]|9.plugins[].engines.*": { "type": "any" },
       "allowedMarketplaces[]|9.plugins[].headers": { "type": "object" },
       "allowedMarketplaces[]|9.plugins[].headers.*": { "type": "string" },
       "allowedMarketplaces[]|9.plugins[].headersHelper": { "type": "string" },
@@ -480,6 +490,8 @@
       "blockedMarketplaces[]|10.plugins": { "type": "array" },
       "blockedMarketplaces[]|10.plugins[]": { "type": "object" },
       "blockedMarketplaces[]|10.plugins[].description": { "type": "string" },
+      "blockedMarketplaces[]|10.plugins[].engines": { "type": "object" },
+      "blockedMarketplaces[]|10.plugins[].engines.*": { "type": "any" },
       "blockedMarketplaces[]|10.plugins[].headers": { "type": "object" },
       "blockedMarketplaces[]|10.plugins[].headers.*": { "type": "string" },
       "blockedMarketplaces[]|10.plugins[].headersHelper": { "type": "string" },
@@ -603,6 +615,7 @@
       "claudeMd": { "type": "string" },
       "claudeMdExcludes": { "type": "array" },
       "claudeMdExcludes[]": { "type": "string" },
+      "clawdFileProgressEnabled": { "type": "boolean" },
       "cleanupPeriodDays": { "type": "integer" },
       "companyAnnouncements": { "type": "array" },
       "companyAnnouncements[]": { "type": "string" },
@@ -724,6 +737,12 @@
       "extraKnownMarketplaces.*.source|9.plugins[]": { "type": "object" },
       "extraKnownMarketplaces.*.source|9.plugins[].description": {
         "type": "string"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].engines": {
+        "type": "object"
+      },
+      "extraKnownMarketplaces.*.source|9.plugins[].engines.*": {
+        "type": "any"
       },
       "extraKnownMarketplaces.*.source|9.plugins[].headers": {
         "type": "object"
@@ -1065,6 +1084,9 @@
       "permissions.allow[]": { "type": "string" },
       "permissions.ask": { "type": "array" },
       "permissions.ask[]": { "type": "string" },
+      "permissions.blockFileToolReadsOutsideWorkingDirectories": {
+        "type": "boolean"
+      },
       "permissions.blockReadsExemptPaths": { "type": "array" },
       "permissions.blockReadsExemptPaths[]": { "type": "string" },
       "permissions.blockReadsOutsideWorkingDirectories": { "type": "boolean" },
@@ -1200,6 +1222,7 @@
       "policyHelpers.wsl.script": { "type": "string" },
       "policyHelpers.wsl.timeoutMs": { "type": "any" },
       "prUrlTemplate": { "type": "string" },
+      "precomputeArmTokens": { "type": "integer" },
       "precomputeCompactionEnabled": { "type": "boolean" },
       "preferredNotifChannel": {
         "enum": [
@@ -1452,6 +1475,8 @@
       "strictKnownMarketplaces[]|9.plugins": { "type": "array" },
       "strictKnownMarketplaces[]|9.plugins[]": { "type": "object" },
       "strictKnownMarketplaces[]|9.plugins[].description": { "type": "string" },
+      "strictKnownMarketplaces[]|9.plugins[].engines": { "type": "object" },
+      "strictKnownMarketplaces[]|9.plugins[].engines.*": { "type": "any" },
       "strictKnownMarketplaces[]|9.plugins[].headers": { "type": "object" },
       "strictKnownMarketplaces[]|9.plugins[].headers.*": { "type": "string" },
       "strictKnownMarketplaces[]|9.plugins[].headersHelper": {
