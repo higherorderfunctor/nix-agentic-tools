@@ -333,6 +333,7 @@ in {
                       if config.unit == "USD" && budget != null
                       then budget.limit
                       else throw "percentagePoint limits require capacity";
+                    defaultText = lib.literalExpression "pools.<name>.window.limit for USD with a configured window; required otherwise";
                     description = "Native allowance capacity; USD defaults to the existing budget window.";
                   };
                   models = lib.mkOption {
