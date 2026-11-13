@@ -339,6 +339,7 @@ moderations
 modfmt
 moff
 mojibake
+moonshotai
 mountpoint
 mpim
 mtimes
@@ -597,7 +598,6 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
-zhipu
 zhipuai
 zstd
 gnupatch

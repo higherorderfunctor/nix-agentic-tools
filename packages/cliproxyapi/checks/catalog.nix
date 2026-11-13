@@ -90,8 +90,6 @@
   in
     if id == "iceman-contributor-free"
     then "iceman"
-    else if namespace == "zhipuai"
-    then "zhipu"
     else namespace;
   # Each backend exercises complete defaults, list overrides and identity aliases.
   checks = lib.mapAttrs (backendName: evaluate:
@@ -335,7 +333,7 @@
               identity = catalog.models.${id};
             in
               expectedMaker id != "" && identity.maker == expectedMaker id && sorted identity.aliases.opencode-go == lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id) (builtins.attrNames go)
-            && lib.all (id: catalog.models.${id}.maker == "zhipu") zai.models;
+            && lib.all (id: catalog.models.${id}.maker == "zhipuai") zai.models;
           "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "z-ai" == expectedZai;
           "maker exclusion ignored or native APIs changed" = offers filteredGo "opencode-go" == expectedFilteredGo;
           "maker-wide vendor accepted before finite constructor" = lib.all (vendor: !(acceptsMakerOffer vendor)) ["opencode-go" "z-ai"];

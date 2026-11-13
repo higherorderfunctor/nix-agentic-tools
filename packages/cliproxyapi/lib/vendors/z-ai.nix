@@ -4,11 +4,11 @@
   facts = import ../../../../lib/extracted/facts.nix {inherit lib;};
   # Missing or divergent facts fail at extraction's shared reader.
   extracted = facts.get (facts.load {dir = ../../extracted;}).aggregate "zAi";
-  # z.ai's model table supplies canonical ids in the zhipu maker namespace.
+  # z.ai serves GLM models; zhipuai is the maker namespace upstream ids use (OpenCode Go canonical_id).
   catalog = {
     models = lib.genAttrs extracted.models (_: {
       aliases = {};
-      maker = "zhipu";
+      maker = "zhipuai";
       source = ["cliproxyapi:zAi.models"];
     });
     vendors.z-ai.models = extracted.models;

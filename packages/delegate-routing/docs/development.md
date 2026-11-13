@@ -329,7 +329,7 @@ It supplies every technique's default and remains consumer-overridable; Sol uses
 medium, Go Kimi K3.1 Pro max, and families without levels null. Go Crouton Alpha
 Free uses a provisional medium package choice, not a published recommendation;
 consumers can override it. Configure custom
-`families.zhipu.glm.defaultEffort = "high"`; no glm preset is shipped. Null
+`families.zhipuai.glm.defaultEffort = "high"`; no glm preset is shipped. Null
 omits the generated file's `effort:` line. Agent files pin only efforts Claude's
 agent-file format accepts; otherwise they leave effort to the launch call. A
 non-null role effort overrides the family default. The shared frontmatter

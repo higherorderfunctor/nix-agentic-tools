@@ -105,7 +105,7 @@ served by other subscriptions, while retaining the vendor's evolving defaults:
 ai.cliproxyapi.instances.main.credentials.go = {
   vendor = "opencode-go";
   apiKey.key = redact.file "/run/secrets/opencode-go";
-  excludeMakers = ["anthropic" "openai" "zhipu"];
+  excludeMakers = ["anthropic" "openai" "zhipuai"];
 };
 ```
 
