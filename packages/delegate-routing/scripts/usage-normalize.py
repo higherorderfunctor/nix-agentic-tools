@@ -176,7 +176,7 @@ def normalize(snapshot, now):
     for route in routes:
         if not isinstance(route, dict) or set(route) != {"id", "maker", "model"} or any(not isinstance(route[k], str) or not route[k] for k in ("id", "model")) or (route["maker"] is not None and not isinstance(route["maker"], str)):
             raise Invalid("invalid-route")
-    models = {r["model"] for r in routes}
+    models = {r["id"] for r in routes}  # limits name canonical catalog ids, not served spellings
     diagnostics, pools = [], {}
     for pool, registration in sorted(snapshot["pools"].items()):
         def diagnostic(reason, **details):
