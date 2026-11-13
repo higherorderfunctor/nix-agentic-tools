@@ -1,6 +1,6 @@
 {
-  "version": "0.168.0",
-  "buildCommit": "9480ec100c3edee9fc69172e8e80a4730444094d",
+  "version": "0.169.0",
+  "buildCommit": "d32063f96c2dff1dc96af839b3952abb6acfeda4",
   "librustyV8": {
     "version": "152.2.0",
     "archive": {
@@ -16,7 +16,7 @@
       "x86_64-linux": "sha256-Pk1f7Nvg+YpgF+adfKglGad/sDLF615M2+zdPi7FGdU="
     }
   },
-  "srcHash": "sha256-3YcoWIAsWeMWT645i5bRtEue12LJYiDxYy0mMOvbxjQ=",
+  "srcHash": "sha256-p8Vw0Vu8ufPY35k/RkcKE6HOTMJta2J9W33ei/7in+A=",
   "rustToolchainChannel": "1.95.0",
-  "cargoHash": "sha256-04d5sl4HaCT4Qc9GVxOcDHSEAgT0iFcOf51f7//sJ3Y="
+  "cargoHash": "sha256-+YSkZwmAP88AOFmNWav4ye4ObbDYAIo0mzeQEzTqDm8="
 }
