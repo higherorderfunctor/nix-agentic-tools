@@ -177,17 +177,23 @@
     preview = overrides: (import ../lib/pacing.nix {inherit lib;}) (lib.recursiveUpdate previewArgs overrides);
     # USD transport fixtures vary the Reader label to exercise shell quoting.
     usdPreview = readerPool:
-      preview {
+      (import ../lib/pacing.nix {inherit lib;}) {
+        inherit (previewArgs) cpaRoutes;
+        techniques.claude.anthropic-api-usage = previewArgs.techniques.claude.read;
         pools."test/first" = {
-          usage = {inherit readerPool;};
+          usage = {
+            inherit readerPool;
+            runtime = "claude";
+            technique = "anthropic-api-usage";
+          };
           window = {
             limit = 200;
             resetDay = 3;
             unit = "USD";
           };
           limits.weekly = {
-            capacity = 200;
             models = ["test-alpha-1"];
+            role = "pace";
             unit = "USD";
             window = "monthly";
           };
@@ -232,6 +238,38 @@
         "preview empty explicit scope accepted" = refuses (preview {pools."test/first".limits.scoped.models = [];});
         "preview duplicate window accepted" = refuses (preview {pools."test/first".limits.scoped.window = "7d";});
         "preview missing label infers vendor" = (preview {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
+        "preview registration leaks into helper Readers" = (view {inherit (previewArgs) pools;}).readers == [];
+        "preview unrelated USD technique accepted" = refuses (preview {
+          pools."test/first" = {
+            window = {
+              limit = 100;
+              resetDay = 3;
+              unit = "USD";
+            };
+            limits.weekly = {
+              unit = "USD";
+              window = "monthly";
+            };
+          };
+        });
+        "preview module requires duplicate USD capacity" = let
+          configured = change {
+            ai.programs.delegate-routing.pools."test/first" = {
+              window = {
+                limit = 200;
+                resetDay = 3;
+                unit = "USD";
+              };
+              limits.monthly = {
+                role = "pace";
+                unit = "USD";
+                window = "monthly";
+              };
+            };
+          };
+        in
+          configured.ai.programs.delegate-routing.pools."test/first".limits.monthly.capacity == 200;
+        "preview USD capacity is not derived" = (usdPreview "observed").claude.pools."test/first".limits.weekly.capacity == 200;
         "preview disabled Reader accepted" = refuses (preview {techniques.claude.read.enable = false;});
         "preview independent USD budget accepted" = refuses (preview {pools."test/first".limits.weekly.unit = "USD";});
         "preview Reader pool label loses shell quoting" =
@@ -242,7 +280,7 @@
         in
           usd.claude.pools."test/first".command
           == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed --now-ms <now-ms>"
-          && usd.codex.pools."test/first".command == "fake-reader"
+          && usd.codex.pools."test/first".command == null
           && !(usd.codex.pools."test/first".limits ? weekly);
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
