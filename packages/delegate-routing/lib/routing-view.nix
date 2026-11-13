@@ -208,5 +208,6 @@ in {
         then null
         else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
     })
-    pools;
+    # Credential preview scopes use catalog IDs, never helper family bindings.
+    (lib.filterAttrs (_: pool: (pool.limits or {}) == {} && ((pool.usage or null) == null || (pool.usage.readerPool or null) == null)) pools);
 }

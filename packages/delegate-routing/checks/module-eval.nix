@@ -586,8 +586,7 @@
     };
     # Production option shapes with synthetic identities; no provider is contacted.
     observationEnvelope =
-      pkgs.writeText "preview-reader.json" (builtins.toJSON
-        (builtins.fromJSON (builtins.readFile ./pacing/reader-snapshots.json)).readers.codex.data);
+      pkgs.writeText "preview-reader.json" (builtins.fromJSON (builtins.readFile ./pacing/reader-snapshots.json)).readers.codex.stdout;
     observationDelivery = evaluate {
       ai = {
         catalog.models = {
@@ -609,6 +608,7 @@
         };
         cliproxyapi.instances.preview = {
           enable = true;
+          settings.management.secret-key = redact.file "/run/secrets/preview-management";
           settings.config-version = 8;
           credentials = lib.genAttrs ["one" "two"] (_: {
             apiKey = {
@@ -650,7 +650,7 @@
             picker.entries = lib.mkForce [];
             techniques.preview = {
               kind = "usage";
-              command = "${pkgs.coreutils}/bin/cat ${observationEnvelope}";
+              command = "test \"$DELEGATE_USAGE_CPA_CODEX_MANAGEMENT_KEY_FILE\" = /run/secrets/preview-management && test -n \"$DELEGATE_USAGE_CPA_CODEX_URL\" && ${pkgs.coreutils}/bin/cat ${observationEnvelope}";
             };
           };
         };
@@ -665,18 +665,6 @@
         then observationDelivery.config.home.packages
         else observationDelivery.config.packages
       );
-    # Manual callers pass exactly the same computed routes and existing registrations.
-    observationManual = observationDelivery.config.ai.internal.roots.delegate-routing-content.mkObservation {
-      cpaRoutes = import ../lib/cpa-routes.nix {
-        inherit lib;
-        inherit (observationDelivery.config.ai) catalog;
-        instances = observationDelivery.config.ai.cliproxyapi.instances;
-        inferenceInstances = observationDelivery.config.ai.internal.inferenceInstances;
-        selections.codex = observationDelivery.config.ai.codex.settings.inference;
-      };
-      pools = observationDelivery.config.ai.programs.delegate-routing.pools;
-      techniques = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques observationDelivery.config;
-    };
     routingView = import ../lib/routing-view.nix routingArgs;
     sessionPools = {
       claude = "claude";
@@ -913,12 +901,19 @@
     "module-delegate-routing-${name}-codex-packaged-helper" = packagedHelperCheck "codex";
     "module-delegate-routing-${name}-kimchi-packaged-helper" = packagedHelperCheck "kimchi";
     "module-delegate-routing-${name}-kiro-packaged-helper" = packagedHelperCheck "kiro";
-    # Fails if backend/manual preview delivery loses routes, limits or safe failures.
+    # A runtime without CPA has no manifest and must not install the preview.
+    "module-delegate-routing-${name}-observation-no-cpa" =
+      mkTest "delegate-routing-${name}-observation-no-cpa" (!lib.any (package: lib.getName package == "delegate-routing-allowance-preview")
+      (
+        if name == "hm"
+        then result.config.home.packages
+        else result.config.packages
+      ));
+    # Fails if installed preview loses CPA metadata, routes, limits or safe failures.
     "module-delegate-routing-${name}-observation-command" =
       pkgs.runCommand "delegate-routing-${name}-observation-command" {
         nativeBuildInputs = [pkgs.python3];
         delivered = lib.getExe observationPackage;
-        manual = lib.getExe observationManual;
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -926,23 +921,19 @@
         export HOME="$out/home"
         python3 -I -B - <<'PYTHON'
         import json, os, subprocess
-        results = []
-        for key in ["delivered", "manual"]:
-            command = [os.environ[key], "--runtime", "codex", "--now", "1794447300"]
-            result = json.loads(subprocess.check_output(command))
-            assert result["capability"] == "allowance-preview", result
-            assert len(result["routes"]) == 4, result
-            assert sum(r["maker"] is None for r in result["routes"]) == 2, result
-            assert sorted(result["pools"]) == ["preview/one", "preview/two"], result
-            weekly = result["pools"]["preview/one"]["limits"][0]
-            assert weekly["models"] == ["preview-code", "preview-unknown"], result
-            assert weekly["remaining"] == 49, result
-            assert not result["pools"]["preview/two"]["scopeResolved"], result
-            assert {"pool": "preview/two", "reason": "missing-capture"} in result["diagnostics"], result
-            assert "fixture-account" not in json.dumps(result), result
-            results.append(result)
-        assert results[0] == results[1], results
-        print("backend/manual allowance preview delivery passed")
+        command = [os.environ["delivered"], "--runtime", "codex"]
+        result = json.loads(subprocess.check_output(command))
+        assert result["capability"] == "allowance-preview", result
+        assert len(result["routes"]) == 4, result
+        assert sum(r["maker"] is None for r in result["routes"]) == 2, result
+        assert sorted(result["pools"]) == ["preview/one", "preview/two"], result
+        weekly = result["pools"]["preview/one"]["limits"][0]
+        assert weekly["models"] == ["preview-code", "preview-unknown"], result
+        assert weekly["remaining"] == 49, result
+        assert not result["pools"]["preview/two"]["scopeResolved"], result
+        assert {"pool": "preview/two", "reason": "missing-capture"} in result["diagnostics"], result
+        assert "fixture-account" not in json.dumps(result), result
+        print("installed allowance preview delivery passed")
         PYTHON
         rmdir "$out/home"
       '';

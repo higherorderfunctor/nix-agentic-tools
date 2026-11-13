@@ -65,12 +65,13 @@ Configured Reader collection, CPA attribution and ranking remain separate.
 ## Configured collection
 
 Home Manager and devenv install `delegate-routing-allowance-preview` whenever a
-delegate-routing runtime is enabled. Run it with
-`--runtime codex --now 2026-11-12T01:35:00Z`. This explicitly named preview
-leaves the routing helper, its configured family pool attribution, ranking and
-skill unchanged. The source CLI accepts `--manifest <path>` for the same
-runtime-indexed registrations. `--snapshot` bypasses even an installed default
-manifest and stays transport-free.
+delegate-routing runtime is enabled with a non-null CPA routes entry. Run it
+with `--runtime codex`. Collection uses the wall clock and records each actual
+finish time; `--now` is reserved for snapshot replay. This explicitly named
+preview leaves the routing helper, its configured family pool attribution,
+ranking and skill unchanged. The source CLI accepts `--manifest <path>` for the
+same runtime-indexed registrations. `--snapshot` bypasses even an installed
+default manifest and stays transport-free.
 
 The existing `ai.programs.delegate-routing.pools` registry supplies the Reader.
 For preview, its key is `<instance>/<credential>` from CPA's computed client
@@ -111,24 +112,35 @@ nonempty IDs must belong to that credential and are intersected with the current
 client's offers. Duplicate windows are refused. `limits` defaults to empty and
 `usage.readerPool` to null; missing registrations or labels leave observations
 unmeasured while retaining all offers, including unknown makers and overlapping
-credentials. No first-credential attribution is inferred.
+credentials. No first-credential attribution is inferred. Pin a separate command
+for each credential (for example with `--auth-index`): commands shared between
+registrations share a capture, and `account.auth_index` is not an attribution
+check.
 
-USD limits consume the existing `window` budget: unit `USD`, matching capacity
-and exact `monthly` window. The configured accounted Reader receives that
+USD limits consume the existing `window` budget: unit `USD` and exact `monthly`
+window. Omit `capacity` to derive it from `window.limit`. Only the
+`anthropic-api-usage` accounted technique accepts these limits; it receives that
 budget's `--limit`, `--reset-day`, `--time-zone UTC`, expected `--pool` label
 and explicit `--now-ms` clock. No new pricing source or transport is introduced.
 
-Manual callers use `content.mkObservation { cpaRoutes; pools; techniques; }`,
-passing the same direct CPA projection and effective technique registry as
-module callers. Each distinct command runs once with a 30-second timeout.
-Execution errors, timeouts and nonzero exits share one retry after two seconds;
-successful invalid JSON or envelopes are never retried. Failure preserves routes
-and emits only the normalizer's safe reason/status/count fields; it does not
-certify inference availability.
+The installed wrapper bakes in the same CPA URL and management-key file paths as
+runtime environments, using the shared `usageEnvironment` source; it never reads
+secret contents while building. Credential preview registrations stay out of the
+routing helper's Reader inventory.
+
+Manual callers use
+`content.mkObservation { cpaRoutes; pools; techniques; environment; }`, passing
+the same direct CPA projection and effective technique registry as module
+callers, including the Reader environment. Each distinct command uses the
+routing helper's 10-second timeout and process-group cleanup. Execution errors,
+timeouts and nonzero exits share one retry after two seconds; successful invalid
+JSON or envelopes are never retried. Failure preserves routes and emits
+`exit-nonzero` with numeric status (124 for timeout, 127 for launch failure); it
+does not certify inference availability.
 
 `delegate-routing-observation-command` tests collection using fake executables
 and all five saved production envelope shapes, with scratch under its output
 directory. Synthetic CPA properties test credential identity, scope refusal and
 USD budget reuse. Both backend `observation-command` checks execute their
-installed package and the manual builder and compare results. These checks make
-no provider request. Preview output has no stable schema promise.
+installed package, including its CPA management metadata. These checks make no
+provider request. Preview output has no stable schema promise.

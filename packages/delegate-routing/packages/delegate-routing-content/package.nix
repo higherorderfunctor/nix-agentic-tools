@@ -141,12 +141,13 @@
     };
   # Manual and backend callers use the same direct offers and Reader registrations.
   mkObservation = args: let
-    manifests = (import ../../lib/pacing.nix {inherit lib;}) args;
+    manifests = (import ../../lib/pacing.nix {inherit lib;}) (removeAttrs args ["environment"]);
     manifest = pkgs.writeText "delegate-routing-observation.json" (builtins.toJSON manifests);
   in
     (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-allowance-preview";
       text = ''
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") (args.environment or {}))}
         exec ${pkgs.python3}/bin/python3 -I -B ${../../scripts}/pacing-list.py --default-manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash "$@"
       '';
     };
