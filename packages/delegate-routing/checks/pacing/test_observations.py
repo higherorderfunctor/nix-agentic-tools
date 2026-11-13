@@ -55,6 +55,7 @@ class Observations(unittest.TestCase):
     def test_scoped_inactive_retained(self):
         fable = self.limit("claude", "fable")
         self.assertEqual((fable["models"], fable["remaining"], fable["readerStatus"], fable["status"]), (["synthetic-fable"], 87, "inactive", "valid"))
+        self.assertIsNone(self.limit("codex", "weekly")["enforced"])
         self.assertIsNone(fable["enforced"])
         self.assertTrue(self.limit("claude", "weekly")["enforced"])
         self.assertIn("unknown-enforcement", self.reasons())
@@ -68,14 +69,15 @@ class Observations(unittest.TestCase):
         rolling = self.limit("z-ai", "rolling")
         self.assertEqual((rolling["role"], rolling["remaining"], rolling["windowSeconds"], rolling["status"]), ("gate", 100, 18000, "valid"))
         self.assertIsNone(rolling["naturalResetAt"])
-        self.assertEqual(self.limit("opencode-go", "rolling")["role"], "gate")
+        self.assertEqual((self.limit("opencode-go", "rolling")["role"], self.limit("opencode-go", "rolling")["status"]), ("gate", "valid"))
+        self.snapshot["readers"]["opencode-go"]["data"]["windows"]["5h"]["resetsAt"] = "2026-11-12T06:34:47Z"
+        self.assertEqual(self.limit("opencode-go", "rolling")["status"], "invalid")
         self.snapshot["pools"]["z-ai"]["limits"]["rolling"]["role"] = "pace"
         self.assertEqual(self.limit("z-ai", "rolling")["status"], "invalid")
 
     def test_closed_rolling_gate(self):
         # Synthetic exhaustion of the saved z.ai envelope with a known release time.
         window = self.snapshot["readers"]["z-ai"]["data"]["windows"]["5h"]
-        self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
         # An open gate with a known reset still has no opening time.
         window.update(resetsAt="2026-11-12T03:35:00Z")
         self.assertIsNone(self.limit("z-ai", "rolling")["gateOpensAt"])
@@ -85,6 +87,11 @@ class Observations(unittest.TestCase):
         self.assertEqual(rolling["gateOpensAt"], 1794454500)
         self.assertEqual(rolling["naturalResetAt"], 1794454500)
         self.assertNotIn("refused", rolling)
+        window.update(resetsAt="2026-11-12T01:34:48Z")
+        rolling = self.limit("z-ai", "rolling")
+        self.assertEqual(rolling["status"], "stale")
+        self.assertEqual(rolling["remaining"], 0)
+        self.assertIsNone(rolling["gateOpensAt"])
 
     def test_missing_extras_are_unknown(self):
         del self.snapshot["readers"]["claude"]["data"]["bonuses"]
@@ -160,6 +167,7 @@ class Observations(unittest.TestCase):
         command = [sys.executable, "-I", str(SCRIPTS / "pacing-list.py"), "--snapshot", str(FIXTURE), "--now", NOW]
         first = subprocess.check_output(command)
         self.assertEqual(first, subprocess.check_output(command))
+        self.assertEqual(first, subprocess.check_output(command[:-1] + ["1794447300"]))
         result = json.loads(first)
         self.assertEqual((result["capability"], result["asOf"]), ("allowance-preview", 1794447300))
         self.assertNotIn("entries", result)
@@ -180,6 +188,7 @@ class Observations(unittest.TestCase):
                 window[field] = value
                 result = self.limit("codex", "weekly")
                 self.assertEqual((result["remaining"], result["used"], result["status"]), (0, 100, "invalid"))
+                self.assertNotIn("private-", json.dumps(self.result()))
                 window[field] = original
         capture["finishedAt"] = "private-capture-time"
         self.assertEqual(self.limit("codex", "weekly")["remaining"], 0)
@@ -228,20 +237,13 @@ class Observations(unittest.TestCase):
             for value in [{"secret": "private-text"}, True, [], "private-text"]:
                 self.snapshot["readers"]["codex"] = {**original, field: value}
                 self.assertNotIn("private-text", json.dumps(self.result()))
+                if field == "exit" and value is True:
+                    self.assertIn("invalid-exit-status", self.reasons())
         self.snapshot["readers"]["codex"] = original
         for value in [[], {}, "private-status"]:
             original["data"]["windows"]["7d"]["status"] = value
             self.assertEqual(self.limit("codex", "weekly")["remaining"], 49)
             self.assertNotIn("private-status", json.dumps(self.result()))
-
-    def test_stale_gate_does_not_promise_opening(self):
-        window = self.snapshot["readers"]["z-ai"]["data"]["windows"]["5h"]
-        window.update(remainingPercent=0, usedPercent=100, resetsAt="2026-11-12T01:34:48Z")
-        result = self.limit("z-ai", "rolling")
-        self.assertEqual(result["status"], "stale")
-        self.assertEqual(result["remaining"], 0)
-        self.assertIsNone(result["gateOpensAt"])
-        self.assertIsNone(self.limit("codex", "weekly")["enforced"])
 
     def test_invalid_scope_registration(self):
         self.snapshot["pools"]["codex"]["limits"]["weekly"]["models"] = ["unknown"]
@@ -264,9 +266,6 @@ class Observations(unittest.TestCase):
 
     def test_replay_has_no_command_execution(self):
         # An audit hook refuses process/network events; even capture commands are data.
-        from unittest.mock import patch
-        with patch("subprocess.Popen", side_effect=AssertionError("command executed")):
-            self.result()
         source = SCRIPTS / "pacing-list.py"
         code = "import runpy, sys; sys.dont_write_bytecode=True\ndef audit(event, args):\n if event in {'subprocess.Popen','os.system','os.posix_spawn','socket.connect'}: raise RuntimeError('execution forbidden')\nsys.addaudithook(audit)\nsys.argv=" + repr([str(source), "--snapshot", str(FIXTURE), "--now", NOW]) + ";runpy.run_path(" + repr(str(source)) + ",run_name='__main__')"
         result = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True)

@@ -214,7 +214,7 @@
         "windows": {
           "5h": {
             "remainingPercent": 100,
-            "resetsAt": "2026-11-12T06:34:47Z",
+            "resetsAt": "2026-11-12T06:34:46Z",
             "status": "ok",
             "usedPercent": 0,
             "windowSeconds": 18000

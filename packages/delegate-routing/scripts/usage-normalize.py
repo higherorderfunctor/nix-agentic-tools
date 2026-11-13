@@ -6,18 +6,22 @@ import math
 from dataclasses import dataclass
 
 
-def number(value, minimum=0):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < minimum:
+def number(value):
+    # Refuse booleans, negative quantities and non-finite numbers.
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
         raise ValueError("invalid-number")
     return value
 
 
 def utc(value):
+    # Normalize UTC timestamps and integer seconds without exposing parser text.
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if not isinstance(value, str):
         raise ValueError("invalid-time")
     try:
+        if value.isdecimal():
+            return int(value)
         instant = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
         if instant.utcoffset() != dt.timedelta(0):
             raise ValueError("invalid-time")
@@ -28,6 +32,7 @@ def utc(value):
 
 @dataclass(frozen=True)
 class LimitSpec:
+    # Hold a registered limit with explicit model scope and native capacity.
     capacity: float
     models: list[str]
     role: str
@@ -48,6 +53,7 @@ class LimitSpec:
 
 
 def stdout_document(capture):
+    # Decode captured stdout when supplied, refusing malformed JSON safely.
     document = capture.get("data")
     if "stdout" in capture:
         try:
@@ -62,6 +68,7 @@ class Invalid(ValueError):
 
 
 def envelope(capture):
+    # Refuse envelopes missing account identity, pool identity or a window map.
     document = stdout_document(capture)
     if not isinstance(document, dict) or not isinstance(document.get("account"), dict):
         raise Invalid("invalid-envelope")
@@ -103,6 +110,7 @@ def metadata(document, diagnostic):
 
 
 def window_observation(identifier, spec, window, observed, now, diagnostic):
+    # Preserve measured quantities while validating timing and enforcement independently.
     result = dict(id=identifier, capacity=spec.capacity, unit=spec.unit,
                   role=spec.role, models=spec.models, remaining=None, used=None,
                   windowSeconds=None, naturalResetAt=None, enforced=None,
