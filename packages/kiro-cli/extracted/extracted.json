@@ -534,6 +534,7 @@
     "lite",
     "managed_settings",
     "memory_cloud_sync",
+    "memory_import",
     "test",
     "test_internal_only",
     "test_nightly_only",
@@ -553,6 +554,12 @@
       }
     },
     "memory_cloud_sync": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
+    "memory_import": {
       "patchable": false,
       "unmatchedSites": {
         "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
@@ -592,6 +599,11 @@
       "segment": "internal",
       "treatment_percent": 0
     },
+    "memory_import": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
     "test_nightly_only": {
@@ -613,6 +625,7 @@
     "chat.autoExpandToolOutput",
     "chat.defaultInterruptBehavior",
     "chat.defaultModel",
+    "chat.disableAutoCompaction",
     "chat.disableTrustAllConfirmation",
     "chat.disableWrap",
     "chat.enableC2s",
@@ -683,6 +696,7 @@
     "chat.workflow.continueInterrupted",
     "chat.workflowLaunch",
     "chat.workflowMonitor.mouseEnabled",
+    "compaction.autoCompactionThreshold",
     "memory.mode",
     "memory.reflection"
   ],
@@ -699,6 +713,7 @@
     "chat.enableThinking",
     "chat.modelDefaults",
     "chat.outputStyle",
+    "compaction.autoCompactionThreshold",
     "compaction.excludeContextWindowPercent",
     "compaction.excludeMessages",
     "knowledge.chunkOverlap",
