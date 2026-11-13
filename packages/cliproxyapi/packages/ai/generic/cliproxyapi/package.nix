@@ -27,16 +27,13 @@
       inherit (sources) version;
       # The patched tree is `src` itself, so the build, the extractor and the
       # settings checks (which copy `package.src`) all read the carried patches.
-      src = pkgs.applyPatches {
+      src = (packageLib.patching {inherit pkgs;}).source {
         src = fetchzip {inherit (sources.src) url hash;};
-        patches = [
+        patchFiles = [
           ../../../../patches/key-allowlist.patch
           ../../../../patches/zai-tool-shims.patch
           ../../../../patches/passthrough-provider.patch
         ];
-        # A CPA release that changes the patched context fails here, loudly.
-        # GNU patch writes backups when hunks apply at an offset.
-        patchFlags = ["-p1" "--fuzz=0" "--no-backup-if-mismatch"];
       };
       vendorHash = sources.vendorHash or lib.fakeHash;
       passthru =
