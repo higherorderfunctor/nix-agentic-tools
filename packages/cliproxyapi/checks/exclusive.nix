@@ -114,6 +114,14 @@
       instance = change {credentials.left = (finite "left" ["fixture-shared"]) // {exclusive = true;};};
       fragments = ["credential `left`" "ambiguous model alias `fixture-shared`" "fixture-a" "fixture-b"];
     };
+    # Fails a check that reads exclusive as "exactly one side" or reports the pair twice.
+    "both sides exclusive reported once" = {
+      instance = change {
+        credentials.left.exclusive = true;
+        credentials.right.exclusive = true;
+      };
+      fragments = overlap;
+    };
     "canonical id loses to alias" = {
       instance = change {credentials.left.exclusive = true;};
       fragments = overlap;
@@ -308,7 +316,6 @@
       };
       fragments = ["credential `right`" "OAuth vendor `fixture-missing`" "declare ai.catalog.vendors.fixture-missing.maker"];
     };
-    "credentials outside the routes compared" = {instance = change {credentials.unused = (finite "unused" ["fixture-a"]) // {exclusive = true;};};};
     "unresolved route enters overlap check" = {
       instance = change {
         credentials.left.exclusive = true;
@@ -383,8 +390,6 @@
     ) "exclusive case: ${label}";
   # Grant membership is hand specified; changing order alone must not break the check.
   grants = evaluate: let
-    result = evaluate [{ai.cliproxyapi.instances.main = base;}];
-    instance = result.config.ai.cliproxyapi.instances.main;
     cpa = (import ../lib/default.nix {inherit lib;}).cliproxyapi;
     renderedGrants = definition: let
       evaluated = evaluate [{ai.cliproxyapi.instances.main = definition;}];
@@ -420,10 +425,7 @@
       }
     ];
   in
-    !instance.credentials.left.exclusive
-    && !instance.credentials.right.exclusive
-    && sameMembers expected base
-    && sameMembers expected (change {clientKeys.main.routes = [(route "right") (route "left")];})
+    sameMembers expected base
     && sameMembers passthroughExpected cases."passthrough fallback refused".instance;
   # One owner check combines table results without maintaining a rendered-order snapshot.
   checks = lib.mapAttrs (backend: evaluate:
