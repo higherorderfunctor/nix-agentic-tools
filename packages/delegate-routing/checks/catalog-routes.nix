@@ -1,0 +1,241 @@
+# Synthetic production-shaped configurations exercise CPA projection and launch identity refusal.
+{
+  harness,
+  lib,
+  ...
+}: let
+  # Secret references have the production type, but no fixture reads their files.
+  redact = import ../../../lib/redact {inherit lib;};
+  # Both backend evaluations receive the same instance and runtime options.
+  backends = {
+    devenv = harness.evalDevenvModules;
+    hm = harness.evalHmModules;
+  };
+  # Model facts are deliberately synthetic, with aliases shared across vendor scopes.
+  identity = maker: aliases: {
+    inherit aliases maker;
+    source = ["synthetic route identity"];
+  };
+  # Each credential offers two APIs; the client route must pick exactly one.
+  key = models: {
+    apiKey = {
+      key = redact.file "/run/secrets/upstream";
+      inherit models;
+      apis = {
+        anthropic = {
+          base-url = "https://fixture.example/anthropic";
+          models = ["test-beta-1"];
+        };
+        chat.base-url = "https://fixture.example/chat";
+      };
+    };
+  };
+  # Clients differ in API and credential; overlap is deliberately not exclusive.
+  fixture.ai = {
+    catalog = {
+      models = {
+        test-alpha-1 = identity "alpha" {finite = ["short"];};
+        test-alpha-2 = identity "alpha" {};
+        test-beta-1 = identity "beta" {other = ["short"];};
+        test-unknown-1 = identity null {};
+      };
+      vendors = {
+        finite.models = ["short" "test-unknown-1"];
+        wide.maker = "alpha";
+      };
+    };
+    claude = {
+      enable = true;
+      settings.inference = {
+        instance = "test";
+        clientKey = "one";
+      };
+    };
+    codex = {
+      enable = true;
+      settings.inference = {
+        instance = "test";
+        clientKey = "two";
+      };
+    };
+    cliproxyapi.instances.test = {
+      enable = true;
+      settings.config-version = 8;
+      credentials = {
+        first = key ["test-alpha-1" "test-unknown-1"];
+        filtered = (key ["test-alpha-1" "test-beta-1"]) // {excludeMakers = ["alpha"];};
+        finite.oauth = {
+          vendor = "finite";
+          account = redact.file "/run/secrets/finite";
+        };
+        second = key ["test-alpha-1"];
+        wide.oauth = {
+          vendor = "wide";
+          account = redact.file "/run/secrets/wide";
+        };
+      };
+      clientKeys = {
+        one = {
+          key = redact.file "/run/secrets/one";
+          routes = [
+            {
+              credential = "first";
+              api = "chat";
+            }
+          ];
+        };
+        two = {
+          key = redact.file "/run/secrets/two";
+          routes = [
+            {
+              credential = "first";
+              api = "anthropic";
+            }
+          ];
+        };
+      };
+    };
+    programs.delegate-routing = {
+      enable = true;
+      skill.entries."Family tables" = {
+        after = ["Routing helper"];
+        text = "{families}";
+      };
+      families.fixture.alpha = {
+        match = "test-alpha-*";
+        tier = "strong";
+        useFor = "synthetic fixture";
+      };
+      runtimes = {
+        claude = {
+          models = [{families = ["alpha"];}];
+          picker.entries = [];
+        };
+        codex = {
+          models = [{families = ["alpha"];}];
+          picker.entries = [];
+        };
+      };
+    };
+  };
+  # Projection consumes evaluated CPA options, including credential filtering.
+  project = config:
+    import ../lib/cpa-routes.nix {
+      inherit lib;
+      inherit (config.ai) catalog;
+      instances = config.ai.cliproxyapi.instances;
+      selections = lib.genAttrs ["claude" "codex"] (runtime: config.ai.${runtime}.settings.inference);
+    };
+  # A failed deep evaluation proves refusal rather than an unevaluated thunk.
+  refuses = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
+  # Each property labels the wrong implementation it rejects.
+  check = evaluate: let
+    result = evaluate [fixture];
+    inherit (result) config;
+    catalog = config.ai.catalog;
+    routes = project config;
+    change = extra: (evaluate [fixture extra]).config;
+    clientRoutes = choices: project (change {ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce choices;});
+    oauth = vendor: (clientRoutes [{credential = vendor;}]).claude;
+    overlapping = clientRoutes (map (credential: {
+      inherit credential;
+      api = "chat";
+    }) ["first" "second"]);
+    selection = import ../lib/select-families.nix {inherit lib;};
+    validate = selection.validateId catalog;
+    content = config.ai.internal.roots.delegate-routing-content;
+    args = {
+      inherit catalog;
+      cpaRoutes = routes;
+      inherit (config.ai.programs.delegate-routing) families skill;
+      models = lib.mapAttrs (_: settings: settings.models) config.ai.programs.delegate-routing.runtimes;
+      picker.entries = [];
+      runtime = "claude";
+      techniques = selection.effectiveTechniques config;
+    };
+    view = extra: import ../lib/routing-view.nix ({inherit lib;} // args // extra);
+    pinned = builtins.head (builtins.head (view {}).routes).techniques;
+    manual = content.mkSkill args;
+    text = builtins.readFile "${manual}/SKILL.md";
+    moduleText = builtins.readFile "${config.ai.claude.skills.delegate-routing}/SKILL.md";
+    # Compare prose independently of the manifest's store context.
+    withoutHelper = value: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" value));
+    properties = {
+      "ambiguous vendor alias chooses first identity" = refuses (project (change {
+        ai.catalog.models.test-alpha-2.aliases.finite = ["short"];
+        ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [{credential = "finite";}];
+      }));
+      "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
+      "client inherits other API offers" = map (offer: offer.model) routes.claude == ["test-alpha-1" "test-unknown-1"];
+      "concrete route bypasses maker validation" =
+        refuses
+        (view {
+          catalog = catalog // {models = catalog.models // {test-alpha-1 = catalog.models.test-alpha-1 // {maker = null;};};};
+        }).routes;
+      "disabled instance advertises reach" = refuses (project (change {ai.cliproxyapi.instances.test.enable = lib.mkForce false;}));
+      "explicit agent pin escapes selected client" =
+        refuses
+        (view {
+          resolvedAgentFiles.alpha = {
+            family = args.families.fixture.alpha;
+            id = "test-beta-1";
+          };
+        }).routes;
+      "external URL invents CPA offers" =
+        (project (change {
+          ai.claude.settings.inference = {
+            instance = lib.mkForce null;
+            clientKey = lib.mkForce null;
+            url = "https://external.example";
+            key = redact.file "/run/secrets/external";
+          };
+        })).claude
+        == null;
+      "filtered credential regains excluded maker" =
+        map (offer: offer.model)
+        (clientRoutes [
+          {
+            credential = "filtered";
+            api = "chat";
+          }
+        ]).claude
+        == ["test-beta-1"];
+      "finite OAuth alias loses spelling or identity" = let offer = lib.head (oauth "finite"); in offer.model == "short" && offer.id == "test-alpha-1" && offer.maker == "alpha";
+      "maker-wide OAuth misses synthetic identities" = map (offer: offer.id) (oauth "wide") == ["test-alpha-1" "test-alpha-2"];
+      "manual builder diverges from module" = withoutHelper text == withoutHelper moduleText && lib.hasInfix "pinning `test-alpha-1`" text;
+      "missing route API silently chooses first" = refuses (clientRoutes [{credential = "first";}]);
+      "multiple credentials choose first budget" = (lib.head (view {cpaRoutes = overlapping;}).routes).pool == null && lib.length overlapping.claude == 3;
+      "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
+      "native launch skips identity validation" = refuses (validate null "missing");
+      "no CPA invents offers" =
+        (import ../lib/cpa-routes.nix {
+          inherit lib catalog;
+          selections.claude = {
+            instance = null;
+            clientKey = null;
+          };
+        }).claude
+        == null;
+      "null-maker concrete launch succeeds" = refuses (validate routes.claude "test-unknown-1");
+      "outside-client concrete launch succeeds" = refuses (validate routes.claude "test-beta-1");
+      "projection exposes secrets" = !(lib.hasInfix "/run/secrets" (builtins.toJSON routes));
+      "rendered agent and launch pins differ" = pinned.model.value == "test-alpha-1" && lib.hasInfix "model: \"test-alpha-1\"" config.ai.claude.agents.alpha;
+      "singular credential attribution lost" = (lib.head (view {}).routes).pool == "first";
+      "unknown API silently chooses fallback" = refuses (clientRoutes [
+        {
+          credential = "first";
+          api = "responses";
+        }
+      ]);
+      "unknown credential silently disappears" = refuses (clientRoutes [{credential = "missing";}]);
+      "unknown offers disappear" = (lib.last routes.claude).maker == null;
+      "unoffered alias borrows another vendor identity" = refuses (validate (oauth "wide") "short");
+      "unscoped ambiguous alias chooses first identity" = refuses (validate null "short");
+      "vendor alias borrows another vendor" = validate (oauth "finite") "short" == "short";
+    };
+  in
+    lib.all (name: properties.${name} || throw "delegate-routing CPA routes: ${name}") (builtins.attrNames properties);
+in {
+  # The combined owner check exercises production options on each backend.
+  checks.delegate-routing-cpa-routes = harness.mkTest "delegate-routing-cpa-routes" (lib.all check (builtins.attrValues backends));
+}

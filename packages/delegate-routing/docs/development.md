@@ -46,6 +46,39 @@ and `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude,
 Codex, Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix`
 and expose the same surface.
 
+## Static identities and CPA launch routes
+
+`ai.catalog.models` and `ai.catalog.vendors` contain static owner contributions.
+Delegate-routing reads those identities to validate concrete launch pins: an
+undeclared identity or a null maker is refused. Pattern-only native launches
+still use runtime introspection. The content package assembles its default
+catalog with the existing catalog type module and Claude, Codex and CPA owner
+modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
+
+`lib/cpa-routes.nix` projects each runtime's selected
+`ai.<runtime>.settings.inference` client from `ai.cliproxyapi.instances`. It
+calls CPA's existing `providers.route` and `providers.canonical`; the client and
+API select the offers, including credential maker filtering. Disabled instances,
+missing clients and invalid routes fail. OAuth offers expand a finite vendor
+list or all catalog identities of its maker. Canonical identities use
+vendor-scoped aliases while launches retain the served spelling.
+
+The projection feeds both agent-file selection and `lib/routing-view.nix`.
+Unknown-maker offers remain in `cpaRoutes` for inspection, but cannot become a
+concrete launch. Multiple credential offers remain available when CPA permits
+overlap; a launch with more than one matching credential has null pool
+attribution. A single matching credential supplies its name as the pool binding.
+Native launches and external URLs without declared CPA routes retain the
+existing fallback selection, without inferred CPA credential reach.
+
+Module and manual builders pass the same `catalog`, `cpaRoutes` and resolved
+agent data to prose and manifest rendering. Manual callers supplying CPA routes
+use the projection with their evaluated instance and selection options. The
+`delegate-routing-cpa-routes` check uses synthetic identities and real Home
+Manager/devenv option shapes to reject client/API leakage, alias confusion,
+unknown concrete pins, lost overlap and divergent builder pins. Existing module
+checks retain native and external-endpoint fallback coverage.
+
 ## Named guidance
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
