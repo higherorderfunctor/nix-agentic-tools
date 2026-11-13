@@ -305,9 +305,43 @@ in {
               default = "";
               description = "Budget description shown in consumer {pools} table entries.";
             };
+            limits = lib.mkOption {
+              default = {};
+              description = "Allowance preview windows scoped to canonical CPA credential offers.";
+              type = lib.types.attrsOf (lib.types.submodule {
+                options = {
+                  capacity = lib.mkOption {
+                    type = lib.types.numbers.positive;
+                    description = "Native allowance capacity; USD must equal the existing budget window.";
+                  };
+                  models = lib.mkOption {
+                    type = lib.types.nullOr (lib.types.nonEmptyListOf lib.types.nonEmptyStr);
+                    default = null;
+                    description = "Canonical model IDs, or all actual credential offers when null.";
+                  };
+                  role = lib.mkOption {
+                    type = lib.types.enum ["gate" "pace"];
+                    description = "Declared enforcement or pacing role.";
+                  };
+                  unit = lib.mkOption {
+                    type = lib.types.enum ["USD" "percentagePoint"];
+                    description = "Native capacity unit.";
+                  };
+                  window = lib.mkOption {
+                    type = lib.types.nonEmptyStr;
+                    description = "Exact Reader window key, including any scope suffix.";
+                  };
+                };
+              });
+            };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
                 options = {
+                  readerPool = lib.mkOption {
+                    type = lib.types.nullOr lib.types.nonEmptyStr;
+                    default = null;
+                    description = "Expected Reader envelope label; null leaves allowance preview unmeasured.";
+                  };
                   runtime = lib.mkOption {
                     type = lib.types.enum supportedRuntimes;
                     description = "Enabled runtime whose usage technique reads this pool.";
@@ -371,6 +405,20 @@ in {
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
+    {
+      config =
+        lib.setAttrByPath (
+          if backend == "hm"
+          then ["home" "packages"]
+          else ["packages"]
+        )
+        (lib.mkIf (lib.any sourceEnabled supportedRuntimes) [
+          (defaults.passthru.mkObservation {
+            inherit cpaRoutes techniques;
+            inherit (portable) pools;
+          })
+        ]);
+    }
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
