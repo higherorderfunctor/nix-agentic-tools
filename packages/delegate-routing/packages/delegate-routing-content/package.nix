@@ -139,12 +139,23 @@
       inherit (args) runtime;
       inherit treefmt;
     };
+  # Manual and backend callers use the same direct offers and Reader registrations.
+  mkObservation = args: let
+    manifests = (import ../../lib/pacing.nix {inherit lib;}) args;
+    manifest = pkgs.writeText "delegate-routing-observation.json" (builtins.toJSON manifests);
+  in
+    (import ../../../../lib/strict-shell-application.nix pkgs) {
+      name = "delegate-routing-allowance-preview";
+      text = ''
+        exec ${pkgs.python3}/bin/python3 -I -B ${../../scripts}/pacing-list.py --default-manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash "$@"
+      '';
+    };
   skills = lib.genAttrs (builtins.attrNames (lib.filterAttrs (_: models: models != []) defaults.models)) (runtime: mkSkill {inherit runtime;});
 in
   pkgs.runCommand "delegate-routing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
-      inherit mkSkill mkUsageScript render skills usageScripts;
+      inherit mkObservation mkSkill mkUsageScript render skills usageScripts;
       inherit (defaults) families models techniques routing skill workflows;
     };
   } ''
