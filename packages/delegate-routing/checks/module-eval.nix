@@ -990,9 +990,22 @@
               id = "proxy-opus-123";
             };
           });
+        # Wrong: configured scopes disappear when their runtime is not selected.
+        codexOnly = import ../lib/routing-view.nix (routingArgs
+          // {
+            extraRuntimes = [];
+            manualExternalDelegates = [];
+            picker.entries = [];
+            runtime = "codex";
+          });
         agent = builtins.head (builtins.head resolved.routes).techniques;
       in
         passes routingFixture
+        && builtins.elem "opus" codexOnly.poolFamilies.measured
+        && codexOnly.poolFamilies == routingView.poolFamilies
+        && lib.all (route: route.target == "codex") codexOnly.routes
+        && codexOnly.manualRoutes == []
+        && lib.any (reader: reader.name == "measured" && reader.command != null) codexOnly.readers
         && routingView.effortLevels == ["minimal" "low" "medium" "high" "xhigh" "max"]
         && lib.all (route: route.family.defaultEffort == "medium") (lib.filter (route: route.family.name == "opus") routingView.routes)
         && routingView.runtimes == ["claude" "codex"]

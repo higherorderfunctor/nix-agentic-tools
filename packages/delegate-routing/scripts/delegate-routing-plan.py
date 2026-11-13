@@ -499,7 +499,7 @@ class InvalidRequest(ValueError):
         self.errors = errors
 
 
-MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "readers", "routes", "runtime", "runtimes", "sessionPool")
+MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "poolFamilies", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
 def request_errors(manifest, context, roles):
@@ -588,6 +588,21 @@ def request_errors(manifest, context, roles):
                 refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}must be a list of strings")
             else:
                 name_lists[key] = values
+        inventory = manifest["poolFamilies"]
+        if not isinstance(inventory, dict):
+            refuse("manifest.poolFamilies", f"{CONFIGURATION_FAULT}must be an object")
+        else:
+            for pool in sorted(set(pool_names) | set(inventory)):
+                path = f"manifest.poolFamilies.{pool}"
+                if pool not in pool_names:
+                    refuse(path, pool_fault % pool)
+                values = inventory.get(pool)
+                if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+                    refuse(path, f"{CONFIGURATION_FAULT}must be a list of strings for each registered pool")
+                elif "familyNames" in name_lists:
+                    for value in values:
+                        if value not in name_lists["familyNames"]:
+                            refuse(path, f"{CONFIGURATION_FAULT}unknown configured family {value}")
         for kind in ("routes", "manualRoutes"):
             if not isinstance(manifest[kind], list):
                 refuse(f"manifest.{kind}", f"{CONFIGURATION_FAULT}must be a list")
@@ -675,10 +690,10 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
     pools = collect(manifest["readers"], now, shell, run)
     warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
-    # Include manual routes so warnings describe configuration, not availability.
+    # The inventory includes bindings outside automatic and manual launch reach.
     family_paces, invalid_families = {}, set()
     for name, pool in pools.items():
-        families = {route["family"]["name"] for route in manifest["routes"] + manifest["manualRoutes"] if route["pool"] == name}
+        families = manifest["poolFamilies"][name]
         for window, pace in pool.get("scopedPaces", {}).items():
             scope = window.split(":", 1)[1]
             error = pool.get("scopedErrors", {}).get(window)

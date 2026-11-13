@@ -554,12 +554,17 @@ validation text, never Reader stderr, command text or exception payloads.
 The pace formula is
 `(remainingPercent / 100) / ((resetsAt - now) / windowSeconds)`. The pool uses
 the minimum unscoped pace and remaining share; a candidate uses the minimum of
-pool and matching scoped paces. Remaining shares must be finite numbers in
-[0,100], excluding booleans. Used windows require a UTC reset and retain the
-strict reset-duration bound; reported calendar-month durations remain intact.
-Idle windows bypass reset validation; all-idle pools use pace 1.0 and full
-buffer. Scoped `status` is ignored because inactive has unknown meaning. Ties
-sort non-session pools first, then family/runtime deterministically.
+pool and matching scoped paces. A scoped key such as `7d:fable` matches the
+exact family name in the manifest's `poolFamilies` inventory for that pool. The
+inventory collects all configured runtime pool bindings, including families
+outside the current runtime's automatic and manual launch routes. A family
+configured only in another pool still produces an unmatched-scope warning.
+Remaining shares must be finite numbers in [0,100], excluding booleans. Used
+windows require a UTC reset and retain the strict reset-duration bound; reported
+calendar-month durations remain intact. Idle windows bypass reset validation;
+all-idle pools use pace 1.0 and full buffer. Scoped `status` is ignored because
+inactive has unknown meaning. Ties sort non-session pools first, then
+family/runtime deterministically.
 
 JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
 stderr includes failure warnings and the fallback notice; advisory notes stay

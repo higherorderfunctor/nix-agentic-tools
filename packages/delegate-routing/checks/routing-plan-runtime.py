@@ -46,8 +46,12 @@ def route(name="sol", tier="strong", pool="outside", target="codex", techniques=
     return {"family": {"avoidFor": "sole judge", "defaultEffort": default, "effort": "prose is not an effort enum", "name": name, "tier": tier, "useFor": "writer-judge loop", "vendor": "provider"}, "pool": pool, "target": target, "techniques": techniques or [technique()]}
 
 
+def pool_families(routes, pools):
+    return {pool: sorted({r["family"]["name"] for r in routes if r["pool"] == pool}) for pool in pools}
+
+
 def manifest(routes=None, session=None):
-    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
+    return {"familyNames": [r["family"]["name"] for r in (routes or [route()])] + ["manual", "dormant"], "effortLevels": ["minimal", "low", "medium", "high", "xhigh", "max"], "manualRoutes": [route("manual", pool=None)], "pickerEntries": [], "poolFamilies": pool_families(routes or [route()], ("hidden", "outside", "session")), "readers": [{"command": "reader-outside", "name": "outside"}, {"command": "reader-session", "name": "session"}, {"command": "reader-hidden-runtime", "name": "hidden"}], "routes": routes or [route()], "runtime": "codex", "runtimes": ["codex"], "sessionPool": session}
 
 
 def context(roles=("writer",), names=("sol",), techniques=None, non_interactive=False, effort="high"):
@@ -532,6 +536,7 @@ class Routing(unittest.TestCase):
             log = root / "reads"
             config = manifest()
             config["readers"] = [{"name": "outside", "command": f"printf x >> '{log}'"}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text('{"taskSummary": "ok",\n "roles": {}, oops}')
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json")]
@@ -742,6 +747,7 @@ class Routing(unittest.TestCase):
         self.assertEqual(corpus["readers"]["opencode-go"]["windows"]["monthly"]["windowSeconds"], 2678400)
         config = manifest([route("fable" if name == "claude" else name, pool=name) for name in expected])
         config["readers"] = [{"command": f"reader-{name}", "name": name} for name in expected]
+        config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
         ctx = context(names=tuple(r["family"]["name"] for r in config["routes"]))
         ctx["roles"]["writer"].update({"avoid": [], "exclude": []})
         outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
@@ -979,6 +985,7 @@ class Routing(unittest.TestCase):
             root = Path(directory)
             config = manifest([route(default=None)])
             config["readers"] = [{"name": "outside", "command": "printf '%s' " + shlex.quote(stream())}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             ctx = context(effort=None)
             ctx["techniques"][0]["efforts"] = []
             ctx["roles"]["writer"]["avoid"] = ["sol"]
@@ -1189,6 +1196,7 @@ class Routing(unittest.TestCase):
         # Wrong: per-role reads, current-runtime filtering, trusting reader .pool.
         config = manifest()
         config["readers"].append({"command": "reader-outside", "name": "alias"})
+        config["poolFamilies"]["alias"] = []
         result, calls = self.run_plan(config, context(("writer", "judge")), ("writer", "judge"))
         self.assertEqual(calls, ["reader-outside", "reader-session", "reader-hidden-runtime"])
         self.assertEqual(sorted(result["pools"]), ["alias", "hidden", "outside", "session"])
@@ -1326,6 +1334,42 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(names=("fable", "sol")), outputs=outputs)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["pace"], 0.34)
 
+    def test_scope_inventory_is_independent_of_launch_routes(self):
+        # Wrong: launch routes define scope membership, or global family names
+        # let a scope name a family bound only to another pool.
+        config = manifest([route("sol", pool="session")])
+        config["familyNames"].append("fable")
+        config["poolFamilies"]["hidden"] = ["fable"]
+        outputs = {"reader-hidden-runtime": stream({
+            "7d": window(52, 604800, "2026-11-18T12:00:00Z"),
+            "7d:fable": window(17, 604800, "2026-11-18T12:00:00Z"),
+            "7d:sol": window(0, 604800, "2026-11-18T12:00:00Z"),
+        })}
+        for reachable in (False, True):
+            with self.subTest(reachable=reachable):
+                if reachable:
+                    config["routes"].append(route("fable", pool="hidden"))
+                result, _ = self.run_plan(config, outputs=outputs)
+                self.assertFalse(any("7d:fable" in warning for warning in result["warnings"]))
+                self.assertIn("WARNING: hidden: scoped window 7d:sol matches no configured family. Report this failure to the user.", result["warnings"])
+                candidates = result["roles"]["writer"]["candidates"]
+                fable = [item for item in candidates if item["launch"]["family"] == "fable"]
+                self.assertEqual([item["pace"] for item in fable], [0.34] if reachable else [])
+
+    def test_scope_inventory_validation(self):
+        # Wrong: malformed inventory crashes matching or bypasses pool membership.
+        for inventory, path in (
+            (None, "manifest.poolFamilies"),
+            ({}, "manifest.poolFamilies.hidden"),
+            ({"hidden": "fable"}, "manifest.poolFamilies.hidden"),
+            ({"hidden": ["missing"]}, "manifest.poolFamilies.hidden"),
+            ({"unregistered": []}, "manifest.poolFamilies.unregistered"),
+        ):
+            with self.subTest(inventory=inventory):
+                config = manifest()
+                config["poolFamilies"] = inventory
+                self.assertIn(path, [error["path"] for error in self.request_errors(config)])
+
     def test_unknown_scope_warns_without_failing_pool(self):
         # Wrong: silently ignoring a scope, or failing its otherwise valid pool.
         result, _ = self.run_plan(outputs={"reader-outside": stream({"7d": window(17, 604800, "2026-11-18T12:00:00Z"), "7d:unknown-model": window(0, 604800, "2026-11-18T12:00:00Z")})})
@@ -1433,6 +1477,7 @@ class Routing(unittest.TestCase):
         result, _ = self.run_plan(config, context(names=("sol", "unknown")))
         self.assertEqual([c["launch"]["family"] for c in result["roles"]["writer"]["candidates"]], ["sol"])
         config["readers"] = []
+        config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
         config["routes"] = [route(pool=None)]
         result, _ = self.run_plan(config)
         self.assertEqual(result["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
@@ -1561,6 +1606,7 @@ class Routing(unittest.TestCase):
                     helper.check_plan(artifact, changed, root)
             config = manifest([route(pool=None)])
             config["readers"] = []
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             fit_only, _ = self.run_plan(config, roles=roles)
             self.assertEqual(helper.check_plan(artifact, fit_only, root)["status"], "valid")
             self.assertEqual(fit_only["roles"]["writer"]["candidates"][0]["budget"], "fit-only; budget and session buffer unknown")
@@ -1729,6 +1775,7 @@ class Routing(unittest.TestCase):
             config = manifest()
             log = root / "reads"
             config["readers"] = [{"command": f"printf 'outside\\n' >> '{log}'; printf '%s' '{stream()}'", "name": "outside"}]
+            config["poolFamilies"] = pool_families(config["routes"], (reader["name"] for reader in config["readers"]))
             roles = ("writer", "first-check", "second-check", "judge")
             for name, value in (("plan", artifact), ("manifest", config), ("context", context(roles))):
                 (root / f"{name}.json").write_text(json.dumps(value))
@@ -1766,6 +1813,7 @@ class Routing(unittest.TestCase):
                 for name in ("outside", "session", "hidden")
             ]
             config["readers"].append({"name": "alias", "command": config["readers"][0]["command"]})
+            config["poolFamilies"]["alias"] = []
             (root / "manifest.json").write_text(json.dumps(config))
             (root / "context.json").write_text(json.dumps(context()))
             command = [sys.executable, str(SOURCE), "--manifest", str(root / "manifest.json"), "--reader-shell", SHELL, "--launch-context", str(root / "context.json"), "--now", "2026-11-15T00:00:00Z", "--role", "writer"]
