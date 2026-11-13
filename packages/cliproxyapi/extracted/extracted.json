@@ -3988,10 +3988,10 @@
           },
           "structured_output": true,
           "system_updates": true,
-          "temperature": false,
+          "temperature": true,
           "tools": { "supported": true },
           "top_k": false,
-          "top_p": false
+          "top_p": true
         },
         "cost": {
           "text": {
@@ -4066,10 +4066,10 @@
           },
           "structured_output": true,
           "system_updates": true,
-          "temperature": false,
+          "temperature": true,
           "tools": { "supported": true },
           "top_k": false,
-          "top_p": false
+          "top_p": true
         },
         "cost": {
           "text": {
