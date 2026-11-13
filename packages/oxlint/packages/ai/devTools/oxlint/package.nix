@@ -38,9 +38,11 @@
   verifyNapiPatch = ''
     node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
   '';
-  src = pkgs.applyPatches {
+  src = (packageLib.patching {inherit pkgs;}).source {
     src = unpatchedSrc;
     postPatch = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       if [ -e ${napiPatchPath} ]; then
         echo "oxlint: upstream already owns ${napiPatchPath}; reconcile the patches" >&2
         exit 1

@@ -69,11 +69,10 @@
   # the source. Rehash every reference (including peer snapshots) without
   # regenerating unrelated lock resolutions. Registry tarball bytes stay intact.
   piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
-  patchedSource = pkgs.applyPatches {
+  patchedSource = (packageLib.patching {inherit pkgs;}).source {
     src = kimchiSource;
     # Apply source patches once for both the build and settings extractor.
-    patchFlags = ["-p1" "--fuzz=0"];
-    patches = [
+    patchFiles = [
       ./command-shell.patch
       ./disable-self-update.patch
       ./keep-telemetry-opt-out.patch

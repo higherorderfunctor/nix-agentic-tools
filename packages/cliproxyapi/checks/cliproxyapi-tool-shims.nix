@@ -2,6 +2,7 @@
 # package and extractor, including upstream OAuth regressions in the executor.
 {
   extractedLib,
+  packageLib,
   pkgs,
   self,
   ...
@@ -13,15 +14,14 @@
   package =
     shipped
     // {
-      src = pkgs.applyPatches {
+      src = (packageLib.patching {inherit pkgs;}).source {
         name = "cliproxyapi-tool-shims-source";
         inherit (shipped) src;
-        patchFlags = ["-p1" "--fuzz=0"];
-        patches = [./ci-timing.patch];
+        patchFiles = [./ci-timing.patch];
       };
     };
 in {
-  checks.cliproxyapi-tool-shims = pkgs.linkFarm "cliproxyapi-tool-shims" (map (packagePath: {
+  checks.cliproxyapi-tool-shims = (pkgs.linkFarm "cliproxyapi-tool-shims" (map (packagePath: {
       name = baseNameOf packagePath;
       path = (extractedLib {inherit pkgs;}).goTest {
         name = "cliproxyapi-tool-shims-${baseNameOf packagePath}";
@@ -35,5 +35,7 @@ in {
       "internal/runtime/executor"
       "internal/translator/openai/openai/responses"
       "internal/watcher/synthesizer"
-    ]);
+    ])).overrideAttrs {
+    passthru.patchedSource = package.src;
+  };
 }
