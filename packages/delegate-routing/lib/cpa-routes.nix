@@ -32,7 +32,6 @@
         then throw (lib.concatStringsSep "; " canonical.errors)
         else {
           inherit model;
-          credential = route.name;
           inherit (canonical) id;
           maker = catalog.models.${canonical.id}.maker or null;
         };

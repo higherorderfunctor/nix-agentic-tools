@@ -56,11 +56,12 @@ catalog with the existing catalog type module and Claude, Codex and CPA owner
 modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
 
 `lib/cpa-routes.nix` reads each selected client's computed credentials from
-`ai.internal.inferenceInstances`. CPA owns API selection, disabled-instance and
-client validation, and credential filtering. OAuth offers expand catalog
-identities of the vendor's maker; finite vendor lists do not define OAuth reach.
-A missing OAuth vendor is refused. Canonical identities use vendor-scoped
-aliases while launches retain the served spelling.
+`ai.internal.inferenceInstances`. CPA owns API selection and credential
+filtering; the shared inference options refuse a disabled instance or an
+undeclared client. OAuth offers expand catalog identities of the vendor's maker;
+finite vendor lists do not define OAuth reach. A missing OAuth vendor is
+refused. Canonical identities use vendor-scoped aliases while launches retain
+the served spelling.
 
 The projection feeds agent-file selection and `lib/routing-view.nix`.
 Unknown-maker offers remain inspectable in the projection but cannot become a
