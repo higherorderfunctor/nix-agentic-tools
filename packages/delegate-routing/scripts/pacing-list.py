@@ -30,17 +30,21 @@ def collect(manifest, now, reader_shell):
     def capture(argv, **kwargs):
         try:
             process = planner.run_reader(argv, **kwargs)
-        except (OSError, subprocess.TimeoutExpired) as error:
+        except (OSError, subprocess.TimeoutExpired, UnicodeError) as error:
             # The normalizer owns the fixed nonzero-exit diagnostic; no payload escapes.
-            process = subprocess.CompletedProcess(argv, 124 if isinstance(error, subprocess.TimeoutExpired) else 127, "")
-        captures[argv[-1].split("\n", 1)[1]] = {"exit": process.returncode, "finishedAt": int(time.time()), "stdout": process.stdout}
+            status = 65 if isinstance(error, UnicodeError) else 124 if isinstance(error, subprocess.TimeoutExpired) else 127
+            process = subprocess.CompletedProcess(argv, status, "")
+        captures[command] = {"exit": process.returncode, "finishedAt": int(time.time()), "stdout": process.stdout}
         # Only the preview normalizer parses these envelopes. The shared helper
         # needs the status for retry; its routing measurement is discarded.
         return subprocess.CompletedProcess(argv, process.returncode, "{}")
 
     readers = [{"command": registration["command"].replace("<now-ms>", str(now * 1000)), "name": pool}
                for pool, registration in sorted(manifest["pools"].items()) if registration["command"] is not None]
-    planner.collect(readers, now, reader_shell, run=capture)
+    for reader in readers:
+        command = reader["command"]
+        if command not in captures:
+            planner.collect([reader], now, reader_shell, run=capture)
     return {**manifest, "readers": {reader["name"]: captures[reader["command"]] for reader in readers}}
 
 

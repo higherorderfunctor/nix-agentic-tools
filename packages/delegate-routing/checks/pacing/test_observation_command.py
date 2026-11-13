@@ -73,6 +73,20 @@ class ObservationCommand(unittest.TestCase):
         self.assertEqual(result["routes"], self.saved["routes"])
         self.assertFalse(result["pools"]["z-ai"]["scopeResolved"])
 
+    def test_invalid_bytes_preserve_other_pools_and_routes(self):
+        # Both output streams can fail text decoding before capture is saved.
+        for stream in ["stdout", "stderr"]:
+            with self.subTest(stream=stream):
+                self.manifest["pools"]["codex"]["command"] = shlex.join([
+                    sys.executable, "-I", "-B", "-c",
+                    f"import sys; sys.{stream}.buffer.write(bytes([255]))",
+                ])
+                result = COMMAND.normalizer.normalize(self.collect(), NOW)
+                self.assertEqual(result["routes"], self.saved["routes"])
+                self.assertIn({"pool": "codex", "reason": "exit-nonzero", "exitStatus": 65}, result["diagnostics"])
+                self.assertTrue(any(limit["remaining"] is not None for limit in result["pools"]["claude"]["limits"]))
+                self.assertIsNone(result["pools"]["codex"]["limits"][0]["remaining"])
+
     def test_actual_finish_time_and_stale_replay(self):
         # A caller's start clock cannot stamp captures or suppress replay staleness.
         with patch.object(COMMAND.time, "time", return_value=NOW + 5):
@@ -126,6 +140,19 @@ class ObservationCommand(unittest.TestCase):
                 self.assertEqual(run.call_count, 2)
                 self.assertIs(captures["first"], captures["second"])
                 self.assertEqual(run.call_args.kwargs["timeout"], COMMAND.planner.READER_TIMEOUT)
+
+    def test_capture_key_does_not_parse_planner_argv(self):
+        # The command registry owns identity even if the shell wrapper changes.
+        registration = self.manifest["pools"]["codex"]
+        self.manifest["pools"] = {"first": registration, "second": copy.deepcopy(registration)}
+        def collect(readers, now, shell, run):
+            run([shell, "opaque-wrapper"], timeout=10)
+        with patch.object(COMMAND.planner, "collect", side_effect=collect), patch.object(
+            COMMAND.planner, "run_reader", return_value=subprocess.CompletedProcess([], 0, self.saved["readers"]["codex"]["stdout"])
+        ) as run:
+            captures = self.collect()["readers"]
+        self.assertEqual(run.call_count, 1)
+        self.assertIs(captures["first"], captures["second"])
 
     def test_fake_executable_shared_retry(self):
         # Real process attempts are deduplicated too, including a recovery.
