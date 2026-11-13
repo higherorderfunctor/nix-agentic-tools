@@ -584,6 +584,99 @@
         };
       };
     };
+    # Production option shapes with synthetic identities; no provider is contacted.
+    observationEnvelope =
+      pkgs.writeText "preview-reader.json" (builtins.toJSON
+        (builtins.fromJSON (builtins.readFile ./pacing/reader-snapshots.json)).readers.codex.data);
+    observationDelivery = evaluate {
+      ai = {
+        catalog.models = {
+          preview-code = {
+            maker = "fixture";
+            source = ["synthetic preview"];
+          };
+          preview-unknown = {
+            maker = null;
+            source = ["synthetic preview"];
+          };
+        };
+        codex = {
+          enable = true;
+          settings.inference = {
+            instance = "preview";
+            clientKey = "client";
+          };
+        };
+        cliproxyapi.instances.preview = {
+          enable = true;
+          settings.config-version = 8;
+          credentials = lib.genAttrs ["one" "two"] (_: {
+            apiKey = {
+              apis.chat.base-url = "https://unused.invalid/v1";
+              key = redact.file "/run/secrets/unused-preview";
+              models = ["preview-code" "preview-unknown"];
+            };
+          });
+          clientKeys.client = {
+            key = redact.file "/run/secrets/unused-client";
+            routes = map (credential: {
+              inherit credential;
+              api = "chat";
+            }) ["one" "two"];
+          };
+        };
+        programs.delegate-routing = {
+          enable = true;
+          families.fixture.preview = {
+            match = "preview-code";
+            tier = "strong";
+            useFor = "synthetic preview";
+          };
+          pools."preview/one" = {
+            usage = {
+              readerPool = "codex";
+              runtime = "codex";
+              technique = "preview";
+            };
+            limits.weekly = {
+              capacity = 100;
+              role = "pace";
+              unit = "percentagePoint";
+              window = "7d";
+            };
+          };
+          runtimes.codex = {
+            models = [{families = ["preview"];}];
+            picker.entries = lib.mkForce [];
+            techniques.preview = {
+              kind = "usage";
+              command = "${pkgs.coreutils}/bin/cat ${observationEnvelope}";
+            };
+          };
+        };
+      };
+    };
+    # Find the actual backend package rather than constructing its expected command.
+    observationPackage =
+      lib.findFirst (package: lib.getName package == "delegate-routing-allowance-preview")
+      (throw "missing ${name} allowance preview")
+      (
+        if name == "hm"
+        then observationDelivery.config.home.packages
+        else observationDelivery.config.packages
+      );
+    # Manual callers pass exactly the same computed routes and existing registrations.
+    observationManual = observationDelivery.config.ai.internal.roots.delegate-routing-content.mkObservation {
+      cpaRoutes = import ../lib/cpa-routes.nix {
+        inherit lib;
+        inherit (observationDelivery.config.ai) catalog;
+        instances = observationDelivery.config.ai.cliproxyapi.instances;
+        inferenceInstances = observationDelivery.config.ai.internal.inferenceInstances;
+        selections.codex = observationDelivery.config.ai.codex.settings.inference;
+      };
+      pools = observationDelivery.config.ai.programs.delegate-routing.pools;
+      techniques = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques observationDelivery.config;
+    };
     routingView = import ../lib/routing-view.nix routingArgs;
     sessionPools = {
       claude = "claude";
@@ -805,6 +898,38 @@
     # Fails if common-module delivery drops sessionPool or renders another
     # runtime's identity or pool. All four skills are supported on both
     # backends; HM Kimchi's reminder-hook exclusion does not exclude its skill.
+    "module-delegate-routing-${name}-observation-command" =
+      pkgs.runCommand "delegate-routing-${name}-observation-command" {
+        nativeBuildInputs = [pkgs.python3];
+        delivered = lib.getExe observationPackage;
+        manual = lib.getExe observationManual;
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        mkdir -p "$out/home"
+        export HOME="$out/home"
+        python3 -I -B - <<'PYTHON'
+        import json, os, subprocess
+        results = []
+        for key in ["delivered", "manual"]:
+            command = [os.environ[key], "--runtime", "codex", "--now", "1794447300"]
+            result = json.loads(subprocess.check_output(command))
+            assert result["capability"] == "allowance-preview", result
+            assert len(result["routes"]) == 4, result
+            assert sum(r["maker"] is None for r in result["routes"]) == 2, result
+            assert sorted(result["pools"]) == ["preview/one", "preview/two"], result
+            weekly = result["pools"]["preview/one"]["limits"][0]
+            assert weekly["models"] == ["preview-code", "preview-unknown"], result
+            assert weekly["remaining"] == 49, result
+            assert not result["pools"]["preview/two"]["scopeResolved"], result
+            assert {"pool": "preview/two", "reason": "missing-capture"} in result["diagnostics"], result
+            assert "fixture-account" not in json.dumps(result), result
+            results.append(result)
+        assert results[0] == results[1], results
+        print("backend/manual allowance preview delivery passed")
+        PYTHON
+        rmdir "$out/home"
+      '';
     "module-delegate-routing-${name}-session-pool-delivery" = mkTest "delegate-routing-${name}-session-pool-delivery" (
       passes sessionDelivery
       && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes
