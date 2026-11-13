@@ -91,11 +91,26 @@
       then redact.filePaths key
       else [];
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
+    # Credential previews must not fall back to the runtime's direct login.
+    credentialPreview = lib.any (name: let
+      pool = portable.pools.${name};
+    in
+      selection.instance
+      != null
+      && lib.hasPrefix "${selection.instance}/" name
+      && pool.limits != {}
+      && pool.usage != null
+      && pool.usage.readerPool != null
+      && pool.usage.runtime == runtime)
+    (builtins.attrNames portable.pools);
   in
-    lib.optionalAttrs (managementKeyFiles != []) {
-      "${prefix}_MANAGEMENT_KEY_FILE" = lib.head managementKeyFiles;
-      "${prefix}_URL" = selected.url;
-    };
+    if credentialPreview && managementKeyFiles == []
+    then throw "ai.programs.delegate-routing.pools: credential preview for ${runtime} requires a CPA management secret-key file reference."
+    else
+      lib.optionalAttrs (managementKeyFiles != []) {
+        "${prefix}_MANAGEMENT_KEY_FILE" = lib.head managementKeyFiles;
+        "${prefix}_URL" = selected.url;
+      };
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
     (lib.filter (target: builtins.elem target ["claude" "codex"]) (lib.unique (requiredTargets runtime ++ poolReaders)));

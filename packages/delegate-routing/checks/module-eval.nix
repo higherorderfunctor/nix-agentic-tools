@@ -587,7 +587,7 @@
     # Production option shapes with synthetic identities; no provider is contacted.
     observationEnvelope =
       pkgs.writeText "preview-reader.json" (builtins.fromJSON (builtins.readFile ./pacing/reader-snapshots.json)).readers.codex.stdout;
-    observationDelivery = evaluate {
+    observationConfig = {
       ai = {
         catalog.models = {
           preview-code = {
@@ -656,6 +656,11 @@
         };
       };
     };
+    # Reuse the production-shaped fixture with and without management metadata.
+    observationDelivery = evaluate observationConfig;
+    observationMissingKey = evaluate (lib.recursiveUpdate observationConfig {
+      ai.cliproxyapi.instances.preview.settings.management.secret-key = null;
+    });
     # Find the actual backend package rather than constructing its expected command.
     observationPackage =
       lib.findFirst (package: lib.getName package == "delegate-routing-allowance-preview")
@@ -909,6 +914,8 @@
         then result.config.home.packages
         else result.config.packages
       ));
+    # Refuse missing CPA credentials before a Reader can measure the direct login.
+    "module-delegate-routing-${name}-observation-missing-key" = mkTest "delegate-routing-${name}-observation-missing-key" (!(builtins.tryEval (builtins.deepSeq (usageVars observationMissingKey "codex") true)).success);
     # Fails if installed preview loses CPA metadata, routes, limits or safe failures.
     "module-delegate-routing-${name}-observation-command" =
       pkgs.runCommand "delegate-routing-${name}-observation-command" {

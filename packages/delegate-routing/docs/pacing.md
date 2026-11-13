@@ -121,12 +121,18 @@ USD limits consume the existing `window` budget: unit `USD` and exact `monthly`
 window. Omit `capacity` to derive it from `window.limit`. Only the
 `anthropic-api-usage` accounted technique accepts these limits; it receives that
 budget's `--limit`, `--reset-day`, `--time-zone UTC`, expected `--pool` label
-and explicit `--now-ms` clock. No new pricing source or transport is introduced.
+and explicit `--now-ms` clock. The consumer environment must supply
+`MANAGER_URL` and `MANAGER_KEY_FILE` for this accounted USD Reader; the preview
+does not derive Manager+ credentials from CPA metadata. Running it from a bare
+terminal without those variables fails loudly and leaves the observation
+unmeasured. No new pricing source or transport is introduced.
 
 The installed wrapper bakes in the same CPA URL and management-key file paths as
 runtime environments, using the shared `usageEnvironment` source; it never reads
-secret contents while building. Credential preview registrations stay out of the
-routing helper's Reader inventory.
+secret contents while building. Credential preview registrations require a CPA
+management secret-key file reference; a missing reference is refused at
+evaluation rather than allowing the Reader to measure a direct login. Credential
+preview registrations stay out of the routing helper's Reader inventory.
 
 Manual callers use
 `content.mkObservation { cpaRoutes; pools; techniques; environment; }`, passing
@@ -135,8 +141,8 @@ callers, including the Reader environment. Each distinct command uses the
 routing helper's 10-second timeout and process-group cleanup. Execution errors,
 timeouts and nonzero exits share one retry after two seconds; successful invalid
 JSON or envelopes are never retried. Failure preserves routes and emits
-`exit-nonzero` with numeric status (124 for timeout, 127 for launch failure); it
-does not certify inference availability.
+`exit-nonzero` with numeric status (124 for timeout, 127 for launch failure, 65
+for invalid output encoding); it does not certify inference availability.
 
 `delegate-routing-observation-command` tests collection using fake executables
 and all five saved production envelope shapes, with scratch under its output
