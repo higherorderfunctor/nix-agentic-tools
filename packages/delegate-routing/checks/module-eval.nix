@@ -9,6 +9,10 @@
   inherit (harness) evalDevenv evalHm mkTest setEnable;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
   shipped.ai = {
+    catalog.models = lib.genAttrs ["fixture-model" "proxy-opus-123" "test-flash-1" "test-glm-1" "test-native-opus-1"] (_: {
+      maker = "fixture-maker";
+      source = ["synthetic launch identity"];
+    });
     claude.enable = true;
     codex.enable = true;
     kimchi = {
@@ -476,6 +480,10 @@
     # (the stray id sorts above every family id under either compare).
     fixedScenario = lib.recursiveUpdate scenario {
       ai = {
+        catalog.models = lib.genAttrs fixedCatalogModels (_: {
+          maker = "fixture-maker";
+          source = ["synthetic version selection"];
+        });
         internal.inferenceInstances.test = catalogInstance fixedCatalogModels;
         claude.settings.inference = {
           instance = "test";
@@ -560,6 +568,7 @@
       selection = import ../lib/select-families.nix {inherit lib;};
     in {
       inherit lib;
+      catalog = routingFixture.config.ai.catalog;
       inherit (portable) families pools;
       inherit (portable.runtimes.claude) extraRuntimes manualExternalDelegates;
       models = lib.mapAttrs (_: settings: settings.models) portable.runtimes;
@@ -892,6 +901,7 @@
           (import ../lib/routing-view.nix ({
               inherit lib;
               runtime = "claude";
+              catalog = result.config.ai.catalog;
               inherit (content) families models techniques;
             }
             // changes)).pickerEntries;
@@ -925,9 +935,20 @@
         # Wrong: pinning a literal id instead of the family's highest resolved
         # one, or keeping an entry when the family resolves to nothing.
         && map (e: e.model) (inherited {
-          resolvedAgentFiles = (import ../lib/agent-files.nix {inherit lib;}).resolve ["claude-sonnet-4-5" "claude-sonnet-9-1" "claude-sonnet-5-5"] ((import ../lib/select-families.nix {inherit lib;}).flatten content.families);
+          catalog.models.test-sonnet-9-1 = {
+            maker = "fixture-maker";
+            aliases = {};
+          };
+          families = lib.recursiveUpdate content.families {anthropic.sonnet.match = "test-sonnet-*";};
+          resolvedAgentFiles = (import ../lib/agent-files.nix {inherit lib;}).resolve ["test-sonnet-4-5" "test-sonnet-9-1" "test-sonnet-5-5"] [
+            {
+              name = "sonnet";
+              match = "test-sonnet-*";
+              example = {};
+            }
+          ];
         })
-        == ["claude-sonnet-9-1"]
+        == ["test-sonnet-9-1"]
         && inherited {resolvedAgentFiles = {};} == []
         && settings.codex.picker.entries
         == [
@@ -1124,12 +1145,12 @@
         resolver = import ../lib/agent-files.nix {inherit lib;};
         off = change {ai.programs.delegate-routing.runtimes.claude.techniques."Agent with generated agent file".enable = false;};
         missing = change {ai.programs.delegate-routing.runtimes.claude.models = [{families = ["flash"];}];};
-        example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        example = change {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "test-native-opus-1";};
         glmExample = change {
           ai.programs.delegate-routing = {
             families.zhipuai.glm = {
               defaultEffort = "high";
-              example.claude = "glm-5.3";
+              example.claude = "test-glm-1";
               match = "glm-*";
               tier = "strong";
             };
@@ -1140,14 +1161,14 @@
         runtimeOff = change {ai.claude.enable = lib.mkForce false;};
         picker = change {
           ai = {
-            internal.inferenceInstances.test = catalogInstance ["glm-5.3"];
+            internal.inferenceInstances.test = catalogInstance ["test-glm-1"];
             claude.settings.inference = {
               instance = "test";
               clientKey = "reader";
             };
             programs.delegate-routing = {
               families.zhipuai.glm = {
-                match = "glm-[0-9]*.[0-9]";
+                match = "test-glm-*";
                 tier = "strong";
               };
               runtimes.claude.models = [{families = ["glm"];}];
@@ -1174,7 +1195,7 @@
         && lib.hasInfix "effort: \"medium\"" fixedResult.config.ai.claude.agents.fable
         && lib.hasInfix "model: \"test-opus-5-10\"" fixedResult.config.ai.claude.agents.opus
         && lib.hasInfix "This file pins the model, and the family's default effort when Claude's agent-file format accepts it" agents.haiku
-        && lib.hasInfix "model: \"claude-opus-4.6\"" example.config.ai.claude.agents.opus
+        && lib.hasInfix "model: \"test-native-opus-1\"" example.config.ai.claude.agents.opus
         # Numeric segment order: 10 > 9, 5-1 > 5, 6.1 > 6 > 5.6, and zero-padded
         # dated segments compare as numbers instead of aborting.
         && lib.all (case:
@@ -1209,15 +1230,15 @@
         ]
         && lib.all (family: result.config.ai.files ? ${".claude/agents/${family}.md"}) ["fable" "haiku" "opus" "sonnet"]
         && !(result.config.ai.agents ? opus)
-        && lib.hasInfix "model: \"glm-5.3\"" glmExample.config.ai.claude.agents.glm
+        && lib.hasInfix "model: \"test-glm-1\"" glmExample.config.ai.claude.agents.glm
         && programOff.config.ai.claude.agents == {}
         && runtimeOff.config.ai.claude.agents == {}
         && off.config.ai.claude.agents == {}
         && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `claude-opus-*`" (readSkill off "claude")
         && missing.config.ai.claude.agents == {}
         && lib.hasInfix "claude: `Workflow` with full model id the highest id matching `test-flash-*`" (readSkill missing "claude")
-        && lib.hasInfix "model: \"glm-5.3\"" picker.config.ai.claude.agents.glm
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`" (readSkill picker "claude")
+        && lib.hasInfix "model: \"test-glm-1\"" picker.config.ai.claude.agents.glm
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-glm-1`" (readSkill picker "claude")
         && result.config.ai.programs.delegate-routing.families.anthropic.opus.defaultEffort == "medium"
         && result.config.ai.programs.delegate-routing.families.anthropic.haiku.defaultEffort == null
         && result.config.ai.programs.delegate-routing.families.openai.sol.defaultEffort == "medium"
@@ -1429,11 +1450,11 @@
     "module-delegate-routing-${name}-launch-routes" = mkTest "delegate-routing-${name}-launch-routes" (
       let
         noWorkflow = fixedSkill {ai.programs.delegate-routing.runtimes.claude.techniques.Workflow.enable = false;};
-        withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "claude-opus-4.6";};
+        withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "test-native-opus-1";};
         glm = skill {
           ai.programs.delegate-routing = {
             families.zhipuai.glm = {
-              example.claude = "glm-5.3";
+              example.claude = "test-glm-1";
               match = "glm-*";
               pools.claude = "zai-coding";
               tier = "strong";
@@ -1456,10 +1477,10 @@
         && lib.hasInfix "kiro: `kiro-cli chat` with model_id the highest id matching `claude-opus-*`" kiro
         && lib.hasInfix "kimchi: `Agent` with `--list-models` id the highest id matching `test-flash-*`" kimchi
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `claude -p` with full model id the highest id matching `test-opus-*`" noWorkflow
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `claude-opus-4.6`, else `Workflow` with full model id `claude-opus-4.6`" withExample
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-native-opus-1`, else `Workflow` with full model id `test-native-opus-1`" withExample
         && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
         && lib.hasInfix "glm (zhipuai) `glm-*`" glm
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `glm-5.3`, else `Workflow` with full model id `glm-5.3`, else `claude -p` with full model id `glm-5.3` (pool zai-coding)" glm
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-glm-1`, else `Workflow` with full model id `test-glm-1`, else `claude -p` with full model id `test-glm-1` (pool zai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
         && skillFails {
           ai.programs.delegate-routing.runtimes.claude.techniques = {
@@ -2306,6 +2327,7 @@ in {
           skill = lib.recursiveUpdate prev.skill {phrases."Launch fallback".text = ", or ";};
         });
         fallback = content.passthru.mkSkill {
+          catalog = (evalHm scenario).config.ai.catalog;
           runtime = "claude";
           skill = withFamilies content.passthru.skill;
           families = lib.recursiveUpdate content.passthru.families {

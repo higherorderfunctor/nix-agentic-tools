@@ -1,6 +1,8 @@
 # Normalized launch reaches and registered readers, independent of skill prose.
 {
   lib,
+  catalog,
+  cpaRoutes ? {},
   runtime,
   families,
   models,
@@ -14,13 +16,35 @@
   selection = import ./select-families.nix {inherit lib;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
-  selected = target: selection.select families models.${target};
-  candidates = selection.candidates families models runtimes;
+  # Null means no declared CPA reach, rather than an empty allowed model set.
+  offered = target: cpaRoutes.${target} or null;
+  # Select original served spellings so agent files and other launch techniques agree.
+  resolvedModel = family: target: let
+    offers = offered target;
+    resolved = agentFiles.resolve (map (offer: offer.model) offers) [
+      # agent-files.resolve reads only example.claude, including for other runtimes.
+      (family // {example.claude = family.example.${target} or "";})
+    ];
+  in
+    if offers == null
+    then null
+    else if target == "claude" && resolvedAgentFiles != null && resolvedAgentFiles ? ${family.name}
+    then resolvedAgentFiles.${family.name}.id
+    else resolved.${family.name}.id or null;
+  selected = target:
+    lib.filter (family: offered target == null || resolvedModel family target != null)
+    (selection.select families models.${target});
+  candidates = lib.unique (lib.concatMap selected runtimes);
   agentFiles = import ./agent-files.nix {inherit lib;};
   agentSet =
     if resolvedAgentFiles != null
     then resolvedAgentFiles
-    else agentFiles.resolve agentFiles.facts.models (selected "claude");
+    else
+      agentFiles.resolve (
+        if offered "claude" == null
+        then agentFiles.facts.models
+        else map (offer: offer.model) (offered "claude")
+      ) (selected "claude");
   kindOrder = {
     external = 3;
     subagent = 1;
@@ -51,26 +75,33 @@
       id =
         if agent != null
         then agent.id
+        else if offered target != null
+        then resolvedModel family target
         else family.example.${target} or "";
     in
       # Both module delivery and direct mkSkill callers refuse missing model
       # spelling here; disabled/non-launch techniques never enter this list.
       if lib.trim node.modelArg == ""
       then throw "ai.programs.delegate-routing.runtimes.${target}.techniques.${lib.strings.escapeNixIdentifier name}.modelArg: name the model value spelling for techniques that pin model and effort"
-      else {
-        inherit agent name node;
-        model = {
-          isPattern = lib.trim id == "";
-          value =
-            if lib.trim id != ""
-            then id
-            else family.match;
+      else
+        builtins.seq (
+          if lib.trim id == ""
+          then null
+          else selection.validateId catalog (offered target) id
+        ) {
+          inherit agent name node;
+          model = {
+            isPattern = lib.trim id == "";
+            value =
+              if lib.trim id != ""
+              then id
+              else family.match;
+          };
         };
-      };
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
-    pool = selection.poolFor family target;
+    pool = family.pools.${target} or null;
     techniques =
       if names == []
       then
@@ -105,13 +136,16 @@
   in
     if builtins.length matches != 1 || !usable || !concrete || !(builtins.elem entry.effort effortLevels)
     then null
-    else {
-      inherit (entry) effort model technique;
-      runtime = route.target;
-      inherit (node.pickerCommand) command outputFormat resumeCommand sessionIdSource toolFree;
-      family = route.family.name;
-      inherit (route) pool;
-    };
+    else if picker == null && offered route.target != null && !lib.any (offer: offer.model == entry.model) (offered route.target)
+    then null
+    else
+      builtins.seq (selection.validateId catalog (offered route.target) entry.model) {
+        inherit (entry) effort model technique;
+        runtime = route.target;
+        inherit (node.pickerCommand) command outputFormat resumeCommand sessionIdSource toolFree;
+        family = route.family.name;
+        inherit (route) pool;
+      };
 in {
   inherit candidates effortLevels runtimes;
   pickerEntries = let

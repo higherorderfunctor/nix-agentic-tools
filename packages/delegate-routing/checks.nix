@@ -51,7 +51,7 @@ in {
         touch "$out"
       '';
   };
-  imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
+  imports = [./checks/catalog-routes.nix ./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
   testing.moduleProbes = [
     {
       ai = {
