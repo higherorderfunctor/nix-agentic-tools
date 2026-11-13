@@ -913,9 +913,7 @@
     "module-delegate-routing-${name}-codex-packaged-helper" = packagedHelperCheck "codex";
     "module-delegate-routing-${name}-kimchi-packaged-helper" = packagedHelperCheck "kimchi";
     "module-delegate-routing-${name}-kiro-packaged-helper" = packagedHelperCheck "kiro";
-    # Fails if common-module delivery drops sessionPool or renders another
-    # runtime's identity or pool. All four skills are supported on both
-    # backends; HM Kimchi's reminder-hook exclusion does not exclude its skill.
+    # Fails if backend/manual preview delivery loses routes, limits or safe failures.
     "module-delegate-routing-${name}-observation-command" =
       pkgs.runCommand "delegate-routing-${name}-observation-command" {
         nativeBuildInputs = [pkgs.python3];
@@ -948,6 +946,9 @@
         PYTHON
         rmdir "$out/home"
       '';
+    # Fails if common-module delivery drops sessionPool or renders another
+    # runtime's identity or pool. All four skills are supported on both
+    # backends; HM Kimchi's reminder-hook exclusion does not exclude its skill.
     "module-delegate-routing-${name}-session-pool-delivery" = mkTest "delegate-routing-${name}-session-pool-delivery" (
       passes sessionDelivery
       && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes

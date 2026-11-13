@@ -216,7 +216,7 @@
         "preview missing label infers vendor" = (preview {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
         "preview disabled Reader accepted" = refuses (preview {techniques.claude.read.enable = false;});
         "preview independent USD budget accepted" = refuses (preview {pools."test/first".limits.weekly.unit = "USD";});
-        "preview USD transport drops configured budget" = let
+        "preview USD transport ignores retained runtime limits" = let
           usd = preview {
             pools."test/first" = {
               window = {
@@ -226,13 +226,17 @@
               };
               limits.weekly = {
                 capacity = 200;
+                models = ["test-alpha-1"];
                 unit = "USD";
                 window = "monthly";
               };
             };
           };
         in
-          usd.claude.pools."test/first".command == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed' --now-ms <now-ms>";
+          usd.claude.pools."test/first".command
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed --now-ms <now-ms>"
+          && usd.codex.pools."test/first".command == "fake-reader"
+          && !(usd.codex.pools."test/first".limits ? weekly);
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
           ai.catalog.models.test-alpha-2.aliases.z-ai = ["short"];
