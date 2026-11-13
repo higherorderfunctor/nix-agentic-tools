@@ -4,7 +4,7 @@
   pools,
   techniques,
 }: let
-  # Validate explicit scopes against every selected client of this credential.
+  # Collect credential offers across every selected runtime client.
   allOffers = lib.concatLists (lib.filter (offers: offers != null) (builtins.attrValues cpaRoutes));
   # Preview opt-ins must name an actual credential, not a vendor or old native pool.
   unknown = lib.filterAttrs (name: pool:
@@ -27,9 +27,9 @@
     available = lib.unique (map (offer: offer.id) (lib.filter (offer: offer.credential == credential) allOffers));
     declared = pool.limits or {};
     window = pool.window or null;
-    usd = lib.any (spec: spec.unit == "USD") (builtins.attrValues declared);
+    usd = lib.any (spec: spec.unit == "USD") (builtins.attrValues limits);
     path = "ai.programs.delegate-routing.pools.${credential}";
-    limits = lib.mapAttrs (_: spec:
+    scoped = lib.mapAttrs (_: spec:
       spec
       // {
         models =
@@ -38,17 +38,18 @@
           else lib.intersectLists models spec.models;
       })
     declared;
+    limits = lib.filterAttrs (_: spec: spec.models != []) scoped;
   in
     if lib.any (spec: spec.models != null && (spec.models == [] || !lib.all (model: lib.elem model available) spec.models)) (builtins.attrValues declared)
     then throw "${path}.limits: models must be nonempty canonical credential offers or null."
     else if !lib.allUnique (map (spec: spec.window) (builtins.attrValues declared))
     then throw "${path}.limits: register each Reader window once."
-    else if usd && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && (spec.capacity != window.limit || spec.window != "monthly")) (builtins.attrValues declared))
+    else if lib.any (spec: spec.unit == "USD") (builtins.attrValues declared) && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && (spec.capacity != window.limit || spec.window != "monthly")) (builtins.attrValues declared))
     then throw "${path}.limits: USD limits must use the existing monthly USD window and capacity."
     else if readerPool != null && (node == null || !node.enable || node.kind != "usage" || node.command == null || lib.trim node.command == "")
     then throw "${path}.usage.technique: reference an enabled usage technique with a non-empty command."
     else {
-      limits = lib.filterAttrs (_: spec: spec.models != []) limits;
+      inherit limits;
       # A missing label never infers a provider; no capture is attempted.
       readerPool =
         if readerPool == null
