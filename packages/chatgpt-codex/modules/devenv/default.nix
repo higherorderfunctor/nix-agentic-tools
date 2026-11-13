@@ -16,12 +16,15 @@
   codexGitCommonDirResolver =
     args.codexGitCommonDirResolver
     or (import ../../lib/resolveGitCommonDir.nix {inherit lib;});
+  # Preserve the transformed body and its arguments when adding static facts.
+  transformed =
+    (aiLib.app.devenvTransform (import ../../lib/mkCodex.nix {
+      getEnv = codexGetEnv;
+      lib = lib // {ai = aiLib;};
+      # This flake's build unless the overlay is applied (ai.internal.packages).
+      pkgs = pkgs // {ai = config.ai.internal.packages;};
+      resolveGitCommonDir = codexGitCommonDirResolver;
+    }))
+    args;
 in
-  (aiLib.app.devenvTransform (import ../../lib/mkCodex.nix {
-    getEnv = codexGetEnv;
-    lib = lib // {ai = aiLib;};
-    # This flake's build unless the overlay is applied (ai.internal.packages).
-    pkgs = pkgs // {ai = config.ai.internal.packages;};
-    resolveGitCommonDir = codexGitCommonDirResolver;
-  }))
-  args
+  transformed // {imports = (transformed.imports or []) ++ [../catalog.nix];}

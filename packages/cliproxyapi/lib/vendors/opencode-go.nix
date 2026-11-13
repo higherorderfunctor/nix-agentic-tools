@@ -4,6 +4,35 @@
   facts = import ../../../../lib/extracted/facts.nix {inherit lib;};
   # Use CPA's aggregate so missing or divergent vendor facts fail at their source.
   fact = facts.get (facts.load {dir = ../../extracted;}).aggregate;
+  # Keep transport metadata local; catalog contributions contain identities only.
+  extracted = (fact "opencodeGo").models;
+  # canonical_id names the maker; owned_by names the serving vendor instead.
+  identities =
+    lib.mapAttrs (id: model: let
+      canonical = model.canonical_id or null;
+      namespace =
+        if canonical == null
+        then null
+        else lib.head (lib.splitString "/" canonical);
+    in {
+      aliases.opencode-go = lib.optional (canonical != null) canonical;
+      maker =
+        if id == "iceman-contributor-free"
+        then "iceman"
+        else if namespace == "zhipuai"
+        then "zhipu"
+        else namespace;
+      source =
+        ["cliproxyapi:opencodeGo.models.${id}"]
+        # The upstream identity is undisclosed, not evidence for another maker.
+        ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
+    })
+    extracted;
+  # Full offers are static even while credential defaults retain prefix exclusions.
+  catalog = {
+    models = identities;
+    vendors.opencode-go.models = builtins.attrNames extracted;
+  };
   # OpenCode Go serves each catalog model on one native API. Each lands on
   # that API only, so CPA translates every other protocol itself. A function
   # of the catalog (`opencodeGo.models`) so checks can feed it malformed ones.
@@ -16,11 +45,8 @@
       messages = "anthropic";
       responses = "responses";
     };
-    # Subscriptions the operator already routes through CPA serve these
-    # families: Claude OAuth (claude-*), z.ai, shipped here as
-    # `vendor = "z-ai"` (glm-*), and Codex OAuth (gpt-*). OpenCode would only
-    # duplicate them, so the defaults leave them out and
-    # ../../modules/instances.nix refuses any a definition adds.
+    # Preserve the existing credential-default exclusions and matching refusal
+    # in ../../modules/instances.nix; the static catalog still includes these offers.
     refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
     catalog = lib.filterAttrs (id: _: !(refuses id)) models;
     placed = lib.mapAttrsToList (id: entry: let
@@ -71,8 +97,19 @@
     toolAliases = {};
   };
 in {
-  # Production credentials use the measured catalog through the same placement function.
-  defaults = opencodeGo (fact "opencodeGo").models;
+  # Merged identities select vendor metadata; no transport facts leave this owner.
+  construct = merged:
+    opencodeGo (lib.listToAttrs (map (id: let
+      identity = merged.models.${id};
+      spellings = [id] ++ (identity.aliases.opencode-go or []);
+      upstream = lib.findFirst (name: lib.elem name spellings || lib.elem (extracted.${name}.canonical_id or null) spellings) null (builtins.attrNames extracted);
+    in
+      if upstream == null
+      then throw "cliproxyapi opencode-go: catalog model `${id}` has no extracted transport metadata."
+      else lib.nameValuePair upstream extracted.${upstream})
+    merged.vendors.opencode-go.models));
+  # Static definitions are read by modules/catalog.nix and standalone construction.
+  inherit catalog;
   # module-eval.nix supplies synthetic catalogs to exercise placement refusals.
   inherit opencodeGo;
 }

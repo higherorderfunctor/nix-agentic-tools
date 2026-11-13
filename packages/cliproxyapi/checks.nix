@@ -1,5 +1,6 @@
 {
   imports = [
+    ./checks/catalog.nix
     ./checks/cliproxyapi-extracted.nix
     ./checks/cliproxyapi-grouped-family.nix
     ./checks/cliproxyapi-key-allowlist.nix

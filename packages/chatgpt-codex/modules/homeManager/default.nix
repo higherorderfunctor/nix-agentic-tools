@@ -15,10 +15,13 @@
     ai = import ../../../../lib/ai {lib = extLib;};
     hm = prev.hm or {dag = import ../../../../lib/hm-dag.nix {lib = extLib;};};
   });
+  # Preserve the transformed body and its arguments when adding static facts.
+  transformed =
+    (extLib.ai.app.hmTransform (import ../../lib/mkCodex.nix {
+      lib = extLib;
+      # This flake's build unless the overlay is applied (ai.internal.packages).
+      pkgs = pkgs // {ai = config.ai.internal.packages;};
+    }))
+    args;
 in
-  (extLib.ai.app.hmTransform (import ../../lib/mkCodex.nix {
-    lib = extLib;
-    # This flake's build unless the overlay is applied (ai.internal.packages).
-    pkgs = pkgs // {ai = config.ai.internal.packages;};
-  }))
-  args
+  transformed // {imports = (transformed.imports or []) ++ [../catalog.nix];}

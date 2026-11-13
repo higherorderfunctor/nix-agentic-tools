@@ -9,6 +9,7 @@
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   services = import ../lib/services.nix {inherit lib;};
 in {
+  imports = [./catalog.nix];
   options.ai = {
     activation = lib.mkOption {
       type = lib.types.attrsOf activation.entryType;
