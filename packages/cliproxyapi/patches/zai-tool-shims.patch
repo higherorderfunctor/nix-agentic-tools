@@ -496,7 +496,7 @@ index 0000000..5edd0f7
 +	}
 +}
 diff --git a/internal/runtime/executor/claude_executor_stream.go b/internal/runtime/executor/claude_executor_stream.go
-index d8c2417..d122b2b 100644
+index d8c2417..1f005e9 100644
 --- a/internal/runtime/executor/claude_executor_stream.go
 +++ b/internal/runtime/executor/claude_executor_stream.go
 @@ -210,7 +210,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
@@ -513,7 +513,18 @@ index d8c2417..d122b2b 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequestDoc(doc, mcpAliases)
  		if err != nil {
-@@ -474,7 +479,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -398,7 +403,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+ 
+ 		streamBody := threadBetas.StreamReader(decodedBody, func(messageID string) {
+ 			commitClaudeContinuity(diagnosticsState, messageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
+-			e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, messageID)
++			if !claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
++				e.rememberClaudeOAuthToolAliases(body, oauthToolNamesReverseMap, messageID)
++			}
+ 		})
+ 		// If the response target is Claude, directly forward complete SSE events without translation.
+ 		if responseFormat == to {
+@@ -474,7 +481,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  			}
  			if upstreamCompleted {
  				commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -524,7 +535,7 @@ index d8c2417..d122b2b 100644
  			}
  			return
  		}
-@@ -577,7 +584,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -577,7 +586,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  		}
  		if upstreamCompleted {
  			commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
