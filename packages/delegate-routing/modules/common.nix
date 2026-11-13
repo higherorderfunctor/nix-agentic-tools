@@ -93,8 +93,8 @@
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
   in
     lib.optionalAttrs (managementKeyFiles != []) {
-      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head managementKeyFiles);
-      "${prefix}_URL" = lib.mkDefault selected.url;
+      "${prefix}_MANAGEMENT_KEY_FILE" = lib.head managementKeyFiles;
+      "${prefix}_URL" = selected.url;
     };
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
@@ -298,7 +298,9 @@ in {
         description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
       };
       pools = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submodule {
+        type = lib.types.attrsOf (lib.types.submodule ({config, ...}: let
+          budget = config.window;
+        in {
           options = {
             description = lib.mkOption {
               type = lib.types.str;
@@ -308,11 +310,15 @@ in {
             limits = lib.mkOption {
               default = {};
               description = "Allowance preview windows scoped to canonical CPA credential offers.";
-              type = lib.types.attrsOf (lib.types.submodule {
+              type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
                 options = {
                   capacity = lib.mkOption {
                     type = lib.types.numbers.positive;
-                    description = "Native allowance capacity; USD must equal the existing budget window.";
+                    default =
+                      if config.unit == "USD" && budget != null
+                      then budget.limit
+                      else throw "percentagePoint limits require capacity";
+                    description = "Native allowance capacity; USD defaults to the existing budget window.";
                   };
                   models = lib.mkOption {
                     type = lib.types.nullOr (lib.types.nonEmptyListOf lib.types.nonEmptyStr);
@@ -332,7 +338,7 @@ in {
                     description = "Exact Reader window key, including any scope suffix.";
                   };
                 };
-              });
+              }));
             };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
@@ -373,10 +379,10 @@ in {
                 };
               });
               default = null;
-              description = "Configured monthly window for an unmeasured budget; current use remains unknown. A usage reader takes precedence.";
+              description = "Configured monthly budget for unread allowance or accounted Reader preview flags. Preview uses limits and usage.readerPool; see packages/delegate-routing/docs/pacing.md.";
             };
           };
-        });
+        }));
         default = {};
         description = "Portable budget pools. Each pool needs a usage reader or a configured monthly window.";
       };
@@ -412,9 +418,10 @@ in {
           then ["home" "packages"]
           else ["packages"]
         )
-        (lib.mkIf (lib.any sourceEnabled supportedRuntimes) [
+        (lib.mkIf (lib.any (runtime: sourceEnabled runtime && cpaRoutes.${runtime} or null != null) supportedRuntimes) [
           (defaults.passthru.mkObservation {
             inherit cpaRoutes techniques;
+            environment = lib.foldl' (env: runtime: env // usageEnvironment runtime) {} (lib.filter sourceEnabled supportedRuntimes);
             inherit (portable) pools;
           })
         ]);
@@ -448,7 +455,7 @@ in {
           if runtime == "claude"
           then ["native" "settings" "env"]
           else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
-        ) (usageEnvironment runtime))))
+        ) (lib.mapAttrs (_: lib.mkDefault) (usageEnvironment runtime)))))
       (lib.mkIf (sourceEnabled "claude" && techniques.claude.Workflow.enable) {
         # Plain lists coexist with consumer directories; mkForce opts out.
         claude.native.settings.permissions.additionalDirectories = [workflowResumeDirectory];

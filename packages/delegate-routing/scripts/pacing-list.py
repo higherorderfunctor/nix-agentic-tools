@@ -17,32 +17,31 @@ sys.modules[SPEC.name] = normalizer
 SPEC.loader.exec_module(normalizer)
 
 
+# Reuse the routing helper's retry, timeout and process-group cleanup policy.
+SPEC = importlib.util.spec_from_file_location("routing_plan", Path(__file__).with_name("delegate-routing-plan.py"))
+planner = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(planner)
+
+
 def collect(manifest, now, reader_shell):
-    """Share each command's bounded attempt and execution retry across registrations."""
-    captures, readers = {}, {}
-    for pool, registration in sorted(manifest["pools"].items()):
-        command = registration["command"]
-        if command is None:
-            continue
-        if command not in captures:
-            for attempt in range(2):
-                try:
-                    process = subprocess.run(
-                        [reader_shell, "-c", "set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n" + command.replace("<now-ms>", str(now * 1000))],
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30,
-                    )
-                    capture = {"exit": process.returncode, "stdout": process.stdout.decode("utf-8", errors="replace")}
-                except subprocess.TimeoutExpired:
-                    capture = {"exit": 124, "data": {"diagnostic": {"reason": "timeout"}}}
-                except OSError:
-                    capture = {"exit": 127, "data": {"diagnostic": {"reason": "refused"}}}
-                # Successful malformed output belongs to normalization, never retry.
-                if capture["exit"] == 0 or attempt == 1:
-                    break
-                time.sleep(2)
-            captures[command] = {**capture, "finishedAt": now}
-        readers[pool] = captures[command]
-    return {**manifest, "readers": readers}
+    """Retain raw captures while the shared collector owns command execution."""
+    captures = {}
+
+    def capture(argv, **kwargs):
+        try:
+            process = planner.run_reader(argv, **kwargs)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            # The normalizer owns the fixed nonzero-exit diagnostic; no payload escapes.
+            process = subprocess.CompletedProcess(argv, 124 if isinstance(error, subprocess.TimeoutExpired) else 127, "")
+        captures[argv[-1].split("\n", 1)[1]] = {"exit": process.returncode, "finishedAt": int(time.time()), "stdout": process.stdout}
+        # Only the preview normalizer parses these envelopes. The shared helper
+        # needs the status for retry; its routing measurement is discarded.
+        return subprocess.CompletedProcess(argv, process.returncode, "{}")
+
+    readers = [{"command": registration["command"].replace("<now-ms>", str(now * 1000)), "name": pool}
+               for pool, registration in sorted(manifest["pools"].items()) if registration["command"] is not None]
+    planner.collect(readers, now, reader_shell, run=capture)
+    return {**manifest, "readers": {reader["name"]: captures[reader["command"]] for reader in readers}}
 
 
 def main():
@@ -53,10 +52,14 @@ def main():
     parser.add_argument("--default-manifest", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--runtime")
     parser.add_argument("--reader-shell", default="/bin/bash", help=argparse.SUPPRESS)
-    parser.add_argument("--now", required=True)
+    parser.add_argument("--now", help="Explicit UTC clock for snapshot replay only")
     args = parser.parse_args()
     try:
-        now = normalizer.utc(args.now)
+        if args.snapshot is not None and args.now is None:
+            parser.error("--snapshot requires --now")
+        if args.snapshot is None and args.now is not None:
+            parser.error("--now is only for --snapshot replay")
+        now = normalizer.utc(args.now) if args.now is not None else int(time.time())
         if args.snapshot is not None:
             snapshot = json.loads(args.snapshot.read_text())
         else:
@@ -65,6 +68,7 @@ def main():
             # Validate scopes before any configured transport executes.
             normalizer.normalize({**manifest, "readers": {}}, now)
             snapshot = collect(manifest, now, args.reader_shell)
+            now = int(time.time())
         result = normalizer.normalize(snapshot, now)
     except (AttributeError, KeyError, OSError, ValueError, TypeError, OverflowError, RecursionError):
         # Neither paths, timestamps nor JSON/parser exception text are diagnostics.

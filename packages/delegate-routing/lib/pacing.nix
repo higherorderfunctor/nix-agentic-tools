@@ -32,6 +32,10 @@
     scoped = lib.mapAttrs (_: spec:
       spec
       // {
+        capacity =
+          if spec.unit == "USD" && window != null
+          then window.limit
+          else spec.capacity;
         models =
           if spec.models == null
           then models
@@ -44,8 +48,11 @@
     then throw "${path}.limits: models must be nonempty canonical credential offers or null."
     else if !lib.allUnique (map (spec: spec.window) (builtins.attrValues declared))
     then throw "${path}.limits: register each Reader window once."
-    else if lib.any (spec: spec.unit == "USD") (builtins.attrValues declared) && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && (spec.capacity != window.limit || spec.window != "monthly")) (builtins.attrValues declared))
+    else if lib.any (spec: spec.unit == "USD") (builtins.attrValues declared) && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && ((spec.capacity or window.limit) != window.limit || spec.window != "monthly")) (builtins.attrValues declared))
     then throw "${path}.limits: USD limits must use the existing monthly USD window and capacity."
+    else if usd && readerPool != null && usage.technique != "anthropic-api-usage"
+    then throw "${path}.limits: USD transport requires the accounted Reader (anthropic-api-usage)."
+    # Manual mkObservation callers do not pass through the module's assertions.
     else if readerPool != null && (node == null || !node.enable || node.kind != "usage" || node.command == null || lib.trim node.command == "")
     then throw "${path}.usage.technique: reference an enabled usage technique with a non-empty command."
     else {
@@ -56,7 +63,7 @@
         then credential
         else readerPool;
       command =
-        if readerPool == null
+        if readerPool == null || limits == {}
         then null
         else node.command + lib.optionalString usd " --limit ${toString window.limit} --reset-day ${toString window.resetDay} --time-zone UTC --pool ${lib.escapeShellArg readerPool} --now-ms <now-ms>";
     };
