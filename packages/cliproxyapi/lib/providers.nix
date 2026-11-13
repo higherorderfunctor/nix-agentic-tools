@@ -186,24 +186,32 @@
     };
   # Normalize each credential once so rendering, grants and overlap checks share filtered offers.
   normalizeCredential = name: credential: let
+    # Name the credential and exclusion option in each refusal.
     path = "ai.cliproxyapi credential `${name}`.excludeMakers";
+    # Reject maker names absent from the merged catalog.
     unknown = lib.subtractLists (lib.unique (map (model: model.maker or null) (builtins.attrValues catalog.models))) credential.excludeMakers;
+    # Keep offers unless their resolved maker is excluded.
     keep = model: let
+      # Resolve strings and passthrough model objects in the credential vendor scope.
       resolved = canonical credential.vendor (
         if builtins.isAttrs model
         then model.name
         else model
       );
+      # Unknown identities have no inferred maker and remain available.
       maker = catalog.models.${resolved.id}.maker or null;
     in
       if resolved.errors != []
       then throw "${path}: ${lib.concatStringsSep "; " resolved.errors}"
       else !(lib.elem maker credential.excludeMakers);
+    # Remove excluded offers and drop APIs left with no models.
     filtered = lib.mapAttrs (api: value:
       if value == null
       then null
       else let
+        # Use the API model list or its credential-level default.
         models = modelsOf credential.apiKey api;
+        # Preserve null so the missing-model assertion can report it.
         remaining =
           if models == null
           then null
@@ -220,6 +228,7 @@
     then throw "${path}: OAuth credentials cannot exclude makers; remove excludeMakers."
     else if unknown != []
     then throw "${path}: unknown catalog makers ${lib.concatStringsSep ", " unknown}."
+    # Neither-kind credentials with valid exclusions must reach the exactly-one assertion.
     else if credential.apiKey == null
     then credential
     else credential // {apiKey = credential.apiKey // {apis = filtered;};};

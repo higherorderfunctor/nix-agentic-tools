@@ -252,12 +252,61 @@
           ]).config.ai.cliproxyapi.instances.main.credentials.${
             vendor
           }.vendor).success;
+      # Missing identities must throw before Go attribute lookup or z.ai rendering can accept them.
+      acceptsUnknownIdentity = vendor:
+        (builtins.tryEval (builtins.deepSeq
+          (evaluate [fixture {ai.catalog.vendors.${vendor}.models = ["fixture-missing-identity"];}]).config.ai.cliproxyapi.instances.main.credentials.${vendor}
+          true)).success;
+      # Repeated owner declarations describe one offer, including equal-priority module merges.
+      repeated = vendor: id:
+        render (evaluate [
+          fixture
+          {ai.catalog.vendors.${vendor}.models = [id id];}
+          {ai.catalog.vendors.${vendor}.models = [id];}
+        ]);
+      # No exclusive flag is set: maker filtering itself must refuse the shared alias.
+      ambiguousExclusion = evaluate [
+        {
+          ai.catalog.models = lib.genAttrs ["fixture-first" "fixture-second"] (_: {
+            aliases.opencode-go = ["fixture-shared"];
+            maker = "fixture-maker";
+            source = ["maker exclusion fixture"];
+          });
+          ai.cliproxyapi.instances.main.credentials.filtered = {
+            excludeMakers = ["fixture-maker"];
+            apiKey = {
+              apis.chat.base-url = "https://filtered.example/chat";
+              key = redact.file "/run/secrets/filtered";
+              models = ["fixture-shared"];
+            };
+          };
+        }
+      ];
+      # The null API-key guard preserves the named exactly-one assertion for neither-kind inputs.
+      neitherKind = evaluate [
+        {
+          ai.cliproxyapi.instances.main = {
+            credentials.bad.excludeMakers = ["anthropic"];
+            enable = true;
+            settings.config-version = 8;
+          };
+        }
+      ];
       constructed = import ../lib/providers.nix {inherit lib catalog;};
       expectedZai = lib.genAttrs (builtins.attrNames zai.apis) (_: sorted zai.models);
       expectedNarrowGo = {${nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}} = [chosen];};
       cases =
         catalogShapes
         // {
+          "ambiguous exclusion alias accepted without exclusive" = let
+            resolver = import ../lib/providers.nix {
+              inherit lib;
+              catalog = ambiguousExclusion.config.ai.catalog;
+            };
+          in
+            (resolver.canonical null "fixture-shared").errors
+            == ["ambiguous model alias `fixture-shared`: fixture-first, fixture-second; use a canonical catalog id."]
+            && !(builtins.tryEval (builtins.deepSeq ambiguousExclusion.config.ai.cliproxyapi.instances.main.credentials true)).success;
           "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
           "configured identity aliases ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
           "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.z-ai.models == sorted zai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zai.models);
@@ -292,6 +341,7 @@
           "maker-wide vendor accepted before finite constructor" = lib.all (vendor: !(acceptsMakerOffer vendor)) ["opencode-go" "z-ai"];
           "model edge whitespace accepted" = !(acceptsModel " fixture-model") && !(acceptsModel "fixture-model ");
           "native base URLs changed" = lib.all (api: (block settings families.${api} "opencode-go").base-url == expectedUrl api) (builtins.attrNames expectedGo);
+          "neither-kind exclusions hide exactly-one assertion" = lib.any (entry: !entry.assertion && entry.message == "ai.cliproxyapi.instances.main.credentials.bad: declare exactly one of oauth or apiKey.") neitherKind.config.assertions;
           "nonempty OAuth exclusions accepted" =
             !(acceptsExclusions {
               excludeMakers = ["anthropic"];
@@ -300,8 +350,25 @@
                 account = redact.file "/run/secrets/bad";
               };
             });
+          "repeated owner offers fail or render duplicate models" = lib.all (entry: let
+            rendered = repeated entry.vendor entry.id;
+            actual = lib.concatMap (api: (block rendered families.${api} entry.vendor).models) entry.apis;
+          in
+            actual == map (_: {name = entry.id;}) entry.apis) [
+            {
+              apis = [nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}];
+              id = chosen;
+              vendor = "opencode-go";
+            }
+            {
+              apis = builtins.attrNames zai.apis;
+              id = chosenZai;
+              vendor = "z-ai";
+            }
+          ];
           "session header missing from API block" = lib.all (api: (block result.config.ai.cliproxyapi.instances.main.settings families.${api} "opencode-go").headers.x-opencode-session == manual.literalHeader pkgs "$CPA-SESSION-ID") (builtins.attrNames expectedGo);
           "standalone constructor diverges from module defaults" = manual.vendors == constructed.vendors;
+          "unknown identity reaches vendor transport defaults" = lib.all (vendor: !(acceptsUnknownIdentity vendor)) ["opencode-go" "z-ai"];
           "unknown maker exclusion accepted before rendering" =
             !(acceptsExclusions {
               excludeMakers = ["fixture-typo"];
