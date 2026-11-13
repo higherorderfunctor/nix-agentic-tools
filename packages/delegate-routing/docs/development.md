@@ -508,16 +508,20 @@ limits are 65536 bytes, timeout 90 seconds; transient execution failures retry
 once after two seconds, malformed results advance without retry. Duplicate JSON
 keys, non-finite values, invalid Unicode, extra fields/documents and incomplete
 coverage are refused, as is a run that exits without writing its output file.
-Template values are substituted in one pass, so a value never rewrites a later
-token. Event streams and stderr are discarded. The helper's authorized picker
-subprocess may run with `nonInteractive: true`.
+Decision reasons must be nonempty and printable throughout; valid reasons longer
+than 240 characters retain their first 240 characters. Template values are
+substituted in one pass, so a value never rewrites a later token. Event streams
+and stderr are discarded. The helper's authorized picker subprocess may run with
+`nonInteractive: true`.
 
 When identity is absent/null, no entry is runnable, or all entries fail, report
 exactly
 `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`
-(followed by ` Unavailable: <reason>.` for each entry the helper could not build
-from local state, such as a Codex model missing from its models cache) and use
-hard-eligible tier/pool routes. Picker failure alone does not erase routes.
+followed by ` Unavailable: <reason>.` for each failed entry, or for missing
+identity/no runnable entry, and use hard-eligible tier/pool routes. Failure
+reasons describe timeouts, exit status, limits and invalid decisions without
+including prompts, raw output or stderr. Picker failure alone does not erase
+routes.
 
 Observed `efforts: []` always means launch without effort, regardless of role
 request, family default or avoidance. JSON keeps effort null; canonical lines
