@@ -31,6 +31,7 @@
     };
   };
   configs = lib.mapAttrs (name: case: (evaluate name case.accounts).config) cases;
+  proxy = import ./proxy.nix {inherit harness lib pkgs;};
   wrapper = config: name: builtins.head config.ai.services.${name}.command;
   snapshot = config: name: {
     activation = builtins.attrNames config.ai.mcp-oauth.activation;
@@ -74,7 +75,8 @@
   checks =
     lib.all (backend: valid backend && !(lib.any (accepts backend) refused)) ["devenv" "hm"]
     && (evaluate "hm" {}).config.ai.mcp-oauth.services == {}
-    && lib.all (config: lib.all (entry: entry.assertion) config.assertions) (builtins.attrValues configs);
+    && lib.all (config: lib.all (entry: entry.assertion) config.assertions) (builtins.attrValues configs)
+    && proxy.checks;
   fixture = pkgs.writeText "mcp-oauth-backends.json" (builtins.toJSON {
     backends = lib.mapAttrs (backend: config: let
       name = "mcp-oauth-${cases.${backend}.name}";
@@ -103,6 +105,7 @@
           else {watchPaths = process.watch.paths;};
       })
     configs;
+    proxy = proxy.snapshots;
   });
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {

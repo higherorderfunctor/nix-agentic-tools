@@ -74,15 +74,31 @@
   mkProxyDeclaration = optionPath: key: server: {
     inherit key optionPath server;
   };
+  resolveProxy = import ../../packages/mcp-oauth/lib/resolve-proxy.nix {inherit lib;} {
+    accounts = lib.attrByPath ["ai" "mcp-oauth" "accounts"] {} config;
+    backend =
+      if options ? home
+      then "hm"
+      else "devenv";
+    stateRoot =
+      if options ? home
+      then config.xdg.stateHome
+      else config.devenv.state;
+  };
   usedTopLevelProxyDeclarations =
     lib.mapAttrsToList (mkProxyDeclaration "ai.mcpServers") usedTopLevelProxiedServers;
   runtimeProxyDeclarationsFor = name:
     lib.mapAttrsToList
     (mkProxyDeclaration (lib.showOption (runtimeMcpPath name)))
     (mcpProxy.proxiedServers (runtimeMcpServers name));
-  runtimeProxyDeclarations = lib.concatMap runtimeProxyDeclarationsFor mcpRuntimeNames;
+  resolvedTopLevelProxyDeclarations = map resolveProxy usedTopLevelProxyDeclarations;
+  resolvedRuntimeProxyDeclarations =
+    lib.genAttrs mcpRuntimeNames
+    (name: map resolveProxy (runtimeProxyDeclarationsFor name));
 
-  activeProxyDeclarations = usedTopLevelProxyDeclarations ++ runtimeProxyDeclarations;
+  activeProxyDeclarations =
+    resolvedTopLevelProxyDeclarations
+    ++ lib.concatMap (name: resolvedRuntimeProxyDeclarations.${name}) mcpRuntimeNames;
   # Each declaration becomes the service of the layer that owns it: a used
   # top-level entry under the shared `internal` owner, a runtime entry under
   # that runtime. The claims registry then rejects one key declared twice,
@@ -92,7 +108,17 @@
       lib.nameValuePair "mcp-proxy-${declaration.key}" (mcpProxy.serviceFor declaration.key declaration.server))
     declarations);
   proxyValidationAssertions =
-    lib.concatMap
+    [
+      {
+        # Force declaration-level schema checks even when ownership emits no service.
+        assertion =
+          lib.all (server: server == null || builtins.seq (server.proxy or null) true)
+          (builtins.attrValues config.ai.mcpServers
+            ++ lib.concatMap (name: builtins.attrValues (runtimeMcpServers name)) mcpRuntimeNames);
+        message = "MCP proxy declarations must be valid even when unused";
+      }
+    ]
+    ++ lib.concatMap
     (declaration:
       mcpProxy.assertionsFor {
         inherit (declaration) key optionPath server;
@@ -588,8 +614,8 @@ in {
     (lib.optionalAttrs hasAssertions {assertions = inferenceLib.assertionsFor config.ai.internal.inferenceInstances ["ai" "settings" "inference"] config.ai.settings.inference;})
     {
       ai =
-        {internal.services = proxyServices usedTopLevelProxyDeclarations;}
-        // lib.genAttrs mcpRuntimeNames (name: {services = proxyServices (runtimeProxyDeclarationsFor name);});
+        {internal.services = proxyServices resolvedTopLevelProxyDeclarations;}
+        // lib.genAttrs mcpRuntimeNames (name: {services = proxyServices resolvedRuntimeProxyDeclarations.${name};});
     }
     {
       # Root-pool writes are sanctioned only from the module that declares
