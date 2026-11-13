@@ -40,12 +40,27 @@ lib.types.submodule {
         options = {
           command = lib.mkOption {
             type = lib.types.nonEmptyStr;
-            description = "One-shot template using <model>, <effort>, <prompt-file>, <output-file> and, for Codex, <catalog-file> (a one-model tool-free catalog the helper writes), each substituted as a shell literal. The first word must be a bare executable name found on PATH; the helper skips a picker whose executable is not.";
+            description = "Initial template using <model>, <effort>, <prompt-file>, <output-file>, <events-file>, <schema-file>, <schema-json>, <session-id> and, for Codex, <catalog-file> (a one-model tool-free catalog the helper writes), each substituted as a shell literal. The first word must be a bare executable name found on PATH; the helper skips a picker whose executable is not.";
+          };
+          outputFormat = lib.mkOption {
+            type = lib.types.enum ["claude-json" "json"];
+            default = "json";
+            description = "Result file protocol: raw decision JSON or Claude's successful structured_output envelope.";
+          };
+          resumeCommand = lib.mkOption {
+            type = lib.types.nullOr lib.types.nonEmptyStr;
+            default = null;
+            description = "Same-session correction template, binding <session-id> and retaining initial model, effort and tool restrictions.";
+          };
+          sessionIdSource = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["codex-events" "generated"]);
+            default = null;
+            description = "Resume ID from a thread.started JSONL event or a UUID generated before the initial call.";
           };
           toolFree = lib.mkOption {
             type = lib.types.bool;
             default = false;
-            description = "Whether source or offline provider capture proves this command exposes no tools, including MCP and delegation. Unproven templates are unavailable.";
+            description = "Whether source or offline provider capture proves this command exposes no executable tools, including MCP and delegation; a native structured-output protocol tool may only submit the result. Unproven templates are unavailable.";
           };
         };
       });

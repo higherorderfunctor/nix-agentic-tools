@@ -654,7 +654,16 @@
               pinsEffort = true;
               pinsModel = true;
               pickerCommand = {
-                command = ''printf '%s' '{"decisions":[{"decision":"keep","family":"packaged","reason":"fixture role fit","role":"writer"}],"schemaVersion":1}' > <output-file>'';
+                # Wrong: metadata is declared but dropped before packaged Python,
+                # or a repair starts fresh instead of using its exact generated ID.
+                command = ''printf '%s' <session-id> > <output-file>.session; printf '%s' '{"is_error":false,"structured_output":{},"subtype":"success","type":"result"}' > <output-file>'';
+                outputFormat = "claude-json";
+                resumeCommand = ''
+                  test <session-id> = "$(< <output-file>.session)"
+                  ${pkgs.python3}/bin/python3 -I -B -c 'import json,pathlib,sys; s=json.loads(pathlib.Path(sys.argv[1]).read_text()); assert s["properties"]["schemaVersion"] == {"enum":[1],"type":"integer"}; p=pathlib.Path(sys.argv[2]).read_text(); assert "Correct your previous submission" in p and "invalid picker schema" in p and "taskSummary" not in p' <schema-file> <prompt-file>
+                  printf '%s' '{"is_error":false,"structured_output":{"decisions":[{"decision":"keep","family":"packaged","reason":"fixture role fit","role":"writer"}],"schemaVersion":1},"subtype":"success","type":"result"}' > <output-file>
+                '';
+                sessionIdSource = "generated";
                 toolFree = true;
               };
             };
@@ -727,6 +736,9 @@
         manifest = json.loads(Path(manifest_path).read_text())
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
+        assert manifest["pickerEntries"][0]["outputFormat"] == "claude-json"
+        assert manifest["pickerEntries"][0]["sessionIdSource"] == "generated"
+        assert "<session-id>" in manifest["pickerEntries"][0]["resumeCommand"]
         assert "packaged" in manifest["familyNames"]
         assert "sol" in manifest["familyNames"]
         assert all(route["family"]["defaultEffort"] == "high" for route in manifest["routes"])
@@ -736,6 +748,12 @@
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
+        native = direct_manifest["pickerEntries"][0]
+        assert native["outputFormat"] == "json" and native["sessionIdSource"] == "codex-events"
+        assert "codex exec resume" in native["resumeCommand"]
+        for template in (native["command"], native["resumeCommand"]):
+            assert "--output-schema <schema-file>" in template and "> <events-file>" in template
+            assert "--ephemeral" not in template and "--last" not in template
         # Wrong: direct-builder selector overrides retain an unreachable inherited picker.
         opus_skill = Path(os.environ["opusOnlyDirectSkillPath"]).read_text()
         opus_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", opus_skill)[1])
@@ -962,8 +980,53 @@
         && (lib.last cross).toolFree
         # Exact literals reject broken pins or suppressing auth/provider settings
         # instead of overlaying native hook disable with tool controls intact.
-        && (lib.head cross).command == ''claude -p --model <model> --effort <effort> --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --settings '{"disableAllHooks":true}' --disable-slash-commands --no-session-persistence --system-prompt 'Return JSON only.' < <prompt-file> > <output-file>''
-        && (lib.last cross).command == ''codex exec --model <model> --config 'model_reasoning_effort="<effort>"' -c model_catalog_json=<catalog-file> -c tools.experimental_request_user_input.enabled=false -c agents.enabled=false -c 'web_search="disabled"' --disable goals --disable view_image --disable shell_tool --disable image_generation --disable apps --disable plugins --disable tool_suggest --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check --sandbox read-only -c 'approval_policy="never"' --json --output-last-message <output-file> - < <prompt-file>''
+        && (lib.head cross).outputFormat == "claude-json"
+        && (lib.head cross).sessionIdSource == "generated"
+        && (lib.last cross).outputFormat == "json"
+        && (lib.last cross).sessionIdSource == "codex-events"
+        && lib.hasInfix "--session-id <session-id>" (lib.head cross).command
+        && lib.hasInfix "--resume <session-id>" (lib.head cross).resumeCommand
+        && lib.hasPrefix "codex exec resume " (lib.last cross).resumeCommand
+        && lib.all (command:
+          lib.all (part: lib.hasInfix part command) [
+            "--disable-slash-commands"
+            "--effort <effort>"
+            "--json-schema <schema-json>"
+            ''--mcp-config '{"mcpServers":{}}' ''
+            "--model <model>"
+            "--output-format json"
+            ''--settings '{"disableAllHooks":true}' ''
+            "--strict-mcp-config"
+            ''--tools ""''
+          ]
+          && !(lib.hasInfix "--no-session-persistence" command)) [(lib.head cross).command (lib.head cross).resumeCommand]
+        && lib.all (command:
+          lib.all (part: lib.hasInfix part command) [
+            "--config model_reasoning_effort=<effort>"
+            "--disable apps"
+            "--disable goals"
+            "--disable image_generation"
+            "--disable plugins"
+            "--disable shell_tool"
+            "--disable tool_suggest"
+            "--disable view_image"
+            "--ignore-rules"
+            "--ignore-user-config"
+            "--json"
+            "--model <model>"
+            "--output-last-message <output-file>"
+            "--output-schema <schema-file>"
+            "--skip-git-repo-check"
+            "-c agents.enabled=false"
+            ''-c 'approval_policy="never"' ''
+            "-c model_catalog_json=<catalog-file>"
+            ''-c 'sandbox_mode="read-only"' ''
+            "-c tools.experimental_request_user_input.enabled=false"
+            ''-c 'web_search="disabled"' ''
+            "> <events-file>"
+          ]
+          && !(lib.hasInfix "--ephemeral" command)
+          && !(lib.hasInfix "--last" command)) [(lib.last cross).command (lib.last cross).resumeCommand]
         && refused [entry entry]
         && refused [(entry // {model = "unknown";})]
         && refused [(entry // {technique = "Workflow";})]

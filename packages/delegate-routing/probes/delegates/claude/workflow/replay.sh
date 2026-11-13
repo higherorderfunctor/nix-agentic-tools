@@ -35,7 +35,7 @@ status=0
 printf 'WF_ROOT_RUN\n' | CLAUDE_CONFIG_DIR="$out/config" ANTHROPIC_BASE_URL="http://127.0.0.1:$port" \
   ANTHROPIC_API_KEY=mock-offline-not-a-key DISABLE_TELEMETRY=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
   CLAUDE_CODE_WORKFLOWS=1 CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS=2 \
-  timeout "$limit" "$binary" -p --no-session-persistence --setting-sources "" --settings '{"enableWorkflows":true}' \
+  timeout "$limit" "$binary" -p --setting-sources "" --settings '{"enableWorkflows":true}' \
   --strict-mcp-config --mcp-config '{"mcpServers":{}}' --tools Workflow --allowedTools Workflow \
   --permission-mode bypassPermissions --allow-dangerously-skip-permissions --model haiku \
   >"$out/stdout" 2>"$out/stderr" || status=$?

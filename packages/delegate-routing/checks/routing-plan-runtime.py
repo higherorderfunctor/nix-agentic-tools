@@ -68,6 +68,11 @@ def picker_child_exited(child):
 
 
 class Routing(unittest.TestCase):
+    def picker_state(self):
+        directory = tempfile.TemporaryDirectory(prefix="routing-call-")
+        self.addCleanup(directory.cleanup)
+        return {"directory": directory.name}
+
     def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW):
         calls = []
         def reader(argv, **kwargs):
@@ -173,9 +178,8 @@ class Routing(unittest.TestCase):
                 self.assertEqual(picker.call_count, 1)
                 self.assertEqual(result["picker"]["provenance"]["runtime"], "claude")
 
-    def test_picker_one_transient_retry_and_no_malformed_retry(self):
-        # Wrong: malformed results retry; transient failures never retry or retry
-        # indefinitely; subprocess diagnostics leak into warning/provenance output.
+    def test_picker_transport_and_validation_share_attempt_budget(self):
+        # Wrong: malformed results never retry; transport retries multiply budgets; subprocess diagnostics leak into warning/provenance output.
         config, ctx = self.picker_fixture()
         valid = self.decisions(("writer", "sol", "keep"))
         for failure in (OSError("private"), subprocess.TimeoutExpired("secret", 90), subprocess.CalledProcessError(1, "secret", stderr="private")):
@@ -191,9 +195,140 @@ class Routing(unittest.TestCase):
         self.assertIn("picker", result)
         with patch.object(helper, "run_picker", side_effect=OSError("private")) as picker:
             result, _ = self.run_plan(config, ctx)
-        self.assertEqual(picker.call_count, 4)
+        self.assertEqual(picker.call_count, 6)
         self.assertEqual(result["warnings"].count(helper.PICKER_WARNING + " Unavailable: picker I/O failure. Unavailable: picker I/O failure."), 1)
         self.assertNotIn("private", json.dumps(result))
+
+    def test_picker_observed_failures_recover_with_exact_private_feedback(self):
+        # Wrong: accepting native/schema-only output, losing exact diagnostics,
+        # replaying older feedback, or leaking a recovered error into warnings.
+        valid = self.decisions(("writer", "sol", "keep"))
+        cases = [
+            (valid.replace(b'"decision":', b'"verdict":'), "invalid picker decision"),
+            (valid.replace(b'"sol"', b'"unasked"'), "invalid picker decision"),
+            (valid.replace(b'"schemaVersion": 1', b'"schemaVersion": 1, "schemaVersion": 1'), "duplicate JSON key"),
+            (b'{private', "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"),
+        ]
+        for raw, diagnostic in cases:
+            config, ctx = self.picker_fixture()
+            with self.subTest(diagnostic=diagnostic), patch.object(helper, "run_picker", side_effect=[raw, valid]) as picker:
+                result, _ = self.run_plan(config, ctx)
+            self.assertEqual(picker.call_count, 2)
+            self.assertEqual(picker.call_args.args[4], diagnostic)
+            self.assertEqual(picker.call_args_list[0].args[1], picker.call_args.args[1])
+            self.assertEqual(result["picker"]["decisions"], json.loads(valid)["decisions"])
+            self.assertFalse(any(w.startswith(helper.PICKER_WARNING) for w in result["warnings"]))
+        for replies in ([cases[0][0], cases[2][0], valid], [cases[0][0], OSError("private"), valid]):
+            with patch.object(helper, "run_picker", side_effect=replies) as picker:
+                result, _ = self.run_plan(config, ctx)
+            self.assertEqual(picker.call_count, 3)
+            self.assertEqual(picker.call_args.args[4], "duplicate JSON key" if isinstance(replies[1], bytes) else "invalid picker decision")
+            self.assertIn("picker", result)
+        with patch.object(helper, "run_picker", return_value=cases[0][0]) as picker:
+            result, _ = self.run_plan(config, ctx)
+        self.assertEqual(picker.call_count, 3)
+        self.assert_picker_warning(result, "invalid decisions: invalid picker decision")
+
+    def test_picker_delays_only_between_budgeted_calls(self):
+        # Wrong: transport and repair loops each spend their own attempts/delays.
+        config, ctx = self.picker_fixture()
+        replies = [b"{", OSError("private"), self.decisions(("writer", "sol", "keep"))]
+        with patch.object(helper, "run_picker", side_effect=replies) as picker, patch.object(helper.time, "sleep") as delay:
+            result = helper.plan(config, ctx, ("writer",), NOW, SHELL, lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stream()))
+        self.assertIn("picker", result)
+        self.assertEqual(picker.call_count, 3)
+        self.assertEqual(delay.call_args_list, [call(2), call(2)])
+
+    def test_picker_protocol_commands_resume_or_rebuild_request(self):
+        # Wrong: new scratch loses the session, resume sends the original request,
+        # stale result/events survive, IDs select latest, or substitutions execute.
+        valid = self.decisions(("writer", "sol", "keep"))
+        code = "import json,pathlib,sys; p,o,e,s,sj,sf,m,eff,mode=sys.argv[1:]; print(json.dumps({'prompt':pathlib.Path(p).read_text(),'session':s,'schema':json.loads(sj),'schema_file':json.loads(pathlib.Path(sf).read_text()),'model':m,'effort':eff,'mode':mode,'cwd':str(pathlib.Path.cwd())})); pathlib.Path(e).write_text('{\"type\":\"thread.started\",\"thread_id\":\"exact-thread-id\"}\\n'); pathlib.Path(o).write_bytes(" + repr(valid) + ")"
+        with tempfile.TemporaryDirectory(prefix="routing-protocol-") as directory:
+            log = Path(directory) / "calls.jsonl"
+            command = shlex.quote(sys.executable) + " -I -B -c " + shlex.quote(code) + " <prompt-file> <output-file> <events-file> <session-id> <schema-json> <schema-file> <model> <effort> MODE >> " + shlex.quote(str(log))
+            for source in ("codex-events", "generated", None):
+                log.unlink(missing_ok=True)
+                entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command.replace("MODE", "initial"), "resumeCommand": command.replace("MODE", "resume") if source else None, "sessionIdSource": source}
+                state = {"directory": directory}
+                payload = {"taskSummary": "original task", "families": [{"role": "writer", "name": "sol"}]}
+                self.assertEqual(helper.run_picker(entry, payload, SHELL, state), valid)
+                first_id = state.get("session_id")
+                self.assertEqual(helper.run_picker(entry, payload, SHELL, state, "duplicate JSON key"), valid)
+                first, second = map(json.loads, log.read_text().splitlines())
+                self.assertEqual(first["schema"], helper.PICKER_SCHEMA)
+                self.assertEqual(first["schema_file"], helper.PICKER_SCHEMA)
+                self.assertIn('"schemaVersion"', first["prompt"])
+                self.assertEqual(second["model"], "gpt-6.1-sol")
+                self.assertEqual(second["effort"], "medium")
+                self.assertEqual(second["cwd"], first["cwd"])
+                self.assertIn('"duplicate JSON key"', second["prompt"])
+                if source:
+                    self.assertEqual(second["session"], first_id)
+                    self.assertEqual(second["mode"], "resume")
+                    self.assertNotIn("original task", second["prompt"])
+                else:
+                    self.assertEqual(second["mode"], "initial")
+                    self.assertIn("original task", second["prompt"])
+                # A successful process that omits output cannot reuse the prior answer.
+                with self.assertRaisesRegex(ValueError, "picker wrote no output"):
+                    helper.run_picker(entry | {"command": "true", "resumeCommand": "true"}, payload, SHELL, state)
+                self.assertFalse((Path(directory) / "result.json").exists())
+
+    def test_picker_missing_or_malformed_session_events_use_fresh_repairs(self):
+        # Wrong: missing/unusable telemetry selects the latest or stale session.
+        for events in (b"", b"broken", b'[]', b'{"type":"thread.started","thread_id":false}', b'{"type":"thread.started","thread_id":"--last"}'):
+            with self.subTest(events=events), tempfile.TemporaryDirectory() as directory:
+                state = {"directory": directory}
+                command = "printf '%s' " + shlex.quote(events.decode()) + " > <events-file>; cp <prompt-file> <output-file>"
+                entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command, "resumeCommand": "false", "sessionIdSource": "codex-events"}
+                helper.run_picker(entry, {"taskSummary": "original"}, SHELL, state)
+                raw = helper.run_picker(entry, {"taskSummary": "original"}, SHELL, state, "invalid picker decision")
+                self.assertIn(b"original", raw)
+                self.assertIn(b"invalid picker decision", raw)
+
+    def test_picker_claude_envelope_remains_strict(self):
+        # Wrong: trusting structured_output before strictly decoding the envelope,
+        # accepting text fallback, or treating a failed result as a success.
+        answer = json.loads(self.decisions(("writer", "sol", "keep")))
+        envelope = {"is_error": False, "session_id": "fixture-id", "structured_output": answer, "subtype": "success", "type": "result"}
+        for raw, ok in [(json.dumps(envelope).encode(), True), (json.dumps(envelope | {"is_error": True}).encode(), False), (json.dumps(envelope | {"subtype": "error_max_turns"}).encode(), False), (b'{"type":"result","type":"result"}', False), (b'{"result":"free text"}', False), (b'[]', False)]:
+            entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "printf '%s' " + shlex.quote(raw.decode()) + " > <output-file>", "outputFormat": "claude-json"}
+            with self.subTest(raw=raw):
+                if ok:
+                    self.assertEqual(helper.picker_decisions(helper.run_picker(entry, {}, SHELL, self.picker_state()), {("writer", "sol")}), answer["decisions"])
+                else:
+                    with self.assertRaises(ValueError):
+                        helper.run_picker(entry, {}, SHELL, self.picker_state())
+
+    def test_picker_events_and_repair_prompts_are_bounded(self):
+        # Wrong: bounding only result.json lets JSONL fill disk or corrections
+        # exceed the original prompt cap; final reads must also enforce bounds.
+        entry = self.picker_fixture()[0]["pickerEntries"][0]
+        for suffix in ("", "; sleep 60"):
+            with patch.object(helper, "PICKER_OUTPUT_LIMIT", 10), self.assertRaisesRegex(ValueError, "picker output limit"):
+                helper.run_picker(entry | {"command": "head -c 100 /dev/zero > <events-file>" + suffix}, {}, SHELL, self.picker_state())
+        with tempfile.TemporaryDirectory() as directory, patch.object(helper, "PICKER_PROMPT_LIMIT", 100), self.assertRaisesRegex(ValueError, "picker prompt limit"):
+            helper.run_picker(entry | {"resumeCommand": "false"}, {}, SHELL, {"directory": directory, "session_id": "known"}, "x" * 101)
+
+    def test_picker_resume_has_the_same_timeout_and_output_bounds(self):
+        # Wrong: resume escapes limits or a transport retry gets a fresh budget.
+        for command, limit, expected in [
+            ("head -c 100 /dev/zero > <events-file>", {"PICKER_OUTPUT_LIMIT": 10}, ValueError),
+            ("head -c 100 /dev/zero > <output-file>", {"PICKER_OUTPUT_LIMIT": 10}, ValueError),
+            ("sleep 60", {"PICKER_TIMEOUT": 0.02}, subprocess.TimeoutExpired),
+        ]:
+            entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "false", "resumeCommand": command}
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as directory, patch.multiple(helper, **limit), self.assertRaises(expected):
+                helper.run_picker(entry, {}, SHELL, {"directory": directory, "session_id": "known"}, "invalid picker schema")
+
+    def test_picker_protocol_manifest_refuses_inconsistent_metadata(self):
+        # Wrong: bad protocol declarations reach Readers/subprocesses.
+        for fields, key in [({"outputFormat": "unknown"}, "outputFormat"), ({"sessionIdSource": []}, "sessionIdSource"), ({"resumeCommand": "cli --last"}, "resumeCommand"), ({"resumeCommand": "cli <session-id>"}, "sessionIdSource"), ({"sessionIdSource": "generated"}, "command"), ({"sessionIdSource": "codex-events"}, "command")]:
+            config, ctx = self.picker_fixture()
+            config["pickerEntries"][0].update(fields)
+            errors = self.request_errors(config, ctx)
+            self.assertTrue(any(e["path"] == "manifest.pickerEntries[0]." + key for e in errors), errors)
 
     def assert_picker_warning(self, result, reason):
         warning = helper.PICKER_WARNING + " Unavailable: " + reason + "."
@@ -208,21 +343,21 @@ class Routing(unittest.TestCase):
 
     def test_picker_process_failures_have_safe_reasons(self):
         # Wrong: failed claude -p calls fall back silently, leak diagnostics, or
-        # retry malformed output. A shell function stands in for the CLI; no
+        # abandon malformed output. A shell function stands in for the CLI; no
         # provider is contacted, and timeout/size bounds are shortened for speed.
         valid = self.decisions(("writer", "sol", "keep")).decode()
         cases = [
-            ("coverage", """printf '%s' '{"decisions":[],"schemaVersion":1}'""", {}, "incomplete picker coverage", 1),
-            ("empty", "true", {}, "picker wrote no output", 1),
-            ("exit", "printf secret >&2; return 1", {}, "exited 1", 2),
-            ("json", "printf secret", {}, "invalid JSON", 1),
+            ("coverage", """printf '%s' '{"decisions":[],"schemaVersion":1}'""", {}, "incomplete picker coverage", 3),
+            ("empty", "true", {}, "picker wrote no output", 3),
+            ("exit", "printf secret >&2; return 1", {}, "exited 1", 3),
+            ("json", "printf secret", {}, "invalid JSON", 3),
             ("long", "printf '%s' " + shlex.quote(valid.replace("bounded role fit", "x" * 241)), {}, None, 1),
-            ("missing", "true", {}, "picker wrote no output", 1),
+            ("missing", "true", {}, "picker wrote no output", 3),
             ("output", "printf secret", {"PICKER_OUTPUT_LIMIT": 2}, "picker output limit", 1),
             ("prompt", "printf secret", {"PICKER_PROMPT_LIMIT": 2}, "picker prompt limit", 1),
-            ("schema", "printf '{}'", {}, "invalid decisions: invalid picker schema", 1),
-            ("timeout", "while :; do :; done", {"PICKER_TIMEOUT": 0.02}, "timed out after 0.02s", 2),
-            ("unicode", r"printf '\377'", {}, "invalid Unicode", 1),
+            ("schema", "printf '{}'", {}, "invalid decisions: invalid picker schema", 3),
+            ("timeout", "while :; do :; done", {"PICKER_TIMEOUT": 0.02}, "timed out after 0.02s", 3),
+            ("unicode", r"printf '\377'", {}, "invalid Unicode", 3),
         ]
         for name, body, limits, reason, attempts in cases:
             with self.subTest(case=name):
@@ -240,11 +375,11 @@ class Routing(unittest.TestCase):
     def test_picker_exception_failures_have_safe_reasons(self):
         # Wrong: non-process exceptions vanish or expose their raw payload.
         cases = [
-            (OSError("secret"), "picker I/O failure", 2),
-            (subprocess.SubprocessError("secret"), "picker subprocess failure", 2),
+            (OSError("secret"), "picker I/O failure", 3),
+            (subprocess.SubprocessError("secret"), "picker subprocess failure", 3),
             (TypeError("secret"), "invalid decisions: invalid type", 1),
             (ValueError("secret"), "invalid decisions", 1),
-            (ValueError("picker wrote no output"), "picker wrote no output", 1),
+            (ValueError("picker wrote no output"), "picker wrote no output", 3),
         ]
         for error, reason, attempts in cases:
             with self.subTest(error=type(error), reason=reason):
@@ -280,6 +415,8 @@ class Routing(unittest.TestCase):
         # extra fields/documents or partial role/family coverage are accepted.
         valid = self.decisions(("writer", "sol", "keep"))
         mutations = [valid + b"{}", valid.replace(b'"schemaVersion": 1', b'"schemaVersion": 1, "schemaVersion": 1'), valid.replace(b'"schemaVersion": 1', b'"schemaVersion": NaN'), valid.replace(b'"bounded role fit"', b'"\\ud800"'), valid.replace(b'"writer"', b'"judge"'), self.decisions(("writer", "sol", "keep"), ("writer", "sol", "exclude")), b'{"decisions":[],"schemaVersion":1}', valid.replace(b'"reason":', b'"extra":true,"reason":')]
+        mutations += [valid.replace(b'"schemaVersion": 1', b'"schemaVersion": ' + value) for value in (b'true', b'"1"', b'2', b'1e999')]
+        mutations += [valid.replace(b'"family": "sol"', b'"family": []'), valid.replace(b'"keep"', b'"maybe"'), b'{"decisions":{},"schemaVersion":1}', b'{"decisions":[]}']
         for raw in mutations:
             with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeError)):
                 helper.picker_decisions(raw, {("writer", "sol")})
@@ -350,7 +487,7 @@ class Routing(unittest.TestCase):
         config, ctx = self.picker_fixture()
         reply = self.decisions(("writer", "sol", "keep")).decode()
         entry = config["pickerEntries"][0] | {"command": f"printf '%s\\n' {shlex.quote(reply)} > <output-file>"}
-        raw = helper.run_picker(entry, {}, SHELL)
+        raw = helper.run_picker(entry, {}, SHELL, self.picker_state())
         self.assertEqual(raw, (reply + "\n").encode())
         self.assertEqual(helper.picker_decisions(raw, {("writer", "sol")})[0]["decision"], "keep")
 
@@ -556,13 +693,13 @@ class Routing(unittest.TestCase):
         # prompt limits are decorative, or timeout leaves the one-shot process alive.
         config, _ = self.picker_fixture()
         entry = config["pickerEntries"][0] | {"model": "$(exit 7)", "command": "printf '%s' <model> > <output-file>"}
-        self.assertEqual(helper.run_picker(entry, {}, SHELL), b"$(exit 7)")
+        self.assertEqual(helper.run_picker(entry, {}, SHELL, self.picker_state()), b"$(exit 7)")
         with patch.object(helper, "PICKER_OUTPUT_LIMIT", 2), self.assertRaisesRegex(ValueError, "output limit"):
-            helper.run_picker(entry, {}, SHELL)
+            helper.run_picker(entry, {}, SHELL, self.picker_state())
         with patch.object(helper, "PICKER_PROMPT_LIMIT", 2), self.assertRaisesRegex(ValueError, "prompt limit"):
-            helper.run_picker(entry, {}, SHELL)
+            helper.run_picker(entry, {}, SHELL, self.picker_state())
         with patch.object(helper, "PICKER_TIMEOUT", 0.02), self.assertRaises(subprocess.TimeoutExpired):
-            helper.run_picker(entry | {"command": "while :; do :; done"}, {}, SHELL)
+            helper.run_picker(entry | {"command": "while :; do :; done"}, {}, SHELL, self.picker_state())
 
     def test_child_without_proc_is_alive_until_signal_zero_fails(self):
         # Wrong: an absent /proc stat file proves a surviving child exited.
@@ -575,7 +712,7 @@ class Routing(unittest.TestCase):
     def test_picker_without_catalog_keeps_the_project_directory(self):
         # Wrong: Claude loses project settings when every picker runs in scratch.
         entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "pwd > <output-file>"}
-        self.assertEqual(helper.run_picker(entry, {}, SHELL).decode().strip(), str(Path.cwd()))
+        self.assertEqual(helper.run_picker(entry, {}, SHELL, self.picker_state()).decode().strip(), str(Path.cwd()))
 
     def test_codex_picker_resolves_relative_home_before_changing_directory(self):
         # Wrong: the child resolves a relative CODEX_HOME inside picker scratch.
@@ -583,7 +720,7 @@ class Routing(unittest.TestCase):
         with self.codex_home():
             absolute = Path(os.environ["CODEX_HOME"])
             os.environ["CODEX_HOME"] = os.path.relpath(absolute)
-            self.assertEqual(helper.run_picker(entry, {}, SHELL), b"absolute")
+            self.assertEqual(helper.run_picker(entry, {}, SHELL, self.picker_state()), b"absolute")
 
     def test_picker_output_overrun_kills_the_whole_process_group(self):
         # Wrong: a picker that writes past the limit and keeps running outlives the
@@ -593,7 +730,7 @@ class Routing(unittest.TestCase):
             pidfile = Path(directory) / "child.pid"
             command = f"sleep 60 & echo $! > '{pidfile}'; head -c 100 /dev/zero > <output-file>; wait"
             with patch.object(helper, "PICKER_OUTPUT_LIMIT", 10), patch.object(helper, "PICKER_TIMEOUT", 30), self.assertRaisesRegex(ValueError, "output limit"):
-                helper.run_picker(config["pickerEntries"][0] | {"command": command}, {}, SHELL)
+                helper.run_picker(config["pickerEntries"][0] | {"command": command}, {}, SHELL, self.picker_state())
             child = int(pidfile.read_text())
             for _ in range(200):
                 if picker_child_exited(child):
@@ -609,13 +746,13 @@ class Routing(unittest.TestCase):
         config, _ = self.picker_fixture()
         config["pickerEntries"][0]["command"] = "true"
         with self.assertRaisesRegex(ValueError, "no output"):
-            helper.run_picker(config["pickerEntries"][0], {}, SHELL)
+            helper.run_picker(config["pickerEntries"][0], {}, SHELL, self.picker_state())
 
     def test_picker_values_are_not_rescanned_for_tokens(self):
         # Wrong: a value containing a later token is rewritten by sequential replace.
         config, _ = self.picker_fixture()
         entry = config["pickerEntries"][0] | {"model": "x<output-file>y", "command": "printf '%s' <model> > <output-file>"}
-        self.assertEqual(helper.run_picker(entry, {}, SHELL), b"x<output-file>y")
+        self.assertEqual(helper.run_picker(entry, {}, SHELL, self.picker_state()), b"x<output-file>y")
 
     def test_picker_needs_a_path_command_not_caller_evidence(self):
         # Wrong: the picker is skipped because the caller did not list its own
@@ -639,7 +776,7 @@ class Routing(unittest.TestCase):
         cache["models"] = cache["models"] if models is None else models
         (Path(directory.name) / "models_cache.json").write_text(json.dumps(cache))
         scrubbed = {key: value for key, value in os.environ.items() if not key.startswith(("CODEX", "OPENAI"))}
-        return patch.dict(os.environ, scrubbed | {"CODEX_HOME": directory.name}, clear=True)
+        return patch.dict(os.environ, scrubbed | {"CODEX_HOME": directory.name, "HOME": directory.name}, clear=True)
 
     def test_codex_picker_catalog_is_the_picked_model_with_every_tool_removed(self):
         # Wrong: the catalog keeps another model, keeps the live tool mode, shell,
@@ -648,7 +785,7 @@ class Routing(unittest.TestCase):
         other = dict(live, slug="gpt-6-luna")
         entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": "cp <catalog-file> <output-file>"}
         with self.codex_home([other, live]):
-            raw = helper.run_picker(entry, {}, SHELL)
+            raw = helper.run_picker(entry, {}, SHELL, self.picker_state())
         self.assertEqual(live["tool_mode"], "code_mode_only")
         expected = dict(live, tool_mode="direct", shell_type="disabled", apply_patch_tool_type=None, experimental_supported_tools=[], multi_agent_version=None, node_repl_disabled=True, supports_search_tool=False)
         self.assertEqual(json.loads(raw), {"models": [expected]})
@@ -667,7 +804,7 @@ class Routing(unittest.TestCase):
         self.assertIn(helper.PICKER_WARNING + f" Unavailable: gpt-6-luna: Codex models cache {cache} unreadable (FileNotFoundError).", missing["warnings"])
         self.assertEqual(len(result["roles"]["writer"]["candidates"]), 1)
 
-    @unittest.skipUnless(os.environ.get("CODEX_PICKER_COMMAND") and shutil.which("codex"), "needs the real codex binary and the shipped command in CODEX_PICKER_COMMAND")
+    @unittest.skipUnless(os.environ.get("CODEX_PICKER_COMMAND") and os.environ.get("CODEX_PICKER_RESUME_COMMAND"), "needs raw Codex and shipped initial/resume templates")
     def test_codex_picker_request_has_no_tools_against_a_fake_provider(self):
         # Wrong: the shipped command sends a `tools` key or any tool item to the
         # Responses endpoint (flags alone leave code-mode exec and wait).
@@ -692,7 +829,7 @@ class Routing(unittest.TestCase):
                 elif encoding == "zstd":
                     raw = subprocess.run(["zstd", "-d", "-q"], input=raw, capture_output=True, check=True).stdout
                 requests.append(json.loads(raw))
-                events = [{"type": "response.created", "response": {"id": "r"}}, {"type": "response.output_item.done", "item": {"type": "message", "role": "assistant", "id": "m", "content": [{"type": "output_text", "text": reply}]}}, {"type": "response.completed", "response": {"id": "r", "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}}]
+                events = [{"type": "response.created", "response": {"id": "r"}}, {"type": "response.output_item.done", "item": {"type": "message", "role": "assistant", "id": "m", "content": [{"type": "output_text", "text": reply if len(requests) > 1 else reply.replace('"sol"', '"unasked"')}]}}, {"type": "response.completed", "response": {"id": "r", "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}}]
                 body = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -701,16 +838,103 @@ class Routing(unittest.TestCase):
 
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
         threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         provider = ['model_provider="probe"', 'model_providers.probe.name="Probe"', f'model_providers.probe.base_url="http://127.0.0.1:{server.server_port}/v1"', 'model_providers.probe.wire_api="responses"', "model_providers.probe.requires_openai_auth=false", "model_providers.probe.supports_websockets=false"]
-        command = os.environ["CODEX_PICKER_COMMAND"].replace("codex exec", "codex exec " + " ".join(f"-c {shlex.quote(item)}" for item in provider), 1)
-        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": command}
-        with self.codex_home():
-            raw = helper.run_picker(entry, {}, SHELL)
+        def configured(command):
+            return command.replace(" --model", " " + " ".join(f"-c {shlex.quote(item)}" for item in provider) + " --model", 1)
+        entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": configured(os.environ["CODEX_PICKER_COMMAND"]), "resumeCommand": configured(os.environ["CODEX_PICKER_RESUME_COMMAND"]), "sessionIdSource": "codex-events"}
+        with self.codex_home(), tempfile.TemporaryDirectory(prefix="routing-native-") as directory:
+            state = {"directory": directory}
+            raw = helper.run_picker(entry, {"taskSummary": "original task"}, SHELL, state)
+            with self.assertRaisesRegex(ValueError, "invalid picker decision"):
+                helper.picker_decisions(raw, {("writer", "sol")})
+            session = state["session_id"]
+            raw = helper.run_picker(entry, {"taskSummary": "original task"}, SHELL, state, "invalid picker decision")
+            self.assertEqual(state["session_id"], session)
+            self.assertTrue(list(Path(os.environ["CODEX_HOME"]).glob("sessions/**/*.jsonl")), "native session was not persisted")
         self.assertEqual(raw.decode(), reply)
-        self.assertEqual(len(requests), 1)
-        self.assertNotIn("tools", requests[0])
-        self.assertEqual([item for item in requests[0]["input"] if item.get("type") == "additional_tools" or "tool" in item.get("type", "")], [])
+        self.assertEqual(len(requests), 2)
+        for request in requests:
+            self.assertNotIn("tools", request)
+            self.assertEqual([item for item in request["input"] if item.get("type") == "additional_tools" or "tool" in item.get("type", "")], [])
+            self.assertEqual(request["text"]["format"]["schema"], helper.PICKER_SCHEMA)
+            self.assertEqual(request["model"], "gpt-6.1-sol")
+            self.assertEqual(request["reasoning"]["effort"], "medium")
+        self.assertIn("Correct your previous submission", json.dumps(requests[1]["input"]))
+
+    @unittest.skipUnless(os.environ.get("CLAUDE_PICKER_COMMAND") and os.environ.get("CLAUDE_PICKER_RESUME_COMMAND"), "needs raw Claude and shipped initial/resume templates")
+    def test_claude_native_schema_resume_has_no_executable_tools(self):
+        # Wrong: schema mode restores executable tools/hooks, resume changes the
+        # session or model, or extraction accepts a free-text fallback.
+        requests = []
+        answer = json.loads(self.decisions(("writer", "sol", "keep")))
+
+        class Fake(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if "count_tokens" in self.path:
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b'{"input_tokens":10}')
+                    return
+                requests.append(body)
+                repaired = "Correct your previous submission" in json.dumps(body["messages"])
+                value = answer if repaired else dict(answer, decisions=[dict(answer["decisions"][0], family="unasked")])
+                message = {"content": [], "id": "msg_fixture", "model": body["model"], "role": "assistant", "stop_reason": None, "stop_sequence": None, "type": "message", "usage": {"input_tokens": 10, "output_tokens": 5}}
+                events = [
+                    {"message": message, "type": "message_start"},
+                    {"content_block": {"id": "tool_fixture", "input": {}, "name": "StructuredOutput", "type": "tool_use"}, "index": 0, "type": "content_block_start"},
+                    {"delta": {"partial_json": json.dumps(value), "type": "input_json_delta"}, "index": 0, "type": "content_block_delta"},
+                    {"index": 0, "type": "content_block_stop"},
+                    {"delta": {"stop_reason": "tool_use", "stop_sequence": None}, "type": "message_delta", "usage": {"output_tokens": 5}},
+                    {"type": "message_stop"},
+                ]
+                data = "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in events).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        with tempfile.TemporaryDirectory(prefix="routing-claude-") as directory:
+            root = Path(directory)
+            config = root / "config"
+            config.mkdir()
+            hook = root / "hook-ran"
+            # Synthetic settings only; no user configurations or credentials.
+            (config / "settings.json").write_text(json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [{"command": shlex.quote(SHELL) + " -c " + shlex.quote("set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf ran > " + shlex.quote(str(hook))), "type": "command"}]}]}}))
+            env = {"ANTHROPIC_API_KEY": "offline-fixture", "ANTHROPIC_BASE_URL": f"http://127.0.0.1:{server.server_port}", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "CLAUDE_CONFIG_DIR": str(config), "DISABLE_TELEMETRY": "1", "HOME": directory, "PATH": os.environ["PATH"]}
+            entry = self.picker_fixture()[0]["pickerEntries"][0] | {"command": os.environ["CLAUDE_PICKER_COMMAND"], "model": "claude-sonnet-4-5", "outputFormat": "claude-json", "resumeCommand": os.environ["CLAUDE_PICKER_RESUME_COMMAND"], "sessionIdSource": "generated"}
+            state = {"cwd": directory, "directory": directory}
+            with patch.dict(os.environ, env, clear=True):
+                raw = helper.run_picker(entry, {"taskSummary": "original task"}, SHELL, state)
+                with self.assertRaisesRegex(ValueError, "invalid picker decision"):
+                    helper.picker_decisions(raw, {("writer", "sol")})
+                session = state["session_id"]
+                raw = helper.run_picker(entry, {"taskSummary": "original task"}, SHELL, state, "invalid picker decision")
+            self.assertEqual(helper.picker_decisions(raw, {("writer", "sol")}), answer["decisions"])
+            self.assertEqual(state["session_id"], session)
+            self.assertTrue(list(config.glob(f"projects/**/{session}.jsonl")), "native session was not persisted")
+            self.assertFalse(hook.exists(), "native schema or resume re-enabled hooks")
+            captured = requests[:]
+            control = entry | {"outputFormat": "json", "command": entry["command"].replace('"disableAllHooks":true', '"disableAllHooks":false')}
+            with patch.dict(os.environ, env, clear=True):
+                helper.run_picker(control, {}, SHELL, {"cwd": directory, "directory": directory})
+            self.assertTrue(hook.exists(), "positive control never executed the configured hook")
+        self.assertEqual(len(captured), 2)
+        for request in captured:
+            self.assertEqual([tool["name"] for tool in request["tools"]], ["StructuredOutput"])
+            self.assertEqual(request["tools"][0]["input_schema"], helper.PICKER_SCHEMA)
+            self.assertEqual(request["model"], "claude-sonnet-4-5")
+        self.assertIn("Correct your previous submission", json.dumps(requests[1]["messages"]))
 
     def test_picker_is_not_called_without_an_eligible_family(self):
         # Wrong: a model call is spent when no role has a family to judge.
