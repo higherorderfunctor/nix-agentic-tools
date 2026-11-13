@@ -10,6 +10,153 @@
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
   inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  webexResult = backend: clients: assignServers:
+    (
+      if backend == "hm"
+      then harness.evalHmModules
+      else harness.evalDevenvModules
+    ) [
+      ({config, ...}: {
+        ai = {
+          claude.enable = clients;
+          codex.enable = clients;
+          mcpServers = lib.mkIf assignServers config.ai.webex-mcp.mcpServers;
+          webex-mcp.instances = {
+            disabled.enable = false;
+            personal = {
+              enable = true;
+              oauth = {
+                clientId = redact.file "/run/secrets/personal-id";
+                clientSecret = redact.file "/run/secrets/personal-secret";
+              };
+            };
+            work = {
+              enable = true;
+              oauth = {
+                clientId = redact.file "/run/secrets/work-id";
+                clientSecret = redact.file "/run/secrets/work-secret";
+              };
+            };
+          };
+        };
+      })
+    ];
+  webexServers = [
+    "webex-mcp-personal-meeting"
+    "webex-mcp-personal-messaging"
+    "webex-mcp-work-meeting"
+    "webex-mcp-work-messaging"
+  ];
+  webexShared = backend: let
+    result = webexResult backend true true;
+    cfg = result.config;
+    clients = [
+      (claudeMcpServers backend result)
+      (hmCodexSettings result).mcp_servers
+    ];
+    accounts = cfg.ai.mcp-oauth.accounts;
+    proxyServices = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) cfg.ai.services;
+  in
+    builtins.attrNames accounts
+    == ["webex-mcp-personal" "webex-mcp-work"]
+    && builtins.attrNames cfg.ai.mcpServers == webexServers
+    && builtins.attrNames proxyServices
+    == [
+      "mcp-proxy-webex-mcp-personal-meeting"
+      "mcp-proxy-webex-mcp-personal-messaging"
+      "mcp-proxy-webex-mcp-work-meeting"
+      "mcp-proxy-webex-mcp-work-messaging"
+    ]
+    && builtins.attrNames cfg.ai.mcp-oauth.services
+    == [
+      "mcp-oauth-webex-mcp-personal"
+      "mcp-oauth-webex-mcp-work"
+    ]
+    && lib.all (client:
+      map (name: client.${name}.url) webexServers
+      == [
+        "http://127.0.0.1:19592/"
+        "http://127.0.0.1:19593/"
+        "http://127.0.0.1:19594/"
+        "http://127.0.0.1:19595/"
+      ])
+    clients
+    && map (name: cfg.ai.mcpServers.${name}.proxy.oauthAccount) webexServers
+    == [
+      "webex-mcp-personal"
+      "webex-mcp-personal"
+      "webex-mcp-work"
+      "webex-mcp-work"
+    ]
+    && map (name: cfg.ai.mcpServers.${name}.url) webexServers
+    == [
+      "https://mcp.webexapis.com/mcp/webex-meeting"
+      "https://mcp.webexapis.com/mcp/webex-messaging"
+      "https://mcp.webexapis.com/mcp/webex-meeting"
+      "https://mcp.webexapis.com/mcp/webex-messaging"
+    ]
+    && lib.all (instance: let
+      account = accounts."webex-mcp-${instance}";
+    in
+      account.clientId
+      == redact.file "/run/secrets/${instance}-id"
+      && account.clientSecret == redact.file "/run/secrets/${instance}-secret"
+      && account.login
+      == {
+        inherit instance;
+        owner = "webex-mcp";
+        profile = "webex";
+      }
+      && account.provider
+      == {
+        authorizeUrl = "https://webexapis.com/v1/authorize";
+        extraScopes = ["spark:kms"];
+        loginLifetimeDays = 90;
+        tokenUrl = "https://webexapis.com/v1/access_token";
+      }
+      && account.scopes
+      == [
+        "meeting:participants_read"
+        "meeting:schedules_read"
+        "meeting:summaries_read"
+        "meeting:transcripts_read"
+        "spark:mcp"
+        "spark:memberships_read"
+        "spark:messages_read"
+        "spark:people_read"
+        "spark:rooms_read"
+      ]) ["personal" "work"]
+    && lib.all (port: builtins.hasAttr port cfg.ai.claims.port) ["19592" "19593" "19594" "19595"]
+    && lib.all (entry: entry.assertion) cfg.assertions;
+  webexUnused = backend: let
+    cfg = (webexResult backend false true).config;
+    ownerOnly = (webexResult backend true false).config;
+    evaluate =
+      if backend == "hm"
+      then evalHm
+      else evalDevenv;
+    disabled = evaluate {ai.webex-mcp.instances.disabled.enable = false;};
+    empty = evaluate {};
+  in
+    # Enabled owner instances must not populate the consumer's root pool.
+    ownerOnly.ai.mcpServers
+    == {}
+    && builtins.attrNames ownerOnly.ai.webex-mcp.mcpServers == webexServers
+    && lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) cfg.ai.services == {}
+    && lib.all (
+      result: let
+        packages =
+          if backend == "hm"
+          then result.config.home.packages
+          else result.config.packages;
+      in
+        result.config.ai.mcpServers
+        == {}
+        && result.config.ai.webex-mcp.mcpServers == {}
+        && result.config.ai.mcp-oauth.accounts == {}
+        && result.config.ai.mcp-oauth.services == {}
+        && !(lib.any (package: builtins.elem package.name ["mcp-oauth" "mcp-oauth-logins"]) packages)
+    ) [empty disabled];
 in {
   checks =
     {
@@ -679,7 +826,8 @@ in {
           codexEntry = (hmCodexSettings result).mcp_servers.shared;
           rendered = builtins.toJSON [claudeEntry codexEntry];
         in
-          builtins.attrNames services
+          lib.all webexShared ["devenv" "hm"]
+          && builtins.attrNames services
           == ["mcp-proxy-shared"]
           && claudeEntry.url == "http://127.0.0.1:9501/"
           && codexEntry.url == "http://127.0.0.1:9501/"
@@ -722,7 +870,8 @@ in {
             };
           };
         in
-          !(result.config.systemd.user.services ? mcp-proxy-unused)
+          lib.all webexUnused ["devenv" "hm"]
+          && !(result.config.systemd.user.services ? mcp-proxy-unused)
           && !(claudeMcpServers "hm" result ? unused)
       );
     }

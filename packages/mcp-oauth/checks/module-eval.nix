@@ -72,11 +72,24 @@
     accepts backend {work = account;}
     && accepts backend {work = account // {redirectUri = "http://[::1]:8080/callback";};}
     && accepts backend {work = cases.devenv.accounts.work;};
+  mountedAccepts = name: extra: let
+    instances = (backend.mounted name extra).config.ai.sample.instances;
+  in
+    (builtins.tryEval (builtins.deepSeq (lib.filterAttrs (_: instance: instance.enable) instances) true)).success;
   checks =
     lib.all (backend: valid backend && !(lib.any (accepts backend) refused)) ["devenv" "hm"]
     && (evaluate "hm" {}).config.ai.mcp-oauth.services == {}
     && lib.all (config: lib.all (entry: entry.assertion) config.assertions) (builtins.attrValues configs)
-    && proxy.checks;
+    && proxy.checks
+    && lib.all (name:
+      mountedAccepts name {}
+      && lib.all (extra: !(mountedAccepts name extra)) [
+        {ai.sample.instances."../bad".enable = false;}
+        {ai.sample.instances.work.oauth.clientSecret = lib.mkForce (redact.file "/run/secrets/work-id");}
+        {ai.sample.instances.work.oauth.scopes = lib.mkForce [];}
+        {ai.sample.instances.work.oauth.redirectUri = "http://localhost:8081/callback";}
+        {ai.sample.instances.work.oauth.provider.name = "override";}
+      ]) ["devenv" "hm"];
   fixture = pkgs.writeText "mcp-oauth-backends.json" (builtins.toJSON {
     backends = lib.mapAttrs (backend: config: let
       name = "mcp-oauth-${cases.${backend}.name}";
@@ -105,6 +118,19 @@
           else {watchPaths = process.watch.paths;};
       })
     configs;
+    cliSource = ../src;
+    mounted = lib.genAttrs ["devenv" "hm"] (name: let
+      cfg = (backend.mounted name {}).config;
+      packages =
+        if name == "hm"
+        then cfg.home.packages
+        else cfg.packages;
+    in {
+      accounts = builtins.attrNames cfg.ai.mcp-oauth.accounts;
+      claims = cfg.ai.mcp-oauth.claims.path;
+      commands = lib.mapAttrs (_: service: service.command) cfg.ai.mcp-oauth.services;
+      logins = map (package: "${package}/bin/sample-login") (lib.filter (package: package.name == "mcp-oauth-logins") packages);
+    });
     proxy = proxy.snapshots;
   });
 in {
