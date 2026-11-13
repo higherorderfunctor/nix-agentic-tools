@@ -3,7 +3,7 @@
 - harness: Claude Code CLI (`claude-code`)
 - pinned version: 2.1.292
 - launcher:
-  `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1 claude -p --no-session-persistence --model haiku hi`
+  `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1 claude -p --model haiku hi`
   against the offline Messages mock
   (`probes/delegates/claude/sysprompt/capture.sh`)
 - capture case: `cache1p-none` (main session, no append, no fixture text in

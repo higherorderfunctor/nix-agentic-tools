@@ -753,7 +753,7 @@
         assert "codex exec resume" in native["resumeCommand"]
         for template in (native["command"], native["resumeCommand"]):
             assert "--output-schema <schema-file>" in template and "> <events-file>" in template
-            assert "--ephemeral" not in template and "--last" not in template
+            assert "--ephemeral" not in template
         # Wrong: direct-builder selector overrides retain an unreachable inherited picker.
         opus_skill = Path(os.environ["opusOnlyDirectSkillPath"]).read_text()
         opus_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", opus_skill)[1])
@@ -1025,8 +1025,12 @@
             ''-c 'web_search="disabled"' ''
             "> <events-file>"
           ]
-          && !(lib.hasInfix "--ephemeral" command)
-          && !(lib.hasInfix "--last" command)) [(lib.last cross).command (lib.last cross).resumeCommand]
+          && !(lib.hasInfix "--ephemeral" command)) [(lib.last cross).command (lib.last cross).resumeCommand]
+        # Wrong: a custom resume template selects the latest session beside its ID.
+        && lib.all (selector:
+          skillFails {
+            ai.programs.delegate-routing.runtimes.claude.techniques."claude -p".pickerCommand.resumeCommand = "claude -p --resume <session-id> ${selector}";
+          }) ["--continue" "--last"]
         && refused [entry entry]
         && refused [(entry // {model = "unknown";})]
         && refused [(entry // {technique = "Workflow";})]

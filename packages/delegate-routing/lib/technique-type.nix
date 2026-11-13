@@ -48,9 +48,12 @@ lib.types.submodule {
             description = "Result file protocol: raw decision JSON or Claude's successful structured_output envelope.";
           };
           resumeCommand = lib.mkOption {
-            type = lib.types.nullOr lib.types.nonEmptyStr;
+            # Latest-session selectors can override the explicit ID in custom templates.
+            type =
+              lib.types.nullOr (lib.types.addCheck lib.types.nonEmptyStr (command:
+                  !(lib.any (selector: lib.hasInfix selector command) ["--continue" "--last"])));
             default = null;
-            description = "Same-session correction template, binding <session-id> and retaining initial model, effort and tool restrictions.";
+            description = "Same-session correction template, binding <session-id> and retaining initial model, effort and tool restrictions; --continue and --last are forbidden.";
           };
           sessionIdSource = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["codex-events" "generated"]);

@@ -275,6 +275,32 @@ class Routing(unittest.TestCase):
                     helper.run_picker(entry | {"command": "true", "resumeCommand": "true"}, payload, SHELL, state)
                 self.assertFalse((Path(directory) / "result.json").exists())
 
+    def test_picker_initial_transport_failure_resumes_with_full_request(self):
+        # Wrong: a failed initial call loses its ID, starts fresh, or resumes
+        # with correction-only text despite having no validator feedback.
+        valid = self.decisions(("writer", "sol", "keep"))
+        for source in ("codex-events", "generated"):
+            with self.subTest(source=source):
+                state = self.picker_state()
+                directory = Path(state["directory"])
+                command = "printf '%s' " + shlex.quote(valid.decode()) + " > <output-file>; cp <prompt-file> " + shlex.quote(str(directory / "retry-prompt")) + "; printf '%s' <session-id> > " + shlex.quote(str(directory / "retry-id"))
+                entry = self.picker_fixture()[0]["pickerEntries"][0] | {
+                    "command": "printf '%s\\n' " + shlex.quote('{"type":"thread.started","thread_id":"exact-thread-id"}') + " > <events-file>; false",
+                    "resumeCommand": command,
+                    "sessionIdSource": source,
+                }
+                payload = {"taskSummary": "original task", "families": [{"role": "writer", "name": "sol"}]}
+                with self.assertRaises(subprocess.CalledProcessError):
+                    helper.run_picker(entry, payload, SHELL, state)
+                original = (directory / "prompt.json").read_bytes()
+                identifier = state["session_id"]
+                if source == "codex-events":
+                    self.assertEqual(identifier, "exact-thread-id")
+                self.assertEqual(helper.run_picker(entry, payload, SHELL, state), valid)
+                self.assertEqual((directory / "retry-prompt").read_bytes(), original)
+                self.assertIn(json.dumps(payload).encode(), original)
+                self.assertEqual((directory / "retry-id").read_text(), identifier)
+
     def test_picker_missing_or_malformed_session_events_use_fresh_repairs(self):
         # Wrong: missing/unusable telemetry selects the latest or stale session.
         for events in (b"", b"broken", b'[]', b'{"type":"thread.started","thread_id":false}', b'{"type":"thread.started","thread_id":"--last"}'):

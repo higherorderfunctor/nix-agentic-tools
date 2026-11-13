@@ -42,7 +42,9 @@ in {
     };
     "claude -p" = {
       command = claudeCommand;
-      # routing-plan-runtime.py: native schema exposes only StructuredOutput; hooks remain disabled.
+      # routing-plan-runtime.py checks StructuredOutput-only tools and disabled hooks
+      # against a fake provider when both CLAUDE_PICKER_COMMAND and
+      # CLAUDE_PICKER_RESUME_COMMAND supply raw CLI templates; otherwise it skips.
       pickerCommand = {
         command = claudePicker "--session-id <session-id>";
         outputFormat = "claude-json";

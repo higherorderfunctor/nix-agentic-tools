@@ -502,10 +502,12 @@ Claude receives a generated UUID; Codex captures the `thread.started` ID from
 JSONL events while reading its answer from the last-message file. A rejected
 reply resumes that exact session with only “Correct your previous submission”
 and the exact local validator error as JSON-string data. JSON syntax diagnostics
-include position, never the rejected document. Missing IDs or non-resumable
-commands use the full original request plus the latest error. Repairs retain
-model, effort, task/pair set, working directory and tool restrictions. Each call
-clears result/event files so stale output cannot be accepted.
+include position, never the rejected document. A transport failure with a known
+session ID resumes that session and sends again the full original request when
+no validator error is available. Missing IDs or non-resumable commands use the
+full original request plus the latest error. Repairs retain model, effort,
+task/pair set, working directory and tool restrictions. Each call clears
+result/event files so stale output cannot be accepted.
 
 Both native templates retain normal CLI session logging: neither
 `--no-session-persistence` nor `--ephemeral` is passed. Scratch is deleted after
