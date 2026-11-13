@@ -1,1 +1,1 @@
-{imports = [./module-eval.nix];}
+{imports = [./file-headers.nix ./module-eval.nix];}

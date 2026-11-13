@@ -27,6 +27,32 @@
 {lib, ...}: let
   redact = import ../../redact {inherit lib;};
   httpValue = redact.types.maybeRedacted lib.types.str;
+  # The header list is pure; schema evaluation needs no package set.
+  inherit
+    (import ../caddy.nix {
+      inherit lib;
+      pkgs = null;
+    })
+    strippedHopHeaders
+    ;
+  fileHeader = lib.types.submodule {
+    options = {
+      file = lib.mkOption {
+        type =
+          lib.types.addCheck (lib.types.strMatching "/[A-Za-z0-9_./-]+")
+          (path:
+            !(builtins.hasContext path)
+            && !(lib.hasPrefix builtins.storeDir path)
+            && !lib.any (segment: builtins.elem segment ["" "." ".."]) (lib.tail (lib.splitString "/" path)));
+        description = "Absolute runtime file path outside the Nix store, without string context or empty/dot/dot-dot segments; only letters, digits, underscore, dot, slash and hyphen are accepted.";
+      };
+      prefix = lib.mkOption {
+        type = lib.types.strMatching "[A-Za-z0-9._~+ /:=@-]*";
+        default = "";
+        description = "Public literal prefix, such as `Bearer `; restricted to letters, digits, spaces and ._~+/ :=@- punctuation.";
+      };
+    };
+  };
 in {
   options = {
     type = lib.mkOption {
@@ -225,9 +251,10 @@ in {
               credential-injecting reverse proxy instead of handing the
               credentials to the client.
 
-              `url` and credential values under `proxy.headers` move into
-              the proxy daemon's ENVIRONMENT, read from their secret files
-              when the daemon starts. Top-level `headers` remain client
+              `url` and redact-reference values under `proxy.headers` move
+              into the proxy daemon's ENVIRONMENT, read from their secret files
+              when the daemon starts. File headers are read per request;
+              replacing their files needs no restart. Top-level `headers` remain client
               headers and must be credential-free. The client receives a
               credential-free `http://<host>:<port>/` entry, so it no longer
               matters which binary launches it — the per-binary scope
@@ -273,7 +300,7 @@ in {
                 upstream credential to that whole network. Anyone who can
                 reach the port can make authenticated requests.
               - Even on loopback it is reachable by ANY LOCAL USER, not
-                just by you. The value is in the daemon's environment,
+                just by you. Redact values are in the daemon's environment,
                 which same-uid processes can read, and any local user who
                 can reach the port can use the credential indirectly.
                 Caddy's autosave is disabled, so it no longer persists the
@@ -290,10 +317,26 @@ in {
             '';
           };
           headers = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.nullOr httpValue);
+            type = lib.types.attrsOf (lib.types.nullOr (redact.types.maybeRedacted (lib.types.either lib.types.str fileHeader)));
+            # Inspect merged headers: separate modules can introduce case collisions.
+            apply = headers:
+              if
+                lib.all (name: let
+                  value = headers.${name};
+                  lower = lib.toLower name;
+                in
+                  !(builtins.isAttrs value && value ? file)
+                  || (
+                    builtins.match "[A-Za-z0-9][A-Za-z0-9-]*" name
+                    != null
+                    && !(builtins.elem lower (map lib.toLower strippedHopHeaders))
+                    && builtins.length (builtins.filter (other: lib.toLower other == lower) (builtins.attrNames headers)) == 1
+                  )) (builtins.attrNames headers)
+              then headers
+              else throw "proxy.headers: file header names must be safe, unique ignoring case and not stripped hop headers";
             default = {};
             description = ''
-              Headers the PROXY DAEMON applies on the way upstream. Three
+              Headers the PROXY DAEMON applies on the way upstream. Four
               value shapes:
 
               - a redact reference — resolved when the daemon starts.
@@ -306,6 +349,14 @@ in {
                 daemon's environment while parsing its config. The
                 distinction matters: the rendered header line is public,
                 the value it resolves to is not.
+              - `{ file = "/run/credentials/token"; prefix = "Bearer "; }` —
+                read once per request, with one terminal LF/CRLF stripped.
+                Prefix defaults to empty. File contents must match
+                `[A-Za-z0-9._~+/-]+=*` and be nonempty; missing, unreadable,
+                empty or malformed files return local 503 without forwarding.
+                Publish with atomic rename. No restart trigger is registered.
+                File header names accept letters, digits and hyphens, must
+                be unique ignoring case, and cannot name stripped hop headers.
               - a plain string — injected literally.
               - `null` — DELETED, so a header the client sent does not
                 reach the upstream.

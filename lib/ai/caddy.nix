@@ -2,7 +2,7 @@
 #
 # Each piece answers a measured hazard, not a preference; the measurements
 # are recorded in dev/fragments/mcp-secrets/mcp-secrets.md. A Caddyfile
-# built from them holds `{$VAR}` tokens only, so it is safe in the
+# built from them holds secret placeholders, so it is safe in the
 # world-readable store. `lib/ai/mcpProxy.nix` is the first caller, and
 # `checks/mcp-proxy/example.Caddyfile` pins its rendering byte for byte.
 {
