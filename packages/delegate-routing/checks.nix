@@ -8,6 +8,16 @@
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
   checks = {
+    # Synthetic properties reject clipped pace, gate pacing and conditional weights.
+    delegate-routing-allowance-ranking =
+      pkgs.runCommand "delegate-routing-allowance-ranking" {
+        nativeBuildInputs = [pkgs.python3];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 -I -B ${./checks/pacing}/test_allowance.py ${./scripts}
+        touch "$out"
+      '';
     # Validates every case and renders its fixture and launch plan with no
     # harness on PATH and no login: the suite's --dry-run, nothing launched.
     delegate-routing-eval-structure =
