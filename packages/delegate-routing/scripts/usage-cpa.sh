@@ -15,7 +15,7 @@ declare -rA delegate_usage_api_keys=(
 # All usage techniques and the runtime fixtures read this common schema.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson clock "${DELEGATE_USAGE_NOW:-null}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -46,13 +46,52 @@ usage_project() {
     def named_window($seconds; $scope; $used; $reset; $status):
       {key: (($seconds | duration) + (if $scope == null then "" else ":" + $scope end)),
        value: window($seconds; $used; $reset; $status)};
-    def bonuses($count):
-      if .credits != null then
-        [.credits[] | {kind: "rate_limit_reset", count: 1,
-                        expiresAt: ((.expires_at // .expiresAt) | if . == null then null else utc end)}]
-      elif ($count // 0) > 0 then
-        [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
-      else [] end;
+    # Applicability is a cap, never an attribution to an expiring inventory lot.
+    def codex_resets($summary):
+      def unavailable($reason): {bonuses: [], missingExtras: [$reason]};
+      def supported:
+        if has("is_supported_by_plan") then .is_supported_by_plan else .isSupportedByPlan end;
+      def expiry:
+        if type == "number" then utc else
+          . as $raw
+          | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") as $parts
+          | ($raw | utc | rtrimstr("Z")) + ($parts.fraction // "") + "Z"
+        end;
+      def valid_expiry:
+        if type == "number" then isfinite and floor == . and . >= 0 and . <= 253402300799
+        elif type != "string" then false
+        elif test("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$") | not then false
+        else .[0:19] + "Z" | . == (fromdateiso8601 | todateiso8601) end;
+      if (.credits | type) != "array" then unavailable("codex-reset-details-unavailable")
+      elif any(.credits[]; type != "object") then unavailable("codex-reset-details-unavailable")
+      elif any(.credits[]; (.expires_at // .expiresAt) | valid_expiry | not) then unavailable("codex-reset-details-unavailable") else
+        # Normalize all expiry values before selection; bad details never become
+        # an inventory-count fallback. Keep sub-second precision in emitted lots.
+        [.credits[] | . + {expiry: ((.expires_at // .expiresAt) | expiry)}] as $rows
+        | ($summary.applicable_available_count // $summary.applicableAvailableCount) as $count
+        | if ($count | type) != "number" or ($count | isfinite | not)
+            or $count < 0 or ($count | floor) != $count then
+            unavailable("codex-reset-applicability-unknown")
+          elif $count == 0 then {bonuses: [], missingExtras: []}
+          elif any($rows[]; (.status | type) != "string" or
+              (.status == "available" and (supported | type) != "boolean")) then
+            unavailable("codex-reset-eligibility-unknown")
+          else
+            [$rows[] | select(.status == "available")
+              | select(supported == true)
+              | . + {epoch: (.expiry | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?Z$")
+                  | (.date + "Z" | fromdateiso8601) + ("0" + (.fraction // "") | tonumber))}
+              | select(.epoch > ($clock // now))] as $eligible
+            # A Codex reset restores the 5-hour limit, the weekly limit, or both, so it
+            # covers the whole pool (scope null). The API reports only how many
+            # resets are applicable; count that many, earliest expiry first.
+            | if ($eligible | length) < $count then unavailable("codex-reset-eligibility-unknown") else
+              {bonuses: [$eligible | sort_by(.epoch) | .[:$count][]
+                  | {kind: "rate_limit_reset", remaining: 1, unit: "resets", funding: "unknown",
+                   scope: null, usable: true, expiresAt: .expiry}],
+               missingExtras: []} end
+          end
+      end;
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -86,7 +125,9 @@ usage_project() {
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
         | ($limits.credits // .credits) as $credits
         | (.rate_limit_reset_credits // .rateLimitResetCredits) as $reset
-        | $base + {
+        | (try (($resets // $reset) | codex_resets($reset))
+            catch {bonuses: [], missingExtras: ["codex-reset-details-unavailable"]}) as $extras
+        | $base + $extras + {
             account: ($base.account + {plan: (.plan_type // null)}),
             windows: ([($limits.primary_window // $limits.primary), ($limits.secondary_window // $limits.secondary)]
               | map(select(. != null)
@@ -94,9 +135,7 @@ usage_project() {
                       (.used_percent // .usedPercent); (.reset_at // .resetsAt); null))
               | if . == [] then error("codex windows") else from_entries end),
             balances: [$credits | select(.has_credits // .hasCredits // false)
-              | {kind: "credits", remaining: (.balance | tonumber), unit: "credits", expiresAt: null}],
-            bonuses: (try (($resets // $reset) | bonuses($reset.available_count // $reset.availableCount))
-              catch (null | bonuses($reset.available_count // $reset.availableCount)))
+              | {kind: "credits", funding: "unknown", scope: null, remaining: (.balance | tonumber), unit: "credits", expiresAt: null}]
           }
       elif $vendor == "cloudflare" then
         $base + {windows: {daily: window(86400; .percent; .reset; null)}}
@@ -257,7 +296,7 @@ except (AttributeError, TypeError, ValueError):
     resets=null
     if [[ $vendor == codex ]]; then
       reset_request=$(jq -c '.url = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"' <<<"$request")
-      # Expiry details are optional; the usage response still supplies the count.
+      # Missing lot details preserve usage but cannot establish eligible resets.
       if envelope=$(usage_cpa_request POST api-call "$reset_request" 2>/dev/null); then
         resets=$(jq -ce '
           select(.status_code >= 200 and .status_code < 300) | .body | fromjson
