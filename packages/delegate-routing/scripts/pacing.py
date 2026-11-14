@@ -23,35 +23,47 @@ def weights(policy, pools):
 
 def allowance(limits, resolved, now):
     # Consume normalized validity and enforcement; never repair or advance observations.
-    paces = []
-    unknown = not resolved
-    blocked = False
+    paces, releases, stale, unknown = [], [], [], []
     for limit in limits:
-        remaining = limit["remaining"]
+        identifier, remaining = limit["id"], limit["remaining"]
+        reset = limit["naturalResetAt"]
+        valid = limit["status"] == "valid" and limit["enforced"] is True
+        if limit["status"] == "stale":
+            stale.append(identifier)
         if remaining == 0:
-            # Independent measured zero survives unknown scope or malformed timing.
-            blocked = True
+            # Independent zero survives bad timing, but cannot promise a return.
+            release = limit["gateOpensAt"] if limit["role"] == "gate" else reset
+            releases.append(release if valid and release is not None and release > now else None)
+            if not valid or releases[-1] is None:
+                unknown.append(identifier)
             if limit["role"] == "pace":
-                paces.append(0)
+                paces.append((0, identifier))
             continue
-        if limit["status"] != "valid" or limit["enforced"] is not True or remaining is None:
-            unknown = True
+        if not valid or remaining is None:
+            unknown.append(identifier)
             continue
         if limit["role"] == "gate":
             # A positive valid rolling gate is open, even without a reset timestamp.
             continue
-        reset = limit["naturalResetAt"]
         if reset is None or reset <= now:
-            unknown = True
+            unknown.append(identifier)
             continue
         pace = remaining / limit["capacity"] * limit["windowSeconds"] / (reset - now)
         if not math.isfinite(pace):
-            unknown = True
+            unknown.append(identifier)
             continue
-        paces.append(pace)
-    pace = 0 if 0 in paces else None if unknown or not paces else min(paces)
-    ready = pace is not None and pace > 0 and not blocked and not unknown
-    return pace, ready
+        paces.append((pace, identifier))
+    binding = min(paces) if paces else None
+    uncertain = not resolved or bool(unknown)
+    pace = 0 if binding and binding[0] == 0 else None if uncertain or not binding else binding[0]
+    ready = pace is not None and pace > 0 and not releases and not uncertain
+    # All blockers must have known future releases; never advance an expired reset.
+    available = now if ready else (
+        max(releases) if releases and None not in releases and not uncertain and pace is not None else None
+    )
+    return dict(available_at=available, binding_limit=binding[1] if binding else None,
+                evidence=dict(scope_resolved=resolved, stale_limits=sorted(stale), unknown_limits=sorted(unknown)),
+                pace=pace, state="ready" if ready else "out")
 
 
 def rank(snapshot, policy=None):
@@ -65,14 +77,14 @@ def rank(snapshot, policy=None):
         ]
         applicable = [item for item in applicable if item[2]]
         if not applicable:
-            entries.append({**offer, "pace": None, "pool": None, "score": 0, "state": "out"})
+            entries.append({**offer, **allowance([], False, snapshot["asOf"]), "pool": None, "score": 0})
         for pool, evidence, limits in applicable:
-            pace, ready = allowance(limits, evidence["scopeResolved"], snapshot["asOf"])
-            score = pace * pool_weights.get(pool, 1) if ready else 0
+            result = allowance(limits, evidence["scopeResolved"], snapshot["asOf"])
+            score = result["pace"] * pool_weights.get(pool, 1) if result["state"] == "ready" else 0
             if not math.isfinite(score):
                 raise ValueError("invalid-weighted-score")
-            entries.append({**offer, "pace": pace, "pool": pool, "score": score,
-                            "state": "ready" if ready else "out"})
+            entries.append({**offer, **result, "pool": pool, "score": score})
     entries.sort(key=lambda entry: (-entry["score"], entry["state"] != "ready",
-                                  entry["pool"] or "", entry["model"], entry["id"], entry["maker"] or ""))
+                                  entry["pool"] or "", entry["model"], entry["id"],
+                                  entry["maker"] is not None, entry["maker"] or ""))
     return {**snapshot, "entries": entries}
