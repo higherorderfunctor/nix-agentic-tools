@@ -48,52 +48,48 @@ usage_project() {
     def named_window($seconds; $scope; $used; $reset; $status):
       {key: (($seconds | duration) + (if $scope == null then "" else ":" + $scope end)),
        value: window($seconds; $used; $reset; $status)};
-    # Applicability is a cap, never an attribution to an expiring inventory lot.
-    def codex_resets($summary):
+    # Applicable count bounds selection; too few eligible lots cannot establish applicability.
+    def codex_reset_extras($summary):
       def unavailable($reason): {bonuses: [], missingExtras: [$reason]};
-      def supported:
-        if has("is_supported_by_plan") then .is_supported_by_plan else .isSupportedByPlan end;
-      def expiry:
-        if type == "number" then utc else
-          . as $raw
-          | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") as $parts
-          | ($raw | utc | rtrimstr("Z")) + ($parts.fraction // "") + "Z"
+      # jq cannot parse fractions/offsets and silently normalizes invalid dates.
+      # Capture once, round-trip the calendar date, and retain the original fraction.
+      def lot_expiry:
+        if type == "number" then
+          if isfinite and floor == . and . >= 0 and . <= 253402300799
+          then {epoch: ., iso: todateiso8601} else error("reset expiry") end
+        elif type == "string" then
+          (capture("^(?<date>[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9])(?<fraction>\\.[0-9]+)?(?<zone>Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$") // error("reset expiry")) as $parts
+          | ($parts.date + "Z" | fromdateiso8601) as $local_epoch
+          | if ($local_epoch | todateiso8601) != ($parts.date + "Z") then error("reset date") else
+              ($local_epoch - (if $parts.zone == "Z" then 0 else
+                (($parts.zone[1:3] | tonumber) * 3600 + ($parts.zone[4:6] | tonumber) * 60)
+                * (if $parts.zone[0:1] == "+" then 1 else -1 end) end)) as $utc_epoch
+              | {epoch: ($utc_epoch + ("0" + ($parts.fraction // "") | tonumber)),
+                 iso: (($utc_epoch | todateiso8601 | rtrimstr("Z")) + ($parts.fraction // "") + "Z")}
+            end
+        else error("reset expiry") end;
+      # Validate the entire detail array before applicability can suppress bad lots.
+      (if (.credits | type) != "array" then error("reset credits") else .credits end
+        | map(if type != "object" then error("reset lot") else
+            . + {expiry: ((.expires_at // .expiresAt) | lot_expiry)} end)) as $rows
+      | $summary.applicable_available_count as $applicable_count
+      | if ($applicable_count | type) != "number" or ($applicable_count | isfinite | not)
+          or $applicable_count < 0 or ($applicable_count | floor) != $applicable_count then
+          unavailable("codex-reset-applicability-unknown")
+        elif $applicable_count == 0 then {bonuses: [], missingExtras: []}
+        elif any($rows[]; (.status | type) != "string" or
+            (.status == "available" and (.is_supported_by_plan | type) != "boolean")) then
+          unavailable("codex-reset-eligibility-unknown")
+        else
+          [$rows[] | select(.status == "available" and .is_supported_by_plan == true)
+            | select(.expiry.epoch > now)] as $eligible
+          # Resets cover the 5-hour limit, the weekly limit, or both: scope is null.
+          | if ($eligible | length) < $applicable_count then unavailable("codex-reset-eligibility-unknown") else
+            {bonuses: [$eligible | sort_by(.expiry.epoch) | .[:$applicable_count][]
+                | {kind: "rate_limit_reset", remaining: 1, unit: "resets", funding: "unknown",
+                 scope: null, usable: true, expiresAt: .expiry.iso}],
+             missingExtras: []} end
         end;
-      def valid_expiry:
-        if type == "number" then isfinite and floor == . and . >= 0 and . <= 253402300799
-        elif type != "string" then false
-        elif test("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$") | not then false
-        else .[0:19] + "Z" | . == (fromdateiso8601 | todateiso8601) end;
-      if (.credits | type) != "array" then unavailable("codex-reset-details-unavailable")
-      elif any(.credits[]; type != "object") then unavailable("codex-reset-details-unavailable")
-      elif any(.credits[]; (.expires_at // .expiresAt) | valid_expiry | not) then unavailable("codex-reset-details-unavailable") else
-        # Normalize all expiry values before selection; bad details never become
-        # an inventory-count fallback. Keep sub-second precision in emitted lots.
-        [.credits[] | . + {expiry: ((.expires_at // .expiresAt) | expiry)}] as $rows
-        | ($summary.applicable_available_count // $summary.applicableAvailableCount) as $count
-        | if ($count | type) != "number" or ($count | isfinite | not)
-            or $count < 0 or ($count | floor) != $count then
-            unavailable("codex-reset-applicability-unknown")
-          elif $count == 0 then {bonuses: [], missingExtras: []}
-          elif any($rows[]; (.status | type) != "string" or
-              (.status == "available" and (supported | type) != "boolean")) then
-            unavailable("codex-reset-eligibility-unknown")
-          else
-            [$rows[] | select(.status == "available")
-              | select(supported == true)
-              | . + {epoch: (.expiry | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?Z$")
-                  | (.date + "Z" | fromdateiso8601) + ("0" + (.fraction // "") | tonumber))}
-              | select(.epoch > now)] as $eligible
-            # A Codex reset restores the 5-hour limit, the weekly limit, or both, so it
-            # covers the whole pool (scope null). The API reports only how many
-            # resets are applicable; count that many, earliest expiry first.
-            | if ($eligible | length) < $count then unavailable("codex-reset-eligibility-unknown") else
-              {bonuses: [$eligible | sort_by(.epoch) | .[:$count][]
-                  | {kind: "rate_limit_reset", remaining: 1, unit: "resets", funding: "unknown",
-                   scope: null, usable: true, expiresAt: .expiry}],
-               missingExtras: []} end
-          end
-      end;
     def prepaid_balances:
       if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
           then error("claude prepaid tranches") else . end
@@ -163,7 +159,7 @@ usage_project() {
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
         | ($limits.credits // .credits) as $credits
         | (.rate_limit_reset_credits // .rateLimitResetCredits) as $reset
-        | (try (($resets // $reset) | codex_resets($reset))
+        | (try (($resets // $reset) | codex_reset_extras($reset))
             catch {bonuses: [], missingExtras: ["codex-reset-details-unavailable"]}) as $extras
         | $base + $extras + {
             account: ($base.account + {plan: (.plan_type // null)}),
