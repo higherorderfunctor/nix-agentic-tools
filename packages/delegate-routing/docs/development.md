@@ -626,7 +626,7 @@ all-idle pools use pace 1.0 and full buffer. Scoped `status` is ignored because
 inactive has unknown meaning. Ties sort non-session pools first, then
 family/runtime deterministically.
 
-See [offline allowance inspection](pacing.md) for saved captures with explicit
+See [saved allowance observations](pacing.md) for saved captures with explicit
 model scopes.
 
 JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;

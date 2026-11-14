@@ -1,216 +1,203 @@
-"""Offline Reader capture boundary; amounts retain their declared native units."""
+"""Normalize saved Reader captures for the owner's offline boundary tests.
 
-import datetime as dt
-import json
+Pydantic parses each independent component; typed observations retain allowance
+when timing or optional metadata fails. No Reader or capture command is run.
+"""
+
 import math
-from dataclasses import dataclass
+from typing import Annotated, Any, Literal
+
+from pydantic import (
+    AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr,
+    StrictInt, StrictStr, StringConstraints, TypeAdapter, ValidationError, model_validator,
+)
+from pydantic_core import from_json
+from pydantic.types import OnErrorOmit
+
+Nonempty = Annotated[str, StringConstraints(strict=True, min_length=1)]
+Amount = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
+Positive = Annotated[Amount, Field(gt=0)]
+Percent = Annotated[Amount, Field(le=100)]
+IsoText = Annotated[str, StringConstraints(strict=True, pattern=r"^\d{4}-\d{2}-\d{2}T")]
+Timestamp = Annotated[AwareDatetime, BeforeValidator(TypeAdapter(IsoText).validate_python)]
 
 
-def number(value):
-    # Refuse booleans, negative quantities and non-finite numbers.
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-        raise ValueError("invalid-number")
-    return value
+class Boundary(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    _invalid: set[str] = PrivateAttr(default_factory=set)
+
+    @model_validator(mode="after")
+    def restore_omitted_defaults(self):
+        # OnErrorOmit isolates component failures; retain their names for diagnostics.
+        self._invalid = set(type(self).model_fields) - self.__dict__.keys()
+        for name in self._invalid:
+            object.__setattr__(self, name, type(self).model_fields[name].default)
+        return self
 
 
-def utc(value):
-    # Normalize UTC timestamps and integer seconds without exposing parser text.
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if not isinstance(value, str):
-        raise ValueError("invalid-time")
-    try:
-        if value.isascii() and value.isdigit():
-            return int(value)
-        instant = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if instant.utcoffset() != dt.timedelta(0):
-            raise ValueError("invalid-time")
-        return int(instant.timestamp())
-    except (OverflowError, ValueError):
-        raise ValueError("invalid-time") from None
+class LimitSpec(Boundary):
+    model_config = ConfigDict(extra="forbid")
+    capacity: Positive
+    models: Annotated[list[Nonempty], Field(min_length=1)]
+    role: Literal["gate", "pace"]
+    unit: Literal["percentagePoint", "USD"]
+    window: Nonempty
 
 
-@dataclass(frozen=True)
-class LimitSpec:
-    # Hold a registered limit with explicit model scope and native capacity.
-    capacity: float
-    models: list[str]
-    role: str
-    unit: str
-    window: str
+class Registration(Boundary):
+    limits: dict[str, LimitSpec]
+    readerPool: Nonempty
 
-    @classmethod
-    def parse(cls, value):
-        if not isinstance(value, dict) or set(value) != {"capacity", "models", "role", "unit", "window"}:
-            raise ValueError("invalid-limit-spec")
-        result = cls(**value)
-        number(result.capacity)
-        if result.capacity == 0 or result.unit not in {"percentagePoint", "USD"} or result.role not in {"gate", "pace"}:
-            raise ValueError("invalid-limit-spec")
-        if (
-            not isinstance(result.window, str) or not result.window
-            or not isinstance(result.models, list) or not result.models
-            or any(not isinstance(m, str) or not m for m in result.models)
-        ):
-            raise ValueError("invalid-limit-spec")
-        return result
+    @model_validator(mode="after")
+    def unique_windows(self):
+        if len({spec.window for spec in self.limits.values()}) != len(self.limits):
+            raise ValueError("duplicate-window-registration")
+        return self
 
 
-def bounded_stdout(raw):
-    # Refuse captured JSON deeper than 64 containers before recursive decoding.
-    if isinstance(raw, (bytes, bytearray)):
-        raw = raw.decode(json.detect_encoding(raw), "surrogatepass")  # cspell:ignore surrogatepass
-    if not isinstance(raw, str):
-        raise ValueError("invalid-json")
-    depth = 0
-    quoted = escaped = False
-    for character in raw:
-        if quoted:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                quoted = False
-        elif character == '"':
-            quoted = True
-        elif character in "[{":
-            depth += 1
-            if depth > 64:
-                raise ValueError("invalid-json")
-        elif character in "]}":
-            depth -= 1
-    return raw
+class Route(Boundary):
+    model_config = ConfigDict(extra="forbid")
+    id: Nonempty
+    maker: StrictStr | None
+    model: Nonempty
 
 
-def stdout_document(capture):
-    # Decode captured stdout when supplied, refusing malformed JSON safely.
-    document = capture.get("data")
-    if "stdout" in capture:
-        try:
-            document = json.loads(bounded_stdout(capture["stdout"]))
-        except (RecursionError, TypeError, ValueError):
-            raise ValueError("invalid-json") from None
-    return document
+class Snapshot(Boundary):
+    pools: dict[str, Registration]
+    # Capture failures belong to one pool, so each payload is parsed separately.
+    readers: dict[str, Any]
+    routes: list[Route]
+    runtime: Nonempty
+
+    @model_validator(mode="after")
+    def registered_models_exist(self):
+        models = {route.id for route in self.routes}
+        if any(set(spec.models) - models for pool in self.pools.values() for spec in pool.limits.values()):
+            raise ValueError("unknown-model")
+        return self
 
 
-class Invalid(ValueError):
-    """Only locally assigned reason codes cross the diagnostic boundary."""
+class Account(Boundary):
+    auth_index: StrictStr | None
+    name: StrictStr | None
+    plan: StrictStr | None
 
 
-def envelope(capture):
-    # Refuse envelopes missing account identity, pool identity or a window map.
-    document = stdout_document(capture)
-    if not isinstance(document, dict) or not isinstance(document.get("account"), dict):
-        raise Invalid("invalid-envelope")
-    account = document["account"]
-    if any(k not in account or (account[k] is not None and not isinstance(account[k], str))
-           for k in ("auth_index", "name", "plan")):
-        raise Invalid("invalid-account")
-    if (not isinstance(document.get("pool"), str) or not document["pool"].strip()
-            or not isinstance(document.get("windows"), dict)):
-        raise Invalid("invalid-envelope")
-    return document
+class Window(Boundary):
+    remainingPercent: OnErrorOmit[Percent] = None
+    resetsAt: OnErrorOmit[Timestamp | None] = None
+    status: OnErrorOmit[StrictStr | None] = None
+    usedPercent: OnErrorOmit[Percent] = None
+    windowSeconds: OnErrorOmit[Positive] = None
+
+    @model_validator(mode="after")
+    def consistent_quantities(self):
+        if (self.remainingPercent is None or self.usedPercent is None
+                or not math.isclose(self.remainingPercent + self.usedPercent, 100)):
+            self.remainingPercent = self.usedPercent = None
+        return self
 
 
-def count(value):
-    # Bonus counts are whole nonnegative quantities.
-    if type(value) is not int:
-        raise ValueError("invalid-count")
-    return number(value)
+class Balance(Boundary):
+    expiresAt: Timestamp | None
+    kind: Literal["credits", "extra_usage"]
+    remaining: Amount
+    unit: Literal["credits", "USD"]
+
+    @model_validator(mode="after")
+    def kind_matches_unit(self):
+        if self.unit != {"credits": "credits", "extra_usage": "USD"}[self.kind]:
+            raise ValueError("balance-unit")
+        return self
 
 
-# Each extras array declares its identity fields, accepted identities and quantity parser.
-EXTRAS = {
-    "balances": (("kind", "unit"), {("credits", "credits"), ("extra_usage", "USD")}, "remaining", number),
-    "bonuses": (("kind",), {("promo_credits",), ("rate_limit_reset",)}, "count", count),
-}
+class Bonus(Boundary):
+    count: Annotated[int, Field(strict=True, ge=0)]
+    expiresAt: Timestamp | None
+    kind: Literal["promo_credits", "rate_limit_reset"]
 
 
-def metadata(document, diagnostic):
-    # Extras are inspection facts, not wallet balances or redemption rights.
+class Envelope(Boundary):
+    account: Account
+    balances: OnErrorOmit[list[Any]] = None
+    bonuses: OnErrorOmit[list[Any]] = None
+    pool: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
+    windows: dict[str, Any]
+
+
+class Capture(Boundary):
+    # Payload parsing follows exit status; failed commands need no usable stdout.
+    data: Any = None
+    exit: OnErrorOmit[StrictInt] = None
+    finishedAt: OnErrorOmit[Timestamp] = None
+    stdout: Any = None
+
+
+def metadata(document: Envelope | None, diagnostic):
     result = {}
-    for field, (keys, identities, quantity, parse) in EXTRAS.items():
-        items = document.get(field)
-        result[field] = None
-        if field not in document:
+    for field, model in (("balances", Balance), ("bonuses", Bonus)):
+        items = getattr(document, field) if document else None
+        result[field] = None if items is None else []
+        if document and field not in document.model_fields_set and field not in document._invalid:
             continue
-        if not isinstance(items, list):
+        if document and items is None:
             diagnostic("invalid-extras", component=field)
-            continue
-        result[field] = []
-        for item in items:
+        for item in items or []:
             try:
-                if tuple(item[key] for key in keys) not in identities:
-                    raise ValueError
-                clean = {key: item[key] for key in keys}
-                clean[quantity] = parse(item[quantity])
-                clean["expiresAt"] = None if item["expiresAt"] is None else utc(item["expiresAt"])
+                clean = model.model_validate(item).model_dump()
+                clean["expiresAt"] = int(clean["expiresAt"].timestamp()) if clean["expiresAt"] else None
                 result[field].append(clean)
-            except (KeyError, TypeError, ValueError, OverflowError):
+            except ValidationError:
                 diagnostic("invalid-extras", component=field)
     return result
 
 
-# Known Reader statuses establish enforcement; other strings remain inspection facts.
 ENFORCEMENT = dict.fromkeys(("active", "critical", "estimated", "normal", "ok", "warning"), True)
 
 
-def window_observation(identifier, spec, window, observed, now, diagnostic):
-    # Preserve measured quantities while validating timing and enforcement independently.
+def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int | None, now: int, diagnostic):
     result = dict(id=identifier, capacity=spec.capacity, unit=spec.unit,
                   role=spec.role, models=spec.models, remaining=None, used=None,
                   windowSeconds=None, naturalResetAt=None, enforced=None,
                   gateOpensAt=None, observedAt=observed, status="missing", readerStatus=None)
-    if window is None:
+    if raw is None:
         diagnostic("missing-window")
         return result
-    if not isinstance(window, dict):
+    try:
+        window = Window.model_validate(raw)
+    except ValidationError:
         diagnostic("invalid-window")
         result["status"] = "invalid"
         return result
     invalid = observed is None
-    # Quantities survive independently invalid timing, including measured zero.
-    try:
-        remaining, used = number(window["remainingPercent"]), number(window["usedPercent"])
-        if remaining > 100 or used > 100 or not math.isclose(remaining + used, 100):
-            raise ValueError
-        result.update(remaining=spec.capacity * (remaining / 100), used=spec.capacity * (used / 100))
-    except (KeyError, TypeError, ValueError, OverflowError):
+    if window.remainingPercent is None:
         diagnostic("invalid-quantity")
         invalid = True
-    try:
-        seconds = number(window["windowSeconds"])
-        if not seconds:
-            raise ValueError
-        result["windowSeconds"] = seconds
-    except (KeyError, TypeError, ValueError, OverflowError):
+    else:
+        result.update(remaining=spec.capacity * (window.remainingPercent / 100),
+                      used=spec.capacity * (window.usedPercent / 100))
+    result["windowSeconds"] = window.windowSeconds
+    if window.windowSeconds is None:
         diagnostic("invalid-duration")
         invalid = True
-    try:
-        reset = None if window["resetsAt"] is None else utc(window["resetsAt"])
-        idle = result["used"] == 0 and result["remaining"] == spec.capacity
-        open_gate = spec.role == "gate" and result["remaining"] is not None and result["remaining"] > 0
-        if reset is None and not (idle or open_gate):
-            raise ValueError
-        result["naturalResetAt"] = reset
-        # Reader resets may round up while capture seconds are truncated.
-        if (reset is not None and observed is not None and result["windowSeconds"] is not None
-                and reset - observed > result["windowSeconds"] + 1):
-            raise ValueError
-    except (KeyError, TypeError, ValueError, OverflowError):
+    reset = int(window.resetsAt.timestamp()) if window.resetsAt else None
+    idle = result["used"] == 0 and result["remaining"] == spec.capacity
+    open_gate = spec.role == "gate" and result["remaining"] is not None and result["remaining"] > 0
+    result["naturalResetAt"] = reset
+    # Reader reset rounding and capture truncation can differ by one second.
+    if ("resetsAt" not in window.model_fields_set or (reset is None and not (idle or open_gate))
+            or (reset is not None and observed is not None and window.windowSeconds is not None
+                and reset - observed > window.windowSeconds + 1)):
         diagnostic("invalid-reset")
         invalid = True
-    status = window.get("status")
-    if "status" not in window or (status is not None and not isinstance(status, str)):
+    if "status" not in window.model_fields_set:
         diagnostic("invalid-status")
         invalid = True
     else:
-        result["readerStatus"] = status
-        result["enforced"] = ENFORCEMENT.get(status)
+        result["readerStatus"] = window.status
+        result["enforced"] = ENFORCEMENT.get(window.status)
         if result["enforced"] is None:
             diagnostic("unknown-enforcement")
-    reset = result["naturalResetAt"]
     stale = observed is not None and (now - observed > 3600 or (reset is not None and reset <= now))
     result["status"] = "invalid" if invalid else "stale" if stale else "valid"
     if result["status"] == "valid" and spec.role == "gate" and result["remaining"] == 0:
@@ -218,94 +205,64 @@ def window_observation(identifier, spec, window, observed, now, diagnostic):
     return result
 
 
-def snapshot_routes(snapshot):
-    # Refuse malformed snapshots and routes before inspecting their captures.
-    if (not isinstance(snapshot, dict) or not isinstance(snapshot.get("runtime"), str)
-            or not snapshot["runtime"] or not isinstance(snapshot.get("pools"), dict)
-            or not isinstance(snapshot.get("readers"), dict) or not isinstance(snapshot.get("routes"), list)):
-        raise Invalid("invalid-snapshot")
-    routes = snapshot["routes"]
-    for route in routes:
-        if (not isinstance(route, dict) or set(route) != {"id", "maker", "model"}
-                or any(not isinstance(route[k], str) or not route[k] for k in ("id", "model"))
-                or (route["maker"] is not None and not isinstance(route["maker"], str))):
-            raise Invalid("invalid-route")
-    return routes
-
-
-def limit_specs(registration, models):
-    # Registration scopes name canonical catalog ids, never served spellings.
-    if (not isinstance(registration, dict) or not isinstance(registration.get("limits"), dict)
-            or not isinstance(registration.get("readerPool"), str) or not registration["readerPool"]):
-        raise Invalid("invalid-registration")
-    specs = {key: LimitSpec.parse(value) for key, value in sorted(registration["limits"].items())}
-    if any(set(spec.models) - models for spec in specs.values()):
-        raise Invalid("unknown-model")
-    if len({spec.window for spec in specs.values()}) != len(specs):
-        raise Invalid("duplicate-window-registration")
-    return specs
-
-
-def capture_observation(capture, reader_pool, now, diagnostic):
-    # Isolate capture failures so other captures and reachable routes survive.
-    if capture is None:
+def capture_observation(raw: Any, reader_pool: str, now: int, diagnostic):
+    if raw is None:
         diagnostic("missing-capture")
         return None, None
-    if not isinstance(capture, dict):
+    try:
+        capture = Capture.model_validate(raw)
+    except ValidationError:
         diagnostic("invalid-capture")
         return None, None
-    observed, document = None, None
-    try:
-        observed = utc(capture["finishedAt"])
-        if observed > now:
-            observed = None
-            raise Invalid("future-observation")
-    except Invalid as error:
-        diagnostic(str(error))
-    except (KeyError, TypeError, ValueError, OverflowError):
+    observed = int(capture.finishedAt.timestamp()) if capture.finishedAt else None
+    if observed is None:
         diagnostic("invalid-observation-time")
-    try:
-        exit_status = capture["exit"]
-        if type(exit_status) is not int:
-            raise Invalid("invalid-exit-status")
-        if exit_status != 0:
-            diagnostic("exit-nonzero", exitStatus=exit_status)
-        else:
-            candidate = envelope(capture)
-            if candidate["pool"] != reader_pool:
-                raise Invalid("pool-mismatch")
-            document = candidate
-    except Invalid as error:
-        diagnostic(str(error))
-    except (KeyError, TypeError, ValueError, OverflowError, RecursionError):
-        diagnostic("invalid-json" if "stdout" in capture else "invalid-capture")
-    return observed, document
+    elif observed > now:
+        diagnostic("future-observation")
+        observed = None
+    if capture.exit is None:
+        diagnostic("invalid-exit-status")
+    elif capture.exit != 0:
+        diagnostic("exit-nonzero", exitStatus=capture.exit)
+    else:
+        candidate = capture.data
+        if "stdout" in capture.model_fields_set:
+            try:
+                candidate = from_json(capture.stdout)
+            except (TypeError, ValueError):
+                diagnostic("invalid-json")
+                return observed, None
+        try:
+            document = Envelope.model_validate(candidate)
+        except ValidationError:
+            diagnostic("invalid-envelope")
+            return observed, None
+        if document.pool == reader_pool:
+            return observed, document
+        diagnostic("pool-mismatch")
+    return observed, None
 
 
 def normalize(snapshot, now):
-    """Inspect saved routes and explicitly scoped limits without executing Readers."""
-    now = utc(now)
-    routes = snapshot_routes(snapshot)
-    models = {r["id"] for r in routes}
+    """Return deterministic allowance facts using an explicit ISO 8601 clock."""
+    now = int(TypeAdapter(Timestamp).validate_python(now).timestamp())
+    snapshot = Snapshot.model_validate(snapshot)
     diagnostics, pools = [], {}
-    for pool, registration in sorted(snapshot["pools"].items()):
+    for pool, registration in sorted(snapshot.pools.items()):
         def diagnostic(reason, **details):
             diagnostics.append({"pool": pool, "reason": reason, **details})
 
-        specs = limit_specs(registration, models)
-        observed, document = capture_observation(
-            snapshot["readers"].get(pool), registration["readerPool"], now, diagnostic
-        )
-        windows = document["windows"] if document else {}
+        observed, document = capture_observation(snapshot.readers.get(pool), registration.readerPool, now, diagnostic)
+        windows = document.windows if document else {}
         observations = [
             window_observation(identifier, spec, windows.get(spec.window), observed, now,
                                lambda reason: diagnostic(reason, limit=identifier))
-            for identifier, spec in specs.items()
+            for identifier, spec in sorted(registration.limits.items())
         ]
-        unresolved = len(set(windows) - {spec.window for spec in specs.values()})
+        unresolved = len(set(windows) - {spec.window for spec in registration.limits.values()})
         if unresolved:
             diagnostic("unregistered-window", count=unresolved)
-        pools[pool] = {"limits": observations, "readerMetadata": metadata(document or {}, diagnostic),
+        pools[pool] = {"limits": observations, "readerMetadata": metadata(document, diagnostic),
                        "scopeResolved": document is not None and unresolved == 0}
     return {"asOf": now, "capability": "allowance-preview", "diagnostics": diagnostics,
-            "pools": pools, "routes": routes, "runtime": snapshot["runtime"]}
+            "pools": pools, "routes": [route.model_dump() for route in snapshot.routes], "runtime": snapshot.runtime}

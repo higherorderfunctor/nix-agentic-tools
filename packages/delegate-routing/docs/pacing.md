@@ -1,77 +1,62 @@
-# Offline allowance inspection
+# Saved allowance observations
 
-Run the source CLI with a saved snapshot and an explicit UTC clock:
+`normalize(snapshot, now)` in `scripts/usage-normalize.py` turns saved Reader
+captures into allowance facts. Its current callers are the owner's Python tests.
+Pass a snapshot and an explicit ISO 8601 clock with an offset. The result is
+repeatable: the library reads no clock and runs no commands.
 
-```bash
-python3 -I -B packages/delegate-routing/scripts/pacing-list.py \
-  --snapshot packages/delegate-routing/checks/pacing/reader-snapshots.json \
-  --now 2026-11-12T01:35:00Z
-```
+A snapshot contains `runtime`, `routes`, `pools` and `readers`. Each route has a
+canonical model `id`, nullable `maker` and served `model` spelling. Routes
+survive failed captures unchanged. They do not establish Reader attribution or
+inference availability.
 
-The command emits deterministic `allowance-preview` JSON. It executes no Reader
-or capture command and needs no configured installation. It does not rank
-models, infer prices, recommend resets or promise a versioned list schema. The
-installed routing helper is separate. When `scripts/delegate-routing-plan.py`
-switches to ranking from the normalized usage list, delete its `measure` and
-`window_pace` validators so `scripts/usage-normalize.py` owns Reader-envelope
-validation.
+Each pool declares its expected `readerPool` and a `limits` map. A limit has:
 
-Snapshots contain `runtime`, `routes`, `pools` and `readers`. Routes are the
-existing offer shape `{id, maker, model}`: `id` is the canonical model identity,
-`maker` is nullable, and `model` is the served spelling. They survive missing or
-failed captures unchanged. Offers establish neither Reader attribution nor
-inference availability. Snapshot pool keys identify Reader observations only; no
-CPA credential binding is inferred.
+- `capacity`: a positive finite amount.
+- `models`: a nonempty list of canonical route ids.
+- `role`: `gate` or `pace`, chosen by the registration.
+- `unit`: `percentagePoint` or `USD`.
+- `window`: an exact Reader window key, used once within that pool.
 
-Each pool declares its expected envelope `readerPool` and a `limits` map. Each
-limit declares positive `capacity`, native `unit` (`percentagePoint` or `USD`),
-`role` (`gate` or `pace`), nonempty explicit canonical `models` and an exact
-Reader `window` key. Models must match snapshot route `id`s. No suffix or family
-heuristic expands `7d:fable`; the fixture explicitly maps it to
-`synthetic-fable`, while its weekly limit covers two models. Duplicate window
-registrations are refused. Unknown windows set `scopeResolved: false` and emit a
-safe count; they establish no unrestricted allowance.
+Scope is explicit. A registration for `7d:fable` lists its canonical model ids;
+no suffix or family matching expands them. Unregistered windows produce a safe
+count and set `scopeResolved` to false. They grant no unrestricted allowance.
 
-Collector-shaped captures contain `exit`, integer Unix `finishedAt`, and JSON
-`stdout`; offline inputs also accept a full `data` envelope. Envelopes validate
-`account` (`auth_index`, `name`, `plan`), matching `pool` and `windows`.
-Concatenated accounts are refused. Account values and unknown capture fields are
-never emitted. `finishedAt` and the CLI clock accept UTC ISO timestamps or
-integer Unix seconds; fractional capture seconds are truncated.
+Each capture has integer `exit`, ISO 8601 `finishedAt` with an offset, and JSON
+text `stdout`. Offline callers can instead supply the decoded envelope as
+`data`. If `stdout` is present it takes precedence. Nonzero exits ignore the
+payload and report only the exit status. Successful envelopes have `account`
+(with nullable string `auth_index`, `name` and `plan`), matching `pool`, and a
+`windows` map. Concatenated accounts and excessive JSON nesting are refused by
+the JSON parser. Account values and unknown fields are never copied to output.
 
-Quantity, duration, reset, status and extras validation are independent.
-Malformed extras do not erase allowance, and malformed timing does not erase
-independently measured zero. Remaining and used values keep their declared
-native units; durations use observed seconds, including actual monthly lengths.
-A missing or invalid capture retains registered limit slots and routes.
-Diagnostic reasons are fixed local codes attached to the snapshot pool key.
-Nonzero exits emit `exit-nonzero` and the numeric exit status; stdout is
-ignored.
+Window quantities, timing, status and extras are checked independently. Bad
+timing preserves measured zero. Bad extras preserve valid allowance. Missing or
+failed captures preserve every registered limit slot. Diagnostics contain local
+reason codes, never parser errors or upstream stderr.
 
-Reader status accepts any string or null. Active, critical, estimated, normal,
-ok and warning statuses establish enforcement; other statuses leave it unknown.
-Non-string, non-null statuses are invalid and omitted. Observations older than
-3600 seconds or past their natural reset are stale, never assumed refilled.
-Natural reset instants remain observations. A valid exhausted gate exposes its
-observed reset as `gateOpensAt`; stale or invalid gates promise no opening, and
-positive gates may have no reset. Consistently idle windows (0 used, 100
-remaining) may have a null reset in either role. The reset-duration bound
-tolerates one second for upstream rounding and truncated capture seconds. Gate
-roles never become pace roles based on duration.
+Remaining and used amounts retain the registered native unit. Durations retain
+the Reader's seconds, including actual monthly lengths. Reset and expiration
+timestamps accept ISO 8601 with an offset; output instants are Unix seconds.
+Capture fractions are truncated. A reset may exceed the duration from capture by
+one second to allow upstream rounding.
 
-`readerMetadata` projects only known balance kind/unit pairs and `promo_credits`
-or `rate_limit_reset` bonus counts with normalized expiration seconds. Missing
-or malformed arrays are unknown; valid empty arrays remain empty. Malformed
-entries are diagnosed independently and omitted. Arbitrary upstream fields and
-invalid timestamp text never enter output. These inspection facts do not
-establish wallet credit or reset eligibility; there are no placeholder credit or
-reset inventories.
+Observations older than 3600 seconds or at/past their reset are stale; they are
+never assumed refilled. Natural resets remain visible. Only a valid exhausted
+`gate` exposes `gateOpensAt`. Positive gates may have no reset. Idle windows (0
+used, 100 remaining) may have no reset in either role. Duration never changes a
+gate into a pace limit.
 
-The owner check `delegate-routing-observation-normalize` exercises synthetic
-scope and route properties against five sanitized Reader capture shapes. Window
-durations and statuses retain production shapes; account values, balances, bonus
-expirations, USD capacities and model identities are synthetic. These are
-offline boundary fixtures, not production Nix configuration or a rotating
-catalog inventory. Tests reject scope expansion, route loss, unsafe metadata,
-zero loss on invalid timing, command execution and nondeterministic replay.
-Configured Reader collection and CPA attribution are outside this source CLI.
+Reader status can be a string or null. `active`, `critical`, `estimated`,
+`normal`, `ok` and `warning` establish enforcement. Other values leave it
+unknown; malformed status values are omitted.
+
+`readerMetadata` contains known balance kind/unit pairs (`credits`/`credits` and
+`extra_usage`/`USD`) and whole nonnegative `promo_credits` or `rate_limit_reset`
+counts. Missing or malformed arrays stay unknown; valid empty arrays stay empty.
+Bad entries are omitted individually. These facts establish neither wallet
+credit nor reset eligibility.
+
+Run the owner check `delegate-routing-observation-normalize` to check the
+boundary. It uses Pydantic v2 and Hypothesis through its Nix Python environment.
+Configured Reader collection, CPA attribution and ranking remain separate.
