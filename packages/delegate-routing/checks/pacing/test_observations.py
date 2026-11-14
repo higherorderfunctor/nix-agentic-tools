@@ -156,6 +156,34 @@ class Observations(unittest.TestCase):
         self.assertEqual(output["pools"]["claude"]["limits"][0]["status"], "valid")
         self.assertIsNone(self.limit("codex", "weekly")["remaining"])
 
+    def test_stdout_nesting_boundary(self):
+        capture = self.snapshot["readers"]["codex"]
+        document = json.dumps(capture["data"])
+        for opening, closing in [("[", "]"), ('{"child":', "}")]:
+            for depth in (64, 65):
+                with self.subTest(opening=opening, depth=depth):
+                    # The envelope itself contributes one container.
+                    capture["stdout"] = document[:-1] + ',"unknown":' + opening * (depth - 1) + "0" + closing * (depth - 1) + "}"
+                    result = self.result()
+                    self.assertEqual(result["routes"], self.snapshot["routes"])
+                    self.assertEqual(result["pools"]["claude"]["limits"][0]["status"], "valid")
+                    if depth == 64:
+                        self.assertEqual(self.limit("codex", "weekly")["remaining"], 49)
+                    else:
+                        self.assertIn({"pool": "codex", "reason": "invalid-json"}, result["diagnostics"])
+                        self.assertIsNone(self.limit("codex", "weekly")["remaining"])
+
+    def test_stdout_quoted_brackets_and_escapes(self):
+        capture = self.snapshot["readers"]["codex"]
+        for value in ('[{' * 100, '}]' * 100, '\\"[{' * 100, "ends with backslash\\"):
+            with self.subTest(value=value):
+                capture["data"]["unknown"] = value
+                raw = json.dumps(capture["data"])
+                for encoding in (None, "utf-8", "utf-16", "utf-32"):
+                    with self.subTest(encoding=encoding):
+                        capture["stdout"] = raw if encoding is None else raw.encode(encoding)
+                        self.assertEqual(self.limit("codex", "weekly")["remaining"], 49)
+
     def test_stdout_transport_and_ambiguous_accounts(self):
         capture = self.snapshot["readers"]["codex"]
         capture["stdout"] = json.dumps(capture.pop("data"))
