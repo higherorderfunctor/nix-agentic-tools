@@ -2106,28 +2106,8 @@
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
-      # Fails if any runtime drops the merged review criteria or the first
-      # check stops grading the diff for the person who merges it.
-      && lib.all (runtime: let
-        text = readSkill result runtime;
-      in
-        lib.all (needle: hasProse needle text) [
-          "Generated or property tests cover input spaces with few literal examples."
-          "Each test says which behavior it protects; large hand-written fixtures need a stated reason."
-          "Names say what a thing returns or decides, not just the type it handles."
-          "Writers and rewriters load and follow `peer-communication` when installed for human docs, maintainer comments and change descriptions."
-          "Without that skill, lead with what the thing does or how to use it in short, plain sentences."
-          "readers need not unpack the wording or guess its purpose."
-          "External input becomes typed structures once at the boundary; downstream code uses those structures without revalidating them."
-          "Support one documented input format unless a named producer sends another."
-          "Use the standard library or an established package before a hand-written parser, decoder, depth limiter or validator."
-          "A hand-written implementation states why none fits."
-          "Each file has a short header naming its purpose, callers and data flow."
-          "Comments explain why; delete comments the reader cannot act on."
-          "A preview or inspection tool that will be replaced later belongs as a runnable snippet in the change description, not in the change."
-          "Grades the diff as the person who merges it reads it, not only against behavior rows."
-        ])
-      runtimes
+      # Fails if a runtime's rendered skill loses the shared review rubric.
+      && lib.all (runtime: hasProse "**Input boundary.**" (readSkill result runtime)) runtimes
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
