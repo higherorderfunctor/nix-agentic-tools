@@ -8,16 +8,16 @@
   # References are synthetic; no fixture copies account or key values.
   redact = import ../../../lib/redact {inherit lib;};
   # All names are synthetic so catalog releases cannot retire a probe.
-  model = maker: aliases: {
-    inherit aliases maker;
+  model = maker: {
+    inherit maker;
     source = ["exclusive fixture"];
   };
   # Hand-written identities specify expected canonicalization independently of the checker.
   catalog = {
     models = {
-      fixture-a = model "fixture-maker-a" {opencode-go = ["fixture-alias" "fixture-shared"];};
-      fixture-b = model "fixture-maker-b" {zhipuai = ["fixture-shared" "fixture-a"];};
-      fixture-unknown = model null {};
+      fixture-a = model "fixture-maker-a";
+      fixture-b = model "fixture-maker-b";
+      fixture-unknown = model null;
     };
     vendors = {
       fixture-empty.maker = "fixture-maker-empty";
@@ -179,7 +179,7 @@
           right = oauth "fixture-login";
         };
       };
-      extra.models.fixture-future = model "fixture-maker-a" {};
+      extra.models.fixture-future = model "fixture-maker-a";
       fragments = ["`left`" "`right`" "canonical models `fixture-future`"];
     };
     "missing maker treated as disjoint" = {
@@ -345,7 +345,7 @@
           right = oauth vendor;
         };
       };
-      extra.models.fixture-owner = model maker {};
+      extra.models.fixture-owner = model maker;
       fragments = ["canonical models `fixture-owner`"];
     }) {
     claude = "anthropic";
@@ -362,7 +362,13 @@
       {
         ai = {
           catalog = lib.recursiveUpdate catalog (test.extra or {});
-          cliproxyapi.instances.main = test.instance;
+          cliproxyapi = {
+            instances.main = test.instance;
+            servedModels = {
+              opencode-go.fixture-a = ["fixture-alias" "fixture-shared"];
+              zhipuai.fixture-b = ["fixture-shared" "fixture-a"];
+            };
+          };
         };
       }
     ];
@@ -371,6 +377,7 @@
     providers = import ../lib/providers.nix {
       inherit lib;
       catalog = config.ai.catalog;
+      servedModels = config.ai.cliproxyapi.servedModels;
     };
     checker = import ../lib/exclusive.nix {
       inherit lib providers;

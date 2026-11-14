@@ -68,15 +68,16 @@
 
 ## Static catalog
 
-- **Owners contribute identities and offers.** `ai.catalog.models` holds maker,
-  vendor aliases and evidence lists; `ai.catalog.vendors` declares either a
-  finite list or a maker-wide offer. Core imports only its types and generic
-  libraries. Each owner loads its own facts and defaults individual fields, so
-  evidence merges and contradictory makers fail. Adding an owner or vendor never
-  requires a core import. See `packages/ai-module/docs/catalog.md`.
+- **Owners contribute identities and offers.** `ai.catalog.models` holds maker
+  and evidence lists; `ai.catalog.vendors` declares either a finite list or a
+  maker-wide offer. Core imports only its types and generic libraries. Each
+  owner loads its own facts and defaults individual fields, so evidence merges
+  and contradictory makers fail. Adding an owner or vendor never requires a core
+  import. See `packages/ai-module/docs/catalog.md`.
 - **CPA reads the merged catalog for credential defaults.** Vendor facts flow
   through static contributions into the merged catalog, then into CPA's existing
-  provider constructor. Transport metadata stays with CPA, and standalone
-  callers use the same constructor with vendor-owned defaults. Static
-  contributions read neither merged catalog configuration nor credentials.
-  Credentials, pools, routing and overlap policy are outside the catalog.
+  provider constructor. Served spellings and transport metadata stay with CPA
+  through `ai.cliproxyapi.servedModels`; standalone callers use the same
+  constructor with vendor-owned defaults. Static contributions read neither
+  merged catalog configuration nor credentials. Credentials, pools, routing and
+  overlap policy are outside the catalog.

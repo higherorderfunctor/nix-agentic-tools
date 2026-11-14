@@ -61,20 +61,18 @@ in {
 
   # Concrete launches require a known maker; unknown offers remain inspectable.
   validateId = catalog: offers: id: let
-    providers = import ../../cliproxyapi/lib/providers.nix {inherit lib catalog;};
     matching =
       if offers == null
       then []
       else lib.filter (offer: offer.model == id) offers;
-    canonical = providers.canonical null id;
     identities =
       if offers == null
-      then [canonical.id]
+      then [id]
       else lib.unique (map (offer: offer.id) matching);
   in
     if offers != null && matching == []
     then throw "delegate-routing: model `${id}` is not offered by the selected CPA client."
-    else if (offers == null && canonical.errors != []) || lib.length identities != 1
+    else if lib.length identities != 1
     then throw "delegate-routing: ambiguous launch identity `${id}`."
     else if (catalog.models.${lib.head identities}.maker or null) == null
     then throw "delegate-routing: concrete model `${id}` requires a catalog identity with a maker."
