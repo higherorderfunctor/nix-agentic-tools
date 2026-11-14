@@ -33,6 +33,7 @@
     };
     source = patching.source (options // {src = input;});
     derivation = pkgs.stdenvNoCC.mkDerivation (patching.override options {
+      inherit (options) patchFiles;
       name = "patch-phase";
       src = input;
       dontConfigure = true;
