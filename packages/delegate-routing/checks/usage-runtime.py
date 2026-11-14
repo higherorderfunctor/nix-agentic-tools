@@ -41,7 +41,7 @@ CODEX = {
     "rate_limit": {"primary_window": {"used_percent": 37, "reset_at": 1900000000, "limit_window_seconds": 604800},
                    "secondary_window": {"used_percent": 7, "reset_at": 1900000000, "limit_window_seconds": 18000}},
     "credits": {"has_credits": True, "balance": "1234.5000000000"},
-    "rate_limit_reset_credits": {"available_count": 2},
+    "rate_limit_reset_credits": {"available_count": 2, "applicable_available_count": 2},
 }
 CODEX_DIRECT = {
     "rateLimits": {
@@ -50,14 +50,11 @@ CODEX_DIRECT = {
         "secondary": {"usedPercent": 8, "resetsAt": 1900000000, "windowDurationMins": 300},
         "credits": {"hasCredits": True, "balance": "1234.5000000000"},
     },
-    "rateLimitResetCredits": {"availableCount": 2, "credits": [
-        {"status": "available", "expiresAt": 1900000000},
-        {"status": "available", "expiresAt": 1900000060},
-    ]},
+    "rateLimitResetCredits": {"availableCount": 2},
 }
 CODEX_RESETS = {"available_count": 2, "credits": [
-    {"status": "available", "expires_at": "2030-03-17T17:46:40.987654Z"},
-    {"status": "available", "expires_at": "2030-03-17T18:47:40+01:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T12:46:40.987654-05:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T19:17:40+01:30"},
 ]}
 ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
@@ -221,7 +218,8 @@ class UsageTests(unittest.TestCase):
 
     def assert_schema(self, value, vendor):
         self.assertEqual(set(value), {"pool", "account", "windows", "balances", "bonuses"} |
-                         ({"credit", "grants", "missingExtras"} if vendor == "claude" else set()))
+                         ({"credit", "grants", "missingExtras"} if vendor == "claude" else
+                          {"missingExtras"} if vendor == "codex" else set()))
         self.assertEqual(value["pool"], vendor)
         self.assertEqual(set(value["account"]), {"auth_index", "name", "plan"})
         for field in value["account"].values():
@@ -241,18 +239,20 @@ class UsageTests(unittest.TestCase):
                 self.assertEqual(window["usedPercent"], 0)
             else:
                 self.assert_utc(window["resetsAt"])
-        for field, amount in [("balances", "remaining"), ("bonuses", "remaining" if vendor == "claude" else "count")]:
+        for field, amount in [("balances", "remaining"), ("bonuses", "remaining" if vendor in ("claude", "codex") else "count")]:
             self.assertIsInstance(value[field], list)
             for entry in value[field]:
                 expected = {"kind", amount, "expiresAt"} | ({"unit"} if field == "balances" else set())
                 if vendor == "claude":
                     expected |= {"funding", "scope"} if field == "balances" else {"clears", "funding", "givesBackWeekly", "handle", "unit", "usable"}
+                elif vendor == "codex":
+                    expected |= {"funding", "scope", "unit"} | ({"usable"} if field == "bonuses" else set())
                 self.assertEqual(set(entry), expected)
                 self.assertIsInstance(entry["kind"], str)
                 self.assertIsInstance(entry[amount], (int, float))
                 if field == "balances":
                     self.assertIsInstance(entry["unit"], str)
-                if entry["expiresAt"] is not None:
+                if entry["expiresAt"] is not None and not (vendor == "codex" and field == "bonuses"):
                     self.assert_utc(entry["expiresAt"])
 
     def assert_utc(self, value):
@@ -957,6 +957,7 @@ else:
         self.assertEqual(value, dict(proxy, account=value["account"]))
 
     def test_codex_balances_and_expiring_resets_on_both_paths(self):
+        """Fails if balances lose decimals, offsets lose sign/minutes, or direct summaries invent lots."""
         self.direct_codex()
         for cpa in [True, False]:
             with self.subTest(cpa=cpa):
@@ -969,10 +970,41 @@ else:
                 self.assertEqual(value["windows"]["5h"]["usedPercent"], 7 if cpa else 8)
                 self.assertEqual(value["windows"]["7d"]["resetsAt"], RESET)
                 self.assertEqual(value["account"]["plan"], "test-plan" if cpa else None)
-                self.assertEqual(value["balances"], [{"kind": "credits", "remaining": 1234.5, "unit": "credits", "expiresAt": None}])
+                self.assertEqual(value["balances"], [{"kind": "credits", "funding": "unknown", "scope": None, "remaining": 1234.5, "unit": "credits", "expiresAt": None}])
                 self.assertEqual(value["bonuses"], [
-                    {"kind": "rate_limit_reset", "count": 1, "expiresAt": RESET},
-                    {"kind": "rate_limit_reset", "count": 1, "expiresAt": "2030-03-17T17:47:40Z"}])
+                    {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
+                     "remaining": 1, "expiresAt": expiry}
+                    for expiry in ("2090-03-17T17:46:40.987654Z", "2090-03-17T17:47:40Z")] if cpa else [])
+                self.assertEqual(value["missingExtras"], [] if cpa else ["codex-reset-details-unavailable"])
+
+    def test_codex_resets_select_earliest_eligible_lots_or_report_why_not(self):
+        """Fails if selection ignores count, order, plan, expiry or a missing field."""
+        cases = [
+            (1, {"expires_at": "2090-03-17T17:46:40.5Z"}, {"expires_at": "2090-03-17T17:46:40Z"}, ["2090-03-17T17:46:40Z"], None),
+            (2, {}, {"status": "pending"}, [], "eligibility-unknown"),
+            (2, {}, {"is_supported_by_plan": False}, [], "eligibility-unknown"),
+            (2, {}, {"expires_at": "2000-01-01T00:00:00Z"}, [], "eligibility-unknown"),
+            (1, {}, {"status": None}, [], "eligibility-unknown"),
+            (1, {}, {"is_supported_by_plan": None}, [], "eligibility-unknown"),
+            (None, {}, {}, [], "applicability-unknown"),
+            (1.5, {}, {}, [], "applicability-unknown"),
+            (1, {}, {"expires_at": "2090-02-30T00:00:00Z"}, [], "details-unavailable"),
+            (1, {"expires_at": None, "expiresAt": 3793456000}, {"status": "redeemed"}, ["2090-03-17T17:46:40Z"], None),
+            (0, {}, {"status": None}, [], None),
+            (-1, {}, {}, [], "applicability-unknown"),
+            ("2", {}, {}, [], "applicability-unknown"),
+            (1, {}, {"expires_at": None}, [], "details-unavailable"),
+            *((1, {}, {"expires_at": epoch}, [], "details-unavailable") for epoch in (3793456000.5, -1, 253402300800)),
+        ]
+        for count, first, second, expected, missing in cases:
+            with self.subTest(count=count, first=first, second=second):
+                self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = count
+                self.resets = copy.deepcopy(CODEX_RESETS)
+                for row, patch in zip(self.resets["credits"], (first, second)):
+                    row.update(patch)
+                value = json.loads(self.run_helper("codex").stdout)
+                self.assertEqual(([row["expiresAt"] for row in value["bonuses"]], value["missingExtras"]),
+                                 (expected, ["codex-reset-" + missing] if missing else []))
 
     def test_codex_optional_windows_credits_and_duration_names(self):
         for cpa in [True, False]:
@@ -1020,7 +1052,7 @@ else:
                 self.assertEqual(result.stderr, "")
                 value = json.loads(result.stdout)
                 self.assertEqual(value["windows"]["7d"]["usedPercent"], 37)
-                self.assertEqual(value["bonuses"], [{"kind": "rate_limit_reset", "count": 2, "expiresAt": None}])
+                self.assertEqual((value["bonuses"], value["missingExtras"]), ([], ["codex-reset-details-unavailable"]))
 
 
     def test_opencode_transports_and_projection(self):

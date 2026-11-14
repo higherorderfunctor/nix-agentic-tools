@@ -743,8 +743,21 @@ an unstarted window at 0%, which z.ai reports without a reset time), `status`
 and `windowSeconds`; names derive from the duration (`5h`, `7d`, `monthly` for
 28–31 days, otherwise `<seconds>s`, with `:<model>` for scoped windows); missing
 windows are absent, and balances and bonuses are arrays. Codex reset credits
-carry expiry dates when available; if the extra proxy request fails, the helper
-still reports their count.
+require the observed applicable count and enough available, plan-supported,
+unexpired lots. The helper selects exactly that count in chronological expiry
+order. It never substitutes the inventory count or forecasts replacement resets.
+Missing count, eligibility or expiry details leave bonuses empty with a
+`missingExtras` reason; valid usage windows remain available. These reads use
+the existing wham usage and reset-credit discovery endpoints; they never redeem
+or consume a reset.
+
+Codex bonuses carry `remaining`, `unit = "resets"`, `usable`, `funding` and
+`scope`, with unknown funding and null whole-pool scope. Codex balances retain
+native `credits` (62,500 credits is not a USD amount), unknown funding, null
+scope and unknown expiry. The direct app-server summary provides only an
+inventory count, so it cannot establish reset eligibility. Missing fields never
+imply eligibility. Reset effects and future replenishment remain unknown; any
+later redemption recommendation requires a fresh read.
 
 ### Claude OAuth inventory
 
