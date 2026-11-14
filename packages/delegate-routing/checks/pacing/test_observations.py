@@ -244,7 +244,10 @@ class Observations(unittest.TestCase):
         self.assertEqual(first, subprocess.check_output(command[:-1] + ["1794447300"]))
         result = json.loads(first)
         self.assertEqual((result["capability"], result["asOf"]), ("allowance-preview", 1794447300))
-        self.assertNotIn("entries", result)
+        # Ranking is additive: every original offer and normalized fact survives.
+        self.assertEqual({key: value for key, value in result.items() if key != "entries"}, self.result())
+        self.assertEqual({entry["id"] for entry in result["entries"]},
+                         {"synthetic-code", "synthetic-fable", "synthetic-go", "synthetic-second", "synthetic-z"})
         self.assertNotIn("fixture-account", first.decode())
         missing_clock = subprocess.run(command[:-2], capture_output=True)
         self.assertEqual(missing_clock.returncode, 2)
