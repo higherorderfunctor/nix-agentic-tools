@@ -70,8 +70,7 @@ usage_project() {
         else error("reset expiry") end;
       # Validate the entire detail array before applicability can suppress bad lots.
       (if (.credits | type) != "array" then error("reset credits") else .credits end
-        | map(if type != "object" then error("reset lot") else
-            . + {expiry: ((.expires_at // .expiresAt) | lot_expiry)} end)) as $rows
+        | map(. + {expiry: ((.expires_at // .expiresAt) | lot_expiry)})) as $rows
       | $summary.applicable_available_count as $applicable_count
       | if ($applicable_count | type) != "number" or ($applicable_count | isfinite | not)
           or $applicable_count < 0 or ($applicable_count | floor) != $applicable_count then

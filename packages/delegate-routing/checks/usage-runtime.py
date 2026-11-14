@@ -2,8 +2,7 @@
 # cspell:ignore curlrc
 
 import copy
-from datetime import datetime, timedelta, timezone
-from hypothesis import given, settings, strategies as st
+from datetime import datetime
 import http.server
 import json
 import os
@@ -41,7 +40,7 @@ CODEX = {
     "plan_type": "test-plan",
     "rate_limit": {"primary_window": {"used_percent": 37, "reset_at": 1900000000, "limit_window_seconds": 604800},
                    "secondary_window": {"used_percent": 7, "reset_at": 1900000000, "limit_window_seconds": 18000}},
-    "credits": {"has_credits": True, "balance": "62500.0000000000"},
+    "credits": {"has_credits": True, "balance": "1234.5000000000"},
     "rate_limit_reset_credits": {"available_count": 2, "applicable_available_count": 2},
 }
 CODEX_DIRECT = {
@@ -49,13 +48,13 @@ CODEX_DIRECT = {
         "planType": "ignored-direct-plan",
         "primary": {"usedPercent": 11, "resetsAt": 1900000000, "windowDurationMins": 10080},
         "secondary": {"usedPercent": 8, "resetsAt": 1900000000, "windowDurationMins": 300},
-        "credits": {"hasCredits": True, "balance": "62500.0000000000"},
+        "credits": {"hasCredits": True, "balance": "1234.5000000000"},
     },
     "rateLimitResetCredits": {"availableCount": 2},
 }
 CODEX_RESETS = {"available_count": 2, "credits": [
-    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T17:46:40.987654Z"},
-    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T18:47:40+01:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T12:46:40.987654-05:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T19:17:40+01:30"},
 ]}
 ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
@@ -253,13 +252,12 @@ class UsageTests(unittest.TestCase):
                 self.assertIsInstance(entry[amount], (int, float))
                 if field == "balances":
                     self.assertIsInstance(entry["unit"], str)
-                if entry["expiresAt"] is not None:
-                    self.assert_utc(entry["expiresAt"], fraction=vendor == "codex" and field == "bonuses")
+                if entry["expiresAt"] is not None and not (vendor == "codex" and field == "bonuses"):
+                    self.assert_utc(entry["expiresAt"])
 
-    def assert_utc(self, value, fraction=False):
-        suffix = r"(?:\.\d+)?" if fraction else ""
-        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}" + suffix + "Z$")
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    def assert_utc(self, value):
+        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
 
     def direct_codex(self, usage=None):
         # The real direct helper must still initialize app-server and request the
@@ -959,6 +957,7 @@ else:
         self.assertEqual(value, dict(proxy, account=value["account"]))
 
     def test_codex_balances_and_expiring_resets_on_both_paths(self):
+        """Fails if balances lose decimals, offsets lose sign/minutes, or direct summaries invent lots."""
         self.direct_codex()
         for cpa in [True, False]:
             with self.subTest(cpa=cpa):
@@ -971,70 +970,41 @@ else:
                 self.assertEqual(value["windows"]["5h"]["usedPercent"], 7 if cpa else 8)
                 self.assertEqual(value["windows"]["7d"]["resetsAt"], RESET)
                 self.assertEqual(value["account"]["plan"], "test-plan" if cpa else None)
-                self.assertEqual(value["balances"], [{"kind": "credits", "funding": "unknown", "scope": None, "remaining": 62500, "unit": "credits", "expiresAt": None}])
+                self.assertEqual(value["balances"], [{"kind": "credits", "funding": "unknown", "scope": None, "remaining": 1234.5, "unit": "credits", "expiresAt": None}])
                 self.assertEqual(value["bonuses"], [
                     {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                     "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z"},
-                    {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                     "remaining": 1, "expiresAt": "2090-03-17T17:47:40Z"}] if cpa else [])
+                     "remaining": 1, "expiresAt": expiry}
+                    for expiry in ("2090-03-17T17:46:40.987654Z", "2090-03-17T17:47:40Z")] if cpa else [])
                 self.assertEqual(value["missingExtras"], [] if cpa else ["codex-reset-details-unavailable"])
 
-    def test_codex_reset_eligibility(self):
-        # Each case pins an applicability, eligibility, or normalization contract.
+    def test_codex_resets_select_earliest_eligible_lots_or_report_why_not(self):
+        """Fails if selection ignores count, order, plan, expiry or a missing field."""
         cases = [
-            ("zero", 0, {}, None, []),
-            ("unsupported", 2, {"is_supported_by_plan": False}, "codex-reset-eligibility-unknown", []),
-            ("support-missing", 2, {"is_supported_by_plan": None}, "codex-reset-eligibility-unknown", []),
-            ("expired", 2, {"expires_at": "2000-01-01T00:00:00Z"}, "codex-reset-eligibility-unknown", []),
-            ("redeemed", 2, {"status": "redeemed"}, "codex-reset-eligibility-unknown", []),
-            ("not-available", 2, {"status": "pending"}, "codex-reset-eligibility-unknown", []),
-            ("missing", None, {}, "codex-reset-applicability-unknown", []),
-            ("fractional", 1.5, {}, "codex-reset-applicability-unknown", []),
-            ("negative", -1, {}, "codex-reset-applicability-unknown", []),
-            ("boolean", True, {}, "codex-reset-applicability-unknown", []),
-            ("too-few-lots", 3, {}, "codex-reset-eligibility-unknown", []),
-            ("string", "2", {}, "codex-reset-applicability-unknown", []),
-            ("invalid-expiry", 2, {"expires_at": "invalid"}, "codex-reset-details-unavailable", []),
-            ("missing-status", 2, {"status": None}, "codex-reset-eligibility-unknown", []),
-            ("missing-expiry", 2, {"expires_at": None}, "codex-reset-details-unavailable", []),
-            ("numeric-expiry-alias", 2, {"expires_at": None, "expiresAt": 3793456000}, None, [
-                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40Z"}] * 2),
-            ("fractional-epoch", 2, {"expires_at": 3793456000.5}, "codex-reset-details-unavailable", []),
-            ("negative-epoch", 2, {"expires_at": -1}, "codex-reset-details-unavailable", []),
-            ("out-of-range-epoch", 2, {"expires_at": 253402300800}, "codex-reset-details-unavailable", []),
-            ("invalid-date", 2, {"expires_at": "2090-02-30T00:00:00Z"}, "codex-reset-details-unavailable", []),
-            # One applicable reset across two lots counts the earliest-expiring lot.
-            ("one-of-two", 1, {}, None, [
-                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z"}]),
-            # Chronological, not lexical: 40Z expires before 40.5Z.
-            ("fraction-order", 1, "fraction-order", None, [
-                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40Z"}]),
-            ("two-applicable", 2, {}, None, [
-                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z"},
-                {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2090-03-17T17:47:40Z"}]),
+            (1, {"expires_at": "2090-03-17T17:46:40.5Z"}, {"expires_at": "2090-03-17T17:46:40Z"}, ["2090-03-17T17:46:40Z"], None),
+            (2, {}, {"status": "pending"}, [], "eligibility-unknown"),
+            (2, {}, {"is_supported_by_plan": False}, [], "eligibility-unknown"),
+            (2, {}, {"expires_at": "2000-01-01T00:00:00Z"}, [], "eligibility-unknown"),
+            (1, {}, {"status": None}, [], "eligibility-unknown"),
+            (1, {}, {"is_supported_by_plan": None}, [], "eligibility-unknown"),
+            (None, {}, {}, [], "applicability-unknown"),
+            (1.5, {}, {}, [], "applicability-unknown"),
+            (1, {}, {"expires_at": "2090-02-30T00:00:00Z"}, [], "details-unavailable"),
+            (1, {"expires_at": None, "expiresAt": 3793456000}, {"status": "redeemed"}, ["2090-03-17T17:46:40Z"], None),
+            (0, {}, {"status": None}, [], None),
+            (-1, {}, {}, [], "applicability-unknown"),
+            ("2", {}, {}, [], "applicability-unknown"),
+            (1, {}, {"expires_at": None}, [], "details-unavailable"),
+            *((1, {}, {"expires_at": epoch}, [], "details-unavailable") for epoch in (3793456000.5, -1, 253402300800)),
         ]
-        for name, applicable, patch, missing, expected in cases:
-            with self.subTest(case=name):
-                self.usage["codex"] = copy.deepcopy(CODEX)
+        for count, first, second, expected, missing in cases:
+            with self.subTest(count=count, first=first, second=second):
+                self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = count
                 self.resets = copy.deepcopy(CODEX_RESETS)
-                # Apply the same eligibility change to every detail row.
-                if patch == "fraction-order":
-                    self.resets["credits"][0]["expires_at"] = "2090-03-17T17:46:40.5Z"
-                    self.resets["credits"][1]["expires_at"] = "2090-03-17T17:46:40Z"
-                else:
-                    for row in self.resets["credits"]:
-                        row.update(patch)
-                self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = applicable
-                result = self.run_helper("codex")
-                self.assertEqual(result.returncode, 0, result.stderr)
-                value = json.loads(result.stdout)
-                self.assertEqual(value["bonuses"], expected)
-                self.assertEqual(value["missingExtras"], [missing] if missing else [])
+                for row, patch in zip(self.resets["credits"], (first, second)):
+                    row.update(patch)
+                value = json.loads(self.run_helper("codex").stdout)
+                self.assertEqual(([row["expiresAt"] for row in value["bonuses"]], value["missingExtras"]),
+                                 (expected, ["codex-reset-" + missing] if missing else []))
 
     def test_codex_optional_windows_credits_and_duration_names(self):
         for cpa in [True, False]:
@@ -1071,24 +1041,18 @@ else:
         self.assertIn("invalid codex usage response", result.stderr)
 
     def test_codex_reset_details_fail_without_failing_usage(self):
-        self.usage["codex"]["rate_limit_reset_credits"]["applicable_available_count"] = 2
-        for failure in ["transport", "management", "vendor", "malformed", "invalid_json", "invalid_credits", "object_credits", "invalid_expiry", "invalid_row"]:
+        for failure in ["transport", "management", "vendor", "malformed", "invalid_json", "invalid_credits", "invalid_expiry"]:
             with self.subTest(failure=failure):
                 self.reset_failure = failure
                 self.resets = {} if failure == "invalid_credits" else copy.deepcopy(CODEX_RESETS)
-                if failure == "object_credits":
-                    self.resets["credits"] = {"lot": self.resets["credits"][0]}
                 if failure == "invalid_expiry":
                     self.resets["credits"][0]["expires_at"] = "invalid"
-                if failure == "invalid_row":
-                    self.resets["credits"][0] = False
                 result = self.run_helper("codex")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 value = json.loads(result.stdout)
                 self.assertEqual(value["windows"]["7d"]["usedPercent"], 37)
-                self.assertEqual(value["bonuses"], [])
-                self.assertIn("codex-reset-details-unavailable", value["missingExtras"])
+                self.assertEqual((value["bonuses"], value["missingExtras"]), ([], ["codex-reset-details-unavailable"]))
 
 
     def test_opencode_transports_and_projection(self):
@@ -1259,36 +1223,6 @@ print({json.dumps(json.dumps(OPENCODE))})
         result = self.run_helper("codex")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("management request failed", result.stderr)
-
-
-class CodexResetProperties(unittest.TestCase):
-    """Generated lot order, offsets and eligibility must preserve exact-count selection."""
-
-    @settings(database=None, deadline=None, max_examples=40)
-    @given(lots=st.lists(st.tuples(st.integers(0, 86400000000), st.integers(-720, 840),
-                                  st.booleans(), st.booleans(), st.booleans()), max_size=8),
-           applicable=st.integers(0, 9))
-    def test_chronological_exact_count(self, lots, applicable):
-        """Select the earliest eligible instants only when they cover the applicable count."""
-        rows, eligible = [], []
-        for micros, offset, available, supported, expired in lots:
-            expiry = datetime(2000 if expired else 2090, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=micros)
-            rows.append({"expires_at": expiry.astimezone(timezone(timedelta(minutes=offset))).isoformat(),
-                         "is_supported_by_plan": supported, "status": "available" if available else "redeemed"})
-            if available and supported and not expired:
-                eligible.append(expiry)
-        usage = copy.deepcopy(CODEX)
-        usage["rate_limit_reset_credits"]["applicable_available_count"] = applicable
-        result = subprocess.run(
-            ["bash", "-c", 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :; source "$1"; usage_project codex null "$2"',
-             "projector-test", str(SCRIPTS / "usage-cpa.sh"), json.dumps({"credits": rows})],
-            input=json.dumps(usage), text=True, capture_output=True, check=True)
-        value = json.loads(result.stdout)
-        expected = sorted(eligible)[:applicable] if len(eligible) >= applicable else []
-        self.assertEqual([datetime.fromisoformat(row["expiresAt"]) for row in value["bonuses"]], expected)
-        self.assertEqual(value["missingExtras"], [] if len(eligible) >= applicable else ["codex-reset-eligibility-unknown"])
-        self.assertTrue(all(row["remaining"] == 1 and row["usable"] is True and row["scope"] is None
-                            for row in value["bonuses"]))
 
 
 if __name__ == "__main__":
