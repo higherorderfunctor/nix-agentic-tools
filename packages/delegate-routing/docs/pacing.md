@@ -130,10 +130,12 @@ ranking does not repeat those diagnostics for every offer.
 `available_at` is the explicit clock for ready entries. For blocked entries it
 is the latest observed release of all exhausted gates and paced limits, only
 when every blocker has valid future timing and the remaining allowance evidence
-is complete. Any unresolved blocker, stale observation or unknown scope leaves
-it null. This is conditional on the observations, not a refill or inference
-availability guarantee; reread before acting. Known zero survives malformed
-timing while its availability stays unknown.
+is complete. A closed gate with a known release needs no paced sibling to report
+that release; its pace remains null and its score zero. Any unresolved blocker,
+stale observation or unknown scope leaves availability null. This is conditional
+on the observations, not a refill or inference availability guarantee; reread
+before acting. Known zero survives malformed timing while its availability stays
+unknown.
 
 All applicable pool/model alternatives survive, including failed and exhausted
 entries with score zero. Entries sort by descending score, then ready before
