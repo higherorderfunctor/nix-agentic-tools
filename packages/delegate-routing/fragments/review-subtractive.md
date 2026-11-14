@@ -27,7 +27,9 @@ and every reviewer. Grade a proposed fix against the same rows:
 - **One source of truth.** Each behavior is implemented once, and callers use it
   rather than wrapping it.
 - **Readable in one pass.** A reader can state what the code does in two
-  sentences without opening another file.
+  sentences without opening another file. Each file has a short header naming
+  its purpose, callers and data flow. Comments explain why; delete comments the
+  reader cannot act on.
 - **Abstract on the third repeat.** Repetition is a defect only when it
   duplicates a decision. If removing it would force a reader to jump between
   files to follow one idea, it stays.

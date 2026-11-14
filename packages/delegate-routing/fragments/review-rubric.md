@@ -16,11 +16,14 @@ Every rubric carries these standing rows:
    authority without a port on a default-port destination, a plain push and not
    only a forced one. A fixture that cannot reproduce production (a port it
    cannot bind) names the difference and what it hides; a path no fixture
-   exercises is a finding.
+   exercises is a finding. Generated or property tests cover input spaces with
+   few literal examples. Each test says which behavior it protects; large
+   hand-written fixtures need a stated reason.
 3. **Naming.** A comment or doc names behaviors, files and options, never a plan
    phase, review round or finding id whose document is not in the repository;
    write the decision the label stands for. Numbering the artifact itself
-   defines (a script's own phase headings) is a name and stays.
+   defines (a script's own phase headings) is a name and stays. Names say what a
+   thing returns or decides, not just the type it handles.
 4. **Size.** Estimate while planning and count the final diff while reviewing:
    200-400 lines per PR is the target, and about 500 is where a change counts as
    over. The signal is the added lines of the ready change's line breakdown, its
@@ -35,6 +38,21 @@ Every rubric carries these standing rows:
    reviewer can read alone, split into stacked PRs without asking; each piece
    passes its checks on its own. If no seam exists, make one change and say why
    in the brief and PR summary.
+
+5. **Human prose.** Writers and rewriters load and follow `peer-communication`
+   when installed for human docs, maintainer comments and change descriptions.
+   Without that skill, lead with what the thing does or how to use it in short,
+   plain sentences. Reviewers grade prose for a point-first explanation in plain
+   words: readers need not unpack the wording or guess its purpose.
+6. **Input boundary.** External input becomes typed structures once at the
+   boundary; downstream code uses those structures without revalidating them.
+7. **Input format.** Support one documented input format unless a named producer
+   sends another.
+8. **Standard tools.** Use the standard library or an established package before
+   a hand-written parser, decoder, depth limiter or validator. A hand-written
+   implementation states why none fits.
+9. **Temporary tools.** A preview or inspection tool that will be replaced later
+   belongs as a runnable snippet in the change description, not in the change.
 
 Paste the file verbatim into the worker's and every reviewer's brief. A one-line
 summary or "follow the project rules" is not a rubric.
