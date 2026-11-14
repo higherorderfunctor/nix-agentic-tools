@@ -19,6 +19,7 @@
 {pkgs}: let
   inherit (import ../extracted {inherit pkgs;}) mkOwnerCheck;
   jq = "${pkgs.jq}/bin/jq";
+  patching = (import ../packaging.nix).patching {inherit pkgs;};
 
   # One interpreter for every extractor: tree-sitter-rust for the Rust
   # tools, docutils for git-revise's man page; git-revise's own parser is
@@ -37,13 +38,14 @@ in {
     name,
     package,
   }:
-    pkgs.srcOnly {
+    pkgs.srcOnly (patching.attrs {
       inherit (package) src;
       name = "${name}-patched";
-      patches = package.patches or [];
+      patchFiles = package.patches or [];
       postPatch = package.postPatch or "";
+      prePatch = package.prePatch or "";
       stdenv = pkgs.stdenvNoCC;
-    };
+    });
 
   extracted = {
     name,
