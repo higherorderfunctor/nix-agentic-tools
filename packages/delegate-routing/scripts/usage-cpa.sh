@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # cspell:ignore fromdateiso noproxy todateiso
-readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
+readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
 readonly delegate_usage_opencode_url='https://opencode.ai/zen/go/v1/usage'
 readonly delegate_usage_zai_url='https://api.z.ai/api/monitor/usage/quota/limit'
@@ -13,9 +13,11 @@ declare -rA delegate_usage_api_keys=(
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
+# The optional fifth argument selects usage (default) or prepaid inventory.
+# The caller maps prepaid failures without changing validated main usage.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -53,6 +55,36 @@ usage_project() {
       elif ($count // 0) > 0 then
         [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
       else [] end;
+    def prepaid_balances:
+      if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
+          then error("claude prepaid tranches") else . end
+        | [((.promo_tranches[] | . + {funding: "promotional"}),
+            (.tranches[] | . + {funding: "purchased"}))
+           | if (.remaining_amount_minor_units | type) != "number"
+               or (.remaining_amount_minor_units | isfinite | not) or .remaining_amount_minor_units < 0
+               or .currency != "USD" then error("claude prepaid lot") else . end
+           | {kind: "usage_credit", funding, remaining: (.remaining_amount_minor_units / 100),
+              unit: .currency, expiresAt: (.expires_at | if . == null then null else utc end), scope: null}];
+    def grant_inventory:
+      . as $usage | try {
+        value: [.cedar_ember.grants[]?
+          | if (.id | type) != "string" or .id == ""
+              or (.clears | type) != "array" or any(.clears[]; type != "string")
+              or (.resets_left | type) != "number" or .resets_left < 0
+              or (.resets_left | isfinite | not) or (.resets_left | floor) != .resets_left
+              then error("claude grant") else . end
+          | {kind: "rate_limit_reset", handle: .id, remaining: .resets_left, unit: "resets",
+             funding: "promotional", clears, givesBackWeekly: .gives_back_weekly,
+             usable: (if $usage.cedar_ember.eligible == false or .paused == true or .usable_now == false then false
+                      elif $usage.cedar_ember.eligible == true and .paused == false and .usable_now == true then true
+                      else null end),
+             expiresAt: (.ends_at | if . == null then null else utc end)}],
+        missing: (if (.cedar_ember.grants | type) == "array" then []
+                  else ["claude-grants-unavailable"] end)}
+      catch {value: [], missing: ["claude-grants-unavailable"]};
+    if $observation == "prepaid" then
+      $prepaid | prepaid_balances
+    else
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -61,6 +93,7 @@ usage_project() {
     | if $vendor == "claude" then
         if has("five_hour") | not then error("claude usage") else . end
         | . as $usage
+        | grant_inventory as $grants
         | $base + {
             windows: ([
               {seconds: 18000, scope: null, value: .five_hour},
@@ -76,11 +109,16 @@ usage_project() {
               | named_window(604800; (.scope.model.display_name | ascii_downcase);
                   .percent; .resets_at; if .is_active then "active" else "inactive" end)
             ] | from_entries),
-            balances: [ .spend | select(. != null)
-              | {kind: "extra_usage", remaining: ((.limit.amount_minor - .used.amount_minor) / pow(10; .limit.exponent)),
-                 unit: .limit.currency, expiresAt: null}],
-            bonuses: [.promo_credits | select(type == "object") | select(.count | type == "number")
-              | {kind: "promo_credits", count: .count, expiresAt: null}]
+            # Wallet lots are independent of spend-cap headroom. The evidenced
+            # OAuth responses do not establish a cap period or usable credit.
+            credit: {cap: (try .spend.limit catch null), spent: (try .spend.used catch null),
+                     periodStart: null, periodEnd: null, usable: null},
+            balances: [],
+            # Preserve provider effects, including unknown targets, rather than
+            # infer account/Fable coverage from a grant type or its name.
+            grants: .cedar_ember,
+            bonuses: $grants.value,
+            missingExtras: $grants.missing
           }
       elif $vendor == "codex" then
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
@@ -117,7 +155,74 @@ usage_project() {
         | if $windows == [] then error("z.ai windows") else
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
       end
+    end
   ' 2>/dev/null
+}
+
+# Both Claude transports use the same headers, request sequence and projection.
+usage_claude_request() {
+  local url=$1 request envelope record status successful encoded_body
+  if [[ $delegate_usage_claude_account != null ]]; then
+    request=$(jq -cn --argjson account "$delegate_usage_claude_account" --arg url "$url" \
+      --arg ua "$delegate_usage_claude_agent" --arg beta "$delegate_usage_claude_beta" '
+      {auth_index: $account.auth_index, method: "GET", url: $url,
+       header: {Authorization: "Bearer $TOKEN$", "Content-Type": "application/json",
+                "User-Agent": $ua, "anthropic-beta": $beta}}')
+    envelope=$(usage_cpa_request POST api-call "$request") || return 1
+    # Keep the external envelope at one typed boundary. Base64 makes its body
+    # one shell field without interpreting provider text as shell syntax.
+    record=$(jq -er '
+      if (.status_code | type) != "number" then error("claude status") else . end
+      | (.status_code >= 200 and .status_code < 300) as $successful
+      | if $successful and (.body | type) != "string" then error("claude body") else . end
+      | [.status_code, $successful, (if $successful then .body | @base64 else "" end)] | @tsv
+    ' <<<"$envelope" 2>/dev/null) || return 1
+    IFS=$'\t' read -r status successful encoded_body <<<"$record"
+    if [[ $successful != true ]]; then
+      printf 'usage: proxy vendor HTTP %s\n' "$status" >&2
+      return 1
+    fi
+    printf '%s' "$encoded_body" | base64 --decode
+  else
+    # shellcheck disable=SC2154 # The appended vendor script sets delegate_usage_token.
+    curl -q --fail --silent --show-error --max-time 75 --config - 2>/dev/null <<EOF_CLAUDE
+url = "$url"
+header = "Authorization: Bearer $delegate_usage_token"
+header = "anthropic-beta: $delegate_usage_claude_beta"
+header = "User-Agent: $delegate_usage_claude_agent"
+EOF_CLAUDE
+  fi
+}
+
+usage_claude() {
+  local delegate_usage_claude_account=${1:-null} delegate_usage_claude_agent version body result
+  local profile org prepaid balances='[]' missing=''
+  if ! version=$(claude --version 2>/dev/null) ||
+    [[ ! $version =~ ^([0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.-]+)?)(\ \(Claude\ Code\))?$ ]]; then
+    printf '%s\n' 'usage: claude version unavailable or invalid' >&2
+    return 1
+  fi
+  delegate_usage_claude_agent="claude-cli/${BASH_REMATCH[1]} (external, cli)"
+  body=$(usage_claude_request "$delegate_usage_claude_url") || {
+    printf '%s\n' 'usage: claude usage request failed' >&2
+    return 1
+  }
+  result=$(usage_project claude "$delegate_usage_claude_account" null null <<<"$body") || {
+    printf '%s\n' 'usage: invalid claude usage response' >&2
+    return 1
+  }
+  # Only the captured OAuth profile field establishes the token's organization.
+  # Optional failures preserve main usage without inventing a zero balance.
+  if ! profile=$(usage_claude_request 'https://api.anthropic.com/api/oauth/profile' 2>/dev/null) ||
+    ! org=$(jq -er '.organization.uuid | select(type == "string") | select(test("^[A-Za-z0-9-]+$"))' <<<"$profile" 2>/dev/null); then
+    missing=claude-prepaid-organization-unknown
+  elif ! prepaid=$(usage_claude_request "https://api.anthropic.com/api/oauth/organizations/$org/prepaid/credits" 2>/dev/null) ||
+    ! balances=$(usage_project claude null null "$prepaid" prepaid <<<null); then
+    balances='[]' missing=claude-prepaid-unavailable
+  fi
+  jq --argjson balances "$balances" --arg missing "$missing" '
+    .balances = $balances | .missingExtras = ([$missing | select(. != "")] + .missingExtras)
+  ' <<<"$result"
 }
 
 usage_cpa_error() {
@@ -224,21 +329,22 @@ except (AttributeError, TypeError, ValueError):
     [[ $accounts != '[]' ]] || usage_cpa_error "has no enabled $vendor login"
   fi
   while IFS= read -r account; do
+    if [[ $vendor == claude ]]; then
+      usage_claude "$account" || exit 1
+      continue
+    fi
     if [[ -n $request_builder ]]; then
       request=$("$request_builder" <<<"$account") || usage_cpa_error 'invalid vendor request'
     else
       request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
-        --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
         --arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
-      url: (if $vendor == "claude" then $claude_url
-            elif $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
+      url: (if $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
             elif $vendor == "opencode" then $opencode_url
             else $zai_url end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
-        if $vendor == "claude" then {"anthropic-beta": $claude_beta}
-        elif $vendor == "zai" then {"Accept-Language": "en-US,en"}
+        if $vendor == "zai" then {"Accept-Language": "en-US,en"}
         elif $vendor == "opencode" then {Accept: "application/json"}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""

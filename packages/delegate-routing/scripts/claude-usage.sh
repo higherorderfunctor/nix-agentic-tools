@@ -1,14 +1,8 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2154 # Shared constants come from the prepended usage-cpa.sh.
+# Claude direct login shares OAuth reads and projection with CPA accounts.
 if usage_cpa claude; then exit 0; fi
 
+# shellcheck disable=SC2034 # Read by usage_claude_request in the prepended usage-cpa.sh.
 delegate_usage_token=$(jq -er '.claudeAiOauth.accessToken' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json")
-curl -q --fail --silent --show-error --config - <<EOF_USAGE | usage_project claude || {
-url = "$delegate_usage_claude_url"
-header = "Authorization: Bearer $delegate_usage_token"
-header = "anthropic-beta: $delegate_usage_claude_beta"
-EOF_USAGE
-  printf '%s\n' 'usage: invalid claude usage response' >&2
-  exit 1
-}
+usage_claude || exit 1
 unset delegate_usage_token

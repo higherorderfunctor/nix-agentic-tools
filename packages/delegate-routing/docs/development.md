@@ -746,6 +746,31 @@ windows are absent, and balances and bonuses are arrays. Codex reset credits
 carry expiry dates when available; if the extra proxy request fails, the helper
 still reports their count.
 
+### Claude OAuth inventory
+
+Run `claude-usage` to read allowance, reset grants and prepaid balances through
+direct login or CPA. Both transports require the installed Claude CLI on PATH.
+They only issue GET requests and never redeem or reset a grant. The OAuth paths
+are tested with fake transport, not verified against a live account.
+
+`grants` preserves the provider's discovery facts, including the natural weekly
+reset, opaque handles, counts, expiry, `clears` and `gives_back_weekly`.
+`bonuses` reports remaining resets and known usability. Missing eligibility or
+expiry stays null. Grant type does not establish account-to-Fable coverage, a
+full weekly refill or a restarted weekly clock. Recommendations require a fresh
+observation before use.
+
+`balances` lists promotional and purchased prepaid lots in USD, each with its
+own expiry. `credit.cap` and `credit.spent` preserve separate provider amount
+records. They do not become wallet balances. The responses do not establish a
+cap period or usable credit, so `periodStart`, `periodEnd` and `usable` stay
+null. Missing cap or spend does not mean unlimited credit.
+
+Optional profile, prepaid or grant failures preserve allowance and other
+available inventory. `missingExtras` names unavailable observations without
+exposing response bodies or transport errors. An observed empty inventory is
+distinct from an unavailable observation.
+
 ### Proxy accounted usage
 
 `proxy-accounted-usage` reads a monthly budget that CPA Manager+ accounts for
