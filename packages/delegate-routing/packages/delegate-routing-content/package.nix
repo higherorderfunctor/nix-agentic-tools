@@ -105,10 +105,25 @@
       manualExternalDelegates = args.manualExternalDelegates or [];
     };
     pools = args.pools or {};
+    # Credential defaults identify reach, not a registered Reader's account.
+    budgetRoute = route: route // {pool = route.family.pools.${route.target} or null;};
+    budgetRoutes = map budgetRoute view.routes;
+    budgetView =
+      view
+      // {
+        manualRoutes = map budgetRoute view.manualRoutes;
+        pickerEntries = map (entry:
+          entry
+          // {
+            inherit (lib.findFirst (route: route.target == entry.runtime && route.family.name == entry.family) null budgetRoutes) pool;
+          })
+        view.pickerEntries;
+        routes = budgetRoutes;
+      };
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
       if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
       then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
-      else view // {inherit (args) runtime sessionPool;}
+      else budgetView // {inherit (args) runtime sessionPool;}
     ));
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";

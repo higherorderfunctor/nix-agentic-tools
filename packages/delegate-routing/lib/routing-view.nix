@@ -31,6 +31,30 @@
     else if target == "claude" && resolvedAgentFiles != null && resolvedAgentFiles ? ${family.name}
     then resolvedAgentFiles.${family.name}.id
     else resolved.${family.name}.id or null;
+  # Only one first-party credential offering the canonical launch can supply a default.
+  routePool = family: target: let
+    offers = offered target;
+    bindings = family.pools or null;
+    id = resolvedModel family target;
+    # Validation proves that every offer with this served spelling has one identity.
+    canonicalId =
+      if id == null
+      then null
+      else builtins.seq (selection.validateId catalog offers id) (lib.head (builtins.filter (offer: offer.model == id) offers)).id;
+    credentials = lib.unique (map (offer: offer.credential)
+      (builtins.filter (offer:
+          offer.id == canonicalId && offer.maker != null && (offer.vendor or null) == offer.maker)
+        (
+          if offers == null
+          then []
+          else offers
+        )));
+  in
+    if bindings != null
+    then bindings.${target} or null
+    else if builtins.length credentials == 1
+    then lib.head credentials
+    else null;
   selected = target:
     lib.filter (family: offered target == null || resolvedModel family target != null)
     (selection.select families models.${target});
@@ -101,7 +125,7 @@
   in {
     inherit target;
     family = {defaultEffort = null;} // family;
-    pool = family.pools.${target} or null;
+    pool = routePool family target;
     techniques =
       if names == []
       then
@@ -183,8 +207,13 @@ in {
   # Reader scopes name configured families even outside this runtime's reach.
   poolFamilies = lib.mapAttrs (pool: _:
     lib.sort builtins.lessThan (lib.unique (map (family: family.name)
-      (builtins.filter (family: builtins.elem pool (builtins.attrValues (family.pools or {})))
-        (selection.flatten families)))))
+      (builtins.filter (family:
+        builtins.elem pool (builtins.attrValues (
+          if (family.pools or null) == null
+          then {}
+          else family.pools
+        )))
+      (selection.flatten families)))))
   pools;
   inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
