@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import runpy
 from pathlib import Path
 import sys
 
@@ -14,6 +15,9 @@ normalizer = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = normalizer
 SPEC.loader.exec_module(normalizer)
 
+# Load the pure engine beside the source CLI, including under isolated Python.
+rank = runpy.run_path(str(Path(__file__).with_name("pacing.py")))["rank"]
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -22,7 +26,7 @@ def main():
     args = parser.parse_args()
     try:
         snapshot = json.loads(Path(args.snapshot).read_text())
-        result = normalizer.normalize(snapshot, args.now)
+        result = rank(normalizer.normalize(snapshot, args.now), snapshot.get("policy"))
     except (OSError, ValueError, TypeError, OverflowError, RecursionError):
         # Neither paths, timestamps nor JSON/parser exception text are diagnostics.
         print(json.dumps({"reason": "invalid-input"}), file=sys.stderr)

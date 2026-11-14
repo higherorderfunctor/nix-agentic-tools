@@ -9,12 +9,12 @@ python3 -I -B packages/delegate-routing/scripts/pacing-list.py \
 ```
 
 The command emits deterministic `allowance-preview` JSON. It executes no Reader
-or capture command and needs no configured installation. It does not rank
-models, infer prices, recommend resets or promise a versioned list schema. The
-installed routing helper is separate. When `scripts/delegate-routing-plan.py`
-switches to ranking from the normalized usage list, delete its `measure` and
-`window_pace` validators so `scripts/usage-normalize.py` owns Reader-envelope
-validation.
+or capture command and needs no configured installation. It ranks observed
+allowance but remains an incomplete, source-only preview: it does not infer
+prices, recommend resets or promise a versioned list schema. The installed
+routing helper is separate. When `scripts/delegate-routing-plan.py` switches to
+ranking from the normalized usage list, delete its `measure` and `window_pace`
+validators so `scripts/usage-normalize.py` owns Reader-envelope validation.
 
 Snapshots contain `runtime`, `routes`, `pools` and `readers`. Routes are the
 existing offer shape `{id, maker, model}`: `id` is the canonical model identity,
@@ -75,3 +75,57 @@ offline boundary fixtures, not production Nix configuration or a rotating
 catalog inventory. Tests reject scope expansion, route loss, unsafe metadata,
 zero loss on invalid timing, command execution and nondeterministic replay.
 Configured Reader collection and CPA attribution are outside this source CLI.
+
+The pure `scripts/pacing.py` engine adds `entries` while preserving `routes` and
+normalized observations. Entries match explicit limit `models` to canonical
+route `id`, retaining the served `model` separately. Multiple applicable pools
+remain inspection alternatives; an offer without applicable evidence has a null
+pool and unknown pace. They do not establish credential attribution.
+
+Pace is the minimum of remaining/capacity times windowSeconds/time-to-reset
+across applicable paced limits. It is not clipped: half a week remaining with
+half the allowance is 1, full allowance halfway through is 2. Each limit uses
+its own duration, including monthly periods. Positive valid gates do not lower
+pace; closed gates block readiness. Missing, stale, invalid, unresolved-scope or
+unknown-enforcement evidence cannot establish readiness. Unknown pace is null
+and scores zero; independently observed exhaustion still proves zero. An idle
+paced limit with no reset remains unknown; an open gate needs no reset.
+
+Optional snapshot `policy` maps observed pool keys to `{ "weight": 1.5 }`. Only
+`weight` is accepted, defaults to 1, and must be finite and nonnegative
+(booleans are refused). Every ready allowance score is pace times this weight,
+without reserve or reset conditions. Unknown pool keys are refused at the rank
+boundary. Weight zero changes preference without changing readiness.
+
+`delegate-routing-allowance-ranking` checks handwritten arithmetic and an
+independent rational reference, canonical scope, unknown evidence and policy
+validation. Its CLI cases use synthetic current snapshot shapes and an explicit
+clock; no production catalog inventory or operator configuration is copied.
+
+Each entry exposes `binding_limit`, the identifier of its smallest observed
+paced allowance (lexical identifier breaks equal-pace ties). It remains an
+inspection fact when other evidence blocks readiness; gates never become paced
+binding limits. `evidence` lists `stale_limits`, `unknown_limits`, and
+`scope_resolved`. Unknown limit IDs cover invalid or missing observations,
+unknown enforcement, or unusable pacing/release timing. Stale limits also count
+as unknown. Existing pool diagnostics explain capture and scope failures once;
+ranking does not repeat those diagnostics for every offer.
+
+`available_at` is the explicit clock for ready entries. For blocked entries it
+is the latest observed release of all exhausted gates and paced limits, only
+when every blocker has valid future timing and the remaining allowance evidence
+is complete. A closed gate with a known release needs no paced sibling to report
+that release; its pace remains null and its score zero. Any unresolved blocker,
+stale observation or unknown scope leaves availability null. This is conditional
+on the observations, not a refill or inference availability guarantee; reread
+before acting. Known zero survives malformed timing while its availability stays
+unknown.
+
+All applicable pool/model alternatives survive, including failed and exhausted
+entries with score zero. Entries sort by descending score, then ready before
+out, then pool and served model, canonical identity and maker (null before any
+string). No other readiness states are emitted. Original route and observation
+order remains untouched. `delegate-routing-allowance-output` checks these
+properties using literal expectations, an independent release-time reference,
+and the current offline CLI input shape; it rejects early promises, loss of
+failed offers, leaked capture text and unstable ties.
