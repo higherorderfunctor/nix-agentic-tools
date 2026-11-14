@@ -746,6 +746,33 @@ windows are absent, and balances and bonuses are arrays. Codex reset credits
 carry expiry dates when available; if the extra proxy request fails, the helper
 still reports their count.
 
+### Claude OAuth inventory
+
+Both direct login and CPA read OAuth usage with `cedar_ember=1&skip_spend=1`,
+using the installed Claude CLI version for the CLI-shaped User-Agent. Claude
+must therefore be on PATH for both transports. Readers only issue upstream GET
+requests; they never redeem or reset a grant. Profile and prepaid reads use
+source-evidenced OAuth paths, not a browser cookie or a guessed endpoint. These
+paths are tested with fake transport, not verified against a live account.
+
+`grants` preserves the observed `cedar_ember` discovery facts, including the
+natural weekly reset, opaque handles, counts, expiry, `clears` and
+`gives_back_weekly`. `bonuses` projects remaining resets and known usability;
+missing eligibility stays null. Grant type never implies account-to-Fable
+coverage, a full weekly refill, or a restarted weekly clock. A null expiry means
+unknown expiry. Recommendations require a fresh observation before use.
+
+`balances` contains only real promotional and purchased prepaid lots, in USD,
+with independent expiry. `credit.cap` and `credit.spent` preserve separate
+provider amount records; they never become wallet balances. The evidenced
+responses do not establish the cap's calendar period, so `periodStart`,
+`periodEnd` and `usable` remain null, including when a cap or spend is missing.
+No cap is inferred to be unlimited. Optional profile/prepaid failures preserve
+allowance and grants; absent or malformed grant inventory preserves allowance.
+`missingExtras` names unavailable optional observations without exposing
+response bodies or transport errors. An observed empty inventory remains
+distinct from an unavailable observation.
+
 ### Proxy accounted usage
 
 `proxy-accounted-usage` reads a monthly budget that CPA Manager+ accounts for
