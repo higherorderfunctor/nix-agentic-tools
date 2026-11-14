@@ -9,6 +9,7 @@ reasons and operation anchors rather than release versions or whole-file hashes.
 
 import pathlib
 import re
+import shlex
 import sys
 
 
@@ -122,9 +123,44 @@ ATTRIBUTE = re.compile(r'\b(?:patches|patchFlags)\s*=|\bapplyPatches\b|\binherit
 COMMAND = re.compile(
     r'(?:^|[\n;|&(`])\s*(?:(?:do|elif|else|if|then|until|while|!|\{)\s+)*(?:exec\s+)?["\']?'
     rf'(?P<exe>(?:\$\{{[^}}]+\}}|/[^\s"\';|&]+)?(?:/bin/)?(?:patch|git)|\$\{{\s*{GET_EXE}\s*\}})'
-    r'["\']?(?=\s|$)(?P<args>[^\n;|&`]*)', re.M,
+    r'["\']?(?=\s|[<>]|$)(?P<args>[^\n;|&`]*)', re.M,
 )
-SHELL_WORD = r'''(?:[^\s"']+|"[^"\n]*"|'[^'\n]*')+'''
+
+def git_applies(args):
+    """Inspect shell words, excluding comments and redirection operands."""
+    lexer = shlex.shlex(args, posix=True, punctuation_chars='<>')
+    lexer.whitespace_split = True
+    words = []
+    try:
+        words.extend(lexer)
+    except ValueError:
+        pass  # The command matcher may stop inside a quoted argument at an operator.
+    command = []
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if word and set(word) <= {'<', '>'}:
+            if command and command[-1].isdigit():
+                command.pop()
+            i += 2  # The following word names the redirected input or output.
+            continue
+        command.append(word)
+        i += 1
+    i = 0
+    while i < len(command):
+        word = command[i]
+        if word in {'-C', '-c', '--git-dir', '--work-tree'}:
+            i += 2
+        elif word.startswith('--'):
+            i += 1
+        else:
+            break
+    if i >= len(command) or command[i] != 'apply':
+        return False
+    options = command[i + 1:]
+    if '--' in options:
+        options = options[:options.index('--')]
+    return '--apply' in options or '--check' not in options
 
 
 def violations(path, text):
@@ -144,8 +180,7 @@ def violations(path, text):
         for match in COMMAND.finditer(body):
             exe, args = match['exe'], match['args']
             if 'git' in exe:
-                application = re.match(rf'\s*(?:(?:-C|-c|--git-dir|--work-tree)\s+{SHELL_WORD}\s+|--[\w-]+(?:={SHELL_WORD})?\s+)*apply(?:\s|$)', args)
-                if not application or re.search(r'(?:^|\s)--check(?:\s|$)', args[application.end():]):
+                if not git_applies(args):
                     continue
             errors.append(f'line {text.count(chr(10), 0, offset + match.start()) + 1}: direct patch command')
     for operation, reason in PNPM.get(path, []):
