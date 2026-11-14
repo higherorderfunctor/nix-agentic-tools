@@ -770,13 +770,27 @@ its admin key file; the key is read in process and sent through curl `--config`
 on stdin, never through argv. The reader fails when the collector is not
 running, when discovery matches zero or several credentials, when the analytics
 response is invalid (`model_stats` may be empty only when the summary reports
-zero calls), when its coverage reports deleted raw events or a degraded summary,
-or when an analytics model row reports tokens with zero cost: Manager+ prices a
-row through its billing or pricing model and leaves one it cannot price at zero,
-and coverage is judged from those analytics rows, not a price book. Calls that
-used no tokens cost nothing legitimately. A display model that merges a priced
-and an unpriced billing model shows a positive total and is not detected; that
-is the limit of the estimate, which is why the window's status is `estimated`.
+zero calls), when coverage or its deletion/limitation fields are absent, or when
+coverage reports deleted raw events or a degraded summary, or when an analytics
+model row reports tokens with zero cost: Manager+ prices a row through its
+billing or pricing model and leaves one it cannot price at zero, and coverage is
+judged from those analytics rows, not a price book. Calls that used no tokens
+cost nothing legitimately. A display model that merges a priced and an unpriced
+billing model shows a positive total and is not detected; that is the limit of
+the estimate, which is why the window's status is `estimated`.
+
+Missing coverage means incomplete accounting, not proof of proxy bypass or zero
+spend. Explicit zero deleted events and no degraded-summary limitations preserve
+the monthly estimate even for mixed raw/aggregate coverage. Calendar boundaries,
+configured budgets and credential discovery are unchanged. At the exact reset
+instant the empty new window still reports zero without an analytics request.
+
+An unpriced-model failure exits nonzero with only
+`{reason: "unpriced-models", count: N}` on stdout. The routing helper preserves
+this count and warns "N models have no price in CPA Manager" once per shared
+Reader command. Other failures retain fixed safe reasons; neither model names
+nor Reader stderr enter the helper's diagnostics. The estimate cannot establish
+unobserved traffic.
 
 A consumer example with placeholder values:
 

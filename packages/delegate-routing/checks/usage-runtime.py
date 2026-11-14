@@ -450,9 +450,9 @@ for line in sys.stdin:
                 result = self.run_proxy(*self.proxy_command())
                 if count:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(result.stderr, f"usage: proxy analytics contain {count} unpriced models\n")
+                    self.assertEqual(result.stderr, f"usage: proxy {count} models have no price in CPA Manager\n")
                     self.assertNotIn("claude-mystery-5", result.stderr)
-                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(json.loads(result.stdout), {"count": count, "reason": "unpriced-models"})
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
         # The rows that judge coverage must themselves be well typed.
@@ -489,6 +489,42 @@ for line in sys.stdin:
                         self.assertNotEqual(result.returncode, 0)
                         self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
                         self.assertEqual(result.stdout, "")
+
+    def test_proxy_missing_coverage_is_not_complete_or_zero_spend(self):
+        # Wrong: null/missing coverage facts default to complete zero deletions.
+        self.configs["claude"] = [PROXY_GROUP]
+        for coverage in [None, {}, {"raw_deleted_event_count": 0},
+                         {"fidelity_limitations": []},
+                         {"raw_deleted_event_count": None, "fidelity_limitations": []},
+                         {"raw_deleted_event_count": 0, "fidelity_limitations": None}]:
+            for cost in [0, 5]:
+                with self.subTest(coverage=coverage, cost=cost):
+                    self.analytics = copy.deepcopy(ANALYTICS)
+                    self.analytics["coverage"] = coverage
+                    self.analytics["summary"]["total_cost"] = cost
+                    result = self.run_proxy(*self.proxy_command())
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.stderr, "usage: proxy cost coverage incomplete\n")
+        self.analytics = copy.deepcopy(ANALYTICS)
+        self.analytics.pop("coverage")
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "usage: proxy cost coverage incomplete\n")
+        # Known unpriced counts survive absent coverage; no model name escapes.
+        self.analytics["model_stats"][0]["cost"] = 0
+        result = self.run_proxy(*self.proxy_command())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout), {"count": 1, "reason": "unpriced-models"})
+        # Wrong: raw_complete=false discards independently supported monthly facts.
+        self.analytics = copy.deepcopy(ANALYTICS)
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        monthly = json.loads(result.stdout)["windows"]["monthly"]
+        self.assertEqual(monthly["usedPercent"], 5)
+        self.assertEqual(monthly["remainingPercent"], 95)
+        self.assertEqual(monthly["status"], "estimated")
 
     def test_proxy_cost_and_coverage_fail_closed(self):
         self.configs["claude"] = [PROXY_GROUP]

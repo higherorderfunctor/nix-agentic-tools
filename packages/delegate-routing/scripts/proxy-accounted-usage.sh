@@ -195,15 +195,6 @@ if ((proxy_usage_from < proxy_usage_current)); then
            and ((.coverage.raw_deleted_event_count // 0) >= 0)
            and (.coverage.fidelity_limitations | (type == "array" or type == "null")))' \
     <<<"$proxy_usage_analytics" >/dev/null 2>&1 || usage_cpa_error 'invalid analytics response'
-  # Hourly pricing roll-ups carry no credential key, so any deleted raw event or
-  # degraded-summary limitation can lower this credential's total.
-  if jq -e '.coverage // {} | ((.raw_deleted_event_count // 0) > 0
-             or any(.fidelity_limitations[]?;
-                    . == "core_metrics_require_raw_events"
-                    or . == "extended_summary_metrics_require_raw_events"))' \
-    <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
-    usage_cpa_error 'cost coverage incomplete'
-  fi
   # Manager+ prices a stat through its billing or pricing model, so coverage is
   # judged from the analytics rows themselves, not a price book: a row that
   # consumed tokens and costs zero is one Manager+ could not price, which must
@@ -214,8 +205,24 @@ if ((proxy_usage_from < proxy_usage_current)); then
   proxy_usage_unpriced=$(jq -r '[.model_stats[]?
                                  | select(.total_tokens > 0 and .cost == 0)] | length' \
     <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
-  [[ $proxy_usage_unpriced == 0 ]] ||
-    usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
+  if [[ $proxy_usage_unpriced != 0 ]]; then
+    jq -cn --argjson count "$proxy_usage_unpriced" '{count: $count, reason: "unpriced-models"}'
+    usage_cpa_error "$proxy_usage_unpriced models have no price in CPA Manager"
+  fi
+  # Absent coverage cannot establish complete credential spend, even when the
+  # reported cost is zero. It says nothing about traffic bypassing the proxy.
+  # Explicit zero deletions and no degraded-summary limitation retain the
+  # existing monthly estimate, including mixed raw/aggregate observations.
+  # Hourly pricing roll-ups carry no credential key, so deleted raw events or
+  # degraded-summary limitations can lower this credential's total.
+  if ! jq -e '.coverage | .raw_deleted_event_count == 0
+               and .fidelity_limitations != null
+               and (any(.fidelity_limitations[]?;
+                        . == "core_metrics_require_raw_events"
+                        or . == "extended_summary_metrics_require_raw_events") | not)' \
+    <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
+    usage_cpa_error 'cost coverage incomplete'
+  fi
 else
   # The reset instant itself: an empty range, which Manager+ rejects, and
   # nothing has been spent in the new window yet.

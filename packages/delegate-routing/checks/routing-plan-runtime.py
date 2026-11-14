@@ -1391,6 +1391,35 @@ class Routing(unittest.TestCase):
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
+    def test_reader_unpriced_diagnostic_is_closed_and_keeps_count(self):
+        # Wrong: generic failure drops the known count, or arbitrary stdout/stderr
+        # (including model names) becomes a warning. All cases are synthetic.
+        valid = {"count": 2, "reason": "unpriced-models"}
+        cases = [(json.dumps(valid), True)]
+        for count in [None, True, 0, -1, 2.5, "2", "secret-model"]:
+            cases.append((json.dumps({**valid, "count": count}), False))
+        cases.extend((json.dumps(value), False) for value in [
+            {**valid, "models": ["secret-model"]},
+            {**valid, "reason": "secret-reason"}, [valid], None,
+        ])
+        cases.extend([(json.dumps(valid) + "\n" + json.dumps(valid), False),
+                      ("secret-stdout", False), ("[" * 2000, False)])
+        for stdout, accepted in cases:
+            with self.subTest(stdout=stdout[:100]):
+                config = manifest([route(), route("other", pool="session")])
+                config["readers"][1]["command"] = "reader-outside"
+                failure = subprocess.CompletedProcess("secret-command", 7, stdout, "secret-stderr")
+                result, calls = self.run_plan(config, context(names=("sol", "other")),
+                                              outputs={"reader-outside": failure})
+                expected = {"status": "unreachable", **(valid if accepted else {"reason": "Reader exited 7"})}
+                self.assertEqual(result["pools"]["outside"], expected)
+                self.assertEqual(calls.count("reader-outside"), 2)
+                reason = "2 models have no price in CPA Manager" if accepted else "Reader exited 7"
+                self.assertEqual([w for w in result["warnings"] if "Reader for" in w],
+                                 [f"WARNING: Reader for outside, session failed: {reason}. Report this failure to the user."])
+                self.assertEqual(result["roles"]["writer"]["candidates"], [])
+                self.assertNotIn("secret-", json.dumps(result))
+
     def test_reader_failures_never_supply_fit_only_routes(self):
         # Wrong: failed Readers become fit-only choices, including HTTP 429.
         failures = [
