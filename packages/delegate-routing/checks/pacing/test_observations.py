@@ -162,6 +162,37 @@ class Observations(unittest.TestCase):
         self.assertIn("invalid-extras", reasons(result))
         self.assertNotIn("private-", json.dumps(result))
 
+    def test_absent_and_empty_extras_are_distinct(self):
+        """Absent extras are unknown while explicit empty arrays are known empty."""
+        value = snapshot()
+        metadata = N.normalize(value, NOW)["pools"]["budget"]["readerMetadata"]
+        self.assertEqual(metadata, {"balances": None, "bonuses": None})
+        value["readers"]["budget"]["data"].update(balances=[], bonuses=[])
+        result = N.normalize(value, NOW)
+        self.assertEqual(result["pools"]["budget"]["readerMetadata"], {"balances": [], "bonuses": []})
+        self.assertNotIn("invalid-extras", reasons(result))
+
+    @given(st.integers(min_value=0), st.sampled_from([-1, 0.5, True, "2", None]))
+    def test_bonus_counts_are_whole_and_nonnegative(self, count, invalid):
+        """Whole nonnegative counts survive while invalid siblings are omitted independently."""
+        value = snapshot()
+        bonus = N.Bonus(count=count, expiresAt=None, kind="promo_credits").model_dump(mode="json")
+        value["readers"]["budget"]["data"]["bonuses"] = [bonus, {**bonus, "count": invalid}]
+        result = N.normalize(value, NOW)
+        self.assertEqual(result["pools"]["budget"]["readerMetadata"]["bonuses"],
+                         [{"count": count, "expiresAt": None, "kind": "promo_credits"}])
+        self.assertIn("invalid-extras", reasons(result))
+        self.assertEqual(limit(result)["remaining"], 30)
+
+    def test_private_account_fields_are_not_projected(self):
+        """Non-null account identity fields remain private even in successful captures."""
+        value = snapshot()
+        value["readers"]["budget"]["data"]["account"] = {
+            "auth_index": "private-auth", "name": "private-name", "plan": "private-plan"}
+        result = N.normalize(value, NOW)
+        self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
+        self.assertNotIn("private-", json.dumps(result))
+
     def test_literal_metadata_allowlist(self):
         """Known extras retain native values while invalid siblings and secrets disappear."""
         value = snapshot()
@@ -230,14 +261,17 @@ class Observations(unittest.TestCase):
         with self.assertRaises(ValueError):
             N.from_json("[" * 201 + "0" + "]" * 201)
 
-    @given(st.sampled_from(["active", "critical", "estimated", "normal", "ok", "warning", "inactive", None]))
+    @given(st.one_of(
+        st.sampled_from(["active", "critical", "estimated", "normal", "ok", "warning", None]),
+        st.text().filter(lambda status: status not in {"active", "critical", "estimated", "normal", "ok", "warning"}),
+    ))
     def test_status_controls_enforcement_only(self, status):
         """Unknown enforcement leaves valid measured allowance available for inspection."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = status
         result = limit(N.normalize(value, NOW))
         self.assertEqual((result["readerStatus"], result["remaining"], result["status"]), (status, 30, "valid"))
-        self.assertEqual(result["enforced"], None if status in ("inactive", None) else True)
+        self.assertEqual(result["enforced"], True if status in {"active", "critical", "estimated", "normal", "ok", "warning"} else None)
 
     @given(st.sampled_from([True, [], {"secret": "private-status"}]))
     def test_malformed_status_preserves_allowance(self, bad):
