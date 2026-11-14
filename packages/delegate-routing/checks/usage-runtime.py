@@ -955,6 +955,40 @@ print({json.dumps(json.dumps(ZAI))})
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(len(self.requests), 2)
 
+    def test_claude_envelope_types_and_body_transport(self):
+        # Reject malformed envelopes and preserve opaque body text through transport.
+        for envelope in [{"status_code": "200", "body": "private-response-body"},
+                         {"status_code": 200, "body": {"private-response-body": True}},
+                         {"status_code": None, "body": "private-response-body"}]:
+            with self.subTest(envelope=envelope):
+                self.envelope = envelope
+                result = self.run_helper("claude")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("claude usage request failed", result.stderr)
+                self.assertNotIn("private-response-body", result.stderr)
+                self.assertEqual(result.stdout, "")
+        usage = copy.deepcopy(CLAUDE)
+        usage["cedar_ember"] = {"grants": [], "note": "tab\tline\nsnowman \u2603 $(false)"}
+        self.envelope = {"status_code": 200, "body": json.dumps(usage, indent=2, ensure_ascii=False)}
+        result = self.run_helper("claude")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["grants"], usage["cedar_ember"])
+
+    def test_claude_projector_observation_is_explicit(self):
+        # Usage ignores optional inventory, and an unknown mode cannot select usage.
+        for observation in ["usage", "unknown"]:
+            result = subprocess.run(
+                ["bash", "-c", 'set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :; '
+                 'source "$1"; usage_project claude null null "{}" "$2"',
+                 "projector-test", str(SCRIPTS / "usage-cpa.sh"), observation],
+                input=json.dumps(CLAUDE), text=True, capture_output=True)
+            if observation == "usage":
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["balances"], [])
+            else:
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+
     def test_claude_empty_inventory_is_observed_and_invalid_lot_is_unavailable(self):
         # Distinguishes zero observations from rejected data without erasing windows.
         self.usage["claude"]["cedar_ember"] = {"grants": []}

@@ -13,8 +13,8 @@ declare -rA delegate_usage_api_keys=(
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
-# The optional fifth argument projects only prepaid inventory, leaving validated
-# main usage untouched when the optional request or its data is unavailable.
+# The optional fifth argument selects usage (default) or prepaid inventory.
+# Prepaid failures leave validated main usage untouched.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
   jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" '
@@ -88,7 +88,7 @@ usage_project() {
       try ($prepaid | if type != "object" then error("claude prepaid") else . end
         | {value: prepaid_balances, missing: []})
       catch {value: [], missing: ["claude-prepaid-unavailable"]}
-    else
+    elif $observation == "usage" then
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -117,7 +117,7 @@ usage_project() {
             # OAuth responses do not establish a cap period or usable credit.
             credit: {cap: (try .spend.limit catch null), spent: (try .spend.used catch null),
                      periodStart: null, periodEnd: null, usable: null},
-            balances: ($prepaid | prepaid_balances),
+            balances: [],
             # Preserve provider effects, including unknown targets, rather than
             # infer account/Fable coverage from a grant type or its name.
             grants: .cedar_ember,
@@ -158,13 +158,14 @@ usage_project() {
               .percentage; (.nextResetTime | if . == null then null else . / 1000 end); null)] as $windows
         | if $windows == [] then error("z.ai windows") else
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
-      end end
+      end
+    else error("usage observation") end
   ' 2>/dev/null
 }
 
 # Both Claude transports use the same headers, request sequence and projection.
 usage_claude_request() {
-  local url=$1 request envelope status
+  local url=$1 request envelope record status successful encoded_body
   if [[ $delegate_usage_claude_account != null ]]; then
     request=$(jq -cn --argjson account "$delegate_usage_claude_account" --arg url "$url" \
       --arg ua "$delegate_usage_claude_agent" --arg beta "$delegate_usage_claude_beta" '
@@ -172,12 +173,20 @@ usage_claude_request() {
        header: {Authorization: "Bearer $TOKEN$", "Content-Type": "application/json",
                 "User-Agent": $ua, "anthropic-beta": $beta}}')
     envelope=$(usage_cpa_request POST api-call "$request") || return 1
-    status=$(jq -er '.status_code | select(type == "number")' <<<"$envelope" 2>/dev/null) || return 1
-    if ! jq -e '. >= 200 and . < 300' <<<"$status" >/dev/null; then
+    # Keep the external envelope at one typed boundary. Base64 makes its body
+    # one shell field without interpreting provider text as shell syntax.
+    record=$(jq -er '
+      if (.status_code | type) != "number" then error("claude status") else . end
+      | (.status_code >= 200 and .status_code < 300) as $successful
+      | if $successful and (.body | type) != "string" then error("claude body") else . end
+      | [.status_code, $successful, (if $successful then .body | @base64 else "" end)] | @tsv
+    ' <<<"$envelope" 2>/dev/null) || return 1
+    IFS=$'\t' read -r status successful encoded_body <<<"$record"
+    if [[ $successful != true ]]; then
       printf 'usage: proxy vendor HTTP %s\n' "$status" >&2
       return 1
     fi
-    jq -er '.body | select(type == "string")' <<<"$envelope" 2>/dev/null
+    printf '%s' "$encoded_body" | base64 --decode
   else
     # shellcheck disable=SC2154 # The appended vendor script sets delegate_usage_token.
     curl -q --fail --silent --show-error --max-time 75 --config - 2>/dev/null <<EOF_CLAUDE
