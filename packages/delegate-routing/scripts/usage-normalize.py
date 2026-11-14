@@ -1,7 +1,11 @@
-"""Normalize saved Reader captures for the owner's offline boundary tests.
+"""Turn saved Reader output into the allowance limits the routing ranking uses.
 
-Pydantic parses each independent component; typed observations retain allowance
-when timing or optional metadata fails. No Reader or capture command is run.
+A snapshot holds the routes, each pool's registered limits and each Reader's
+saved capture. normalize() parses them with pydantic, keeps every route, and
+returns each limit's remaining amount, natural reset and role. A malformed
+capture or field loses only its own observations. Today only the tests call it;
+the routing helper consumes it once it ranks from these limits. Nothing here
+runs a Reader or a command, or reads the clock.
 """
 
 import math
