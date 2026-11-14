@@ -1347,7 +1347,7 @@
           })
           runtime))
       runtimes
-      && lib.all (family: family.pools == {}) ((import ../lib/select-families.nix {inherit lib;}).flatten result.config.ai.programs.delegate-routing.families)
+      && lib.all (family: family.pools == null) ((import ../lib/select-families.nix {inherit lib;}).flatten result.config.ai.programs.delegate-routing.families)
     );
     "module-delegate-routing-${name}-pools-reader-assertions" = mkTest "delegate-routing-${name}-pools-reader-assertions" (
       poolReaderFails {runtimes.claude.techniques.pool-reader.enable = false;}
@@ -1747,7 +1747,7 @@
       && (manual ["fixture-"]).drvPath == (manual []).drvPath
       && !(builtins.tryEval (manual [""]).drvPath).success
       && !(builtins.tryEval (builtins.deepSeq invalid.config.ai.programs.delegate-routing.opencodeGo true)).success
-      && portable.families.zhipuai.glm.pools == {}
+      && portable.families.zhipuai.glm.pools == null
       && portable.families.zhipuai.glm.defaultEffort == "high"
       && portable.families.zhipuai.glm-flash.defaultEffort == null);
     "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let

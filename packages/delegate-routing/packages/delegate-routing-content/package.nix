@@ -112,8 +112,23 @@
       manualExternalDelegates = args.manualExternalDelegates or [];
     };
     pools = args.pools or {};
-    manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
+    # Credential defaults identify reach, not a registered Reader's account.
+    budgetRoute = route: route // {pool = route.family.pools.${route.target} or null;};
+    budgetRoutes = map budgetRoute view.routes;
+    budgetView =
       view
+      // {
+        manualRoutes = map budgetRoute view.manualRoutes;
+        pickerEntries = map (entry:
+          entry
+          // {
+            inherit (lib.findFirst (route: route.target == entry.runtime && route.family.name == entry.family) null budgetRoutes) pool;
+          })
+        view.pickerEntries;
+        routes = budgetRoutes;
+      };
+    manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
+      budgetView
       // {
         inherit sessionPool;
         inherit (args) runtime;

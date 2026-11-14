@@ -273,9 +273,9 @@ in {
               description = "Subscription pool guidance, such as how much use empties the pool. OpenCode Go presets fill it from opencodeGo.plan.";
             };
             pools = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-              default = {};
-              description = "Budget pool by target runtime. A null binding means no pool is known for that reach.";
+              type = lib.types.nullOr (lib.types.attrsOf (lib.types.nullOr lib.types.str));
+              default = null;
+              description = "Budget pool by target runtime. Null defaults to the unique reachable first-party CPA credential; an explicit map (including empty) overrides inference, and a null runtime binding leaves its pool unknown.";
             };
             tier = lib.mkOption {
               type = lib.types.enum tierNames;
@@ -591,7 +591,11 @@ in {
             assertion = pool == null || builtins.hasAttr pool portable.pools;
             message = "${path}: unknown pool `${toString pool}`; declare it under ai.programs.delegate-routing.pools.";
           })
-        family.pools)
+        (
+          if family.pools == null
+          then {}
+          else family.pools
+        ))
       flattenedFamilies
       ++ lib.concatMap (runtime: let
         path = "ai.programs.delegate-routing.runtimes.${runtime}";
