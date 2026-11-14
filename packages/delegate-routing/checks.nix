@@ -8,23 +8,14 @@
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
   checks = {
-    # Synthetic properties reject premature availability, route loss and unstable ties.
-    delegate-routing-allowance-output =
-      pkgs.runCommand "delegate-routing-allowance-output" {
-        nativeBuildInputs = [pkgs.python3];
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        python3 -I -B ${./checks/pacing}/test_allowance_output.py ${./scripts}
-        touch "$out"
-      '';
     # Synthetic properties reject clipped pace, gate pacing and conditional weights.
     delegate-routing-allowance-ranking =
       pkgs.runCommand "delegate-routing-allowance-ranking" {
-        nativeBuildInputs = [pkgs.python3];
+        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        export HYPOTHESIS_STORAGE_DIRECTORY="$TMPDIR/hypothesis"
         python3 -I -B ${./checks/pacing}/test_allowance.py ${./scripts}
         touch "$out"
       '';

@@ -1,90 +1,84 @@
-"""Pure allowance ranking for normalized offers; no capture or routing decisions."""
+"""Rank normalized credential allowances without collecting or selecting a route.
 
-import math
+Owner tests call rank() with normalize() output and typed per-pool weights.
+The result retains that snapshot and adds ordered entries; it never advances
+observations or infers a refill from elapsed time.
+"""
 
+from pathlib import Path
+import runpy
+import types
+from typing import Literal, NamedTuple
 
-def weights(policy, pools):
-    # Reject misspelled pools, future policy fields and unusable caller weights here.
-    if policy is None:
-        return {}
-    if not isinstance(policy, dict) or policy.keys() - pools.keys():
-        raise ValueError("invalid-policy")
-    result = {}
-    for pool, settings in policy.items():
-        if not isinstance(settings, dict) or settings.keys() - {"weight"}:
-            raise ValueError("invalid-policy")
-        weight = settings.get("weight", 1)
-        if (isinstance(weight, bool) or not isinstance(weight, (int, float))
-                or not math.isfinite(weight) or weight < 0):
-            raise ValueError("invalid-weight")
-        result[pool] = weight
-    return result
+from pydantic import RootModel
+
+# Share the normalizer's boundary types without an installed Python package.
+normalizer = types.SimpleNamespace(**runpy.run_path(str(Path(__file__).with_name("usage-normalize.py"))))
 
 
-def allowance(limits, resolved, now):
-    # Consume normalized validity and enforcement; never repair or advance observations.
-    paces, releases, stale, unknown = [], [], [], []
+class Weights(RootModel[dict[str, normalizer.Amount]]):
+    """Parse finite nonnegative preference multipliers keyed by registered pool."""
+
+
+class Entry(normalizer.Route):
+    """Expose readiness and weighted pace for one route and credential alternative."""
+    pace: normalizer.Amount | None
+    pool: str | None
+    score: normalizer.Amount
+    state: Literal["out", "ready"]
+
+
+class Ranking(NamedTuple):
+    """Retain the trusted snapshot alongside computed entries without revalidation."""
+    snapshot: normalizer.Normalized
+    entries: list[Entry]
+
+
+def allowance(limits: list[normalizer.Observation], resolved: bool, now: int) -> tuple[float | None, bool]:
+    """Use normalized enforcement and validity; independent paced zero survives uncertainty."""
+    paces, blocked, uncertain = [], False, not resolved
     for limit in limits:
-        identifier, remaining = limit["id"], limit["remaining"]
-        reset = limit["naturalResetAt"]
-        valid = limit["status"] == "valid" and limit["enforced"] is True
-        if limit["status"] == "stale":
-            stale.append(identifier)
-        if remaining == 0:
-            # Independent zero survives bad timing, but cannot promise a return.
-            release = limit["gateOpensAt"] if limit["role"] == "gate" else reset
-            releases.append(release if valid and release is not None and release > now else None)
-            if not valid or releases[-1] is None:
-                unknown.append(identifier)
-            if limit["role"] == "pace":
-                paces.append((0, identifier))
-            continue
-        if not valid or remaining is None:
-            unknown.append(identifier)
-            continue
-        if limit["role"] == "gate":
-            # A positive valid rolling gate is open, even without a reset timestamp.
-            continue
-        if reset is None or reset <= now:
-            unknown.append(identifier)
-            continue
-        pace = remaining / limit["capacity"] * limit["windowSeconds"] / (reset - now)
-        if not math.isfinite(pace):
-            unknown.append(identifier)
-            continue
-        paces.append((pace, identifier))
-    binding = min(paces) if paces else None
-    uncertain = not resolved or bool(unknown)
-    pace = 0 if binding and binding[0] == 0 else None if uncertain or not binding else binding[0]
-    ready = pace is not None and pace > 0 and not releases and not uncertain
-    # All blockers must have known future releases; never advance an expired reset.
-    available = now if ready else (
-        max(releases) if releases and None not in releases and not uncertain else None
-    )
-    return dict(available_at=available, binding_limit=binding[1] if binding else None,
-                evidence=dict(scope_resolved=resolved, stale_limits=sorted(stale), unknown_limits=sorted(unknown)),
-                pace=pace, state="ready" if ready else "out")
+        valid = limit.status == "valid" and limit.enforced is True
+        if limit.remaining == 0:
+            blocked = True
+            uncertain |= not valid
+            if limit.role == "pace":
+                paces.append(0.0)
+        elif not valid:
+            uncertain = True
+        elif limit.role == "pace":
+            # Idle windows may lack a reset; they cannot establish a rate.
+            if limit.naturalResetAt is None:
+                uncertain = True
+            else:
+                paces.append(limit.remaining / limit.capacity * limit.windowSeconds / (limit.naturalResetAt - now))
+    if 0 in paces:
+        pace = 0.0
+    elif uncertain or not paces:
+        pace = None
+    else:
+        pace = min(paces)
+    return pace, pace is not None and pace > 0 and not blocked and not uncertain
 
 
-def rank(snapshot, policy=None):
-    """Retain the normalized snapshot and add explicitly applicable allowance entries."""
-    pool_weights = weights(policy, snapshot["pools"])
+def rank(snapshot: normalizer.Normalized, weights: Weights | None = None) -> Ranking:
+    """Keep every offer and applicable pool, sorting ready scores by preference."""
+    pool_weights = weights.root if weights is not None else {}
+    if pool_weights.keys() - snapshot.pools.keys():
+        raise ValueError("unknown-weight-pool")
     entries = []
-    for offer in snapshot["routes"]:
+    for offer in snapshot.routes:
         applicable = [
-            (pool, evidence, [limit for limit in evidence["limits"] if offer["id"] in limit["models"]])
-            for pool, evidence in sorted(snapshot["pools"].items())
+            (pool, evidence.scopeResolved, [limit for limit in evidence.limits if offer.id in limit.models])
+            for pool, evidence in sorted(snapshot.pools.items())
         ]
-        applicable = [item for item in applicable if item[2]]
-        if not applicable:
-            entries.append({**offer, **allowance([], False, snapshot["asOf"]), "pool": None, "score": 0})
-        for pool, evidence, limits in applicable:
-            result = allowance(limits, evidence["scopeResolved"], snapshot["asOf"])
-            score = result["pace"] * pool_weights.get(pool, 1) if result["state"] == "ready" else 0
-            if not math.isfinite(score):
-                raise ValueError("invalid-weighted-score")
-            entries.append({**offer, **result, "pool": pool, "score": score})
-    entries.sort(key=lambda entry: (-entry["score"], entry["state"] != "ready",
-                                  entry["pool"] or "", entry["model"], entry["id"],
-                                  entry["maker"] is not None, entry["maker"] or ""))
-    return {**snapshot, "entries": entries}
+        applicable = [item for item in applicable if item[2]] or [(None, False, [])]
+        for pool, resolved, limits in applicable:
+            pace, ready = allowance(limits, resolved, snapshot.asOf)
+            # Entry's finite score constraint refuses overflow of otherwise finite factors.
+            entries.append(Entry(id=offer.id, maker=offer.maker, model=offer.model,
+                                 pace=pace, pool=pool, score=pace * pool_weights.get(pool, 1) if ready else 0,
+                                 state="ready" if ready else "out"))
+    entries.sort(key=lambda entry: (-entry.score, entry.state != "ready", entry.pool or "",
+                                  entry.model, entry.id, entry.maker is not None, entry.maker or ""))
+    return Ranking(snapshot, entries)
