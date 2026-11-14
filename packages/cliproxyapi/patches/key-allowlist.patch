@@ -118,7 +118,7 @@ index 0000000..7dea5e5
 +func TestKeyAllowlistSeparatesSameProviderBaseURLs(t *testing.T) {
 +	cfg, errParse := config.ParseConfigBytes([]byte(`config-version: 8
 +access:
-+  api-keys: [key-both, key-nearmiss, key-oauth, key-oauth-plain, key-plain, key-zai]
++  api-keys: [key-both, key-nearmiss, key-oauth, key-oauth-plain, key-plain, key-zhipuai]
 +  key-allowlist:
 +    - api-key: key-both
 +      credentials: [{provider: claude, kind: apikey, base-urls: [https://api.z.ai/api/anthropic, https://other.example/anthropic]}]
@@ -130,13 +130,13 @@ index 0000000..7dea5e5
 +      credentials: [{provider: claude, kind: oauth}]
 +    - api-key: key-plain
 +      credentials: [{provider: claude, kind: apikey}]
-+    - api-key: key-zai
++    - api-key: key-zhipuai
 +      credentials: [{provider: claude, kind: apikey, base-urls: [" https://api.z.ai/api/anthropic "]}]
 +api-keys:
 +  claude:
-+    - name: zai
++    - name: zhipuai
 +      base-url: https://api.z.ai/api/anthropic
-+      keys: [{api-key: upstream-zai}]
++      keys: [{api-key: upstream-zhipuai}]
 +    - name: other
 +      base-url: https://other.example/anthropic
 +      keys: [{api-key: upstream-other}]
@@ -182,7 +182,7 @@ index 0000000..7dea5e5
 +		{key: "key-oauth-plain", want: []string{"oauth"}},
 +		// Positive control: the group with no base_url is selectable, by a rule without base-urls.
 +		{key: "key-plain", want: []string{"default", "https://api.z.ai/api/anthropic", "https://other.example/anthropic"}},
-+		{key: "key-zai", want: []string{"https://api.z.ai/api/anthropic"}},
++		{key: "key-zhipuai", want: []string{"https://api.z.ai/api/anthropic"}},
 +	}
 +	for _, test := range cases {
 +		key, want := test.key, test.want

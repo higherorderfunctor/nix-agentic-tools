@@ -5,7 +5,7 @@ management indexes independent of chat compatibility. Add a raw client route,
 executor and internal-only model registration using native selection, cooldown
 and per-client usage reporting. Select configured response objects and usage
 locations.
-Applied after key-allowlist and zai-tool-shims with --fuzz=0.
+Applied after key-allowlist and zhipuai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
