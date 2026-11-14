@@ -51,13 +51,13 @@ CODEX_DIRECT = {
         "credits": {"hasCredits": True, "balance": "62500.0000000000"},
     },
     "rateLimitResetCredits": {"availableCount": 2, "applicableAvailableCount": 2, "credits": [
-        {"status": "available", "isSupportedByPlan": True, "expiresAt": 1900000000},
-        {"status": "available", "isSupportedByPlan": True, "expiresAt": 1900000060},
+        {"status": "available", "isSupportedByPlan": True, "expiresAt": 3793456000},
+        {"status": "available", "isSupportedByPlan": True, "expiresAt": 3793456060},
     ]},
 }
 CODEX_RESETS = {"available_count": 2, "credits": [
-    {"status": "available", "is_supported_by_plan": True, "expires_at": "2030-03-17T17:46:40.987654Z"},
-    {"status": "available", "is_supported_by_plan": True, "expires_at": "2030-03-17T18:47:40+01:00"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T17:46:40.987654Z"},
+    {"status": "available", "is_supported_by_plan": True, "expires_at": "2090-03-17T18:47:40+01:00"},
 ]}
 ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
@@ -186,7 +186,7 @@ class UsageTests(unittest.TestCase):
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("DELEGATE_USAGE_CPA_", "MANAGER_"))}
-        self.env.update(HOME=str(self.home), TZ="America/Denver", DELEGATE_USAGE_NOW="1890000000")
+        self.env.update(HOME=str(self.home), TZ="America/Denver")
         # Never invoke the installed CLI or its login while measuring headers.
         cli = self.home / "cli/claude"
         cli.parent.mkdir()
@@ -975,9 +975,9 @@ else:
                 self.assertEqual(value["balances"], [{"kind": "credits", "funding": "unknown", "scope": None, "remaining": 62500, "unit": "credits", "expiresAt": None}])
                 self.assertEqual(value["bonuses"], [
                     {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                     "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z" if cpa else "2030-03-17T17:46:40Z"},
+                     "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z" if cpa else "2090-03-17T17:46:40Z"},
                     {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                     "remaining": 1, "expiresAt": "2030-03-17T17:47:40Z"}])
+                     "remaining": 1, "expiresAt": "2090-03-17T17:47:40Z"}])
 
     def test_codex_reset_eligibility_on_both_paths(self):
         # Direct camelCase eligibility is a synthetic extension: app-server may
@@ -998,20 +998,20 @@ else:
             ("invalid-expiry", 2, {"expires_at": "invalid"}, "codex-reset-details-unavailable", []),
             ("missing-status", 2, {"status": None}, "codex-reset-eligibility-unknown", []),
             ("missing-expiry", 2, {"expires_at": None}, "codex-reset-details-unavailable", []),
-            ("invalid-date", 2, {"expires_at": "2030-02-30T00:00:00Z"}, "codex-reset-details-unavailable", []),
+            ("invalid-date", 2, {"expires_at": "2090-02-30T00:00:00Z"}, "codex-reset-details-unavailable", []),
             # One applicable reset across two lots counts the earliest-expiring lot.
             ("one-of-two", 1, {}, None, [
                 {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z"}]),
+                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z"}]),
             # Chronological, not lexical: 40Z expires before 40.5Z.
             ("fraction-order", 1, "fraction-order", None, [
                 {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40Z"}]),
+                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40Z"}]),
             ("two-applicable", 2, {}, None, [
                 {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2030-03-17T17:46:40.987654Z"},
+                 "remaining": 1, "expiresAt": "2090-03-17T17:46:40.987654Z"},
                 {"kind": "rate_limit_reset", "funding": "unknown", "scope": None, "unit": "resets", "usable": True,
-                 "remaining": 1, "expiresAt": "2030-03-17T17:47:40Z"}]),
+                 "remaining": 1, "expiresAt": "2090-03-17T17:47:40Z"}]),
         ]
         for cpa in [True, False]:
             for name, applicable, patch, missing, expected in cases:
@@ -1020,8 +1020,8 @@ else:
                     self.resets = copy.deepcopy(CODEX_RESETS)
                     # Apply the same eligibility change to every detail row.
                     if patch == "fraction-order":
-                        self.resets["credits"][0]["expires_at"] = "2030-03-17T17:46:40.5Z"
-                        self.resets["credits"][1]["expires_at"] = "2030-03-17T17:46:40Z"
+                        self.resets["credits"][0]["expires_at"] = "2090-03-17T17:46:40.5Z"
+                        self.resets["credits"][1]["expires_at"] = "2090-03-17T17:46:40Z"
                     else:
                         for row in self.resets["credits"]:
                             row.update(patch)
@@ -1056,7 +1056,7 @@ else:
                     self.assertEqual(value["bonuses"], [])
                 else:
                     self.assertEqual([row["expiresAt"] for row in value["bonuses"]],
-                                     [RESET, "2030-03-17T17:47:40Z"])
+                                     ["2090-03-17T17:46:40Z", "2090-03-17T17:47:40Z"])
                     self.assertTrue(all(row["usable"] is True and row["scope"] is None for row in value["bonuses"]))
                     self.assertEqual(value["missingExtras"], [])
 
