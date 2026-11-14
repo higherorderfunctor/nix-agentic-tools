@@ -4,7 +4,7 @@
     aiTypes.extendSubmodule (aiTypes.optionalTextSource {
       # Workflow step maps compose across scopes after module evaluation.
       # Validate their effective content in the shared renderer instead.
-      allowEmptyText = config: config ? steps;
+      allowEmptyText = config: config ? steps || (config ? rows && config.rows != {});
       autoEnable = false;
       description = "delegation guidance";
       enableDefault = true;
@@ -30,9 +30,16 @@
       description = "Include this guidance in the always-on router instead of the skill.";
     };
   };
+  workflowStepType = aiTypes.extendSubmodule stepType {
+    options.rows = lib.mkOption {
+      type = lib.types.attrsOf stepType;
+      default = {};
+      description = "Named rows, composed and ordered independently; step text inserts them with {rows} (numbered) or {bullets}.";
+    };
+  };
   workflowType = aiTypes.extendSubmodule entryType {
     options.steps = lib.mkOption {
-      type = lib.types.attrsOf stepType;
+      type = lib.types.attrsOf workflowStepType;
       default = {};
       description = "Named workflow steps, composed and ordered independently.";
     };
