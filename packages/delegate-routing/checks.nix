@@ -24,10 +24,10 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
-    # Reject scope expansion, route loss, time-dependent replay and unsafe Reader payloads.
+    # Saved captures retain routes and measured allowance when another component fails.
     delegate-routing-observation-normalize =
       pkgs.runCommand "delegate-routing-observation-normalize" {
-        nativeBuildInputs = [pkgs.python3];
+        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
