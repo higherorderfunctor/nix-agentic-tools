@@ -91,11 +91,26 @@
       then redact.filePaths key
       else [];
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
+    # Credential previews must not fall back to the runtime's direct login.
+    credentialPreview = lib.any (name: let
+      pool = portable.pools.${name};
+    in
+      selection.instance
+      != null
+      && lib.hasPrefix "${selection.instance}/" name
+      && pool.limits != {}
+      && pool.usage != null
+      && pool.usage.readerPool != null
+      && pool.usage.runtime == runtime)
+    (builtins.attrNames portable.pools);
   in
-    lib.optionalAttrs (managementKeyFiles != []) {
-      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head managementKeyFiles);
-      "${prefix}_URL" = lib.mkDefault selected.url;
-    };
+    if credentialPreview && managementKeyFiles == []
+    then throw "ai.programs.delegate-routing.pools: credential preview for ${runtime} requires a CPA management secret-key file reference."
+    else
+      lib.optionalAttrs (managementKeyFiles != []) {
+        "${prefix}_MANAGEMENT_KEY_FILE" = lib.head managementKeyFiles;
+        "${prefix}_URL" = selected.url;
+      };
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
     (lib.filter (target: builtins.elem target ["claude" "codex"]) (lib.unique (requiredTargets runtime ++ poolReaders)));
@@ -298,16 +313,57 @@ in {
         description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
       };
       pools = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submodule {
+        type = lib.types.attrsOf (lib.types.submodule ({config, ...}: let
+          budget = config.window;
+        in {
           options = {
             description = lib.mkOption {
               type = lib.types.str;
               default = "";
               description = "Budget description shown in consumer {pools} table entries.";
             };
+            limits = lib.mkOption {
+              default = {};
+              description = "Allowance preview windows scoped to canonical CPA credential offers.";
+              type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
+                options = {
+                  capacity = lib.mkOption {
+                    type = lib.types.numbers.positive;
+                    default =
+                      if config.unit == "USD" && budget != null
+                      then budget.limit
+                      else throw "percentagePoint limits require capacity";
+                    defaultText = lib.literalExpression "pools.<name>.window.limit for USD with a configured window; required otherwise";
+                    description = "Native allowance capacity; USD defaults to the existing budget window.";
+                  };
+                  models = lib.mkOption {
+                    type = lib.types.nullOr (lib.types.nonEmptyListOf lib.types.nonEmptyStr);
+                    default = null;
+                    description = "Canonical model IDs, or all actual credential offers when null.";
+                  };
+                  role = lib.mkOption {
+                    type = lib.types.enum ["gate" "pace"];
+                    description = "Declared enforcement or pacing role.";
+                  };
+                  unit = lib.mkOption {
+                    type = lib.types.enum ["USD" "percentagePoint"];
+                    description = "Native capacity unit.";
+                  };
+                  window = lib.mkOption {
+                    type = lib.types.nonEmptyStr;
+                    description = "Exact Reader window key, including any scope suffix.";
+                  };
+                };
+              }));
+            };
             usage = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
                 options = {
+                  readerPool = lib.mkOption {
+                    type = lib.types.nullOr lib.types.nonEmptyStr;
+                    default = null;
+                    description = "Expected Reader envelope label; null leaves allowance preview unmeasured.";
+                  };
                   runtime = lib.mkOption {
                     type = lib.types.enum supportedRuntimes;
                     description = "Enabled runtime whose usage technique reads this pool.";
@@ -339,10 +395,10 @@ in {
                 };
               });
               default = null;
-              description = "Configured monthly window for an unmeasured budget; current use remains unknown. A usage reader takes precedence.";
+              description = "Configured monthly budget for unread allowance or accounted Reader preview flags. Preview uses limits and usage.readerPool; see packages/delegate-routing/docs/pacing.md.";
             };
           };
-        });
+        }));
         default = {};
         description = "Portable budget pools. Each pool needs a usage reader or a configured monthly window.";
       };
@@ -371,6 +427,21 @@ in {
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
+    {
+      config =
+        lib.setAttrByPath (
+          if backend == "hm"
+          then ["home" "packages"]
+          else ["packages"]
+        )
+        (lib.mkIf (lib.any (runtime: sourceEnabled runtime && cpaRoutes.${runtime} or null != null) supportedRuntimes) [
+          (defaults.passthru.mkObservation {
+            inherit cpaRoutes techniques;
+            environment = lib.foldl' (env: runtime: env // usageEnvironment runtime) {} (lib.filter sourceEnabled supportedRuntimes);
+            inherit (portable) pools;
+          })
+        ]);
+    }
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
@@ -400,7 +471,7 @@ in {
           if runtime == "claude"
           then ["native" "settings" "env"]
           else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
-        ) (usageEnvironment runtime))))
+        ) (lib.mapAttrs (_: lib.mkDefault) (usageEnvironment runtime)))))
       (lib.mkIf (sourceEnabled "claude" && techniques.claude.Workflow.enable) {
         # Plain lists coexist with consumer directories; mkForce opts out.
         claude.native.settings.permissions.additionalDirectories = [workflowResumeDirectory];

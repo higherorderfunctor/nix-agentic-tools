@@ -24,6 +24,17 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Fake executable Readers reject duplicate attempts, unsafe failures and live replay.
+    delegate-routing-observation-command =
+      pkgs.runCommand "delegate-routing-observation-command" {
+        nativeBuildInputs = [pkgs.bash pkgs.python3];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        mkdir -p "$out"
+        export OBSERVATION_TEST_ROOT="$out"
+        python3 -I -B ${./checks/pacing}/test_observation_command.py ${./scripts}
+      '';
     # Reject scope expansion, route loss, time-dependent replay and unsafe Reader payloads.
     delegate-routing-observation-normalize =
       pkgs.runCommand "delegate-routing-observation-normalize" {
