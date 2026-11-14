@@ -56,133 +56,133 @@
       rustyV8=$(${pkgs.jq}/bin/jq --arg h "$hash" '.${key}."${system}" = $h' <<<"$rustyV8")
     '') (builtins.attrNames rustyV8.assets))
   rustyV8.systems;
+  packageAttrs = finalAttrs: prev: {
+    pname = "chatgpt-codex";
+    # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
+    inherit (sources) buildCommit version;
+    cargoHash = sources.cargoHash or lib.fakeHash;
+    src = prev.src.override {hash = sources.srcHash or lib.fakeHash;};
+
+    # cargoSetupHook's cargoUseSystemLibs forces system libs for vendored
+    # -sys crates. codex-rs links aws-lc-sys, onig_sys, libsqlite3-sys and
+    # zstd-sys, whose libraries nixpkgs' codex recipe does not carry at this
+    # pin (libclang and openssl only); nixpkgs' own fix adds these four.
+    buildInputs =
+      (prev.buildInputs or [])
+      ++ [
+        pkgs.aws-lc
+        pkgs.oniguruma
+        pkgs.sqlite
+        pkgs.zstd
+      ];
+
+    # Keep nixpkgs' layout and voice patches. Modules declare daemon auto-start
+    # explicitly, while the binary retains upstream's feature default. Until
+    # nixpkgs reaches this version, its layout patch's substitutions apply to
+    # our copy rebased onto the pinned source.
+    patchFiles = map (patch:
+      if patch.name or null == "nix-package-layout.patch"
+      then patch.overrideAttrs {src = ../../../patches/nix-package-layout.patch;}
+      else patch)
+    (builtins.filter (patch: baseNameOf patch != "no-daemon_auto_start.patch") prev.patches);
+
+    postFixup = prev.postFixup or "";
+    postPatch = prev.postPatch or "";
+    prePatch = prev.prePatch or "";
+
+    postInstall =
+      (prev.postInstall or "")
+      + ''
+        (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        # Cargo also installs the CLI crate's standalone SQLite log viewer.
+        rm "$out/bin/logs_client"
+        )
+      '';
+
+    # nixpkgs' versionCheckHook only requires the version as a substring.
+    postInstallCheck =
+      (prev.postInstallCheck or "")
+      + ''
+        (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        got=$("$out/bin/codex" --version)
+        if [ "''${got##* }" != "${finalAttrs.version}" ]; then
+          echo "chatgpt-codex: binary reports '$got', sidecar pins ${finalAttrs.version}" >&2
+          false
+        fi
+        )
+      '';
+
+    passthru =
+      (prev.passthru or {})
+      // rustPlatform.passthru
+      // {
+        # Read by checks/chatgpt-codex-package-layout.nix, so the check asserts
+        # the layout this recipe says it produces rather than a copy of it.
+        codexPackage = {
+          resources = ["codex-resources/voice/bin/codex-voice-host"];
+          root = packageRoot;
+          target = stdenv.hostPlatform.rust.rustcTarget;
+        };
+        extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
+        updateScript = vu.mkUpdateScript {
+          inherit pkgs sourcesFile;
+          pname = "chatgpt-codex";
+          platforms = {};
+          versionCheck.cmd = vu.ghLatestVersionCmd {
+            inherit pkgs;
+            repo = "openai/codex";
+            tagPrefix = "rust-v";
+          };
+          # Resolve the source commit, rusty_v8 pin and dependency hashes.
+          extraExtract = ''
+            buildCommit=$(
+              ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
+                "refs/tags/rust-v$latest" "refs/tags/rust-v$latest^{}" \
+                | ${pkgs.gawk}/bin/awk 'NR == 1 {commit = $1} /\^\{\}$/ {commit = $1} END {print commit}'
+            )
+            if [[ ! "$buildCommit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "chatgpt-codex: no commit for rust-v$latest" >&2
+              exit 1
+            fi
+            v8=$(
+              ${pkgs.curl}/bin/curl -fsSL "https://raw.githubusercontent.com/openai/codex/$buildCommit/codex-rs/Cargo.lock" \
+                | ${pkgs.gnused}/bin/sed -n '/^name = "v8"$/{n;s/^version = "\(.*\)"$/\1/p;}'
+            )
+            if [[ ! "$v8" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "chatgpt-codex: no single v8 crate version in Cargo.lock at $buildCommit" >&2
+              exit 1
+            fi
+            rustyV8=$(${pkgs.jq}/bin/jq -n --arg v "$v8" '{version: $v}')
+            ${prefetchRustyV8}
+            tmp=$(${pkgs.coreutils}/bin/mktemp)
+            ${pkgs.jq}/bin/jq --arg commit "$buildCommit" --argjson v8 "$rustyV8" \
+              '. + {buildCommit: $commit, librustyV8: $v8}' "${sourcesFile}" > "$tmp"
+            ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
+            ${rustPlatform.passthru.rustUpdateExtract}
+          '';
+        };
+        extracted = pkgs.runCommandLocal "chatgpt-codex-facts-raw" {} (
+          vu.mkCodexExtract {
+            bin = "${finalAttrs.finalPackage}/bin/codex";
+            inherit pkgs;
+            dest = "$out";
+          }
+        );
+      };
+
+    meta =
+      prev.meta
+      // {
+        description = "OpenAI Codex CLI — coding agent that runs locally in your terminal";
+      };
+  };
 in
   (pkgs.codex.override ({inherit rustPlatform;}
     // lib.optionalAttrs (rustyV8.pin != null) {
       librusty_v8 = fetchRustyV8 "librusty_v8" "archive";
       librusty_v8_src_binding = fetchRustyV8 "src_binding" "srcBinding";
-    })).overrideAttrs (finalAttrs: prev:
-    (packageLib.patching {inherit pkgs;}).attrs {
-      pname = "chatgpt-codex";
-      # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
-      inherit (sources) buildCommit version;
-      cargoHash = sources.cargoHash or lib.fakeHash;
-      src = prev.src.override {hash = sources.srcHash or lib.fakeHash;};
-
-      # cargoSetupHook's cargoUseSystemLibs forces system libs for vendored
-      # -sys crates. codex-rs links aws-lc-sys, onig_sys, libsqlite3-sys and
-      # zstd-sys, whose libraries nixpkgs' codex recipe does not carry at this
-      # pin (libclang and openssl only); nixpkgs' own fix adds these four.
-      buildInputs =
-        (prev.buildInputs or [])
-        ++ [
-          pkgs.aws-lc
-          pkgs.oniguruma
-          pkgs.sqlite
-          pkgs.zstd
-        ];
-
-      # Keep nixpkgs' layout and voice patches. Modules declare daemon auto-start
-      # explicitly, while the binary retains upstream's feature default. Until
-      # nixpkgs reaches this version, its layout patch's substitutions apply to
-      # our copy rebased onto the pinned source.
-      patchFiles = map (patch:
-        if patch.name or null == "nix-package-layout.patch"
-        then patch.overrideAttrs {src = ../../../patches/nix-package-layout.patch;}
-        else patch)
-      (builtins.filter (patch: baseNameOf patch != "no-daemon_auto_start.patch") prev.patches);
-
-      postFixup = prev.postFixup or "";
-      postPatch = prev.postPatch or "";
-      prePatch = prev.prePatch or "";
-
-      postInstall =
-        (prev.postInstall or "")
-        + ''
-          (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          # Cargo also installs the CLI crate's standalone SQLite log viewer.
-          rm "$out/bin/logs_client"
-          )
-        '';
-
-      # nixpkgs' versionCheckHook only requires the version as a substring.
-      postInstallCheck =
-        (prev.postInstallCheck or "")
-        + ''
-          (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          got=$("$out/bin/codex" --version)
-          if [ "''${got##* }" != "${finalAttrs.version}" ]; then
-            echo "chatgpt-codex: binary reports '$got', sidecar pins ${finalAttrs.version}" >&2
-            false
-          fi
-          )
-        '';
-
-      passthru =
-        (prev.passthru or {})
-        // rustPlatform.passthru
-        // {
-          # Read by checks/chatgpt-codex-package-layout.nix, so the check asserts
-          # the layout this recipe says it produces rather than a copy of it.
-          codexPackage = {
-            resources = ["codex-resources/voice/bin/codex-voice-host"];
-            root = packageRoot;
-            target = stdenv.hostPlatform.rust.rustcTarget;
-          };
-          extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
-          updateScript = vu.mkUpdateScript {
-            inherit pkgs sourcesFile;
-            pname = "chatgpt-codex";
-            platforms = {};
-            versionCheck.cmd = vu.ghLatestVersionCmd {
-              inherit pkgs;
-              repo = "openai/codex";
-              tagPrefix = "rust-v";
-            };
-            # Resolve the source commit, rusty_v8 pin and dependency hashes.
-            extraExtract = ''
-              buildCommit=$(
-                ${pkgs.git}/bin/git ls-remote --exit-code https://github.com/openai/codex \
-                  "refs/tags/rust-v$latest" "refs/tags/rust-v$latest^{}" \
-                  | ${pkgs.gawk}/bin/awk 'NR == 1 {commit = $1} /\^\{\}$/ {commit = $1} END {print commit}'
-              )
-              if [[ ! "$buildCommit" =~ ^[0-9a-f]{40}$ ]]; then
-                echo "chatgpt-codex: no commit for rust-v$latest" >&2
-                exit 1
-              fi
-              v8=$(
-                ${pkgs.curl}/bin/curl -fsSL "https://raw.githubusercontent.com/openai/codex/$buildCommit/codex-rs/Cargo.lock" \
-                  | ${pkgs.gnused}/bin/sed -n '/^name = "v8"$/{n;s/^version = "\(.*\)"$/\1/p;}'
-              )
-              if [[ ! "$v8" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                echo "chatgpt-codex: no single v8 crate version in Cargo.lock at $buildCommit" >&2
-                exit 1
-              fi
-              rustyV8=$(${pkgs.jq}/bin/jq -n --arg v "$v8" '{version: $v}')
-              ${prefetchRustyV8}
-              tmp=$(${pkgs.coreutils}/bin/mktemp)
-              ${pkgs.jq}/bin/jq --arg commit "$buildCommit" --argjson v8 "$rustyV8" \
-                '. + {buildCommit: $commit, librustyV8: $v8}' "${sourcesFile}" > "$tmp"
-              ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
-              ${rustPlatform.passthru.rustUpdateExtract}
-            '';
-          };
-          extracted = pkgs.runCommandLocal "chatgpt-codex-facts-raw" {} (
-            vu.mkCodexExtract {
-              bin = "${finalAttrs.finalPackage}/bin/codex";
-              inherit pkgs;
-              dest = "$out";
-            }
-          );
-        };
-
-      meta =
-        prev.meta
-        // {
-          description = "OpenAI Codex CLI — coding agent that runs locally in your terminal";
-        };
-    })
+    })).overrideAttrs (finalAttrs: prev: (packageLib.patching {inherit pkgs;}).attrs (packageAttrs finalAttrs prev))

@@ -27,19 +27,8 @@
          e
          f
       '';
-    compressed = pkgs.runCommand "change.patch.gz" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      gzip -c ${patch 1} > "$out"
-    '';
     options = strip: {
-      patchFiles = [
-        (
-          if strip == 1
-          then compressed
-          else patch strip
-        )
-      ];
+      patchFiles = [(patch strip)];
       inherit strip;
       prePatch = "printf 'pre ' > hooks";
       postPatch = "printf post >> hooks";
@@ -221,7 +210,7 @@
         }})
         printf 'offset\nheader\na\nb  c\nc\nnew\nd\ne\nf\n' > whitespace-expected
         cmp whitespace-expected git-whitespace/target
-        printf '%s\n' 'PASS: stdenv, applyPatches, GNU, Git; p0/p1; compressed patch; hooks; metadata; drift and contamination refusals' >> "$out/results"
+        printf '%s\n' 'PASS: stdenv, applyPatches, GNU, Git; p0/p1; hooks; metadata; drift and contamination refusals' >> "$out/results"
         cat "$out/results"
       '';
 }

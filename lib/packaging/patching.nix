@@ -119,6 +119,6 @@ in {
       )
     '';
 
-  # Keep nixpkgs' decompression, hook order, metadata and source passthru.
+  # Keep nixpkgs' hook order, metadata and source passthru.
   source = args: pkgs.applyPatches (attrs args);
 }

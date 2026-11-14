@@ -43,7 +43,6 @@ in {
       name = "${name}-patched";
       patchFiles = package.patches or [];
       postPatch = package.postPatch or "";
-      prePatch = package.prePatch or "";
       stdenv = pkgs.stdenvNoCC;
     });
 
