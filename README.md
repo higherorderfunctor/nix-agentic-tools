@@ -203,7 +203,7 @@ git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (12 servers)</summary>
+<summary><strong>MCP Servers</strong> (13 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -220,6 +220,7 @@ git-branchless, git-absorb, and git-revise.
 | `nixos-mcp` | NixOS and Nix documentation | None |
 | `semble-mcp` | Local semantic and lexical code search | None |
 | `slack-mcp` | Slack search, messages, canvases and lists (remote) | Required |
+| `webex-mcp` | Webex meeting and messaging bundled per OAuth instance | Required |
 
 ```bash
 nix build .#github-mcp

@@ -20,7 +20,7 @@ def manifest(path):
 GUM = "@gum@"
 
 
-def choose(config, name, *, gum=GUM):
+def choose(config, name, *, gum=GUM, display_names=None):
     accounts = config["accounts"]
     if not accounts:
         raise OAuthError("no accounts; configure an OAuth account in this backend")
@@ -36,7 +36,8 @@ def choose(config, name, *, gum=GUM):
     labels = {}
     for key, value in sorted(accounts.items()):
         status = Account(config["backend"], key, value).picker_status()
-        labels[f"{key} — {status}"] = key
+        label = (display_names or {}).get(key, key)
+        labels[f"{label} — {status}"] = key
     options = [f"{label}\t{key}" for label, key in labels.items()]
     result = subprocess.run([gum, "choose", "--limit=1", "--label-delimiter=\t", "--", *options],
                             stdout=subprocess.PIPE, text=True)
@@ -48,9 +49,25 @@ def choose(config, name, *, gum=GUM):
     return selected
 
 
+def owner_selection(config, owner, instance):
+    # Reuse selection/status with public instance labels, retaining Account IDs.
+    identities = {
+        value["login"]["instance"]: key
+        for key, value in config["accounts"].items()
+        if value.get("login") and value["login"]["owner"] == owner
+    }
+    accounts = {key: config["accounts"][key] for key in identities.values()}
+    if instance is not None and instance not in identities:
+        raise OAuthError("unknown instance")
+    return choose({**config, "accounts": accounts},
+                  identities[instance] if instance is not None else None,
+                  display_names={key: label for label, key in identities.items()})
+
+
 def main():
     parser = argparse.ArgumentParser(prog="mcp-oauth")
     parser.add_argument("--manifest", required=True)
+    parser.add_argument("--owner")
     parser.add_argument("command", choices=("daemon", "login", "refresh", "status"))
     parser.add_argument("account", nargs="?")
     args = parser.parse_args()
@@ -58,7 +75,10 @@ def main():
         config = manifest(args.manifest)
         if args.command in ("daemon", "refresh") and args.account is None and len(config["accounts"]) > 1:
             raise OAuthError("supply an explicit account name")
-        name = choose(config, args.account)
+        if args.owner is not None and args.command != "login":
+            raise OAuthError("owner selection requires login")
+        name = (owner_selection(config, args.owner, args.account)
+                if args.owner is not None else choose(config, args.account))
         account = Account(config["backend"], name, config["accounts"][name])
         if args.command == "daemon":
             # Private input set only by the generated backend wrapper, never a flag.

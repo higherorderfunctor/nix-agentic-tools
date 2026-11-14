@@ -147,3 +147,72 @@ user-service backend. devenv services require its running process supervisor.
 Automated checks use synthetic credentials/providers; live consent, sops
 decryption, desktop delivery and supervisor startup remain deployment
 validation. Provider expiry/revocation may interrupt established streams.
+
+## Mount an owner profile
+
+An owner with named instances can mount the shared credential/scope options and
+account lowering. For example, its common module defines a fixed profile:
+
+```nix
+{ config, lib, ... }:
+let
+  oauth = (import ../../mcp-oauth/lib/mount.nix { inherit lib; }).mkOAuthMount {
+    owner = "records";
+    profile = {
+      authorizeUrl = "https://identity.example.test/authorize";
+      extraScopes = [ "offline:access" ];
+      loginLifetimeDays = null;
+      name = "records";
+      scopes = [ "data:read" ];
+      tokenUrl = "https://identity.example.test/token";
+    };
+  };
+in {
+  imports = [ oauth.module ];
+  options.ai.records.instances = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options.enable = lib.mkEnableOption "records instance";
+    });
+  };
+  options.ai.records.mcpServers = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule (import ../../../lib/ai/mcpServer/commonSchema.nix));
+    readOnly = true;
+    description = "Generated server entries for consumers to assign to ai.mcpServers.";
+  };
+  config.ai.records.mcpServers = lib.mapAttrs' (instance: _:
+    lib.nameValuePair "records-${instance}" {
+      url = "https://mcp.example.test/records";
+      proxy = {
+        enable = true;
+        oauthAccount = oauth.accountName instance;
+        # The owner must allocate distinct proxy ports for its instances.
+        port = 19600;
+      };
+    }) (lib.filterAttrs (_: value: value.enable) config.ai.records.instances);
+}
+```
+
+Consumers select the generated entries separately:
+
+```nix
+{ config, ... }: {
+  ai.mcpServers = {
+    inherit (config.ai.records.mcpServers) records-work;
+  };
+}
+```
+
+The server example has one instance; owners supporting several must allocate
+ports for each. Consumers set only instance enablement and `oauth.clientId`,
+`oauth.clientSecret`, and optionally `oauth.scopes`. The credential files must
+be distinct. Profile scopes provide the mounted default; low-level account
+scopes remain required. The callback retains the internal default.
+
+The helper returns `module` and `accountName`; the latter is an owner-only proxy
+reference. Internal IDs are `<owner>-<instance>`. Owners must use distinct names
+whose derived account IDs do not overlap. Enabled instances lower to one account
+and one ordinary refresher each; disabled instances need no credentials and
+produce no account. The profile name installs only `records-login [instance]`.
+Without an instance it uses the existing status picker restricted to that
+owner's enabled instances. Labels show instance names while state and daemon
+identity retain the internal account ID. The generic commands remain available.

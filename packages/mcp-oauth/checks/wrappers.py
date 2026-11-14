@@ -9,6 +9,7 @@ import shlex
 import signal
 import subprocess
 import sys
+from unittest.mock import patch
 
 fixture = json.loads(Path(sys.argv[1]).read_text())
 expected = {
@@ -38,6 +39,56 @@ for backend, entry in fixture["proxy"].items():
         assert "Bearer {vars.file_" in source
     print(f"PASS: {backend} exact clients, owners, token paths and generated header")
 
+sys.path.insert(0, fixture["cliSource"])
+import cli
+
+for backend, entry in fixture["mounted"].items():
+    assert entry["accounts"] == ["sample-personal", "sample-work", "unrelated"]
+    assert list(entry["commands"]) == [
+        "mcp-oauth-sample-personal", "mcp-oauth-sample-work", "mcp-oauth-unrelated"]
+    assert len(entry["logins"]) == 1
+    alias = entry["logins"][0]
+    assert sorted(path.name for path in Path(alias).parent.iterdir()) == ["sample-login"]
+    script = Path(alias).read_text()
+    words = shlex.split(next(line for line in script.splitlines() if line.startswith("exec ")))
+    config_path = words[words.index("--manifest") + 1]
+    config = json.loads(Path(config_path).read_text())
+    root = "/tmp/mounted-hm" if backend == "hm" else "/tmp/mounted-project"
+    assert entry["claims"] == [
+        root + f"/mcp-oauth/{backend}/sample-personal",
+        root + f"/mcp-oauth/{backend}/sample-work",
+        root + f"/mcp-oauth/{backend}/unrelated"]
+    for instance, scopes in (("personal", ["data:read"]), ("work", ["override:read"])):
+        account = config["accounts"]["sample-" + instance]
+        assert account["login"] == {"instance": instance, "owner": "sample", "profile": "sample"}
+        assert account["provider"] == {
+            "authorizeUrl": "https://identity.example/authorize",
+            "extraScopes": ["keys:read"], "loginLifetimeDays": 30,
+            "tokenUrl": "https://identity.example/token"}
+        assert account["scopes"] == scopes
+        assert account["client_id_file"] == f"/run/secrets/{instance}-id"
+        assert account["client_secret_file"] == f"/run/secrets/{instance}-secret"
+        assert account["state_dir"] == root + f"/mcp-oauth/{backend}/sample-{instance}"
+    with patch.object(cli.sys.stdin, "isatty", return_value=True), patch.object(
+        cli.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "sample-work\n")
+    ) as picker:
+        assert cli.owner_selection(config, "sample", None) == "sample-work"
+        options = picker.call_args.args[0]
+        assert any(value.startswith("personal — ") for value in options)
+        assert any(value.startswith("work — ") for value in options)
+        assert all("unrelated" not in value and "disabled" not in value for value in options)
+    assert cli.owner_selection(config, "sample", "work") == "sample-work"
+    # The selected instance is accepted past instance validation.
+    result = invoke(alias, ["work"], os.environ)
+    assert result.returncode == 1 and "unknown" not in result.stderr, result
+    for args in (["disabled"], ["unrelated"], ["sample-work"],
+                 ["--owner", "other"], ["--manifest", config_path], ["--man", config_path]):
+        result = invoke(alias, args, os.environ)
+        assert result.returncode != 0, (args, result)
+        if len(args) == 1:
+            assert "unknown instance" in result.stderr, result
+    print(f"PASS: {backend} mounted defaults, overrides, single login, isolated accounts and selection")
+
 fixture = fixture["backends"]
 
 for backend, (name, root) in expected.items():
@@ -54,6 +105,7 @@ for backend, (name, root) in expected.items():
     assert manifest["accounts"][name] == {
         "client_id_file": credentials[0],
         "client_secret_file": credentials[1],
+        "login": None,
         "provider": {
             "authorizeUrl": "https://identity.example/authorize",
             "extraScopes": ["keys:read"] if backend == "devenv" else [],
