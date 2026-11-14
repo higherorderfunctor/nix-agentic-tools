@@ -46,6 +46,18 @@ def cli(raw):
 
 
 class Output(unittest.TestCase):
+    def test_gate_only_availability(self):
+        # Reject requiring paced allowance to report a known closed-gate release.
+        for release, expected in ((NOW + 500, 2000500), (None, None), ("invalid", None)):
+            with self.subTest(release=release):
+                raw = snapshot()
+                raw["pools"]["pool"]["limits"].clear()
+                raw["readers"]["pool"]["data"]["windows"].clear()
+                add_limit(raw, "rolling", "gate", 0, release)
+                entry = cli(raw)["entries"][0]
+                self.assertEqual((entry["available_at"], entry["pace"], entry["score"], entry["state"]),
+                                 (expected, None, 0, "out"))
+
     def test_binding_and_all_blockers(self):
         # Reject earliest-release availability, gate minima and nondeterministic binding ties.
         raw = snapshot()
