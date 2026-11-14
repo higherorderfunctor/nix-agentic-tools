@@ -1029,7 +1029,7 @@ class Routing(unittest.TestCase):
             "claude": (0.09, 1.1761706173426392),
             "codex": (0.67, 1.8244426034650434),
             "opencode-go": (0.23, 0.34550405357278063),
-            "z-ai": (0.6, 1.0483952514813841),
+            "zhipuai": (0.6, 1.0483952514813841),
         }
         self.assertEqual(set(corpus["readers"]), set(expected))
         self.assertEqual(corpus["readers"]["anthropic-api"]["windows"]["monthly"]["windowSeconds"], 2592000)
@@ -1041,8 +1041,8 @@ class Routing(unittest.TestCase):
         ctx["roles"]["writer"].update({"avoid": [], "exclude": []})
         outputs = {f"reader-{name}": json.dumps(document) for name, document in corpus["readers"].items()}
         for session, order in [
-            (None, ["codex", "claude", "z-ai", "anthropic-api", "opencode-go"]),
-            ("claude", ["codex", "z-ai", "anthropic-api", "opencode-go"]),
+            (None, ["codex", "claude", "zhipuai", "anthropic-api", "opencode-go"]),
+            ("claude", ["codex", "zhipuai", "anthropic-api", "opencode-go"]),
         ]:
             with self.subTest(session=session):
                 config["sessionPool"] = session

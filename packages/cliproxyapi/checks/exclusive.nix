@@ -16,7 +16,7 @@
   catalog = {
     models = {
       fixture-a = model "fixture-maker-a" {opencode-go = ["fixture-alias" "fixture-shared"];};
-      fixture-b = model "fixture-maker-b" {z-ai = ["fixture-shared" "fixture-a"];};
+      fixture-b = model "fixture-maker-b" {zhipuai = ["fixture-shared" "fixture-a"];};
       fixture-unknown = model null {};
     };
     vendors = {
