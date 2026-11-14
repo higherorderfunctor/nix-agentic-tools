@@ -14,11 +14,6 @@ import tempfile
 import threading
 import unittest
 
-from hypothesis import given, settings, strategies as st
-
-settings.register_profile("offline", database=None, deadline=None, max_examples=20)
-settings.load_profile("offline")
-
 SCRIPTS = Path(sys.argv.pop(1))
 SECRET = 'management-"quoted\\key'
 # Endpoint shapes from the investigation; all values and identities are synthetic.
@@ -513,24 +508,6 @@ for line in sys.stdin:
                 self.assertEqual(monthly["remainingPercent"], remaining)
                 self.assertEqual(monthly["status"], "estimated")
 
-    @given(field=st.sampled_from(["fidelity_limitations", "raw_deleted_event_count"]),
-           omit=st.booleans(), cost=st.integers(min_value=0, max_value=1000))
-    def test_proxy_present_incomplete_coverage_is_refused(self, field, omit, cost):
-        # Missing or null coverage facts cannot certify an estimate at any cost.
-        self.configs["claude"] = [PROXY_GROUP]
-        coverage = {"raw_deleted_event_count": 0, "fidelity_limitations": []}
-        if omit:
-            del coverage[field]
-        else:
-            coverage[field] = None
-        self.analytics = copy.deepcopy(ANALYTICS)
-        self.analytics["coverage"] = coverage
-        self.analytics["summary"]["total_cost"] = cost
-        result = self.run_proxy(*self.proxy_command())
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(result.stdout, "")
-        self.assertEqual(result.stderr, "usage: proxy cost coverage incomplete\n")
-
     def test_proxy_unpriced_diagnostic_precedes_incomplete_coverage(self):
         # Unpriced counts win over absent, null and incomplete coverage.
         self.configs["claude"] = [PROXY_GROUP]
@@ -543,21 +520,6 @@ for line in sys.stdin:
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(json.loads(result.stdout), {"count": 1, "reason": "unpriced-models"})
             self.assertEqual(result.stderr, "usage: proxy 1 models have no price in CPA Manager\n")
-
-    @given(cost=st.integers(min_value=1, max_value=1000), raw_complete=st.booleans())
-    def test_proxy_explicit_zero_coverage_preserves_estimate(self, cost, raw_complete):
-        # Explicit healthy coverage preserves independently priced monthly facts.
-        self.configs["claude"] = [PROXY_GROUP]
-        self.analytics = copy.deepcopy(ANALYTICS)
-        self.analytics["summary"]["total_cost"] = cost
-        self.analytics["coverage"] = {"raw_complete": raw_complete, "raw_deleted_event_count": 0,
-                                      "fidelity_limitations": []}
-        result = self.run_proxy(*self.proxy_command())
-        self.assertEqual(result.returncode, 0, result.stderr)
-        monthly = json.loads(result.stdout)["windows"]["monthly"]
-        self.assertAlmostEqual(monthly["usedPercent"], cost)
-        self.assertAlmostEqual(monthly["remainingPercent"], max(0, 100 - cost))
-        self.assertEqual(monthly["status"], "estimated")
 
     def test_proxy_null_coverage_is_incomplete(self):
         # A present null warning does not have the omitted-coverage contract.
@@ -586,22 +548,6 @@ for line in sys.stdin:
         self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
         self.assertEqual(result.stdout, "")
         self.analytics_raw = None
-
-    @given(field=st.sampled_from(["fidelity_limitations", "raw_deleted_event_count"]),
-           value=st.one_of(st.booleans(), st.text(), st.integers(max_value=-1),
-                           st.lists(st.integers(), min_size=1), st.dictionaries(st.text(), st.integers())),
-           unpriced=st.booleans())
-    def test_proxy_malformed_coverage_precedes_unpriced_diagnostic(self, field, value, unpriced):
-        # Malformed coverage always fails before any diagnostic can be emitted.
-        self.configs["claude"] = [PROXY_GROUP]
-        self.analytics = copy.deepcopy(ANALYTICS)
-        self.analytics["coverage"] = {"raw_deleted_event_count": 0, "fidelity_limitations": [], field: value}
-        if unpriced:
-            self.analytics["model_stats"][0]["cost"] = 0
-        result = self.run_proxy(*self.proxy_command())
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(result.stdout, "")
-        self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
 
     def test_proxy_reset_instant_reports_zero(self):
         self.configs["claude"] = [PROXY_GROUP]
@@ -1168,4 +1114,61 @@ print({json.dumps(json.dumps(OPENCODE))})
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # Cloudflare imports the shared fixture with plain Python; property tests
+    # require Hypothesis only when running this standalone suite.
+    from hypothesis import given, settings, strategies as st
+
+    settings.register_profile("offline", database=None, deadline=None, max_examples=20)
+    settings.load_profile("offline")
+
+    class UsagePropertyTests(UsageTests):
+        @given(cost=st.integers(min_value=1, max_value=1000), raw_complete=st.booleans())
+        def test_proxy_explicit_zero_coverage_preserves_estimate(self, cost, raw_complete):
+            # Explicit healthy coverage preserves independently priced monthly facts.
+            self.configs["claude"] = [PROXY_GROUP]
+            self.analytics = copy.deepcopy(ANALYTICS)
+            self.analytics["summary"]["total_cost"] = cost
+            self.analytics["coverage"] = {"raw_complete": raw_complete, "raw_deleted_event_count": 0,
+                                          "fidelity_limitations": []}
+            result = self.run_proxy(*self.proxy_command())
+            self.assertEqual(result.returncode, 0, result.stderr)
+            monthly = json.loads(result.stdout)["windows"]["monthly"]
+            self.assertAlmostEqual(monthly["usedPercent"], cost)
+            self.assertAlmostEqual(monthly["remainingPercent"], max(0, 100 - cost))
+            self.assertEqual(monthly["status"], "estimated")
+
+        @given(field=st.sampled_from(["fidelity_limitations", "raw_deleted_event_count"]),
+               value=st.one_of(st.booleans(), st.text(), st.integers(max_value=-1),
+                               st.lists(st.integers(), min_size=1), st.dictionaries(st.text(), st.integers())),
+               unpriced=st.booleans())
+        def test_proxy_malformed_coverage_precedes_unpriced_diagnostic(self, field, value, unpriced):
+            # Malformed coverage always fails before any diagnostic can be emitted.
+            self.configs["claude"] = [PROXY_GROUP]
+            self.analytics = copy.deepcopy(ANALYTICS)
+            self.analytics["coverage"] = {"raw_deleted_event_count": 0, "fidelity_limitations": [], field: value}
+            if unpriced:
+                self.analytics["model_stats"][0]["cost"] = 0
+            result = self.run_proxy(*self.proxy_command())
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
+
+        @given(field=st.sampled_from(["fidelity_limitations", "raw_deleted_event_count"]),
+               omit=st.booleans(), cost=st.integers(min_value=0, max_value=1000))
+        def test_proxy_present_incomplete_coverage_is_refused(self, field, omit, cost):
+            # Missing or null coverage facts cannot certify an estimate at any cost.
+            self.configs["claude"] = [PROXY_GROUP]
+            coverage = {"raw_deleted_event_count": 0, "fidelity_limitations": []}
+            if omit:
+                del coverage[field]
+            else:
+                coverage[field] = None
+            self.analytics = copy.deepcopy(ANALYTICS)
+            self.analytics["coverage"] = coverage
+            self.analytics["summary"]["total_cost"] = cost
+            result = self.run_proxy(*self.proxy_command())
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, "usage: proxy cost coverage incomplete\n")
+
+    unittest.main(defaultTest="UsagePropertyTests")
