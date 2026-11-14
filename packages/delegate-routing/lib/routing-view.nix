@@ -13,6 +13,21 @@
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
+  # Manual builders omit optional defaults; both helper projections share this inventory.
+  helperPools =
+    lib.filterAttrs (_: pool: pool.limits == {} && (pool.usage == null || pool.usage.readerPool == null))
+    (lib.mapAttrs (_: pool:
+      {
+        description = "";
+        limits = {};
+        usage = null;
+        window = null;
+      }
+      // pool
+      // lib.optionalAttrs (pool.usage or null != null) {
+        usage = {readerPool = null;} // pool.usage;
+      })
+    pools);
   selection = import ./select-families.nix {inherit lib;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
@@ -185,29 +200,19 @@ in {
     lib.sort builtins.lessThan (lib.unique (map (family: family.name)
       (builtins.filter (family: builtins.elem pool (builtins.attrValues (family.pools or {})))
         (selection.flatten families)))))
-  pools;
+  helperPools;
   inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
   readers =
-    lib.mapAttrsToList (name: declared: let
-      # Direct render/mkSkill callers may omit the module's optional defaults.
-      pool =
-        {
-          description = "";
-          usage = null;
-          window = null;
-        }
-        // declared;
-    in {
+    lib.mapAttrsToList (name: pool: {
       inherit name pool;
       # The module's assertions own invalid-reader diagnostics, even when
-      # rendering is forced before assertion collection. Inventory every pool,
+      # rendering is forced before assertion collection. Inventory every helper pool,
       # including readers on runtimes outside automatic and manual targets.
       command =
         if pool.usage == null
         then null
         else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
     })
-    # Credential preview scopes use catalog IDs, never helper family bindings.
-    (lib.filterAttrs (_: pool: (pool.limits or {}) == {} && ((pool.usage or null) == null || (pool.usage.readerPool or null) == null)) pools);
+    helperPools;
 }
