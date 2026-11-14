@@ -12,10 +12,10 @@
 in {
   # Contributions never depend on the merged catalog passed to constructors.
   catalogs = map (vendor: vendor.catalog) (builtins.attrValues definitions);
-  # CPA modules expose these owner defaults through their extensible option.
-  servedModels = lib.mapAttrs (_: vendor: vendor.servedModels) definitions;
   # Preserve the synthetic native-API placement callable used by existing checks.
   inherit (definitions.opencode-go) opencodeGo;
+  # CPA modules expose these owner defaults through their extensible option.
+  servedModels = lib.mapAttrs (_: vendor: vendor.servedModels) definitions;
   # Standalone callers use the same constructor with each vendor's own static facts.
   vendors = lib.mapAttrs (name: vendor: let
     # Standalone callers have only the owner's catalog; module callers use merged identities.
