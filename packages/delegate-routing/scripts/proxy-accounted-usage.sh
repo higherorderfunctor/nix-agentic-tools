@@ -171,7 +171,7 @@ proxy_usage_current=$(jq -r '.now_ms' <<<"$proxy_usage_window")
 if ((proxy_usage_from < proxy_usage_current)); then
   proxy_usage_analytics=$(proxy_usage_request POST /v0/management/monitoring/analytics "$proxy_usage_payload") || exit 1
   # Exactly one JSON document with a finite non-negative cost and well-typed
-  # coverage reaches the projection; jq diagnostics never surface. model_stats
+  # optional coverage reaches the projection; jq diagnostics never surface. model_stats
   # may be empty only when the summary reports no calls: without rows, coverage
   # cannot be judged.
   jq -se 'length == 1 and (.[0] | type == "object"
@@ -193,7 +193,8 @@ if ((proxy_usage_from < proxy_usage_current)); then
            and (.coverage | (type == "object" or type == "null"))
            and (.coverage.raw_deleted_event_count | (type == "number" or type == "null"))
            and ((.coverage.raw_deleted_event_count // 0) >= 0)
-           and (.coverage.fidelity_limitations | (type == "array" or type == "null")))' \
+           and (.coverage.fidelity_limitations | (type == "array" or type == "null"))
+           and (all(.coverage.fidelity_limitations[]?; type == "string")))' \
     <<<"$proxy_usage_analytics" >/dev/null 2>&1 || usage_cpa_error 'invalid analytics response'
   # Manager+ prices a stat through its billing or pricing model, so coverage is
   # judged from the analytics rows themselves, not a price book: a row that
@@ -209,17 +210,21 @@ if ((proxy_usage_from < proxy_usage_current)); then
     jq -cn --argjson count "$proxy_usage_unpriced" '{count: $count, reason: "unpriced-models"}'
     usage_cpa_error "$proxy_usage_unpriced models have no price in CPA Manager"
   fi
-  # Absent coverage cannot establish complete credential spend, even when the
-  # reported cost is zero. It says nothing about traffic bypassing the proxy.
-  # Explicit zero deletions and no degraded-summary limitation retain the
-  # existing monthly estimate, including mixed raw/aggregate observations.
+  # Manager+ 1.14.10 monitoring/service.go emits coverage only for deleted
+  # raw-event warnings (Response omitempty; analytics coverageWarningRequired).
+  # This compact request has no comparison or drill-down: omitted coverage
+  # supports zero deleted raw events, not complete accounting or zero spend.
+  # Retain the independently validated cost as estimated; unobserved spend is
+  # unknown. Present null/partial coverage does not have that source contract.
   # Hourly pricing roll-ups carry no credential key, so deleted raw events or
   # degraded-summary limitations can lower this credential's total.
-  if ! jq -e '.coverage | .raw_deleted_event_count == 0
-               and .fidelity_limitations != null
-               and (any(.fidelity_limitations[]?;
-                        . == "core_metrics_require_raw_events"
-                        or . == "extended_summary_metrics_require_raw_events") | not)' \
+  if ! jq -e 'if has("coverage") then
+                .coverage | .raw_deleted_event_count == 0
+                and .fidelity_limitations != null
+                and (any(.fidelity_limitations[]?;
+                         . == "core_metrics_require_raw_events"
+                         or . == "extended_summary_metrics_require_raw_events") | not)
+              else true end' \
     <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
     usage_cpa_error 'cost coverage incomplete'
   fi

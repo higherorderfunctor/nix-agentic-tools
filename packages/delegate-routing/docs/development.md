@@ -770,20 +770,31 @@ its admin key file; the key is read in process and sent through curl `--config`
 on stdin, never through argv. The reader fails when the collector is not
 running, when discovery matches zero or several credentials, when the analytics
 response is invalid (`model_stats` may be empty only when the summary reports
-zero calls), when coverage or its deletion/limitation fields are absent, or when
-coverage reports deleted raw events or a degraded summary, or when an analytics
-model row reports tokens with zero cost: Manager+ prices a row through its
-billing or pricing model and leaves one it cannot price at zero, and coverage is
-judged from those analytics rows, not a price book. Calls that used no tokens
-cost nothing legitimately. A display model that merges a priced and an unpriced
-billing model shows a positive total and is not detected; that is the limit of
-the estimate, which is why the window's status is `estimated`.
+zero calls), when present coverage is null, malformed or missing its
+deletion/limitation fields, when coverage reports deleted raw events or a
+degraded summary, or when an analytics model row reports tokens with zero cost:
+Manager+ prices a row through its billing or pricing model and leaves one it
+cannot price at zero, and coverage is judged from those analytics rows, not a
+price book. Calls that used no tokens cost nothing legitimately. A display model
+that merges a priced and an unpriced billing model shows a positive total and is
+not detected; that is the limit of the estimate, which is why the window's
+status is `estimated`.
 
-Missing coverage means incomplete accounting, not proof of proxy bypass or zero
-spend. Explicit zero deleted events and no degraded-summary limitations preserve
-the monthly estimate even for mixed raw/aggregate coverage. Calendar boundaries,
-configured budgets and credential discovery are unchanged. At the exact reset
-instant the empty new window still reports zero without an analytics request.
+The pinned Manager+ 1.14.10 `monitoring/service.go` declares `Response.Coverage`
+with `omitempty`; `analytics` assigns it only when `coverageWarningRequired`
+reports deleted raw events. This Reader requests a compact summary and model
+stats with no comparison or drill-down, so a healthy response omits coverage.
+Under that source contract, omission supports zero deleted raw events and
+preserves independently validated monthly cost, including literal zero cost. It
+does **not** establish complete accounting, no proxy bypass or zero total spend:
+total and unobserved accounting remain unknown, and the window remains
+`estimated`. Present null, malformed or partial coverage is refused; missing
+arbitrary facts never default to zero. Explicit zero deleted events and no
+degraded-summary limitations also preserve the estimate; that shape is synthetic
+in tests because the compact production request omits a healthy warning.
+Calendar boundaries, configured budgets and credential discovery are unchanged.
+At the exact reset instant the empty new window still reports zero without an
+analytics request.
 
 An unpriced-model failure exits nonzero with only
 `{reason: "unpriced-models", count: N}` on stdout. The routing helper preserves
