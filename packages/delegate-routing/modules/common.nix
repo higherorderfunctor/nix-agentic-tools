@@ -16,10 +16,7 @@
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
-  opencodeGo = import ../lib/opencode-go.nix {
-    inherit lib;
-    inherit (portable.opencodeGo) presetScope;
-  };
+  opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};

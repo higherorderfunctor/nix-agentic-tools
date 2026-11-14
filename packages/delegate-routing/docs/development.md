@@ -353,17 +353,18 @@ disable a node.
 
 The private `lib/routing-view.nix` owns automatic and manual reach selection,
 eligible technique ordering, concrete model ids versus unresolved patterns,
-generated agent availability and pool bindings. `lib/render.nix` consumes those
-records for the optional pool, family and technique blocks; it keeps skill
-phrases and table formatting. The view reuses `select-families.nix` and takes
-the module's effective techniques, including the Kiro workflow gate, and its
-already resolved Claude agent records so proxy picker ids and family default
-effort remain available. Direct builders retain catalog resolution when no
-resolved agent set is supplied. Its reader inventory resolves every registered
-pool independently of launch targets, including readers whose runtime is absent
-from both automatic and manual reaches. Manual reaches stay separate from
-automatic candidates; this view is private implementation data, not a public
-manifest or option.
+generated agent availability and route credential/default bindings. Packaged
+helper budget associations require explicit family bindings. `lib/render.nix`
+consumes those records for the optional pool, family and technique blocks; it
+keeps skill phrases and table formatting. The view reuses `select-families.nix`
+and takes the module's effective techniques, including the Kiro workflow gate,
+and its already resolved Claude agent records so proxy picker ids and family
+default effort remain available. Direct builders retain catalog resolution when
+no resolved agent set is supplied. Its reader inventory resolves every
+registered pool independently of launch targets, including readers whose runtime
+is absent from both automatic and manual reaches. Manual reaches stay separate
+from automatic candidates; this view is private implementation data, not a
+public manifest or option.
 
 ### Generated Claude agent files
 
@@ -454,10 +455,12 @@ packaged `delegate-routing-plan` executable. The always-on router stays
 runtime-neutral so contributions to shared AGENTS.md targets are byte-identical.
 The wrapper binds the manifest and Bash store paths; no PATH installation is
 needed. `mkSkill` and `render`, including overrides, use the same builder as
-both module backends. The manifest serializes `lib/routing-view.nix` directly,
-including automatic runtime inventory, registered readers, manual-only routes,
-technique guidance and full resolved generated-agent records. It never
-re-derives reach selection in Python.
+both module backends. The manifest serializes the builder's budget view of
+`lib/routing-view.nix`, preserving explicit family budget bindings for
+automatic, manual-only and picker routes instead of inferred credential
+defaults. It includes automatic runtime inventory, registered readers, technique
+guidance and full resolved generated-agent records. It never re-derives reach
+selection in Python.
 
 Set `runtimes.<runtime>.sessionPool` to the registered budget actually spent by
 that session. For registered keys `claude` and `codex`, the migration is

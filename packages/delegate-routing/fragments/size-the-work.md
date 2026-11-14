@@ -6,8 +6,9 @@ universal cheapest model or model-before-effort ordering.
 Resolve each candidate's base effort from a non-null role override, otherwise
 its machine `defaultEffort`, for every technique. Consumers can override the
 existing `families.<vendor>.<family>.defaultEffort` option. Sol defaults to
-medium and Go Kimi K3.1 Pro to max; a configured glm can set high (no glm preset
-is shipped). Prose guidance is not a runtime default lookup.
+medium and Go Kimi K3.1 Pro to max. The shipped `zhipuai.glm` preset defaults to
+high; `zhipuai.glm-flash` leaves effort unset. Prose guidance is not a runtime
+default lookup.
 
 The fixed package scale is `minimal < low < medium < high < xhigh < max`.
 Observed `efforts` is an unordered support set. An avoided-family fallback
