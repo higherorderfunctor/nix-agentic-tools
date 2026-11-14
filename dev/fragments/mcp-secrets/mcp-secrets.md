@@ -152,11 +152,13 @@ and are outside this proxy fix.
 Caddy expands `{$VAR}` while adapting the Caddyfile, so its active JSON contains
 the literal headers and upstream origin/path. `admin off` does not disable
 autosave. `persist_config off` does. The proxy's run script points
-`XDG_CONFIG_HOME` and `XDG_DATA_HOME` at `$XDG_RUNTIME_DIR/mcp-proxy-<name>`
-(mode 0700), so instance state never reaches the user's persistent XDG
-directories and two proxies never share a Caddy state path; the ordinary
-`ai.services` launcher starts it with no proxy-specific systemd fields. The
-module does not remove a user's pre-existing Caddy files.
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` inside its evaluated `ai.services`
+`runtimeDir` (mode 0700), under `config.devenv.runtime` on devenv and the
+service launcher's runtime root on Home Manager. The generic service launcher
+checks the root and creates the leaf before reading credentials or starting
+Caddy, so instance state stays out of persistent XDG directories and Home
+Manager and devenv proxies do not share state. There are no proxy-specific
+systemd fields. The module does not remove a user's pre-existing Caddy files.
 
 Measured with Caddy 2.11.4: replacing parse-time `{$VAR}` header tokens with
 runtime `{env.VAR}` placeholders keeps the value out of adapted JSON. It does
