@@ -20,7 +20,10 @@
   };
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   inherit (view) candidates;
-  entryRenderer = import ./render-entries.nix {inherit lib;};
+  entryRenderer = import ./render-entries.nix {
+    inherit lib;
+    stepPhrase = skill.phrases."Workflow step";
+  };
   routingText = entryRenderer.routing false routing;
   workflowText = entryRenderer.workflows false workflows;
   entrySort = import ./resolve-entries.nix {inherit lib;};

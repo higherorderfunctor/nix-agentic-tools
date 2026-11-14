@@ -632,6 +632,15 @@
       change {
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
+          reviewPolicy = {
+            planCheck = {
+              requireRubric = false;
+              requireSize = false;
+              requiredReviewRoles = [];
+              workerRoles = ["planner"];
+            };
+            roles.judge.tiers = lib.mkForce ["mid"];
+          };
           families.fixture.packaged = {
             defaultEffort = "high";
             example.${runtime} = "fixture-model";
@@ -743,6 +752,8 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["reviewPolicy"]["planCheck"] == {"requireRubric": False, "requireSize": False, "requiredReviewRoles": [], "workerRoles": ["planner"]}
+        assert manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["mid"]
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
         assert manifest["pickerEntries"][0]["outputFormat"] == "claude-json"
@@ -754,6 +765,8 @@
         direct_skill = Path(os.environ["directSkillPath"]).read_text()
         direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
+        assert direct_manifest["reviewPolicy"]["planCheck"] == {"requireRubric": True, "requireSize": True, "requiredReviewRoles": ["first-check"], "workerRoles": ["investigator", "mechanical", "writer"]}
+        assert direct_manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["frontier", "strong"]
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
@@ -2106,6 +2119,8 @@
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
+      # Fails if a runtime's rendered skill loses the shared review rubric.
+      && lib.all (runtime: hasProse "**Input boundary.**" (readSkill result runtime)) runtimes
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
@@ -2123,6 +2138,101 @@
         remainder = builtins.elemAt (lib.splitString "CUSTOM WORKFLOW STEP" text) 1;
       in
         lib.hasInfix "Rubric" rubric && lib.hasInfix "Review" remainder)
+    );
+    "module-delegate-routing-${name}-workflow-step-phrase" = mkTest "delegate-routing-${name}-workflow-step-phrase" (let
+      custom = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".text = "Step {index}: {name} — {text}";
+      };
+      disabled = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".enable = false;
+      };
+    in
+      lib.hasInfix "Step 1: Rubric —" (readSkill custom "claude")
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill custom "claude"))
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill disabled "claude")));
+    # Rows compose on both backends; dropping inherited rows or freezing numbers fails.
+    "module-delegate-routing-${name}-workflow-rows" = mkTest "delegate-routing-${name}-workflow-rows" (
+      let
+        customized = change {
+          ai.programs.delegate-routing = {
+            workflows.${workflowName}.steps = {
+              Rubric.rows = {
+                Fixtures.enable = false;
+                "House rule" = {
+                  after = ["Scope"];
+                  before = ["Naming"];
+                  text = "HOUSE ROW";
+                };
+                Scope.source = pkgs.writeText "scope-row.md" "SOURCE ROW\ncontinued";
+                "Temporary tools" = {
+                  after = [];
+                  before = ["Scope"];
+                };
+              };
+              Subtractive.rows = {
+                Callers.enable = false;
+                "House subtraction" = {
+                  before = ["Same-change caller"];
+                  text = "HOUSE SUBTRACTION";
+                };
+              };
+            };
+            runtimes.claude.workflows.${workflowName}.steps = {
+              Rubric.rows = {
+                "House rule" = {
+                  after = ["Scope"];
+                  before = ["Naming"];
+                  text = "RUNTIME ROW";
+                };
+                "Input boundary".enable = false;
+              };
+              Subtractive.rows.Checks = {
+                before = ["House subtraction"];
+                text = "RUNTIME CHECK";
+              };
+            };
+          };
+        };
+        portable = readSkill customized "codex";
+        runtime = readSkill customized "claude";
+        guidance = customized.config.ai.programs.delegate-routing;
+        raw =
+          (import ../lib/render-entries.nix {inherit lib;}).workflows false
+          ((import ../lib/resolve-entries.nix {inherit lib;}).resolveWorkflows
+            guidance.workflows
+            guidance.runtimes.claude.workflows);
+      in
+        lib.all (text:
+          lib.hasInfix "1. **Temporary tools.**" text
+          && hasProse "2. SOURCE ROW continued 3." text
+          && !(lib.hasInfix "**Fixtures.**" text)
+          && lib.hasInfix "4. **Naming.**" text
+          && lib.hasInfix "5. **Size.**" text
+          && lib.hasInfix "6. **Human prose.**" text
+          && !(lib.hasInfix "**Callers.**" text)
+          && hasProse "Append these rows to the rubric file, continuing its numbering" text
+          && hasProse "- HOUSE SUBTRACTION - **Same-change caller.**" text)
+        [portable runtime]
+        && lib.hasInfix "3. HOUSE ROW" portable
+        && lib.hasInfix "7. **Input boundary.**" portable
+        && lib.hasInfix "9. **Standard tools.**" portable
+        && lib.hasInfix "3. RUNTIME ROW" runtime
+        && !(lib.hasInfix "HOUSE ROW" runtime)
+        && !(lib.hasInfix "**Input boundary.**" runtime)
+        && lib.hasInfix "8. **Standard tools.**" runtime
+        && hasProse "- RUNTIME CHECK - HOUSE SUBTRACTION" runtime
+        && lib.hasInfix "**Checks.**" portable
+        # A continuation must stay inside its row, including after a source override.
+        && lib.hasInfix "   2. SOURCE ROW\n      continued\n   3. RUNTIME ROW" raw
+        && skillFails {
+          ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Scope.before = ["Scope"];
+        }
+        && skillFails {
+          ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Empty.text = "";
+        }
+        && skillFails {
+          ai.programs.delegate-routing.workflows.${workflowName}.steps.Empty.rows.One.text = "ROW WITHOUT TEMPLATE";
+        }
     );
     "module-delegate-routing-${name}-workflow-runtime" = mkTest "delegate-routing-${name}-workflow-runtime" (
       let

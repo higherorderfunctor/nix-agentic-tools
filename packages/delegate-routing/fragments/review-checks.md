@@ -46,10 +46,11 @@ remains the final spot-check and is not consulted about cuts.
 
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. Grades the
-description's claims first, then every rubric row in order: pass with the line
-that meets it, fail with location and evidence, or unknown with what would
-settle it. A guarantee with no enforcing line in this diff is an issue of at
-least medium severity. Then lists issues no row covers, checking each against
+diff as the person who merges it reads it, not only against behavior rows.
+Grades the description's claims first, then every rubric row in order: pass with
+the line that meets it, fail with location and evidence, or unknown with what
+would settle it. A guarantee with no enforcing line in this diff is an issue of
+at least medium severity. Then lists issues no row covers, checking each against
 the draft itself. For each fail or issue, returns its location, the row or
 requirement it breaks, evidence, whether it holds, and a proposed severity; if
 uncertain, returns the open question that would settle it.
