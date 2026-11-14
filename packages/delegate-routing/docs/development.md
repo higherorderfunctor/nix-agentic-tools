@@ -748,29 +748,27 @@ still reports their count.
 
 ### Claude OAuth inventory
 
-Both direct login and CPA read OAuth usage with `cedar_ember=1&skip_spend=1`,
-using the installed Claude CLI version for the CLI-shaped User-Agent. Claude
-must therefore be on PATH for both transports. Readers only issue upstream GET
-requests; they never redeem or reset a grant. Profile and prepaid reads use
-source-evidenced OAuth paths, not a browser cookie or a guessed endpoint. These
-paths are tested with fake transport, not verified against a live account.
+Run `claude-usage` to read allowance, reset grants and prepaid balances through
+direct login or CPA. Both transports require the installed Claude CLI on PATH.
+They only issue GET requests and never redeem or reset a grant. The OAuth paths
+are tested with fake transport, not verified against a live account.
 
-`grants` preserves the observed `cedar_ember` discovery facts, including the
-natural weekly reset, opaque handles, counts, expiry, `clears` and
-`gives_back_weekly`. `bonuses` projects remaining resets and known usability;
-missing eligibility stays null. Grant type never implies account-to-Fable
-coverage, a full weekly refill, or a restarted weekly clock. A null expiry means
-unknown expiry. Recommendations require a fresh observation before use.
+`grants` preserves the provider's discovery facts, including the natural weekly
+reset, opaque handles, counts, expiry, `clears` and `gives_back_weekly`.
+`bonuses` reports remaining resets and known usability. Missing eligibility or
+expiry stays null. Grant type does not establish account-to-Fable coverage, a
+full weekly refill or a restarted weekly clock. Recommendations require a fresh
+observation before use.
 
-`balances` contains only real promotional and purchased prepaid lots, in USD,
-with independent expiry. `credit.cap` and `credit.spent` preserve separate
-provider amount records; they never become wallet balances. The evidenced
-responses do not establish the cap's calendar period, so `periodStart`,
-`periodEnd` and `usable` remain null, including when a cap or spend is missing.
-No cap is inferred to be unlimited. Optional profile/prepaid failures preserve
-allowance and grants; absent or malformed grant inventory preserves allowance.
-`missingExtras` names unavailable optional observations without exposing
-response bodies or transport errors. An observed empty inventory remains
+`balances` lists promotional and purchased prepaid lots in USD, each with its
+own expiry. `credit.cap` and `credit.spent` preserve separate provider amount
+records. They do not become wallet balances. The responses do not establish a
+cap period or usable credit, so `periodStart`, `periodEnd` and `usable` stay
+null. Missing cap or spend does not mean unlimited credit.
+
+Optional profile, prepaid or grant failures preserve allowance and other
+available inventory. `missingExtras` names unavailable observations without
+exposing response bodies or transport errors. An observed empty inventory is
 distinct from an unavailable observation.
 
 ### Proxy accounted usage

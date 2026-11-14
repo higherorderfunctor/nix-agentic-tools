@@ -13,9 +13,11 @@ declare -rA delegate_usage_api_keys=(
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
+# The optional fifth argument projects only prepaid inventory, leaving validated
+# main usage untouched when the optional request or its data is unavailable.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" '
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -53,6 +55,40 @@ usage_project() {
       elif ($count // 0) > 0 then
         [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
       else [] end;
+    def prepaid_balances:
+      if . == null then [] else
+        if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
+          then error("claude prepaid tranches") else . end
+        | [((.promo_tranches[] | . + {funding: "promotional"}),
+            (.tranches[] | . + {funding: "purchased"}))
+           | if (.remaining_amount_minor_units | type) != "number"
+               or (.remaining_amount_minor_units | isfinite | not) or .remaining_amount_minor_units < 0
+               or .currency != "USD" then error("claude prepaid lot") else . end
+           | {kind: "usage_credit", funding, remaining: (.remaining_amount_minor_units / 100),
+              unit: .currency, expiresAt: (.expires_at | if . == null then null else utc end), scope: null}]
+      end;
+    def grant_inventory:
+      . as $usage | try {
+        value: [.cedar_ember.grants[]?
+          | if (.id | type) != "string" or .id == ""
+              or (.clears | type) != "array" or any(.clears[]; type != "string")
+              or (.resets_left | type) != "number" or .resets_left < 0
+              or (.resets_left | isfinite | not) or (.resets_left | floor) != .resets_left
+              then error("claude grant") else . end
+          | {kind: "rate_limit_reset", handle: .id, remaining: .resets_left, unit: "resets",
+             funding: "promotional", clears, givesBackWeekly: .gives_back_weekly,
+             usable: (if $usage.cedar_ember.eligible == false or .paused == true or .usable_now == false then false
+                      elif $usage.cedar_ember.eligible == true and .paused == false and .usable_now == true then true
+                      else null end),
+             expiresAt: (.ends_at | if . == null then null else utc end)}],
+        missing: (if (.cedar_ember.grants | type) == "array" then []
+                  else ["claude-grants-unavailable"] end)}
+      catch {value: [], missing: ["claude-grants-unavailable"]};
+    if $observation == "prepaid" then
+      try ($prepaid | if type != "object" then error("claude prepaid") else . end
+        | {value: prepaid_balances, missing: []})
+      catch {value: [], missing: ["claude-prepaid-unavailable"]}
+    else
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -61,6 +97,7 @@ usage_project() {
     | if $vendor == "claude" then
         if has("five_hour") | not then error("claude usage") else . end
         | . as $usage
+        | grant_inventory as $grants
         | $base + {
             windows: ([
               {seconds: 18000, scope: null, value: .five_hour},
@@ -80,33 +117,12 @@ usage_project() {
             # OAuth responses do not establish a cap period or usable credit.
             credit: {cap: (try .spend.limit catch null), spent: (try .spend.used catch null),
                      periodStart: null, periodEnd: null, usable: null},
-            balances: ($prepaid | if . == null then [] else
-              if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
-                then error("claude prepaid tranches") else . end
-              | [((.promo_tranches[] | . + {funding: "promotional"}),
-                  (.tranches[] | . + {funding: "purchased"}))
-                 | if (.remaining_amount_minor_units | type) != "number"
-                     or (.remaining_amount_minor_units | isfinite | not) or .remaining_amount_minor_units < 0
-                     or .currency != "USD" then error("claude prepaid lot") else . end
-                 | {kind: "usage_credit", funding, remaining: (.remaining_amount_minor_units / 100),
-                    unit: .currency, expiresAt: (.expires_at | if . == null then null else utc end), scope: null}]
-              end),
+            balances: ($prepaid | prepaid_balances),
             # Preserve provider effects, including unknown targets, rather than
             # infer account/Fable coverage from a grant type or its name.
             grants: .cedar_ember,
-            bonuses: (try [.cedar_ember.grants[]?
-              | if (.id | type) != "string" or .id == ""
-                  or (.clears | type) != "array" or any(.clears[]; type != "string")
-                  or (.resets_left | type) != "number" or .resets_left < 0
-                  or (.resets_left | isfinite | not) or (.resets_left | floor) != .resets_left
-                  then error("claude grant") else . end
-              | {kind: "rate_limit_reset", handle: .id, remaining: .resets_left, unit: "resets",
-                 funding: "promotional", clears, givesBackWeekly: .gives_back_weekly,
-                 usable: (if $usage.cedar_ember.eligible == false or .paused == true or .usable_now == false then false
-                          elif $usage.cedar_ember.eligible == true and .paused == false and .usable_now == true then true
-                          else null end),
-                 expiresAt: (.ends_at | if . == null then null else utc end)}]
-              catch [])
+            bonuses: $grants.value,
+            missingExtras: $grants.missing
           }
       elif $vendor == "codex" then
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
@@ -142,13 +158,13 @@ usage_project() {
               .percentage; (.nextResetTime | if . == null then null else . / 1000 end); null)] as $windows
         | if $windows == [] then error("z.ai windows") else
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
-      end
+      end end
   ' 2>/dev/null
 }
 
 # Both Claude transports use the same headers, request sequence and projection.
 usage_claude_request() {
-  local url=$1 request envelope
+  local url=$1 request envelope status
   if [[ $delegate_usage_claude_account != null ]]; then
     request=$(jq -cn --argjson account "$delegate_usage_claude_account" --arg url "$url" \
       --arg ua "$delegate_usage_claude_agent" --arg beta "$delegate_usage_claude_beta" '
@@ -156,7 +172,12 @@ usage_claude_request() {
        header: {Authorization: "Bearer $TOKEN$", "Content-Type": "application/json",
                 "User-Agent": $ua, "anthropic-beta": $beta}}')
     envelope=$(usage_cpa_request POST api-call "$request") || return 1
-    jq -er 'select(.status_code >= 200 and .status_code < 300) | .body | select(type == "string")' <<<"$envelope" 2>/dev/null
+    status=$(jq -er '.status_code | select(type == "number")' <<<"$envelope" 2>/dev/null) || return 1
+    if ! jq -e '. >= 200 and . < 300' <<<"$status" >/dev/null; then
+      printf 'usage: proxy vendor HTTP %s\n' "$status" >&2
+      return 1
+    fi
+    jq -er '.body | select(type == "string")' <<<"$envelope" 2>/dev/null
   else
     # shellcheck disable=SC2154 # The appended vendor script sets delegate_usage_token.
     curl -q --fail --silent --show-error --max-time 75 --config - 2>/dev/null <<EOF_CLAUDE
@@ -170,7 +191,7 @@ EOF_CLAUDE
 
 usage_claude() {
   local delegate_usage_claude_account=${1:-null} delegate_usage_claude_agent version body result
-  local profile org prepaid projected missing=''
+  local profile org prepaid inventory='{"value":[],"missing":[]}' missing=''
   if ! version=$(claude --version 2>/dev/null) ||
     [[ ! $version =~ ^([0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.-]+)?)(\ \(Claude\ Code\))?$ ]]; then
     printf '%s\n' 'usage: claude version unavailable or invalid' >&2
@@ -190,19 +211,18 @@ usage_claude() {
   if profile=$(usage_claude_request 'https://api.anthropic.com/api/oauth/profile' 2>/dev/null) &&
     org=$(jq -er '.organization.uuid | select(type == "string") | select(test("^[A-Za-z0-9-]+$"))' <<<"$profile" 2>/dev/null); then
     if prepaid=$(usage_claude_request "https://api.anthropic.com/api/oauth/organizations/$org/prepaid/credits" 2>/dev/null) &&
-      prepaid=$(jq -ce 'select(type == "object")' <<<"$prepaid" 2>/dev/null) &&
-      projected=$(usage_project claude "$delegate_usage_claude_account" null "$prepaid" <<<"$body"); then
-      result=$projected
+      inventory=$(usage_project claude "$delegate_usage_claude_account" null "$prepaid" prepaid <<<null); then
+      :
     else
-      missing=claude-prepaid-unavailable
+      inventory='{"value":[],"missing":["claude-prepaid-unavailable"]}'
     fi
   else
     missing=claude-prepaid-organization-unknown
   fi
-  jq --argjson usage "$body" --arg missing "$missing" '. + {missingExtras:
-    ([$missing | select(. != "")] +
-      if (try (($usage.cedar_ember.grants | type) == "array" and
-          (.bonuses | length) == ($usage.cedar_ember.grants | length)) catch false) then [] else ["claude-grants-unavailable"] end)}' <<<"$result"
+  jq --argjson inventory "$inventory" --arg missing "$missing" '
+    .balances = $inventory.value
+    | .missingExtras = ([$missing | select(. != "")] + $inventory.missing + .missingExtras)
+  ' <<<"$result"
 }
 
 usage_cpa_error() {

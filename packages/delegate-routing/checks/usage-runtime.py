@@ -942,6 +942,37 @@ print({json.dumps(json.dumps(ZAI))})
             self.assertEqual(value["windows"]["7d"]["remainingPercent"], 39)
             self.assertEqual(value["missingExtras"], ["claude-grants-unavailable"])
 
+    def test_claude_vendor_status_is_safe_and_main_failure_stops_extras(self):
+        # Reports numeric upstream status without leaking the body or fetching extras.
+        for status in [401, 429, 503]:
+            with self.subTest(status=status):
+                self.requests.clear()
+                self.envelope = {"status_code": status, "body": "private-response-body"}
+                result = self.run_helper("claude")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"vendor HTTP {status}", result.stderr)
+                self.assertNotIn("private-response-body", result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(len(self.requests), 2)
+
+    def test_claude_empty_inventory_is_observed_and_invalid_lot_is_unavailable(self):
+        # Distinguishes zero observations from rejected data without erasing windows.
+        self.usage["claude"]["cedar_ember"] = {"grants": []}
+        value = json.loads(self.run_helper("claude").stdout)
+        self.assertEqual(value["missingExtras"], [])
+        self.assertEqual(value["bonuses"], [])
+        self.assertEqual(value["balances"], [])
+        for field, invalid in [("currency", "EUR"), ("remaining_amount_minor_units", -1),
+                               ("remaining_amount_minor_units", "1"), ("expires_at", "invalid")]:
+            with self.subTest(field=field, invalid=invalid):
+                lot = {"currency": "USD", "remaining_amount_minor_units": 1, "expires_at": None}
+                lot[field] = invalid
+                self.prepaid = {"promo_tranches": [lot], "tranches": []}
+                value = json.loads(self.run_helper("claude").stdout)
+                self.assertEqual(value["balances"], [])
+                self.assertEqual(value["missingExtras"], ["claude-prepaid-unavailable"])
+                self.assertEqual(value["windows"]["7d"]["remainingPercent"], 39)
+
     def test_direct_claude_matches_proxy(self):
         # Rejects divergent projections and a direct-only loss of optional data.
         self.usage["claude"]["cedar_ember"] = {"eligible": True, "grants": [
