@@ -91,7 +91,7 @@
     if id == "iceman-contributor-free"
     then "iceman"
     else namespace;
-  # Each backend exercises complete defaults, list overrides and identity aliases.
+  # Each backend exercises complete defaults, list overrides and vendor-scoped served spellings.
   checks = lib.mapAttrs (backendName: evaluate:
     harness.mkTest "cliproxyapi-catalog-${backendName}" (let
       result = evaluate [fixture];
@@ -109,10 +109,6 @@
       renamed = render (evaluate [
         fixture
         {
-          ai.cliproxyapi.servedModels = {
-            opencode-go.configured = [chosen];
-            zhipuai.configured = [chosenZhipuai];
-          };
           ai.catalog = {
             models.configured = {
               source = ["configured identity"];
@@ -121,6 +117,10 @@
               opencode-go.models = ["configured"];
               zhipuai.models = ["configured"];
             };
+          };
+          ai.cliproxyapi.servedModels = {
+            opencode-go.configured = [chosen];
+            zhipuai.configured = [chosenZhipuai];
           };
         }
       ]);
@@ -158,10 +158,6 @@
                 fixture-null.maker = null;
                 fixture-unset = {};
               };
-              cliproxyapi.servedModels = {
-                opencode-go.fixture-blocked = ["fixture-alias"];
-                zhipuai.fixture-kept = ["fixture-alias" "fixture-blocked"];
-              };
               cliproxyapi.instances.main = {
                 enable = true;
                 settings.config-version = 8;
@@ -186,6 +182,10 @@
                   key = redact.file "/run/secrets/client-filtered";
                   routes = [{credential = "filtered";}];
                 };
+              };
+              cliproxyapi.servedModels = {
+                opencode-go.fixture-blocked = ["fixture-alias"];
+                zhipuai.fixture-kept = ["fixture-alias" "fixture-blocked"];
               };
             };
           }
@@ -324,7 +324,7 @@
             == ["ambiguous model alias `fixture-shared`: fixture-first, fixture-second; use a canonical catalog id."]
             && !(builtins.tryEval (builtins.deepSeq ambiguousExclusion.config.ai.cliproxyapi.instances.main.credentials true)).success;
           "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
-          "configured identity aliases ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
+          "configured vendor-scoped served spellings ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
           "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zhipuai.models);
           "empty exclusions change rendered defaults" = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = [];}]) == settings;
           "excluded explicit aliases survive or unknown makers disappear" = offers explicitSettings "filtered" == {chat = sorted expectedExplicit;};

@@ -8,7 +8,6 @@ in {
   # Leaf defaults merge CPA evidence while ordinary user fields win.
   config.ai.catalog = lib.mapAttrsRecursive (_: lib.mkDefault) {
     models = lib.genAttrs (map (model: model.slug) models) (_: {
-      # Extraction supplies no alternate vendor spellings.
       maker = "openai";
       source = ["chatgpt-codex:models"];
     });
