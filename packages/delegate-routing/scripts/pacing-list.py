@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import runpy
 from pathlib import Path
 import sys
 import subprocess
@@ -15,6 +16,9 @@ SPEC = importlib.util.spec_from_file_location("usage_normalize", Path(__file__).
 normalizer = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = normalizer
 SPEC.loader.exec_module(normalizer)
+
+# Load the pure engine beside the source CLI, including under isolated Python.
+rank = runpy.run_path(str(Path(__file__).with_name("pacing.py")))["rank"]
 
 
 # Reuse the routing helper's retry, timeout and process-group cleanup policy.
@@ -73,7 +77,7 @@ def main():
             normalizer.normalize({**manifest, "readers": {}}, now)
             snapshot = collect(manifest, now, args.reader_shell)
             now = int(time.time())
-        result = normalizer.normalize(snapshot, now)
+        result = rank(normalizer.normalize(snapshot, now), snapshot.get("policy"))
     except (AttributeError, KeyError, OSError, ValueError, TypeError, OverflowError, RecursionError):
         # Neither paths, timestamps nor JSON/parser exception text are diagnostics.
         print(json.dumps({"reason": "invalid-input"}), file=sys.stderr)

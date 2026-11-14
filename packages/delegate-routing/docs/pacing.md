@@ -9,12 +9,12 @@ python3 -I -B packages/delegate-routing/scripts/pacing-list.py \
 ```
 
 Snapshot mode emits deterministic `allowance-preview` JSON. It executes no
-Reader or capture command and needs no configured installation. It does not rank
-models, infer prices, recommend resets or promise a versioned list schema. The
-installed routing helper is separate. When `scripts/delegate-routing-plan.py`
-switches to ranking from the normalized usage list, delete its `measure` and
-`window_pace` validators so `scripts/usage-normalize.py` owns Reader-envelope
-validation.
+Reader or capture command and needs no configured installation. The preview
+ranks observed allowance but does not infer prices, recommend resets or promise
+a versioned list schema. The installed routing helper is separate. When
+`scripts/delegate-routing-plan.py` switches to ranking from the normalized usage
+list, delete its `measure` and `window_pace` validators so
+`scripts/usage-normalize.py` owns Reader-envelope validation.
 
 Snapshots contain `runtime`, `routes`, `pools` and `readers`. Routes are the
 existing offer shape `{id, maker, model}`: `id` is the canonical model identity,
@@ -163,3 +163,31 @@ directory. Synthetic CPA properties test credential identity, scope refusal and
 USD budget reuse. Both backend `observation-command` checks execute their
 installed package, including its CPA management metadata. These checks make no
 provider request. Preview output has no stable schema promise.
+
+## Allowance ranking
+
+The pure `scripts/pacing.py` engine adds `entries` while preserving `routes` and
+normalized observations. Entries match explicit limit `models` to canonical
+route `id`, retaining the served `model` separately. Multiple applicable pools
+remain inspection alternatives; an offer without applicable evidence has a null
+pool and unknown pace. They do not establish credential attribution.
+
+Pace is the minimum of remaining/capacity times windowSeconds/time-to-reset
+across applicable paced limits. It is not clipped: half a week remaining with
+half the allowance is 1, full allowance halfway through is 2. Each limit uses
+its own duration, including monthly periods. Positive valid gates do not lower
+pace; closed gates block readiness. Missing, stale, invalid, unresolved-scope or
+unknown-enforcement evidence cannot establish readiness. Unknown pace is null
+and scores zero; independently observed exhaustion still proves zero. An idle
+paced limit with no reset remains unknown; an open gate needs no reset.
+
+Optional snapshot `policy` maps observed pool keys to `{ "weight": 1.5 }`. Only
+`weight` is accepted, defaults to 1, and must be finite and nonnegative
+(booleans are refused). Every ready allowance score is pace times this weight,
+without reserve or reset conditions. Unknown pool keys are refused at the rank
+boundary. Weight zero changes preference without changing readiness.
+
+`delegate-routing-allowance-ranking` checks handwritten arithmetic and an
+independent rational reference, canonical scope, unknown evidence and policy
+validation. Its CLI cases use synthetic current snapshot shapes and an explicit
+clock; no production catalog inventory or operator configuration is copied.
