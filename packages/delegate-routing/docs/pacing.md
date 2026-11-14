@@ -101,3 +101,29 @@ boundary. Weight zero changes preference without changing readiness.
 independent rational reference, canonical scope, unknown evidence and policy
 validation. Its CLI cases use synthetic current snapshot shapes and an explicit
 clock; no production catalog inventory or operator configuration is copied.
+
+Each entry exposes `binding_limit`, the identifier of its smallest observed
+paced allowance (lexical identifier breaks equal-pace ties). It remains an
+inspection fact when other evidence blocks readiness; gates never become paced
+binding limits. `evidence` lists `stale_limits`, `unknown_limits`, and
+`scope_resolved`. Unknown limit IDs cover invalid or missing observations,
+unknown enforcement, or unusable pacing/release timing. Stale limits also count
+as unknown. Existing pool diagnostics explain capture and scope failures once;
+ranking does not repeat those diagnostics for every offer.
+
+`available_at` is the explicit clock for ready entries. For blocked entries it
+is the latest observed release of all exhausted gates and paced limits, only
+when every blocker has valid future timing and the remaining allowance evidence
+is complete. Any unresolved blocker, stale observation or unknown scope leaves
+it null. This is conditional on the observations, not a refill or inference
+availability guarantee; reread before acting. Known zero survives malformed
+timing while its availability stays unknown.
+
+All applicable pool/model alternatives survive, including failed and exhausted
+entries with score zero. Entries sort by descending score, then ready before
+out, then pool and served model, canonical identity and maker (null before any
+string). No other readiness states are emitted. Original route and observation
+order remains untouched. `delegate-routing-allowance-output` checks these
+properties using literal expectations, an independent release-time reference,
+and the current offline CLI input shape; it rejects early promises, loss of
+failed offers, leaked capture text and unstable ties.
