@@ -74,6 +74,11 @@ def snapshot(spec=None, window=None):
     ).model_dump(mode="json", exclude_unset=True)
 
 
+def normalize(value, now, **options):
+    """Serialize the typed public result for wire-format assertions."""
+    return N.normalize(value, now, **options).model_dump(mode="json")
+
+
 def limit(result):
     """Select the synthetic registered slot for focused allowance assertions."""
     return result["pools"]["budget"]["limits"][0]
@@ -91,7 +96,7 @@ class Observations(unittest.TestCase):
         """Whitespace cannot turn a different Reader pool into the registered pool."""
         value = snapshot()
         value["readers"]["budget"]["data"]["pool"] = pool
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertIn("pool-mismatch", reasons(result))
         self.assertEqual((limit(result)["status"], limit(result)["remaining"]), ("missing", None))
         self.assertFalse(result["pools"]["budget"]["scopeResolved"])
@@ -99,7 +104,7 @@ class Observations(unittest.TestCase):
     @given(specs, windows())
     def test_native_amounts_roles_and_resets(self, spec, window):
         """Capacity scales percentages without changing the declared unit or role."""
-        result = limit(N.normalize(snapshot(spec, window), NOW))
+        result = limit(normalize(snapshot(spec, window), NOW))
         self.assertAlmostEqual(result["remaining"], spec.capacity * window.remainingPercent / 100)
         self.assertAlmostEqual(result["used"], spec.capacity * window.usedPercent / 100)
         self.assertEqual((result["role"], result["unit"], result["status"]), (spec.role, spec.unit, "valid"))
@@ -114,8 +119,8 @@ class Observations(unittest.TestCase):
         value = snapshot()
         instant = dt.datetime.fromisoformat(iso(EPOCH, offset)).replace(microsecond=microsecond).isoformat()
         value["readers"]["budget"]["finishedAt"] = instant
-        first = N.normalize(value, instant)
-        self.assertEqual(first, N.normalize(value, NOW))
+        first = normalize(value, instant)
+        self.assertEqual(first, normalize(value, NOW))
         self.assertEqual((first["asOf"], limit(first)["observedAt"]), (EPOCH, EPOCH))
 
     def test_timestamp_boundary_has_one_text_contract(self):
@@ -130,7 +135,7 @@ class Observations(unittest.TestCase):
         """Exact registrations preserve canonical ids and refuse unknown scope expansion."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"].update({f"7d:private-{i}": {} for i in range(count)})
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual(limit(result)["models"], ["canonical-a"])
         self.assertFalse(result["pools"]["budget"]["scopeResolved"])
         self.assertIn({"pool": "budget", "reason": "unregistered-window", "count": count}, result["diagnostics"])
@@ -143,7 +148,7 @@ class Observations(unittest.TestCase):
         value["pools"]["budget"]["limits"]["allowance"]["role"] = role
         value["readers"]["budget"]["data"]["windows"]["7d:fable"].update(
             remainingPercent=remaining, usedPercent=100 - remaining, resetsAt=None)
-        result = limit(N.normalize(value, NOW))
+        result = limit(normalize(value, NOW))
         self.assertEqual(result["status"], "valid" if remaining == 100 or role == "gate" and remaining > 0 else "invalid")
         self.assertIsNone(result["naturalResetAt"])
         self.assertIsNone(result["gateOpensAt"])
@@ -155,11 +160,33 @@ class Observations(unittest.TestCase):
         window.update(remainingPercent=0, usedPercent=100, windowSeconds=2678400)
         for seconds, status in [(2678401, "valid"), (2678402, "invalid"), (0, "stale")]:
             window["resetsAt"] = iso(EPOCH + seconds)
-            result = limit(N.normalize(value, NOW))
+            result = limit(normalize(value, NOW))
             self.assertEqual((result["status"], result["remaining"], result["naturalResetAt"]), (status, 0, EPOCH + seconds))
         window["resetsAt"] = iso(EPOCH + 2678400)
         for age, status in [(3600, "valid"), (3601, "stale")]:
-            self.assertEqual(limit(N.normalize(value, iso(EPOCH + age)))["status"], status)
+            self.assertEqual(limit(normalize(value, iso(EPOCH + age)))["status"], status)
+
+    @given(st.integers(0, 100000))
+    def test_freshness_uses_configured_seconds(self, freshness):
+        """The chosen age boundary expires observations without erasing measured amounts."""
+        value = snapshot()
+        for age, status in [(freshness, "valid"), (freshness + 1, "stale")]:
+            result = limit(normalize(value, iso(EPOCH + age), freshness_seconds=freshness))
+            self.assertEqual((result["status"], result["remaining"]), (status, 30))
+
+    @given(st.sampled_from([-1, True, "3600", float("inf"), float("nan")]))
+    def test_invalid_freshness_is_refused(self, freshness):
+        """Freshness must be a finite nonnegative number at the call boundary."""
+        with self.assertRaises(ValidationError):
+            N.normalize(snapshot(), NOW, freshness_seconds=freshness)
+
+    def test_normalized_result_is_typed(self):
+        """Ranking receives typed routes, pools and observations directly."""
+        result = N.normalize(snapshot(), NOW)
+        self.assertIsInstance(result, N.Normalized)
+        self.assertIsInstance(result.pools["budget"], N.PoolEvidence)
+        self.assertIsInstance(result.pools["budget"].limits[0], N.Observation)
+        self.assertIsInstance(result.routes[0], N.Route)
 
     @given(st.sampled_from(["finishedAt", "resetsAt", "windowSeconds"]),
            st.sampled_from([None, True, "private-invalid", {}, []]))
@@ -170,7 +197,7 @@ class Observations(unittest.TestCase):
         window = capture["data"]["windows"]["7d:fable"]
         window.update(remainingPercent=0, usedPercent=100)
         (capture if field == "finishedAt" else window)[field] = bad
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual((limit(result)["remaining"], limit(result)["used"], limit(result)["status"]), (0, 40, "invalid"))
         self.assertNotIn("private-", json.dumps(result))
 
@@ -180,70 +207,18 @@ class Observations(unittest.TestCase):
         """Malformed optional arrays cannot erase a valid independent allowance."""
         value = snapshot()
         value["readers"]["budget"]["data"][field] = bad
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
-        self.assertIn("invalid-extras", reasons(result))
         self.assertNotIn("private-", json.dumps(result))
-
-    def test_absent_and_empty_extras_are_distinct(self):
-        """Absent extras are unknown while explicit empty arrays are known empty."""
-        value = snapshot()
-        metadata = N.normalize(value, NOW)["pools"]["budget"]["readerMetadata"]
-        self.assertEqual(metadata, {"balances": None, "bonuses": None})
-        value["readers"]["budget"]["data"].update(balances=[], bonuses=[])
-        result = N.normalize(value, NOW)
-        self.assertEqual(result["pools"]["budget"]["readerMetadata"], {"balances": [], "bonuses": []})
-        self.assertNotIn("invalid-extras", reasons(result))
-
-    @given(st.integers(min_value=0), st.sampled_from([-1, 0.5, True, "2", None]))
-    def test_bonus_counts_are_whole_and_nonnegative(self, count, invalid):
-        """Whole nonnegative counts survive while invalid siblings are omitted independently."""
-        value = snapshot()
-        bonus = N.Bonus(count=count, expiresAt=None, kind="promo_credits").model_dump(mode="json")
-        value["readers"]["budget"]["data"]["bonuses"] = [bonus, {**bonus, "count": invalid}]
-        result = N.normalize(value, NOW)
-        self.assertEqual(result["pools"]["budget"]["readerMetadata"]["bonuses"],
-                         [{"count": count, "expiresAt": None, "kind": "promo_credits"}])
-        self.assertIn("invalid-extras", reasons(result))
-        self.assertEqual(limit(result)["remaining"], 30)
 
     def test_private_account_fields_are_not_projected(self):
         """Non-null account identity fields remain private even in successful captures."""
         value = snapshot()
         value["readers"]["budget"]["data"]["account"] = {
             "auth_index": "private-auth", "name": "private-name", "plan": "private-plan"}
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
         self.assertNotIn("private-", json.dumps(result))
-
-    @given(st.sampled_from(["credits", "extra_usage"]), st.sampled_from(["credits", "USD"]))
-    def test_balance_kind_unit_pairs(self, kind, unit):
-        """Only the two producer kind/unit pairs survive metadata projection."""
-        value = snapshot()
-        value["readers"]["budget"]["data"]["balances"] = [
-            {"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}]
-        result = N.normalize(value, NOW)
-        allowed = (kind, unit) in {("credits", "credits"), ("extra_usage", "USD")}
-        self.assertEqual(result["pools"]["budget"]["readerMetadata"]["balances"],
-                         [{"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}] if allowed else [])
-        self.assertEqual("invalid-extras" in reasons(result), not allowed)
-        self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
-
-    def test_literal_metadata_allowlist(self):
-        """Known extras retain native values while invalid siblings and secrets disappear."""
-        value = snapshot()
-        value["readers"]["budget"]["data"].update(
-            balances=[{"kind": "credits", "unit": "credits", "remaining": 12, "expiresAt": None, "secret": "private"},
-                      {"kind": "extra_usage", "unit": "USD", "remaining": 7, "expiresAt": NOW}],
-            bonuses=[{"kind": "rate_limit_reset", "count": 2, "expiresAt": NOW}, {"kind": "private"}],
-        )
-        result = N.normalize(value, NOW)
-        self.assertEqual(result["pools"]["budget"]["readerMetadata"], {
-            "balances": [{"kind": "credits", "unit": "credits", "remaining": 12, "expiresAt": None},
-                         {"kind": "extra_usage", "unit": "USD", "remaining": 7, "expiresAt": EPOCH}],
-            "bonuses": [{"kind": "rate_limit_reset", "count": 2, "expiresAt": EPOCH}],
-        })
-        self.assertNotIn("private", json.dumps(result))
 
     @given(st.sampled_from([
         ({"exit": 7, "stdout": "private"}, "exit-nonzero"),
@@ -257,7 +232,7 @@ class Observations(unittest.TestCase):
         patch, reason = case
         value = snapshot()
         value["readers"]["budget"].update(patch, stderr="private")
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual(result["routes"], [
             {"id": "canonical-a", "maker": None, "model": "served-fable"},
             {"id": "canonical-b", "maker": "synthetic", "model": "fable"},
@@ -271,19 +246,19 @@ class Observations(unittest.TestCase):
     def test_stdout_and_decoded_replay_agree(self, window):
         """JSON captures and decoded captures produce the same deterministic facts."""
         value = snapshot(window=window)
-        expected = N.normalize(value, NOW)
+        expected = normalize(value, NOW)
         capture = value["readers"]["budget"]
         capture["stdout"] = json.dumps(capture.pop("data"))
-        self.assertEqual(N.normalize(value, NOW), expected)
+        self.assertEqual(normalize(value, NOW), expected)
         capture["data"] = {"private": "ignored because stdout takes precedence"}
-        self.assertEqual(N.normalize(value, NOW), expected)
+        self.assertEqual(normalize(value, NOW), expected)
 
     @given(st.integers(201, 1500))
     def test_json_depth_is_bounded(self, depth):
         """Excessive JSON nesting becomes a safe parse failure before envelope validation."""
         value = snapshot()
         value["readers"]["budget"]["stdout"] = "[" * depth + "0" + "]" * depth
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertIn("invalid-json", reasons(result))
         self.assertEqual(limit(result)["status"], "missing")
 
@@ -305,7 +280,7 @@ class Observations(unittest.TestCase):
         """Unknown enforcement leaves valid measured allowance available for inspection."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = status
-        result = limit(N.normalize(value, NOW))
+        result = limit(normalize(value, NOW))
         self.assertEqual((result["readerStatus"], result["remaining"], result["status"]), (status, 30, "valid"))
         self.assertEqual(result["enforced"], True if status in {"active", "critical", "estimated", "normal", "ok", "warning"} else None)
 
@@ -314,7 +289,7 @@ class Observations(unittest.TestCase):
         """A malformed status cannot erase quantities or expose a non-scalar payload."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = bad
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "invalid"))
         self.assertIsNone(limit(result)["readerStatus"])
         self.assertIn("invalid-status", reasons(result))
@@ -329,7 +304,7 @@ class Observations(unittest.TestCase):
         windows = value["readers"]["budget"]["data"]["windows"]
         windows["monthly"] = windows["7d:fable"].copy()
         windows["7d:fable"]["remainingPercent"] = bad
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         broken, independent = result["pools"]["budget"]["limits"]
         self.assertEqual((broken["status"], broken["remaining"]), ("invalid", None))
         self.assertEqual((independent["status"], independent["remaining"]), ("valid", 30))
@@ -339,11 +314,11 @@ class Observations(unittest.TestCase):
         """Missing captures keep slots; future capture times preserve independently measured amounts."""
         value = snapshot()
         value["readers"]["budget"]["finishedAt"] = "2026-11-12T01:35:01Z"
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertIn("future-observation", reasons(result))
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "invalid"))
         value["readers"].clear()
-        result = N.normalize(value, NOW)
+        result = normalize(value, NOW)
         self.assertIn("missing-capture", reasons(result))
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (None, "missing"))
 
@@ -353,12 +328,12 @@ class Observations(unittest.TestCase):
             value = snapshot()
             value["pools"]["budget"]["limits"]["allowance"].update(patch)
             with self.assertRaisesRegex(ValidationError, error):
-                N.normalize(value, NOW)
+                normalize(value, NOW)
         value = snapshot()
         limits = value["pools"]["budget"]["limits"]
         limits["duplicate"] = limits["allowance"].copy()
         with self.assertRaisesRegex(ValidationError, "duplicate-window-registration"):
-            N.normalize(value, NOW)
+            normalize(value, NOW)
 
 
 if __name__ == "__main__":

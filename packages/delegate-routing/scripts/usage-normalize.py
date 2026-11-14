@@ -115,40 +115,9 @@ class Window(Boundary):
         return self
 
 
-class BalanceFields(Boundary):
-    """Share native amounts and expiry across Reader balance variants."""
-    expiresAt: Timestamp | None
-    remaining: Amount
-
-
-class CreditsBalance(BalanceFields):
-    """Keep credit balances denominated in credits."""
-    kind: Literal["credits"]
-    unit: Literal["credits"]
-
-
-class ExtraUsageBalance(BalanceFields):
-    """Keep extra usage balances denominated in dollars."""
-    kind: Literal["extra_usage"]
-    unit: Literal["USD"]
-
-
-# Select the balance schema from the producer's kind before projecting metadata.
-BALANCE = TypeAdapter(Annotated[CreditsBalance | ExtraUsageBalance, Field(discriminator="kind")])
-
-
-class Bonus(Boundary):
-    """Project only known bonus kinds with whole nonnegative counts."""
-    count: Annotated[int, Field(strict=True, ge=0)]
-    expiresAt: Timestamp | None
-    kind: Literal["promo_credits", "rate_limit_reset"]
-
-
 class Envelope(Boundary):
     """Bind the Reader payload to its exact pool identity before using windows."""
     account: Account
-    balances: OnErrorOmit[list[Any]] = None
-    bonuses: OnErrorOmit[list[Any]] = None
     pool: Nonempty
     windows: dict[str, Any]
 
@@ -162,31 +131,44 @@ class Capture(Boundary):
     stdout: Any = None
 
 
-def metadata(document: Envelope | None, diagnostic):
-    """Project valid extras independently so one bad entry cannot hide its siblings."""
-    result = {}
-    for field, validate in (("balances", BALANCE.validate_python), ("bonuses", Bonus.model_validate)):
-        items = getattr(document, field) if document else None
-        result[field] = None if items is None else []
-        if document and field not in document.model_fields_set and field not in document._invalid:
-            continue
-        if document and items is None:
-            diagnostic("invalid-extras", component=field)
-        for item in items or []:
-            try:
-                clean = validate(item).model_dump()
-                clean["expiresAt"] = int(clean["expiresAt"].timestamp()) if clean["expiresAt"] else None
-                result[field].append(clean)
-            except ValidationError:
-                diagnostic("invalid-extras", component=field)
-    return result
+class Observation(BaseModel):
+    """Carry normalized allowance facts to ranking without parsing Reader fields again."""
+    capacity: Positive
+    enforced: bool | None
+    gateOpensAt: int | None
+    id: str
+    models: list[str]
+    naturalResetAt: int | None
+    observedAt: int | None
+    readerStatus: str | None
+    remaining: Amount | None
+    role: Literal["gate", "pace"]
+    status: Literal["invalid", "missing", "stale", "valid"]
+    unit: Literal["percentagePoint", "USD"]
+    used: Amount | None
+    windowSeconds: Positive | None
+
+
+class PoolEvidence(BaseModel):
+    """Keep scope completeness beside each credential's independent observations."""
+    limits: list[Observation]
+    scopeResolved: bool
+
+
+class Normalized(BaseModel):
+    """Return trusted observations and safe diagnostics while retaining every route."""
+    asOf: int
+    diagnostics: list[dict[str, str | int]]
+    pools: dict[str, PoolEvidence]
+    routes: list[Route]
+    runtime: str
 
 
 # Map recognized Reader states to known enforcement without guessing for others.
 ENFORCEMENT = dict.fromkeys(("active", "critical", "estimated", "normal", "ok", "warning"), True)
 
 
-def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int | None, now: int, diagnostic):
+def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int | None, now: int, freshness_seconds: Amount, diagnostic):
     """Translate one registered window into native allowance facts and safe diagnostics."""
     result = dict(id=identifier, capacity=spec.capacity, unit=spec.unit,
                   role=spec.role, models=spec.models, remaining=None, used=None,
@@ -230,7 +212,7 @@ def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int
         result["enforced"] = ENFORCEMENT.get(window.status)
         if result["enforced"] is None:
             diagnostic("unknown-enforcement")
-    stale = observed is not None and (now - observed > 3600 or (reset is not None and reset <= now))
+    stale = observed is not None and (now - observed > freshness_seconds or (reset is not None and reset <= now))
     result["status"] = "invalid" if invalid else "stale" if stale else "valid"
     if result["status"] == "valid" and spec.role == "gate" and result["remaining"] == 0:
         result["gateOpensAt"] = reset
@@ -276,8 +258,9 @@ def capture_observation(raw: Any, reader_pool: str, now: int, diagnostic):
     return observed, None
 
 
-def normalize(snapshot, now):
+def normalize(snapshot: Snapshot | dict, now: str, *, freshness_seconds: Amount = 3600) -> Normalized:
     """Return deterministic allowance facts using an explicit ISO 8601 clock."""
+    freshness_seconds = TypeAdapter(Amount).validate_python(freshness_seconds)
     now = int(TypeAdapter(Timestamp).validate_python(now).timestamp())
     snapshot = Snapshot.model_validate(snapshot)
     diagnostics, pools = [], {}
@@ -288,14 +271,14 @@ def normalize(snapshot, now):
         observed, document = capture_observation(snapshot.readers.get(pool), registration.readerPool, now, diagnostic)
         windows = document.windows if document else {}
         observations = [
-            window_observation(identifier, spec, windows.get(spec.window), observed, now,
+            window_observation(identifier, spec, windows.get(spec.window), observed, now, freshness_seconds,
                                lambda reason: diagnostic(reason, limit=identifier))
             for identifier, spec in sorted(registration.limits.items())
         ]
         unresolved = len(set(windows) - {spec.window for spec in registration.limits.values()})
         if unresolved:
             diagnostic("unregistered-window", count=unresolved)
-        pools[pool] = {"limits": observations, "readerMetadata": metadata(document, diagnostic),
+        pools[pool] = {"limits": observations,
                        "scopeResolved": document is not None and unresolved == 0}
-    return {"asOf": now, "capability": "allowance-preview", "diagnostics": diagnostics,
-            "pools": pools, "routes": [route.model_dump() for route in snapshot.routes], "runtime": snapshot.runtime}
+    return Normalized(asOf=now, diagnostics=diagnostics, pools=pools,
+                      routes=snapshot.routes, runtime=snapshot.runtime)
