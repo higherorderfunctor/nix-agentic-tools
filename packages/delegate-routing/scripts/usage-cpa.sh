@@ -3,13 +3,13 @@
 readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
 readonly delegate_usage_claude_beta='oauth-2025-04-20'
 readonly delegate_usage_opencode_url='https://opencode.ai/zen/go/v1/usage'
-readonly delegate_usage_zai_url='https://api.z.ai/api/monitor/usage/quota/limit'
+readonly delegate_usage_zhipuai_url='https://api.z.ai/api/monitor/usage/quota/limit'
 # API-key vendors: the upstream hostname and base-URL path prefix that identify
 # their key among CPA's configured credentials, whatever transport carries it.
 declare -rA delegate_usage_api_keys=(
   [cloudflare]='api.cloudflare.com /client/v4'
   [opencode]='opencode.ai /inference/go'
-  [zai]='api.z.ai'
+  [zhipuai]='api.z.ai'
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
@@ -229,16 +229,16 @@ except (AttributeError, TypeError, ValueError):
     else
       request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
         --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
-        --arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
+        --arg opencode_url "$delegate_usage_opencode_url" --arg zhipuai_url "$delegate_usage_zhipuai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
       url: (if $vendor == "claude" then $claude_url
             elif $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
             elif $vendor == "opencode" then $opencode_url
-            else $zai_url end),
+            else $zhipuai_url end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
         if $vendor == "claude" then {"anthropic-beta": $claude_beta}
-        elif $vendor == "zai" then {"Accept-Language": "en-US,en"}
+        elif $vendor == "zhipuai" then {"Accept-Language": "en-US,en"}
         elif $vendor == "opencode" then {Accept: "application/json"}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""

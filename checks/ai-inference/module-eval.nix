@@ -79,7 +79,7 @@
       anthropic.base-url = "https://api.z.ai/api/anthropic";
       responses.base-url = "https://api.z.ai/api/v1";
     };
-    key = redact.file "/run/secrets/zai-key";
+    key = redact.file "/run/secrets/zhipuai-key";
     models = ["glm-5.3" "glm-5.3-flash"];
   };
   oauth = name: {
@@ -92,7 +92,7 @@
     chat.apiKey = apiKey // {apis = {chat.base-url = "https://chat.example/v1";};};
     personal = oauth "personal";
     work = oauth "work";
-    zai = {inherit apiKey;};
+    zhipuai = {inherit apiKey;};
   };
   client = name: routes: {
     key = clientKey name;
@@ -114,7 +114,7 @@
         personal = client "personal" [
           (route "personal")
           {
-            credential = "zai";
+            credential = "zhipuai";
             api = "anthropic";
           }
         ];
@@ -146,13 +146,13 @@
 in {
   checks = {
     # Cross-owner consumption only: CPA's extracted offers reach Claude's selected API.
-    module-ai-inference-z-ai-credential = mkTest "ai-inference-z-ai-credential" (
+    module-ai-inference-zhipuai-credential = mkTest "ai-inference-zhipuai-credential" (
       lib.all (backend: let
         facts = import ../../lib/extracted/facts.nix {inherit lib;};
-        expected = (facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "zAi").models;
+        expected = (facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "zhipuai").models;
         result = evaluate backend (instanceChange {
-          credentials.zai = lib.mkForce {
-            vendor = "z-ai";
+          credentials.zhipuai = lib.mkForce {
+            vendor = "zhipuai";
             apiKey.key = apiKey.key;
           };
         });
@@ -166,7 +166,7 @@ in {
             models = [];
           }
           {
-            name = "zai";
+            name = "zhipuai";
             models = expected;
           }
         ]) ["devenv" "hm"]
@@ -215,7 +215,7 @@ in {
         rows =
           map (model: {
             inherit model;
-            description = "zai through CLIProxyAPI";
+            description = "zhipuai through CLIProxyAPI";
           })
           apiKey.models;
         byUrl = evaluate backend {
@@ -294,7 +294,7 @@ in {
             settings.api-keys.claude
             == [
               {
-                name = "zai";
+                name = "zhipuai";
                 base-url = apiKey.apis.anthropic.base-url;
                 keys = [{api-key = apiKey.key;}];
                 models = map (name: {inherit name;}) apiKey.models;
@@ -317,7 +317,7 @@ in {
                 models = [];
               }
               {
-                name = "zai";
+                name = "zhipuai";
                 inherit (apiKey) models;
               }
             ];
@@ -362,7 +362,7 @@ in {
               }
             ];
           });
-          "Codex has no credential profiles" = !(result.config.ai.codex.files ? ".codex/zai.config.toml");
+          "Codex has no credential profiles" = !(result.config.ai.codex.files ? ".codex/zhipuai.config.toml");
           "chat-only choice for Codex" =
             (lib.last (rendered chatOnly).access.key-allowlist).credentials
             == [
@@ -378,11 +378,11 @@ in {
           "unknown client key" = refused backend "clientKey names `missing`" {claude.settings.inference.clientKey = "missing";};
           "instance needs client key" = refused backend "instance needs `clientKey`" {claude.settings.inference.clientKey = null;};
           "instance refuses direct key" = refused backend "Instance selections use `clientKey`" {claude.settings.inference.key = clientKey "direct";};
-          "ambiguous API needs choice" = refused backend "needs api because it does not serve exactly one API" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "zai")];});
+          "ambiguous API needs choice" = refused backend "needs api because it does not serve exactly one API" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "zhipuai")];});
           "unserved API" = refused backend "does not serve API `chat`" (instanceChange {
             clientKeys.work.routes = lib.mkForce [
               {
-                credential = "zai";
+                credential = "zhipuai";
                 api = "chat";
               }
             ];
@@ -398,19 +398,19 @@ in {
           "neither credential kind" = refused backend "credentials.empty: declare exactly one" (instanceChange {credentials.empty = {};});
           "both credential kinds" = refused backend "credentials.personal: declare exactly one" (instanceChange {credentials.personal = {inherit apiKey;};});
           "alias duplicate targets" = refused backend "tool-aliases requires" (instanceChange {
-            credentials.zai.apiKey.toolAliases = {
+            credentials.zhipuai.apiKey.toolAliases = {
               A = "Z";
               B = "Z";
             };
           });
           "alias source collision" = refused backend "tool-aliases requires" (instanceChange {
-            credentials.zai.apiKey.toolAliases = {
+            credentials.zhipuai.apiKey.toolAliases = {
               A = "B";
               B = "C";
             };
           });
-          "alias source too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zai.apiKey.toolAliases.${lib.concatStrings (lib.replicate 65 "x")} = "A";});
-          "alias target too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zai.apiKey.toolAliases.A = lib.concatStrings (lib.replicate 65 "x");});
+          "alias source too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zhipuai.apiKey.toolAliases.${lib.concatStrings (lib.replicate 65 "x")} = "A";});
+          "alias target too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zhipuai.apiKey.toolAliases.A = lib.concatStrings (lib.replicate 65 "x");});
           "raw alias collision" = refused backend "tool-aliases requires" (instanceChange {
             settings.api-keys.claude = [
               {
@@ -491,7 +491,7 @@ in {
             && lib.hasInfix ("{$" + variable + "}") file.content
             && !(lib.hasInfix "/run/secrets/cpa-personal-account" file.content);
           "literal client key" = rejectsType (instanceChange {clientKeys.personal.key = lib.mkForce "secret";});
-          "literal upstream credential" = rejectsType (instanceChange {credentials.zai.apiKey.key = lib.mkForce "secret";});
+          "literal upstream credential" = rejectsType (instanceChange {credentials.zhipuai.apiKey.key = lib.mkForce "secret";});
         };
       in
         lib.mapAttrsToList (name: _: "${backend}: ${name}") (lib.filterAttrs (_: holds: !holds) checks)) ["devenv" "hm"];

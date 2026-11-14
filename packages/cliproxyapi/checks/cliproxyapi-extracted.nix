@@ -12,15 +12,15 @@
     inherit pkgs;
     docs = packages.cliproxyapi-opencode-go-docs;
   };
-  zAiFacts = import ../extract/z-ai.nix {
+  zhipuaiFacts = import ../extract/zhipuai.nix {
     inherit pkgs;
-    docs = packages.cliproxyapi-z-ai-docs;
+    docs = packages.cliproxyapi-zhipuai-docs;
   };
   extracted = pkgs.runCommand "cliproxyapi-extracted" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${pkgs.jq}/bin/jq --slurpfile opencodeGo ${opencodeGoFacts} --slurpfile zAi ${zAiFacts} \
-      '. + {opencodeGo: $opencodeGo[0], zAi: $zAi[0]}' ${configFacts} > "$out"
+    ${pkgs.jq}/bin/jq --slurpfile opencodeGo ${opencodeGoFacts} --slurpfile zhipuai ${zhipuaiFacts} \
+      '. + {opencodeGo: $opencodeGo[0], zhipuai: $zhipuai[0]}' ${configFacts} > "$out"
   '';
 in {
   checks = (extractedLib {inherit pkgs;}).mkOwnerCheck {

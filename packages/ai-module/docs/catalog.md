@@ -15,7 +15,7 @@ does not enable an instance or route a request.
 
 Core imports only its types and generic module libraries. Owners import their
 own extracted facts and contribute ordinary module definitions. CPA contributes
-OpenCode Go and z.ai through `packages/cliproxyapi/modules/catalog.nix`; its
+OpenCode Go and Z.ai through `packages/cliproxyapi/modules/catalog.nix`; its
 per-vendor files own maker identities, aliases and evidence. OpenCode Go's
 canonical namespaces are used as maker ids unchanged. The undisclosed iceman
 identity stays separate; no other maker is inferred. claude-code contributes its
@@ -53,11 +53,12 @@ the entire model map.
 CPA credential defaults are the production reader. Facts flow through owner
 definitions into the merged catalog, then into vendor construction in
 `instances.nix`. The same constructor serves standalone library callers using
-the vendor's own facts. A normal definition of `ai.catalog.vendors.z-ai.models`
-or `.opencode-go.models` replaces that vendor's default list and changes
-rendered credential models. Go looks up transport metadata using the selected
-identity and its vendor aliases; an identity without known Go transport metadata
-is refused. z.ai keeps its common transport endpoints locally.
+the vendor's own facts. A normal definition of
+`ai.catalog.vendors.zhipuai.models` or `.opencode-go.models` replaces that
+vendor's default list and changes rendered credential models. Go looks up
+transport metadata using the selected identity and its vendor aliases; an
+identity without known Go transport metadata is refused. Z.ai keeps its common
+transport endpoints locally.
 
 The catalog describes all extracted Go offers. Existing Go credential prefix
 exclusions still narrow rendered defaults and refuse explicitly configured

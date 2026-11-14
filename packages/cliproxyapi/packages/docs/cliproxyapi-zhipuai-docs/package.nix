@@ -10,7 +10,7 @@
   python = pkgs.python3.withPackages (packages: [packages.markdown-it-py]);
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
-    name = "cliproxyapi-z-ai-docs";
+    name = "cliproxyapi-zhipuai-docs";
     inherit contentHash hash snapshotDate;
     pin = repoPath ./package.nix;
     sources = [
@@ -28,7 +28,7 @@ in
       }
     ];
     validate = ''
-      ${python}/bin/python3 ${../../../extract/z-ai.py} "$1/claude.md" "$1/overview.md" "$1/quick-start.md" > /dev/null
+      ${python}/bin/python3 ${../../../extract/zhipuai.py} "$1/claude.md" "$1/overview.md" "$1/quick-start.md" > /dev/null
     '';
     meta = {
       description = "Pinned official z.ai model and API documentation for CLIProxyAPI defaults";
