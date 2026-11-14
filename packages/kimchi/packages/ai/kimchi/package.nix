@@ -11,6 +11,7 @@
   ripgrep,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) fetchzip lib;
   pnpm = pkgs.ai.generic.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
@@ -69,7 +70,7 @@
   # the source. Rehash every reference (including peer snapshots) without
   # regenerating unrelated lock resolutions. Registry tarball bytes stay intact.
   piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
-  patchedSource = (packageLib.patching {inherit pkgs;}).source {
+  patchedSource = patching.source {
     src = kimchiSource;
     # Apply source patches once for both the build and settings extractor.
     patchFiles = [
@@ -294,21 +295,19 @@ in
     src = patchedSource;
 
     preBuild = ''
-      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;}}
+      ${patching.validateDependencies {inherit patchedDependencies;}}
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
     '';
 
-    # pnpm owns patchedDependencies across peer variants during fetching.
     pnpmDeps = pkgs.fetchPnpmDeps {
       # fetchPnpmDeps derives its name from pname alone; see versionedName.
       pname = versionedName;
       inherit (finalAttrs) src version;
       inherit pnpm;
       fetcherVersion = 3;
-      postInstall = (packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;};
+      postInstall = patching.validateDependencies {inherit patchedDependencies;};
       hash = sources.pnpmDepsHash or lib.fakeHash;
     };
-    # pnpmConfigHook repeats the patchedDependencies install offline for the build.
     nativeBuildInputs =
       [
         pkgs.ai.generic.bun
@@ -366,7 +365,7 @@ in
 
     installPhase = ''
       runHook preInstall
-      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;}}
+      ${patching.validateDependencies {inherit patchedDependencies;}}
       mkdir -p "$out"
       cp -r dist/bin dist/share "$out/"
       runHook postInstall

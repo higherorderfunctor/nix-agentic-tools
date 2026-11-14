@@ -13,59 +13,55 @@
       passthru.rev = "fixture-revision";
       meta.description = "fixture metadata";
     };
-    patch = strip:
-      pkgs.writeText "change-p${toString strip}.patch" ''
-        --- ${lib.optionalString (strip == 1) "a/"}target
-        +++ ${lib.optionalString (strip == 1) "b/"}target
-        @@ -2,7 +2,7 @@
-         a
-         b c
-         c
-        -old
-        +new
-         d
-         e
-         f
-      '';
-    options = strip: {
-      patchFiles = [(patch strip)];
-      inherit strip;
+    patch = pkgs.writeText "change.patch" ''
+      --- a/target
+      +++ b/target
+      @@ -2,7 +2,7 @@
+       a
+       b c
+       c
+      -old
+      +new
+       d
+       e
+       f
+    '';
+    options = {
+      patchFiles = [patch];
       prePatch = "printf 'pre ' > hooks";
       postPatch = "printf post >> hooks";
     };
-    sources = map (strip: patching.source ((options strip) // {src = input;})) [0 1];
-    derivations = map (strip:
-      pkgs.stdenvNoCC.mkDerivation (patching.attrs ((options strip)
-        // {
-          name = "patch-phase-p${toString strip}";
-          src = input;
-          dontConfigure = true;
-          dontBuild = true;
-          installPhase = ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            cp -R . "$out"
-          '';
-        }))) [0 1];
+    source = patching.source (options // {src = input;});
+    derivation = pkgs.stdenvNoCC.mkDerivation (patching.override options {
+      name = "patch-phase";
+      src = input;
+      dontConfigure = true;
+      dontBuild = true;
+      installPhase = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        cp -R . "$out"
+      '';
+    });
     # Isolated subprocesses run the actual stdenv patchPhase for refusals.
     phase = extra:
       pkgs.writeShellScript "patch-phase" ''
         source ${pkgs.stdenvNoCC}/setup
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        ${lib.toShellVars (patching.attrs ({patchFiles = [(patch 1)];} // extra))}
+        ${lib.toShellVars (patching.attrs ({patchFiles = [patch];} // extra))}
         patchPhase
       '';
     finish = pkgs.writeShellScript "patch-output" ''
       source ${pkgs.stdenvNoCC}/setup
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${(patching.attrs {postFixup = "printf fixed >> \"$out/hooks\"";}).postFixup}
+      ${(patching.override {postFixup = "printf fixed >> \"$out/hooks\"";} {}).postFixup}
     '';
-    manual = backend: strip:
+    manual = backend:
       patching.command {
-        inherit backend strip;
-        patchFiles = [(patch strip)];
+        inherit backend;
+        patchFiles = [patch];
       };
     dependencyMap = pkgs.writeText "patched-dependencies.json" (builtins.toJSON {
       "@other/plain" = "plain.patch";
@@ -74,17 +70,17 @@
     dependencyCheck = layout: directory:
       pkgs.writeShellScript "check-patched-dependencies" (patching.validateDependencies {
         inherit directory layout;
-        patchedDependencies = lib.escapeShellArg dependencyMap;
+        patchedDependencies = dependencyMap;
       });
     rejectsOverride = builtins.tryEval (builtins.deepSeq (patching.attrs {patchFlags = ["--fuzz=2"];}) true);
   in
     assert !rejectsOverride.success;
-    assert builtins.all (src: src.rev == "fixture-revision" && src.meta.description == "fixture metadata") sources;
+    assert source.rev == "fixture-revision" && source.meta.description == "fixture metadata";
       pkgs.runCommand "patch-helper" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         mkdir "$out"
-        for tree in ${lib.escapeShellArgs (sources ++ derivations)}; do
+        for tree in ${lib.escapeShellArgs [source derivation]}; do
           cmp ${expected} "$tree/target"
           test "$(cat "$tree/hooks")" = "pre post"
           ${patching.validate ''"$tree"''}
@@ -92,7 +88,7 @@
         # The historical flags reproduce offset backups on the identical input.
         mkdir baseline
         cp ${input}/target baseline/target
-        (cd baseline; patch -p1 --fuzz=0 < ${patch 1})
+        (cd baseline; patch -p1 --fuzz=0 < ${patch})
         test -f baseline/target.orig
         cmp ${input}/target baseline/target.orig
         cmp ${expected} baseline/target
@@ -109,25 +105,24 @@
             exit 1
           fi
         }
-        ${lib.concatMapStringsSep "\n" (backend:
-          lib.concatMapStringsSep "\n" (strip: let
-            name = "${backend}-p${toString strip}";
-            script = pkgs.writeShellScript name (manual backend strip);
-          in ''
-            fresh ${name}
-            (cd ${name}; ${script})
-            cmp ${expected} ${name}/target
-            fresh ${name}-drift
-            sed -i 's/^a$/changed/' ${name}-drift/target
-            (cd ${name}-drift; expect_failure ${script})
-            ${lib.optionalString (backend == "git") (patching.validate "${name}-drift")}
-            for suffix in orig rej; do
-              fresh ${name}-$suffix
-              touch ${name}-$suffix/existing.$suffix
-              (cd ${name}-$suffix; expect_failure ${script}; grep -F 'contamination' failure.log)
-              cmp ${input}/target ${name}-$suffix/target
-            done
-          '') [0 1]) ["git" "gnu"]}
+        ${lib.concatMapStringsSep "\n" (backend: let
+          name = "${backend}-p1";
+          script = pkgs.writeShellScript name (manual backend);
+        in ''
+          fresh ${name}
+          (cd ${name}; ${script})
+          cmp ${expected} ${name}/target
+          fresh ${name}-drift
+          sed -i 's/^a$/changed/' ${name}-drift/target
+          (cd ${name}-drift; expect_failure ${script})
+          ${lib.optionalString (backend == "git") (patching.validate "${name}-drift")}
+          for suffix in orig rej; do
+            fresh ${name}-$suffix
+            touch ${name}-$suffix/existing.$suffix
+            (cd ${name}-$suffix; expect_failure ${script}; grep -F 'contamination' failure.log)
+            cmp ${input}/target ${name}-$suffix/target
+          done
+        '') ["git" "gnu"]}
 
         # Match every direct peer by manifest, including name-only keys. A
         # dependent's patch hash and an unrelated registry backup are not ours.
@@ -177,7 +172,7 @@
 
         fresh baseline-drift
         sed -i 's/^a$/changed/' baseline-drift/target
-        (cd baseline-drift; patch -p1 < ${patch 1})
+        (cd baseline-drift; patch -p1 < ${patch})
         printf 'offset\nheader\nchanged\nb c\nc\nnew\nd\ne\nf\n' > drift-expected
         cmp drift-expected baseline-drift/target
         fresh phase-drift
@@ -206,11 +201,11 @@
         (cd git-whitespace; ${patching.command {
           backend = "git";
           ignoreSpaceChange = true;
-          patchFiles = [(patch 1)];
+          patchFiles = [patch];
         }})
         printf 'offset\nheader\na\nb  c\nc\nnew\nd\ne\nf\n' > whitespace-expected
         cmp whitespace-expected git-whitespace/target
-        printf '%s\n' 'PASS: stdenv, applyPatches, GNU, Git; p0/p1; hooks; metadata; drift and contamination refusals' >> "$out/results"
+        printf '%s\n' 'PASS: stdenv, applyPatches, GNU, Git; p1; hooks; metadata; drift and contamination refusals' >> "$out/results"
         cat "$out/results"
       '';
 }

@@ -1,9 +1,16 @@
-# Repository-owned patch applications use this group, never caller patchFlags
-# or applyPatches: offset backups otherwise leak into extracted sources/checks.
+# Recipes and checks route owned patches through this helper to refuse drift
+# and backup/reject files. Source/output scans follow links; mapped dependency
+# roots use physical traversal so unrelated dependency links stay outside scope.
 {pkgs}: let
   inherit (pkgs) lib;
-  flags = strip: ["-p${toString strip}" "--fuzz=0" "--no-backup-if-mismatch"];
-  validStrip = strip: assert lib.assertMsg (builtins.isInt strip && strip >= 0) "patching: strip must be a nonnegative integer"; strip;
+  flags = ["-p1" "--fuzz=0" "--no-backup-if-mismatch"];
+  checkOption = name: type: value:
+    (lib.mergeDefinitions ["patching" name] type [
+      {
+        file = "patching caller";
+        inherit value;
+      }
+    ]).mergedValue;
   # A shell word allows stdenv output variables as well as escaped store paths.
   validateTree = {
     follow ? true,
@@ -20,16 +27,12 @@
     )
   '';
   validate = root: validateTree {inherit root;};
-  attrs = {
-    patchFiles ? [],
-    strip ? 1,
-    ...
-  } @ args:
-    assert lib.assertMsg (!(args ? patchFlags || args ? patches || args ? patchPhase)) "patching: use patchFiles and strip; patchFlags, patches and patchPhase overrides are refused";
-      removeAttrs args ["patchFiles" "strip"]
+  attrs = {patchFiles ? [], ...} @ args:
+    assert lib.assertMsg (!(args ? patchFlags || args ? patches || args ? patchPhase)) "patching: use patchFiles; patchFlags, patches and patchPhase overrides are refused";
+      removeAttrs args ["patchFiles"]
       // {
         patches = patchFiles;
-        patchFlags = flags (validStrip strip);
+        patchFlags = flags;
         prePatch = validate "." + (args.prePatch or "");
         postPatch = (args.postPatch or "") + "\n" + validate ".";
         postFixup =
@@ -43,6 +46,14 @@
       };
 in {
   inherit attrs validate;
+  # Overrides retain upstream hooks unless a caller explicitly replaces one.
+  override = previous: args:
+    attrs ({
+        postFixup = previous.postFixup or "";
+        postPatch = previous.postPatch or "";
+        prePatch = previous.prePatch or "";
+      }
+      // args);
 
   # CodeQL and oxlint need Git's all-context application. Without --reject it
   # writes neither rejects nor backups; Git has no fuzz option. Only CodeQL
@@ -52,16 +63,15 @@ in {
     directory ? ".",
     ignoreSpaceChange ? false,
     patchFiles,
-    strip ? 1,
-  }:
-    assert lib.assertMsg (lib.elem backend ["git" "gnu"]) "patching: backend must be git or gnu";
-    assert lib.assertMsg (!ignoreSpaceChange || backend == "git") "patching: ignoreSpaceChange is only supported by Git"; let
-      patchFlags = flags (validStrip strip);
-      apply = file:
-        if backend == "git"
-        then "${pkgs.git}/bin/git apply ${lib.escapeShellArgs ([(builtins.head patchFlags)] ++ lib.optional ignoreSpaceChange "--ignore-space-change")} -- ${lib.escapeShellArg file}"
-        else "${pkgs.patch}/bin/patch ${lib.escapeShellArgs patchFlags} < ${lib.escapeShellArg file}";
-    in ''
+  }: let
+    selectedBackend = checkOption "backend" (lib.types.enum ["git" "gnu"]) backend;
+    ignoreWhitespace = checkOption "ignoreSpaceChange" lib.types.bool ignoreSpaceChange;
+    apply = file:
+      if selectedBackend == "git"
+      then "${pkgs.git}/bin/git apply ${lib.escapeShellArgs ([(builtins.head flags)] ++ lib.optional ignoreWhitespace "--ignore-space-change")} -- ${lib.escapeShellArg file}"
+      else "${pkgs.patch}/bin/patch ${lib.escapeShellArgs flags} < ${lib.escapeShellArg file}";
+  in
+    assert builtins.seq selectedBackend (lib.assertMsg (!ignoreWhitespace || selectedBackend == "git")) "patching: ignoreSpaceChange is only supported by Git"; ''
       (
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -74,12 +84,13 @@ in {
 
   # pnpm owns dependency patches; inspect only their package roots, not unrelated
   # registry content or dependents whose directory merely carries a patch hash.
-  # patchedDependencies is a shell word naming the existing JSON map.
+  # patchedDependencies names the existing JSON map; quote it at this boundary.
   validateDependencies = {
     directory ? "node_modules/.pnpm",
     layout ? "pnpm",
     patchedDependencies,
   }: let
+    selectedLayout = checkOption "layout" (lib.types.enum ["pnpm" "runtime"]) layout;
     select = pkgs.writeText "patched-dependency-roots.mjs" ''
       import fs from "node:fs";
       import path from "node:path";
@@ -102,22 +113,21 @@ in {
       }
       for (const root of roots) process.stdout.write(root + "\0");
     '';
-  in
-    assert lib.elem layout ["pnpm" "runtime"]; ''
-      (
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        # A pipeline propagates selector failure, unlike process substitution.
-        ${pkgs.nodejs}/bin/node ${select} ${lib.escapeShellArgs [directory layout]} ${patchedDependencies} |
-          # Dependency links leave the patched package; select each peer itself.
-          while IFS= read -r -d $'\0' patchedRoot; do
-            ${validateTree {
-        follow = false;
-        root = ''"$patchedRoot"'';
-      }}
-          done
-      )
-    '';
+  in ''
+    (
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      # A pipeline propagates selector failure, unlike process substitution.
+      ${pkgs.nodejs}/bin/node ${select} ${lib.escapeShellArgs [directory selectedLayout patchedDependencies]} |
+        # Dependency links leave the patched package; select each peer itself.
+        while IFS= read -r -d $'\0' patchedRoot; do
+          ${validateTree {
+      follow = false;
+      root = ''"$patchedRoot"'';
+    }}
+        done
+    )
+  '';
 
   # Keep nixpkgs' hook order, metadata and source passthru.
   source = args: pkgs.applyPatches (attrs args);

@@ -22,6 +22,7 @@
   pkgs,
   version,
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) lib;
   meta = {inherit (engine.meta) platforms;};
   # Dependencies land under node_modules, where Kimchi's imports resolve them.
@@ -43,7 +44,7 @@
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/kimchi" # bare-commands: ok (runCommand builder PATH)
       cp -R --no-preserve=mode ${kimchi}/src ${kimchi}/package.json ${kimchi}/tsconfig.json "$out/kimchi/" # bare-commands: ok (runCommand builder PATH)
-      ${(packageLib.patching {inherit pkgs;}).validate ''"$out"''}
+      ${patching.validate ''"$out"''}
       find "$out/kimchi/src" -name __mocks__ -type d -prune -exec rm -rf {} +
       find "$out/kimchi/src" -name '*.test.ts' -type f -delete
       for tree in ${lib.escapeShellArgs (map toString dependencies)}; do
@@ -79,14 +80,14 @@
         # Match every context line with Git, allowing whitespace changes.
         (
           cd "$dest"
-          ${(packageLib.patching {inherit pkgs;}).command {
+          ${patching.command {
         backend = "git";
         ignoreSpaceChange = true;
         patchFiles = ["-"];
       }}
         ) < ${kimchi}/"$file"
       done < patches
-      ${(packageLib.patching {inherit pkgs;}).validate ''"$out"''}
+      ${patching.validate ''"$out"''}
       find "$out" -name '*.map' -type f -delete
     '';
 
@@ -202,5 +203,5 @@
       ${lib.getExe (mkQueryRunner {inherit models queries;})} "$TMPDIR/db" "$out"
     '';
 in {
-  inherit createDatabase database databaseOf engine mkQueryRunner runQueries source;
+  inherit createDatabase database databaseOf engine mkQueryRunner runQueries;
 }

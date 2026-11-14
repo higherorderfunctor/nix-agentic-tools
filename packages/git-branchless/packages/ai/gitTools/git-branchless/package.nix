@@ -64,7 +64,7 @@
   };
 
   package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev:
-    (packageLib.patching {inherit pkgs;}).attrs {
+    (packageLib.patching {inherit pkgs;}).override prev {
       name = "git-branchless";
       src = gbSrc;
       cargoDeps = rustPlatform.importCargoLock {
@@ -77,9 +77,7 @@
           ../../../../patches/repair-idempotent.patch
           ../../../../patches/restack-scope.patch
         ];
-      postFixup = prev.postFixup or "";
       postPatch = "";
-      prePatch = prev.prePatch or "";
       nativeInstallCheckInputs =
         builtins.filter
         (p: (p.pname or "") != "version-check-hook")

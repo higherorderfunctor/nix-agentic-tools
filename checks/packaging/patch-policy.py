@@ -1,10 +1,7 @@
-"""Reject owned Nix patch bypasses, not arbitrary computed Nix obfuscation.
+"""Check and pre-commit entry point: refuse direct patches in owned Nix sources.
 
-Recognize direct/quoted bindings, inherit, applyPatches references, and shell
-GNU patch / Git apply (bare, absolute or interpolated; continued lines).
-Nix comments and shell comments are ignored; shell strings remain inspected.
-The pnpm table records application delegated to the package manager, with local
-reasons and operation anchors rather than release versions or whole-file hashes.
+Tree-sitter separates Nix code and shell strings, then identifies Bash commands.
+This checks direct forms, not arbitrary computed Nix obfuscation.
 """
 
 import pathlib
@@ -12,32 +9,19 @@ import re
 import shlex
 import sys
 
+from tree_sitter import Language, Parser
+import tree_sitter_bash
+import tree_sitter_nix
+
+BASH = Parser(Language(tree_sitter_bash.language()))
+NIX = Parser(Language(tree_sitter_nix.language()))
+
 
 # Standard package aliases share interpolation handling with their executables.
 PATCH_TOOL = r'pkgs\.(?:git(?:Minimal)?|gnupatch|patch)'
 GET_EXE = rf'(?:lib\.)?getExe\s+{PATCH_TOOL}'
 
 
-# Path, operation, local reason. No version/hash is part of these exceptions.
-PNPM = {
-    "packages/kimchi/checks/package-identity.nix": [
-        ("pkgs.pnpmConfigHook", "pnpmConfigHook owns the offline patchedDependencies install across peers."),
-    ],
-    "packages/kimchi/packages/ai/kimchi/package.nix": [
-        ("pnpmDeps = pkgs.fetchPnpmDeps", "pnpm owns patchedDependencies across peer variants during fetching."),
-        ("pkgs.pnpmConfigHook", "pnpmConfigHook repeats the patchedDependencies install offline for the build."),
-    ],
-    "packages/kimchi/packages/ai/kimchiExtensions/kimchi-workflows/package.nix": [
-        ("[pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook]", "pnpmConfigHook owns Kimchi patchedDependencies for every toolchain peer."),
-    ],
-    "packages/oxlint/checks.nix": [
-        ("pkgs.pnpmConfigHook", "Exercise the real offline configure hook and production preBuild probe,"),
-    ],
-    "packages/oxlint/packages/ai/devTools/oxlint/package.nix": [
-        ("pnpmDeps = pkgs.fetchPnpmDeps", "pnpm owns patchedDependencies during fetching; pre-applying skips peers."),
-        ("prev.nativeBuildInputs or []", "pnpmConfigHook installs patchedDependencies offline across every peer."),
-    ],
-}
 # Exact fixture statements only: changing flags or adding another bypass fails.
 FIXTURES = {
     "checks/packaging/patch-artifacts.nix": [
@@ -45,107 +29,100 @@ FIXTURES = {
     ],
     "checks/packaging/patch-helper.nix": [
         'rejectsOverride = builtins.tryEval (builtins.deepSeq (patching.attrs {patchFlags = ["--fuzz=2"];}) true);',
-        '(cd baseline; patch -p1 --fuzz=0 < ${patch 1})',
-        '(cd baseline-drift; patch -p1 < ${patch 1})',
+        '(cd baseline; patch -p1 --fuzz=0 < ${patch})',
+        '(cd baseline-drift; patch -p1 < ${patch})',
     ],
 }
 
 
 def views(text):
-    """Mask comments and string bodies in code; collect intact shell strings.
-
-    Recurse into Nix interpolations so bindings there still get checked. Keep
-    offsets/newlines for diagnostics. This is a lexer, not a Nix evaluator.
-    """
-    code = list(text)
+    """Use Nix syntax to keep code and shell strings in separate scan views."""
+    source = text.encode()
+    code = bytearray(source)
     strings = []
 
     def blank(start, end):
-        code[start:end] = ['\n' if c == '\n' else ' ' for c in text[start:end]]
+        code[start:end] = bytes(10 if byte == 10 else 32 for byte in source[start:end])
 
-    def walk(i, interpolation=False):
-        depth = 0
-        while i < len(text):
-            start = i
-            if text.startswith('/*', i) or text[i] == '#':
-                end = text.find('*/' if text[i] == '/' else '\n', i + 1)
-                i = len(text) if end < 0 else end + (2 if text[start] == '/' else 0)
-                blank(start, i)
-            elif text.startswith("''", i) or text[i] == '"':
-                delimiter = "''" if text.startswith("''", i) else '"'
-                i += len(delimiter)
-                body = i
-                interpolations = []
-                while i < len(text):
-                    if delimiter == "''" and (text.startswith("'''", i) or text.startswith("''$", i) or text.startswith("''\\", i)):
-                        i += 3
-                    elif delimiter == '"' and text[i] == '\\':
-                        i += 2
-                    elif text.startswith('${', i):
-                        begin = i + 2
-                        i = walk(begin, True)
-                        interpolations.append((begin, i - 1, code[begin:i - 1]))
-                    elif text.startswith(delimiter, i):
-                        break
-                    else:
-                        i += 1
-                end = i
-                i += len(delimiter)
-                shell = list(text[body:end])
-                for begin, finish, _ in interpolations:
-                    expression = text[begin:finish]
-                    if not re.fullmatch(rf'\s*(?:{PATCH_TOOL}|{GET_EXE})\s*', expression):
-                        # An unknown Nix value is still a shell operand, not whitespace.
-                        shell[begin - 2 - body:finish + 1 - body] = ['_' if c != '\n' else '\n' for c in text[begin - 2:finish + 1]]
-                if not re.search(r'\bdescription\s*=\s*$', text[max(0, start - 100):start]):
-                    strings.append((body, ''.join(shell)))
-                # Quoted attribute names stay visible; other strings do not.
-                if delimiter == '"' and re.fullmatch(r'patches|patchFlags|applyPatches', text[body:end]):
-                    code[start] = code[end] = ' '
+    def visit(node):
+        start, end = node.start_byte, node.end_byte
+        if node.type == 'comment':
+            blank(start, end)
+        elif node.type in {'string_expression', 'indented_string_expression'}:
+            delimiter = 2 if node.type == 'indented_string_expression' else 1
+            body, finish = start + delimiter, end - delimiter
+            shell = bytearray(source[body:finish])
+            interpolations = []
+            for child in node.named_children:
+                if child.type != 'interpolation':
+                    continue
+                visit(child)
+                begin, stop = child.start_byte, child.end_byte
+                interpolations.append((begin, stop, code[begin:stop]))
+                expression = source[begin + 2:stop - 1].decode()
+                width = stop - begin
+                if re.fullmatch(rf'\s*{GET_EXE}\s*', expression):
+                    replacement = ('git' if 'git' in expression else 'patch').ljust(width)
+                elif re.fullmatch(rf'\s*{PATCH_TOOL}\s*', expression):
+                    replacement = '/'.ljust(width, '_')
                 else:
-                    # Preserve interpolation code already visited separately.
-                    blank(start, i)
-                    for begin, end, content in interpolations:
-                        code[begin:end] = content
-            elif interpolation and text[i] == '}' and depth == 0:
-                return i + 1
+                    # Unknown interpolation remains one shell operand.
+                    replacement = ''.join('\n' if byte == 10 else '_' for byte in source[begin:stop])
+                shell[begin - body:stop - body] = replacement.encode()
+            if not re.search(rb'\bdescription\s*=\s*$', source[max(0, start - 100):start]):
+                strings.append((body, shell.decode()))
+            if delimiter == 1 and source[body:finish] in {b'patches', b'patchFlags', b'applyPatches'}:
+                code[start] = code[end - 1] = 32
             else:
-                depth += (text[i] == '{') - (text[i] == '}')
-                i += 1
-        return i
+                blank(start, end)
+                for begin, stop, content in interpolations:
+                    code[begin:stop] = content
+        else:
+            for child in node.named_children:
+                visit(child)
 
-    walk(0)
-    return ''.join(code), strings
+    visit(NIX.parse(source).root_node)
+    return code.decode(), strings
 
 
 ATTRIBUTE = re.compile(r'\b(?:patches|patchFlags)\s*=|\bapplyPatches\b|\binherit\b[^;]*\b(?:patches|patchFlags)\b[^;]*;', re.S)
-# Command starts include shell operators, substitutions and compound prefixes.
-COMMAND = re.compile(
-    r'(?:^|[\n;|&(`])\s*(?:(?:do|elif|else|if|then|until|while|!|\{)\s+)*(?:exec\s+)?["\']?'
-    rf'(?P<exe>(?:\$\{{[^}}]+\}}|/[^\s"\';|&]+)?(?:/bin/)?(?:patch|git)|\$\{{\s*{GET_EXE}\s*\}})'
-    r'["\']?(?=\s|[<>]|$)(?P<args>[^\n;|&`]*)', re.M,
-)
 
-def git_applies(args):
-    """Inspect shell words, excluding comments and redirection operands."""
-    lexer = shlex.shlex(args, posix=True, punctuation_chars='<>')
-    lexer.whitespace_split = True
-    words = []
-    try:
-        words.extend(lexer)
-    except ValueError:
-        pass  # The command matcher may stop inside a quoted argument at an operator.
-    command = []
-    i = 0
-    while i < len(words):
-        word = words[i]
-        if word and set(word) <= {'<', '>'}:
-            if command and command[-1].isdigit():
-                command.pop()
-            i += 2  # The following word names the redirected input or output.
+def descendants(node):
+    yield node
+    for child in node.named_children:
+        yield from descendants(child)
+
+
+def shell_commands(body):
+    """Read command words from Bash syntax, excluding comments and redirects."""
+    for node in descendants(BASH.parse(body.encode()).root_node):
+        if node.type != 'command':
             continue
-        command.append(word)
-        i += 1
+        operands = [child for child in node.named_children
+                    if child.type not in {'variable_assignment', 'file_redirect', 'heredoc_redirect'}]
+        parent = node.parent
+        if parent.type == 'negated_command':
+            parent = parent.parent
+        if parent.type == 'redirected_statement':
+            for redirect in parent.named_children:
+                if redirect.type == 'file_redirect':
+                    # Bash's grammar groups words after a redirect as destinations.
+                    # Only its first destination is a filename; the rest are argv.
+                    operands.extend(redirect.children_by_field_name('destination')[1:])
+        words = []
+        for operand in operands:
+            try:
+                words.extend(shlex.split(operand.text.decode()))
+            except ValueError:
+                words.append(operand.text.decode())
+        if words and words[0] == 'exec':
+            words.pop(0)
+        if words:
+            yield node.start_point.row, words
+
+
+def git_applies(command):
+    """Distinguish Git application from read-only apply --check."""
     i = 0
     while i < len(command):
         word = command[i]
@@ -175,17 +152,10 @@ def violations(path, text):
     for match in ATTRIBUTE.finditer(code):
         errors.append(f'line {code.count(chr(10), 0, match.start()) + 1}: direct patch attribute/application')
     for offset, body in strings:
-        body = re.sub(r'\\\n', '  ', body)
-        body = re.sub(r'(?m)^\s*#[^\n]*', '', body)
-        for match in COMMAND.finditer(body):
-            exe, args = match['exe'], match['args']
-            if 'git' in exe:
-                if not git_applies(args):
-                    continue
-            errors.append(f'line {text.count(chr(10), 0, offset + match.start()) + 1}: direct patch command')
-    for operation, reason in PNPM.get(path, []):
-        if operation not in code or '# ' + reason not in text:
-            errors.append('stale pnpm exception: ' + operation)
+        for row, words in shell_commands(body):
+            executable = words[0].rsplit('/', 1)[-1]
+            if executable == 'patch' or (executable == 'git' and git_applies(words[1:])):
+                errors.append(f'line {text.encode().count(b'\n', 0, offset) + row + 1}: direct patch command')
     return errors
 
 
@@ -201,7 +171,7 @@ def scan(root):
             errors.extend(f'{path}: {error}' for error in violations(path, file.read_text()))
     if not count:
         errors.append('no Nix source files scanned')
-    for path in PNPM.keys() | FIXTURES.keys():
+    for path in FIXTURES.keys():
         if not (root / path).is_file():
             errors.append('stale exception path: ' + path)
     return count, errors
@@ -209,5 +179,5 @@ def scan(root):
 
 if __name__ == '__main__':
     count, errors = scan(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '.'))
-    print('\n'.join(errors) if errors else f'patch-policy: {count} Nix files passed; pnpm operations/reasons current')
+    print('\n'.join(errors) if errors else f'patch-policy: {count} Nix files passed')
     sys.exit(bool(errors))

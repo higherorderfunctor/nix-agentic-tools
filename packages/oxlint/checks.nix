@@ -3,6 +3,7 @@
   pkgs,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   releases = {
     "3.10.1" = "sha256-7BFATrr7E3/mh9Yu8MNB0OqtKD8XXv8BZz4855i3pdk=";
     "3.10.4" = "sha256-TGIOOTGV8plTpjATQ3l747UAH+nBR3nIrsJo43FBHfY=";
@@ -11,8 +12,8 @@
   patch = ./patches/oxlint-napi-rs-cli.patch;
   verify = ./src/verify-napi-patch.mjs;
 in {
-  # Exercise the real offline configure hook and production preBuild probe,
-  # without compiling Rust. This catches a probe scheduled before pnpm installs.
+  # Run the offline install hook and probe without compiling Rust.
+  # A probe scheduled before pnpm installs must fail.
   checks.oxlint-napi-materialization = package.overrideAttrs (_: {
     name = "oxlint-napi-materialization";
     nativeBuildInputs = [pkgs.nodejs_24 package.pnpmDeps.pnpm pkgs.pnpmConfigHook];
@@ -23,11 +24,10 @@ in {
       runHook preBuild
     '';
     installPhase = ''
-      ${(packageLib.patching {inherit pkgs;}).validateDependencies {
-        patchedDependencies = ''<(${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' pnpm-workspace.yaml)'';
+      ${patching.validateDependencies {
+        inherit (package) patchedDependencies;
       }}
-      mkdir "$out"
-      cp -r node_modules "$out/"
+      touch "$out"
     '';
     doInstallCheck = false;
     dontFixup = true;
@@ -56,7 +56,7 @@ in {
             exit 1
           fi
           grep -F 'spawn EPERM' pristine.log
-          ${(packageLib.patching {inherit pkgs;}).command {
+          ${patching.command {
             backend = "git";
             directory = "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli";
             patchFiles = [patch];
@@ -66,7 +66,7 @@ in {
             exit 1
           fi
           grep -F 'spawn EPERM' partial.log
-          ${(packageLib.patching {inherit pkgs;}).command {
+          ${patching.command {
             backend = "git";
             directory = "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli";
             patchFiles = [patch];
@@ -80,8 +80,7 @@ in {
         exit 1
       fi
       grep -F 'no installed @napi-rs/cli peer variants' empty.log
-      ${(packageLib.patching {inherit pkgs;}).validate "."}
-      mkdir "$out"
-      cp -r peers-* "$out/"
+      ${patching.validate "."}
+      touch "$out"
     '';
 }

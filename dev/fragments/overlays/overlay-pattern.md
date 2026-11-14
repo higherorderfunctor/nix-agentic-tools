@@ -57,15 +57,11 @@ tree. Never set `patches` or `patchFlags`, call `applyPatches`, or invoke GNU
 patch / Git apply directly. The helper keeps zero fuzz and suppresses `.orig`
 backups, which otherwise leak into extracted sources and checks. Git application
 keeps all-context matching. pnpm applies its own dependency patches to every
-peer; documented operations are recorded in `checks/packaging/patch-policy.py`.
+peer.
 
-`patch-policy` checks supported Nix bindings and shell commands locally and in
-CI; it is not an evaluator for arbitrary computed commands. `patch-sources`
-checks real sources and dependency-map-selected package roots; unrelated
-registry content is outside that map. Ordinary trees follow symlinks, while
-mapped package roots use physical traversal to avoid unrelated dependencies.
-`patch-artifacts` checks real built outputs. Ephemeral manual trees are checked
-immediately by `command` before they disappear.
+`patch-policy` refuses direct patch application. The helper and the patch checks
+refuse `.orig` and `.rej` files in sources, mapped pnpm packages and built
+outputs.
 
 ### Who builds a package: `buildOverlay` and the exported overlay
 

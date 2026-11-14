@@ -1,4 +1,4 @@
-# Real output backups fail here; patch-sources owns ordinary/mapped source roots.
+# Check built outputs for patch artifacts; the helper checks source boundaries.
 {
   inputs,
   packageLib,
@@ -74,9 +74,6 @@
       done
       touch nested/inner/unrelated
       ${patching.validate "linked"}
-      # Do not follow the aggregate's raw pnpm links: its own builder validates
-      # mapped dependency roots physically and ordinary sources logically.
-      test -d ${self.checks.${system}.patch-sources}
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: package:
         lib.concatMapStringsSep "\n" (output: let
           path = lib.getOutput output package;

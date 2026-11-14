@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   kimchi = pkgs.ai.kimchi;
   # Exercise the actual files/settings emitted by each backend, with cheap
   # payloads that share a package name but have distinct store targets.
@@ -60,7 +61,6 @@ in {
   checks.kimchi-package-identity = pkgs.stdenvNoCC.mkDerivation {
     name = "kimchi-package-identity";
     inherit (kimchi) pnpmDeps src;
-    # pnpmConfigHook owns the offline patchedDependencies install across peers.
     nativeBuildInputs = [pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook];
     dontFixup = true;
     buildPhase = ''
@@ -82,7 +82,7 @@ in {
       mkdir -p identity-source/dist/core
       cp ${kimchi.extractionSources.pi}/dist/core/package-manager.js identity-source/dist/core/
       chmod u+w identity-source/dist/core/package-manager.js
-      ${(packageLib.patching {inherit pkgs;}).command {
+      ${patching.command {
         directory = "identity-source";
         patchFiles = [../packages/ai/kimchi/package-identity.patch];
       }}
@@ -98,7 +98,7 @@ in {
       grep -q 'only final packages may warn' warnings-pristine.log
       cp ${kimchi.extractionSources.pi}/dist/core/resource-loader.js identity-source/dist/core/
       chmod u+w identity-source/dist/core/resource-loader.js
-      ${(packageLib.patching {inherit pkgs;}).command {
+      ${patching.command {
         directory = "identity-source";
         patchFiles = [../packages/ai/kimchi/extension-package-warnings.patch];
       }}
@@ -109,10 +109,9 @@ in {
     '';
     installPhase = ''
       runHook preInstall
-      ${(packageLib.patching {inherit pkgs;}).validate "identity-source"}
-      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg kimchi.patchedDependencies;}}
-      mkdir "$out"
-      cp -r identity-source node_modules "$out/"
+      ${patching.validate "identity-source"}
+      ${patching.validateDependencies {inherit (kimchi) patchedDependencies;}}
+      touch "$out"
       runHook postInstall
     '';
   };

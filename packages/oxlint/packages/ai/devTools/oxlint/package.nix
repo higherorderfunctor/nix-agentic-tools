@@ -12,6 +12,7 @@
   repoPath,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   rustToolchainChannel = "1.100.0";
   rustPlatform = packageLib.mkRustPlatform {
     channel = rustToolchainChannel;
@@ -35,16 +36,20 @@
   napiPatch = ../../../../patches/oxlint-napi-rs-cli.patch;
   napiPatchPath = "patches/${builtins.baseNameOf napiPatch}";
   napiPatchHash = builtins.hashFile "sha256" napiPatch;
-  patchedDependencies = ''<(${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' pnpm-workspace.yaml)'';
+  patchedDependencies = pkgs.runCommand "oxlint-patched-dependencies.json" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' ${src}/pnpm-workspace.yaml > "$out"
+  '';
   verifyNapiPatch = ''
     (
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
-    ${(packageLib.patching {inherit pkgs;}).validateDependencies {inherit patchedDependencies;}}
+    ${patching.validateDependencies {inherit patchedDependencies;}}
     )
   '';
-  src = (packageLib.patching {inherit pkgs;}).source {
+  src = patching.source {
     src = unpatchedSrc;
     postPatch = ''
       set -euETo pipefail
@@ -75,12 +80,11 @@ in
     inherit (rustPlatform.rust) cargo rustc;
   }).overrideAttrs (finalAttrs: prev: {
     inherit version src;
-    passthru = (prev.passthru or {}) // rustPlatform.passthru;
+    passthru = (prev.passthru or {}) // rustPlatform.passthru // {inherit patchedDependencies;};
     cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
       hash = "sha256-6jGwMJmGol9EFfBVBmpD1ouhaJgilwAQvs1KHE9aEzU=";
     };
-    # pnpm owns patchedDependencies during fetching; pre-applying skips peers.
     pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = pkgs.ai.generic.pnpm_11;
@@ -88,10 +92,9 @@ in
       postInstall = verifyNapiPatch;
       hash = "sha256-/oO+2TT0pNajKOorGUu9lkOyVgDlan30CHRfpUVt8nM=";
     };
-    # pnpmConfigHook installs patchedDependencies offline across every peer.
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
-    preInstall = (packageLib.patching {inherit pkgs;}).validateDependencies {inherit patchedDependencies;} + (prev.preInstall or "");
+    preInstall = patching.validateDependencies {inherit patchedDependencies;} + (prev.preInstall or "");
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
     # pnpm 11 until a swap is validated against this consumer. pnpm 12 needs a
     # non-empty registry base: given an empty one, every request becomes a

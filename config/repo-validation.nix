@@ -4,6 +4,7 @@
   lib,
   pkgs,
 }: let
+  patchPolicyPython = import ../checks/packaging/patch-policy-python.nix pkgs;
   shellStrict = import ./shell-strict.nix;
   strictShellApplication = import ../lib/strict-shell-application.nix pkgs;
 
@@ -105,7 +106,7 @@
       hook = {
         enable = true;
         name = "patch-policy";
-        entry = "${pkgs.python3}/bin/python ${../checks/packaging/patch-policy.py}";
+        entry = "${patchPolicyPython}/bin/python ${../checks/packaging/patch-policy.py}";
         files = "^(packages|lib|checks|dev)/.*\\.nix$";
         pass_filenames = false;
       };

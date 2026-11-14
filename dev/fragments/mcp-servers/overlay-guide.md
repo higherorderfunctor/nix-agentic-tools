@@ -3,6 +3,8 @@
 > **Last verified:** 2026-11-13 — source builds use the shared patch helper for
 > strict context and backup suppression.
 
+> Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
+
 ### Overlay Architecture
 
 MCP recipes live under

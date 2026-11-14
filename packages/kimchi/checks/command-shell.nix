@@ -3,6 +3,7 @@
   pkgs,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   # The release tree proves the unpatched failure; patchedSource carries the patch.
   inherit (pkgs.ai.kimchi.passthru) extractionSources patchedSource;
   patch = ../packages/ai/kimchi/command-shell.patch;
@@ -21,10 +22,9 @@ in {
         exit 1
       fi
       grep -q 'AssertionError' pristine.log
-      ${(packageLib.patching {inherit pkgs;}).command {patchFiles = [patch];}}
+      ${patching.command {patchFiles = [patch];}}
       node --experimental-vm-modules ${./command-shell.mjs} .
-      ${(packageLib.patching {inherit pkgs;}).validate "."}
-      mkdir "$out"
-      cp -r src "$out/"
+      ${patching.validate "."}
+      touch "$out"
     '';
 }
