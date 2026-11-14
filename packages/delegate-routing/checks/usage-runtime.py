@@ -64,10 +64,8 @@ MANAGER_STATUS = {"service": "cpa-manager-plus", "dbPath": "/usage.sqlite",
                                 "mode": "auto", "transport": "http"}}
 PROXY_GROUP = {"base-url": "https://api.anthropic.com",
                "keys": [{"api-key": "upstream-private-key", "auth_index": "idx-one"}]}
+# Healthy compact queries omit coverage; omission is not complete accounting.
 ANALYTICS = {"generated_at_ms": 1,
-             "coverage": {"scope": "time_range", "mode": "mixed", "raw_complete": False,
-                          "core_aggregate_used": True, "raw_deleted_event_count": 0,
-                          "fidelity_limitations": []},
              "model_stats": [{"model": "claude-fable-5-1", "calls": 27, "total_tokens": 2657502,
                               "cost": 5.0}],
              "summary": {"total_calls": 27, "total_cost": 5.0}}
@@ -450,9 +448,9 @@ for line in sys.stdin:
                 result = self.run_proxy(*self.proxy_command())
                 if count:
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(result.stderr, f"usage: proxy analytics contain {count} unpriced models\n")
+                    self.assertEqual(result.stderr, f"usage: proxy {count} models have no price in CPA Manager\n")
                     self.assertNotIn("claude-mystery-5", result.stderr)
-                    self.assertEqual(result.stdout, "")
+                    self.assertEqual(json.loads(result.stdout), {"count": count, "reason": "unpriced-models"})
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
         # The rows that judge coverage must themselves be well typed.
@@ -490,6 +488,30 @@ for line in sys.stdin:
                         self.assertEqual(result.stderr, "usage: proxy invalid analytics response\n")
                         self.assertEqual(result.stdout, "")
 
+    def test_proxy_unpriced_count_precedes_incomplete_coverage(self):
+        # Wrong: incomplete coverage is reported before the unpriced count.
+        self.configs["claude"] = [PROXY_GROUP]
+        self.analytics["coverage"] = None
+        self.analytics["model_stats"][0]["cost"] = 0
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(json.loads(result.stdout), {"count": 1, "reason": "unpriced-models"})
+
+    def test_proxy_null_coverage_is_incomplete(self):
+        # Wrong: null coverage is treated as omitted and produces an estimate.
+        self.configs["claude"] = [PROXY_GROUP]
+        self.analytics["coverage"] = None
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "usage: proxy cost coverage incomplete\n")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_proxy_explicit_healthy_coverage_keeps_estimate(self):
+        # Wrong: any present coverage object is refused as incomplete.
+        self.configs["claude"] = [PROXY_GROUP]
+        self.analytics["coverage"] = {"raw_deleted_event_count": 0, "fidelity_limitations": []}
+        result = self.run_proxy(*self.proxy_command())
+        self.assertEqual(json.loads(result.stdout)["windows"]["monthly"]["usedPercent"], 5)
+
     def test_proxy_cost_and_coverage_fail_closed(self):
         self.configs["claude"] = [PROXY_GROUP]
         for cost in [-5.0, float("nan"), float("inf")]:
@@ -500,14 +522,16 @@ for line in sys.stdin:
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("invalid analytics response", result.stderr)
                 self.assertEqual(result.stdout, "")
-        # A malformed coverage object is a bad response, not a clean one.
+        # Malformed coverage is a bad response, refused before any unpriced count.
         for field, value in [("fidelity_limitations", "core_metrics_require_raw_events"),
                              ("fidelity_limitations", 7),
+                             ("fidelity_limitations", [7]),
                              ("raw_deleted_event_count", "many"),
                              ("raw_deleted_event_count", -3)]:
             with self.subTest(field=field, value=value):
                 self.analytics = copy.deepcopy(ANALYTICS)
-                self.analytics["coverage"][field] = value
+                self.analytics["coverage"] = {"raw_deleted_event_count": 0, "fidelity_limitations": [], field: value}
+                self.analytics["model_stats"][0]["cost"] = 0
                 result = self.run_proxy(*self.proxy_command())
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("invalid analytics response", result.stderr)
@@ -544,11 +568,14 @@ for line in sys.stdin:
         self.assertEqual(result.stdout, "")
         self.status_body["collector"]["collector"] = "running"
         for field, value in [("raw_deleted_event_count", 5),
+                             ("fidelity_limitations", None),
+                             ("raw_deleted_event_count", None),
                              ("fidelity_limitations", ["core_metrics_require_raw_events"]),
                              ("fidelity_limitations", ["extended_summary_metrics_require_raw_events"])]:
             with self.subTest(field=field, value=value):
                 self.analytics = copy.deepcopy(ANALYTICS)
-                self.analytics["coverage"][field] = value
+                self.analytics["coverage"] = {"raw_deleted_event_count": 0, "fidelity_limitations": [],
+                                              field: value}
                 result = self.run_proxy(*self.proxy_command())
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("cost coverage incomplete", result.stderr)

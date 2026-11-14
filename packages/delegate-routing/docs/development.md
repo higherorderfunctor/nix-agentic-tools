@@ -632,26 +632,30 @@ JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
-From this package directory, run the offline runtime suite with its explicit
-fixture input:
+From the repository root, run the offline runtime checks with their packaged
+Python dependencies, including hypothesis and pydantic:
 
 ```bash
-python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
+flock /tmp/nat-vm-spike.lock systemd-run --user --scope -q \
+  -p CPUQuota=200% -p MemoryMax=6G \
+  nix build --max-jobs 1 --cores 2 --no-link \
+  .#checks.x86_64-linux.delegate-routing-plan-runtime \
+  .#checks.x86_64-linux.delegate-routing-usage-runtime
 ```
 
-It exercises fake Readers and hand-written expectations, including a subprocess
-spy that rejects any candidate/probe launch. The fixture preserves five full
-successful Reader envelopes captured live from the five registered pools,
-evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index` and
-`account.name` are replaced with stable synthetic strings; nulls, field types,
-windows, balances and bonuses are preserved. These captures verify arithmetic
-and ranking; synthetic cases verify Reader failures. CI passes the fixture store
-path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
-delivery fixtures check the rendered helper command, runtime/session-pool
-identity in the skill, and policy prose for Reader completeness, the session
-buffer and shared avoided-family fallback. Reader collection, ranking and buffer
-behavior are tested against the source Python helper with synthetic manifests.
-The
+The routing check exercises fake Readers and hand-written expectations,
+including a subprocess spy that rejects any candidate/probe launch. The fixture
+preserves five full successful Reader envelopes captured live from the five
+registered pools, evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index`
+and `account.name` are replaced with stable synthetic strings; nulls, field
+types, windows, balances and bonuses are preserved. These captures verify
+arithmetic and ranking; synthetic cases verify Reader failures. CI passes the
+fixture store path explicitly in `delegate-routing-plan-runtime`. Eight
+backend/runtime delivery fixtures check the rendered helper command,
+runtime/session-pool identity in the skill, and policy prose for Reader
+completeness, the session buffer and shared avoided-family fallback. Reader
+collection, ranking and buffer behavior are tested against the source Python
+helper with synthetic manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
@@ -770,13 +774,29 @@ its admin key file; the key is read in process and sent through curl `--config`
 on stdin, never through argv. The reader fails when the collector is not
 running, when discovery matches zero or several credentials, when the analytics
 response is invalid (`model_stats` may be empty only when the summary reports
-zero calls), when its coverage reports deleted raw events or a degraded summary,
-or when an analytics model row reports tokens with zero cost: Manager+ prices a
-row through its billing or pricing model and leaves one it cannot price at zero,
-and coverage is judged from those analytics rows, not a price book. Calls that
-used no tokens cost nothing legitimately. A display model that merges a priced
-and an unpriced billing model shows a positive total and is not detected; that
-is the limit of the estimate, which is why the window's status is `estimated`.
+zero calls), when present coverage is null, malformed or missing its
+deletion/limitation fields, when coverage reports deleted raw events or a
+degraded summary, or when an analytics model row reports tokens with zero cost:
+Manager+ prices a row through its billing or pricing model and leaves one it
+cannot price at zero, and coverage is judged from those analytics rows, not a
+price book. Calls that used no tokens cost nothing legitimately. A display model
+that merges a priced and an unpriced billing model shows a positive total and is
+not detected; that is the limit of the estimate, which is why the window's
+status is `estimated`.
+
+Healthy compact responses omit coverage. Omitted coverage, or explicit zero
+deleted events with no degraded-summary limitations, preserves the estimated
+monthly cost, including zero. Present null, malformed or partial coverage is
+refused. Neither accepted shape establishes complete accounting or measures
+traffic that bypassed the proxy. At the exact reset instant, the new window
+reports zero without an analytics request.
+
+An unpriced-model failure exits nonzero with only
+`{reason: "unpriced-models", count: N}` on stdout. The routing helper preserves
+this count and warns "N models have no price in CPA Manager" once per shared
+Reader command. Other failures retain fixed safe reasons; neither model names
+nor Reader stderr enter the helper's diagnostics. The estimate cannot establish
+unobserved traffic.
 
 A consumer example with placeholder values:
 

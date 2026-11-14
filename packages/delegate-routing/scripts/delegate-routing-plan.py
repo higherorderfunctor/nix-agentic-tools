@@ -17,7 +17,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import Literal
 import uuid
+
+from pydantic import BaseModel, ConfigDict, Field
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_TIERS = {
@@ -470,6 +473,14 @@ def run_reader(argv, **kwargs):
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
 
+class UnpricedModelsDiagnostic(BaseModel):
+    """The only failed Reader payload that can supply a public diagnostic."""
+
+    model_config = ConfigDict(extra="forbid")
+    count: int = Field(gt=0, strict=True)
+    reason: Literal["unpriced-models"]
+
+
 def collect(readers, now, shell, run=run_reader):
     # Only this inventory reaches subprocess: candidate command guidance is data.
     commands, results = {}, {}
@@ -491,6 +502,14 @@ def collect(readers, now, shell, run=run_reader):
                     proc = run(argv, capture_output=True, text=True, timeout=READER_TIMEOUT)
                 if proc.returncode:
                     result = {"reason": f"Reader exited {proc.returncode}", "status": "unreachable"}
+                    # Only this closed diagnostic is safe on failed Reader stdout.
+                    # Arbitrary JSON, names and stderr never reach the warning.
+                    try:
+                        detail = UnpricedModelsDiagnostic.model_validate(json.loads(proc.stdout))
+                    except (ValueError, RecursionError):
+                        pass  # Retain the observed exit failure, not parsed inventory.
+                    else:
+                        result.update(detail.model_dump())
                 else:
                     result = measure(proc.stdout, now)
             except subprocess.TimeoutExpired:
@@ -520,7 +539,10 @@ def pool_diagnostics(readers, pools):
         for window, reason in sorted(pool.get("windowErrors", {}).items()):
             warnings.append(warning(f"{name}: window {window} pace dropped: {reason}"))
     for names in sorted(failures.values()):
-        reason = pools[names[0]]["reason"]
+        pool = pools[names[0]]
+        reason = pool["reason"]
+        if reason == "unpriced-models":
+            reason = f"{pool['count']} models have no price in CPA Manager"
         warnings.append(warning(f"Reader for {', '.join(names)} failed: {reason}"))
     return warnings
 
