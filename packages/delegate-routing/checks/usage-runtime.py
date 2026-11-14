@@ -1079,7 +1079,7 @@ else:
                 self.assertEqual(value["missingExtras"], [] if cpa else ["codex-reset-details-unavailable"])
 
     def test_codex_reset_eligibility(self):
-        # Each case pins a distinct eligibility or normalization contract.
+        # Each case pins an applicability, eligibility, or normalization contract.
         cases = [
             ("zero", 0, {}, None, []),
             ("unsupported", 2, {"is_supported_by_plan": False}, "codex-reset-eligibility-unknown", []),
