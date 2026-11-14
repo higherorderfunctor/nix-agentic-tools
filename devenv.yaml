@@ -48,7 +48,7 @@ inputs:
   nixpkgs-stable:
     url: github:NixOS/nixpkgs/f1e5c356f35d07e7b71a6b5e6c9338e0b029e0c0
   rust-overlay:
-    url: github:oxalica/rust-overlay/84edd48f141b0c8910dffdd0296ddd577e829132
+    url: github:oxalica/rust-overlay/5b87ee0513c29127a01ad06e9cb362ea5ce91e78
     inputs:
       nixpkgs:
         follows: nixpkgs
