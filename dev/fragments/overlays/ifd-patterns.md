@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-11-06 — a pnpm repin comes from the update tooling;
-> extracted facts self-heal through visible PR CI commits, with Linux carrying
-> its facts before Darwin measures.
+> **Last verified:** 2026-11-13 — source preparation uses the shared patch
+> helper before pnpm materializes dependency patches.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -504,15 +503,16 @@ names need no annotation rows. Feature maturity policy stays at the factory's
 - Package-manager dependency fetchers consume the source tree before normal
   build phases run. If a pnpm dependency needs a downstream patch, patching
   materialized `node_modules` in `preBuild` hides ownership at the final-package
-  layer. Instead, use `applyPatches` to add pnpm `patchedDependencies` metadata,
-  its patch file, and the corresponding lock entries to the upstream source;
-  pass that same patched source to both `fetchPnpmDeps` and the final package.
-  Pnpm then applies it at dependency materialization and reaches every peer
-  variant. The fetcher FOD caches the original registry bytes, while the patched
-  source is a separate final-derivation input that tells pnpm how to transform
-  them. Its hash can still change when the fetcher mechanism changes (for
-  example pnpm 10/fetcher v3 to pnpm 11/fetcher v4); that does not mean the
-  dependency tarball was replaced.
+  layer. Instead, use `(packageLib.patching {inherit pkgs;}).source` to add pnpm
+  `patchedDependencies` metadata, its patch file, and the corresponding lock
+  entries to the upstream source; pass that same patched source to both
+  `fetchPnpmDeps` and the final package. Pnpm then applies it at dependency
+  materialization and reaches every peer variant. The fetcher FOD caches the
+  original registry bytes, while the patched source is a separate
+  final-derivation input that tells pnpm how to transform them. Its hash can
+  still change when the fetcher mechanism changes (for example pnpm 10/fetcher
+  v3 to pnpm 11/fetcher v4); that does not mean the dependency tarball was
+  replaced.
 - Do not regenerate a pnpm lock with a different pnpm major just to add that
   metadata. It can silently re-resolve unrelated peers and even change major
   dependency selections. Make the minimal lock edit, then prove it with

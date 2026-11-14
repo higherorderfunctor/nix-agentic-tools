@@ -1,8 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-11-06 — kiro-cli owns its payload derivation and its
-> Linux FHS env; pnpm_12 bootstrap has no hash fixers; a hand hash edit needs a
-> reason.
+> **Last verified:** 2026-11-13 — repository patch applications use the shared
+> helper; source and output checks reject backup and reject files.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -49,6 +48,24 @@ source sidecars, patches, extraction helpers, and declarative registrations with
 the owner. `registry.nix` declares update/doc entries;
 `repoPath ./relative/path` derives mutable paths from their actual location. See
 the package-ownership fragment for the native composition boundaries.
+
+### Applying source patches
+
+Use `packageLib.patching {inherit pkgs;}`: `attrs` accepts `patchFiles` for
+stdenv, `source` produces a patched source, and `command` patches an existing
+tree. Never set `patches` or `patchFlags`, call `applyPatches`, or invoke GNU
+patch / Git apply directly. The helper keeps zero fuzz and suppresses `.orig`
+backups, which otherwise leak into extracted sources and checks. Git application
+keeps all-context matching. pnpm applies its own dependency patches to every
+peer; documented operations are recorded in `checks/packaging/patch-policy.py`.
+
+`patch-policy` checks supported Nix bindings and shell commands locally and in
+CI; it is not an evaluator for arbitrary computed commands. `patch-sources`
+checks real sources and dependency-map-selected package roots; unrelated
+registry content is outside that map. Ordinary trees follow symlinks, while
+mapped package roots use physical traversal to avoid unrelated dependencies.
+`patch-artifacts` checks real built outputs. Ephemeral manual trees are checked
+immediately by `command` before they disappear.
 
 ### Who builds a package: `buildOverlay` and the exported overlay
 

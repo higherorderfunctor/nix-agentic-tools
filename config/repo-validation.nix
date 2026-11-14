@@ -100,6 +100,20 @@
       };
       ci.backend = "git-hooks";
     };
+    patch-policy = {
+      role = "validator";
+      hook = {
+        enable = true;
+        name = "patch-policy";
+        entry = "${pkgs.python3}/bin/python ${../checks/packaging/patch-policy.py}";
+        files = "^(packages|lib|checks|dev)/.*\\.nix$";
+        pass_filenames = false;
+      };
+      ci = {
+        backend = "external";
+        check = "patch-policy";
+      };
+    };
     reject-default-branch-commit = {
       role = "commit-guard";
       hook = {
