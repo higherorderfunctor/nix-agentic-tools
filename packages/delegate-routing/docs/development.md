@@ -252,10 +252,15 @@ highest id matching the pattern. Consumers selecting Kimchi models declare the
 corresponding vendor families in their delegate-routing configuration.
 
 `lib/opencode-go.nix` adds `opencode-go` preset families for the OpenCode Go
-catalog that CPA's `opencode-go` vendor serves. Its local preset-scope rule
-(`refuses`: `claude-*`, `glm-*` and `gpt-*` ids) leaves some ids without a
-preset; it limits routing guidance only, not what a CPA credential serves. They
-come from per-model research, and every tier is provisional: whenever a consumer
+catalog that CPA's `opencode-go` vendor serves. Coverage reuses the existing
+Anthropic and OpenAI families and the shipped `zhipuai.glm` and
+`zhipuai.glm-flash` guidance; these families have no default pool bindings.
+`opencodeGo.presetScope.excludeModelPrefixes = []` checks the entire catalog by
+default. Consumers can exclude case-insensitive nonempty prefixes from guidance
+coverage, for example `["example-"]`. This changes neither CPA offers nor
+runtime reach and does not remove families or bind pools. Home Manager, devenv
+and the manual `mkSkill` builder accept the same nested option. Go presets come
+from per-model research, and every tier is provisional: whenever a consumer
 `{families}` block renders an `opencode-go` family, one line under the tables
 says so. Each family is named `go-` plus the exact Go id, except
 `go-muse-spark-contributor` (Muse Spark 1.2 and 1.3), which the research found
@@ -282,7 +287,9 @@ such as a hand-written `deepseek-v*-flash*` beside `go-deepseek-v4.1-flash`,
 evaluation fails and names the id and the families. Selecting them on different
 runtimes is allowed, and families that overlap with no preset selected are not
 checked. The `delegate-routing-opencode-go-presets` check fails when a servable
-catalog id matches no preset or several, or a preset matches no catalog id.
+in-scope catalog id matches no guidance owner or several, or its owner lacks
+use/avoid and effort guidance. Removing an upstream model does not fail this
+gate. Explicit scope exclusions do not suppress missing guidance for other ids.
 
 Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
@@ -362,12 +369,12 @@ technique in its Launch route. Files and routes share the resolved set.
 It supplies every technique's default and remains consumer-overridable; Sol uses
 medium, Go Kimi K3.1 Pro max, and families without levels null. Go Crouton Alpha
 Free uses a provisional medium package choice, not a published recommendation;
-consumers can override it. Configure custom
-`families.zhipuai.glm.defaultEffort = "high"`; no glm preset is shipped. Null
-omits the generated file's `effort:` line. Agent files pin only efforts Claude's
-agent-file format accepts; otherwise they leave effort to the launch call. A
-non-null role effort overrides the family default. The shared frontmatter
-renderer writes the pins and a fixed delegate body.
+consumers can override it. The shipped `zhipuai.glm` uses high;
+`zhipuai.glm-flash` leaves the effort pin unset. Null omits the generated file's
+`effort:` line. Agent files pin only efforts Claude's agent-file format accepts;
+otherwise they leave effort to the launch call. A non-null role effort overrides
+the family default. The shared frontmatter renderer writes the pins and a fixed
+delegate body.
 
 There is no separate file enable option. Set
 `runtimes.claude.techniques."Agent with generated agent file".enable = false` to
