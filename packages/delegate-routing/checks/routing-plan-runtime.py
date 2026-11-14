@@ -20,6 +20,8 @@ import time
 import unittest
 from unittest.mock import call, patch
 
+from hypothesis import given, settings, strategies as st
+
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
@@ -73,7 +75,7 @@ class Routing(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         return {"directory": directory.name}
 
-    def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW):
+    def run_plan(self, config=None, launch_context=None, roles=("writer",), outputs=None, now=NOW, check=None):
         calls = []
         def reader(argv, **kwargs):
             self.assertEqual(argv[:4], [SHELL, "-euETo", "pipefail", "-c"])
@@ -87,7 +89,7 @@ class Routing(unittest.TestCase):
                 return value
             return subprocess.CompletedProcess(argv, 0, value)
         with patch.object(helper.subprocess, "Popen", side_effect=AssertionError("delegate/probe launched")), patch("time.sleep"):
-            result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader)
+            result = helper.plan(config or manifest(), launch_context or context(roles), roles, now, SHELL, reader, check=check)
         return result, calls
 
     def request_errors(self, config=None, launch_context=None, roles=("writer",)):
@@ -1836,6 +1838,74 @@ class Routing(unittest.TestCase):
             launches.append({"brief": brief, "candidate": {"agent": None, "effort": "high", "family": "sol", "guidance": {"command": "MUST NEVER EXECUTE THIS LAUNCH", "modelArg": "slug", "notes": "caller binds task/output paths"}, "model": "gpt-6.1-sol", "runtime": "codex", "technique": "spawn_agent"}, "line": f"role={role} runtime=codex family=sol technique=spawn_agent model=gpt-6.1-sol effort=high", "role": role, "runtime": "codex"})
         units = [{"audience": "routing maintainer", "checks": [f"checks/{index}.py"], "dependencies": [], "docs": [f"docs/{index}.md"], "files": [f"src/{index}.py", f"checks/{index}.py", f"docs/{index}.md"], "goal": "replace not validated launch choices", "id": str(index), "launches": deepcopy(launches), "size": {"code": {"added": 20, "removed": 5}, "docs": {"added": 5, "removed": 0}, "tests": {"added": 30, "removed": 0}}, "verification": {"command": f"python3 checks/{index}.py", "wrongImplementation": "accepts invented launch choices"}} for index in range(count)]
         return {"rubric": "rubric.md", "runtime": "codex", "snapshot": {"automaticRuntimes": ["codex"], "manualOnly": [], "pools": {"outside": {"buffer": 0.5, "pace": 0.9375, "status": "measured"}}, "roles": {record["role"]: {"candidates": [{"launch": record["candidate"], "line": record["line"], "pool": "outside"}], "exclusions": []} for record in launches}, "runtime": "codex", "sessionPool": None, "snapshot": "2026-11-14T00:00:00Z", "warnings": ["session pool unknown; buffer rule cannot be certified"]}, "task": "validate assigned routing work", "units": units, "waves": [[str(index) for index in range(count)]]}
+
+    @settings(max_examples=24, deadline=None)
+    @given(require_rubric=st.booleans(), require_size=st.booleans(), reviews=st.lists(st.sampled_from(["first-check", "judge", "second-check"]), unique=True))
+    def test_plan_policy_controls_required_artifacts_and_review_roles(self, require_rubric, require_size, reviews):
+        """Policy opt-outs permit omitted records while enabled checks still refuse them."""
+        policy = helper.PlanCheckPolicy(requireRubric=require_rubric, requireSize=require_size, requiredReviewRoles=reviews)
+        with tempfile.TemporaryDirectory(prefix="routing-policy-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root, 1)
+            current = artifact["snapshot"]
+            unit = artifact["units"][0]
+            unit["launches"] = [record for record in unit["launches"] if record["role"] in ["writer"] + reviews]
+            if not require_rubric:
+                del artifact["rubric"]
+                for record in unit["launches"]:
+                    (root / record["brief"]).write_text("Task without rubric")
+            if not require_size:
+                del unit["size"]
+            config = manifest()
+            config["reviewPolicy"] = {"planCheck": policy.model_dump()}
+            result, _ = self.run_plan(config, roles=tuple(["writer"] + reviews), check=(artifact, root, 10))
+            self.assertEqual(result["validation"]["status"], "valid")
+            changed = deepcopy(artifact)
+            changed["units"][0]["launches"][0]["brief"] = "../outside.md"
+            with self.assertRaisesRegex(ValueError, "plan-relative"):
+                helper.check_plan(changed, current, root, policy=policy)
+            for role in reviews:
+                changed = deepcopy(artifact)
+                changed["units"][0]["launches"] = [r for r in unit["launches"] if r["role"] != role]
+                with self.assertRaisesRegex(ValueError, "configured review barriers"):
+                    helper.check_plan(changed, current, root, policy=policy)
+            if require_size:
+                del unit["size"]
+                with self.assertRaisesRegex(ValueError, "per-kind size"):
+                    helper.check_plan(artifact, current, root, policy=policy)
+
+    @settings(max_examples=32, deadline=None)
+    @given(role=st.sampled_from(sorted(helper.ROLE_TIERS)), tier=st.sampled_from(["frontier", "mid", "small", "strong"]), allowed=st.sets(st.sampled_from(["frontier", "mid", "small", "strong"])))
+    def test_manifest_role_tiers_control_candidate_eligibility(self, role, tier, allowed):
+        """Every role obeys its configured allowed tiers, including an empty set."""
+        config = manifest([route(tier=tier)])
+        config["reviewPolicy"] = {"roles": {role: {"tiers": sorted(allowed)}}}
+        result, _ = self.run_plan(config, context((role,)), (role,))
+        self.assertEqual(bool(result["roles"][role]["candidates"]), tier in allowed)
+
+    def test_plan_policy_can_assign_planner_as_worker(self):
+        """Explicit worker policy can replace the default worker set."""
+        with tempfile.TemporaryDirectory(prefix="routing-policy-") as directory:
+            root = Path(directory)
+            artifact = self.prepared_plan(root, 1)
+            record = artifact["units"][0]["launches"][0]
+            record["role"] = "planner"
+            artifact["units"][0]["launches"] = [record]
+            artifact["snapshot"]["roles"]["planner"] = artifact["snapshot"]["roles"]["writer"]
+            policy = helper.PlanCheckPolicy(requiredReviewRoles=[], workerRoles=["planner"])
+            self.assertEqual(helper.check_plan(artifact, artifact["snapshot"], root, policy=policy)["status"], "valid")
+            with self.assertRaises(ValueError):
+                helper.check_plan(artifact, artifact["snapshot"], root)
+
+    def test_invalid_review_policy_refuses_before_readers(self):
+        """Manifest policy errors are configuration faults and never spend budget."""
+        for policy in ({"planCheck": {"requireSize": "false"}}, {"roles": {"judge": {"tiers": ["tiny"]}}}, {"planCheck": {"workerRoles": ["invented"]}}):
+            config = manifest()
+            config["reviewPolicy"] = policy
+            with patch.object(helper, "collect", side_effect=AssertionError("Reader ran")):
+                with self.assertRaises(helper.InvalidRequest) as error:
+                    helper.plan(config, context(), ["writer"], NOW, SHELL)
+            self.assertTrue(all(issue["path"].startswith("manifest.reviewPolicy.") for issue in error.exception.errors))
 
     def test_planner_bootstrap_floor_native_and_workflow(self):
         # Wrong: planner unregistered, high-pace mid chosen, or no pinned bootstrap.

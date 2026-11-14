@@ -108,6 +108,7 @@ in {
       "Pool window" = {text = "configured: {limit} {unit} per month, resets day {resetDay}; current use unknown";};
       "Technique notes heading" = {text = "### {harness} technique notes";};
       "Technique table heading" = {text = "### {harness} techniques";};
+      "Workflow step" = {text = "{index}. **{name}:** {text}";};
     };
   };
   workflows."Work and review" = {

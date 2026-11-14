@@ -632,6 +632,15 @@
       change {
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
+          reviewPolicy = {
+            planCheck = {
+              requireRubric = false;
+              requireSize = false;
+              requiredReviewRoles = [];
+              workerRoles = ["planner"];
+            };
+            roles.judge.tiers = lib.mkForce ["mid"];
+          };
           families.fixture.packaged = {
             defaultEffort = "high";
             example.${runtime} = "fixture-model";
@@ -743,6 +752,8 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["reviewPolicy"]["planCheck"] == {"requireRubric": False, "requireSize": False, "requiredReviewRoles": [], "workerRoles": ["planner"]}
+        assert manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["mid"]
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
         assert manifest["pickerEntries"][0]["outputFormat"] == "claude-json"
@@ -754,6 +765,8 @@
         direct_skill = Path(os.environ["directSkillPath"]).read_text()
         direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
+        assert direct_manifest["reviewPolicy"]["planCheck"] == {"requireRubric": True, "requireSize": True, "requiredReviewRoles": ["first-check"], "workerRoles": ["investigator", "mechanical", "writer"]}
+        assert direct_manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["frontier", "strong"]
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
@@ -2126,6 +2139,17 @@
       in
         lib.hasInfix "Rubric" rubric && lib.hasInfix "Review" remainder)
     );
+    "module-delegate-routing-${name}-workflow-step-phrase" = mkTest "delegate-routing-${name}-workflow-step-phrase" (let
+      custom = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".text = "Step {index}: {name} — {text}";
+      };
+      disabled = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".enable = false;
+      };
+    in
+      lib.hasInfix "Step 1: Rubric —" (readSkill custom "claude")
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill custom "claude"))
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill disabled "claude")));
     # Rows compose on both backends; dropping inherited rows or freezing numbers fails.
     "module-delegate-routing-${name}-workflow-rows" = mkTest "delegate-routing-${name}-workflow-rows" (
       let
