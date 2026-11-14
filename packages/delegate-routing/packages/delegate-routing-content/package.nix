@@ -24,7 +24,7 @@
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/codex-usage.sh];
     opencode-usage = mkUsageScript "opencode-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/opencode-usage.sh];
     proxy-accounted-usage = mkUsageScript "proxy-accounted-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/proxy-accounted-usage.sh];
-    zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zai-usage.sh];
+    zhipuai-usage = mkUsageScript "zhipuai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zhipuai-usage.sh];
   };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;

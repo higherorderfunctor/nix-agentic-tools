@@ -34,7 +34,7 @@
   fixture.ai = {
     catalog = {
       models = {
-        test-alpha-1 = identity "alpha" {z-ai = ["short"];};
+        test-alpha-1 = identity "alpha" {zhipuai = ["short"];};
         test-alpha-2 = identity "alpha" {};
         test-beta-1 = identity "beta" {other = ["short"];};
         test-unknown-1 = identity null {};
@@ -42,7 +42,7 @@
       vendors = {
         finite.models = ["test-alpha-1" "test-unknown-1"];
         wide.maker = "alpha";
-        z-ai.models = lib.mkForce ["test-alpha-1"];
+        zhipuai.models = lib.mkForce ["test-alpha-1"];
       };
     };
     claude = {
@@ -63,7 +63,7 @@
       enable = true;
       settings.config-version = 8;
       credentials = {
-        aliased = (key ["short"]) // {vendor = "z-ai";};
+        aliased = (key ["short"]) // {vendor = "zhipuai";};
         first = key ["test-alpha-1" "test-unknown-1"];
         filtered = (key ["test-alpha-1" "test-beta-1"]) // {excludeMakers = ["alpha"];};
         finite.oauth = {
@@ -170,7 +170,7 @@
       // lib.optionalAttrs projection {
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
-          ai.catalog.models.test-alpha-2.aliases.z-ai = ["short"];
+          ai.catalog.models.test-alpha-2.aliases.zhipuai = ["short"];
           ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [
             {
               credential = "aliased";

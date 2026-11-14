@@ -306,7 +306,7 @@
           if vendor != null && catalog != null && catalog.vendors.${vendor}.models == null
           then throw "ai.cliproxyapi credential vendor `${vendor}` requires a finite ai.catalog.vendors.${vendor}.models list for transport defaults; set maker = null and declare models, or omit vendor and configure apiKey explicitly."
           else vendor;
-        description = "Built-in vendor defaults for this API-key upstream credential. z-ai uses z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
+        description = "Built-in vendor defaults for this API-key upstream credential. zhipuai uses Z.ai's standard API; a Coding Plan may require overriding the chat base URL. opencode-go places each OpenCode Go catalog model on its native API, and sends CPA's session ID as x-opencode-session. Every API and model default can be overridden; supply apiKey.key as a redact reference.";
       };
     };
     config = lib.mkIf (config.vendor != null) {
