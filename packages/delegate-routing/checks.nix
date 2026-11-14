@@ -24,6 +24,17 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Saved captures retain routes and measured allowance when another component fails.
+    delegate-routing-observation-normalize =
+      pkgs.runCommand "delegate-routing-observation-normalize" {
+        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export HYPOTHESIS_STORAGE_DIRECTORY="$TMPDIR/hypothesis"
+        python3 -I -B ${./checks/pacing}/test_observations.py ${./scripts}
+        touch "$out"
+      '';
     # Every servable OpenCode Go catalog model belongs to exactly one preset,
     # and every preset matches a catalog model.
     delegate-routing-opencode-go-presets = let

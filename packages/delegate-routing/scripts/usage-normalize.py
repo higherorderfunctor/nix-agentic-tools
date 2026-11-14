@@ -1,0 +1,301 @@
+"""Turn saved Reader output into the allowance limits the routing ranking uses.
+
+A snapshot holds the routes, each pool's registered limits and each Reader's
+saved capture. normalize() parses them with pydantic, keeps every route, and
+returns each limit's remaining amount, natural reset and role. A malformed
+capture or field loses only its own observations. Today only the tests call it;
+the routing helper consumes it once it ranks from these limits. Nothing here
+runs a Reader or a command, or reads the clock.
+"""
+
+import math
+from typing import Annotated, Any, Literal
+
+from pydantic import (
+    AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr,
+    StrictInt, StrictStr, StringConstraints, TypeAdapter, ValidationError, model_validator,
+)
+from pydantic_core import from_json
+from pydantic.types import OnErrorOmit
+
+# Preserve exact external identifiers while requiring a usable spelling.
+Nonempty = Annotated[str, StringConstraints(strict=True, min_length=1)]
+# Keep native allowance amounts finite and nonnegative.
+Amount = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
+# Require capacity and duration to define a nonzero scale.
+Positive = Annotated[Amount, Field(gt=0)]
+# Bound Reader shares to their percentage scale.
+Percent = Annotated[Amount, Field(le=100)]
+# Restrict timestamps to the producer's ISO text representation.
+IsoText = Annotated[str, StringConstraints(strict=True, pattern=r"^\d{4}-\d{2}-\d{2}T")]
+# Require an offset so replay does not depend on the local timezone.
+Timestamp = Annotated[AwareDatetime, BeforeValidator(TypeAdapter(IsoText).validate_python)]
+
+
+class Boundary(BaseModel):
+    """Isolate malformed optional components while retaining diagnostic field names."""
+    model_config = ConfigDict(extra="ignore")
+    _invalid: set[str] = PrivateAttr(default_factory=set)
+
+    @model_validator(mode="after")
+    def restore_omitted_defaults(self):
+        # OnErrorOmit isolates component failures; retain their names for diagnostics.
+        self._invalid = set(type(self).model_fields) - self.__dict__.keys()
+        for name in self._invalid:
+            object.__setattr__(self, name, type(self).model_fields[name].default)
+        return self
+
+
+class LimitSpec(Boundary):
+    """Bind one Reader window to an explicit native allowance and model scope."""
+    model_config = ConfigDict(extra="forbid")
+    capacity: Positive
+    models: Annotated[list[Nonempty], Field(min_length=1)]
+    role: Literal["gate", "pace"]
+    unit: Literal["percentagePoint", "USD"]
+    window: Nonempty
+
+
+class Registration(Boundary):
+    """Keep window attribution unique within each configured Reader pool."""
+    limits: dict[str, LimitSpec]
+    readerPool: Nonempty
+
+    @model_validator(mode="after")
+    def unique_windows(self):
+        if len({spec.window for spec in self.limits.values()}) != len(self.limits):
+            raise ValueError("duplicate-window-registration")
+        return self
+
+
+class Route(Boundary):
+    """Preserve declared launch identities independently of Reader availability."""
+    model_config = ConfigDict(extra="forbid")
+    id: Nonempty
+    maker: StrictStr | None
+    model: Nonempty
+
+
+class Snapshot(Boundary):
+    """Validate registrations against the declared routes before capture parsing."""
+    pools: dict[str, Registration]
+    # Capture failures belong to one pool, so each payload is parsed separately.
+    readers: dict[str, Any]
+    routes: list[Route]
+    runtime: Nonempty
+
+    @model_validator(mode="after")
+    def registered_models_exist(self):
+        models = {route.id for route in self.routes}
+        if any(set(spec.models) - models for pool in self.pools.values() for spec in pool.limits.values()):
+            raise ValueError("unknown-model")
+        return self
+
+
+class Account(Boundary):
+    """Recognize the Reader account shape without projecting private identity."""
+    auth_index: StrictStr | None
+    name: StrictStr | None
+    plan: StrictStr | None
+
+
+class Window(Boundary):
+    """Keep valid quantities available when independent timing or status fails."""
+    remainingPercent: OnErrorOmit[Percent] = None
+    resetsAt: OnErrorOmit[Timestamp | None] = None
+    status: OnErrorOmit[StrictStr | None] = None
+    usedPercent: OnErrorOmit[Percent] = None
+    windowSeconds: OnErrorOmit[Positive] = None
+
+    @model_validator(mode="after")
+    def consistent_quantities(self):
+        if (self.remainingPercent is None or self.usedPercent is None
+                or not math.isclose(self.remainingPercent + self.usedPercent, 100)):
+            self.remainingPercent = self.usedPercent = None
+        return self
+
+
+class BalanceFields(Boundary):
+    """Share native amounts and expiry across Reader balance variants."""
+    expiresAt: Timestamp | None
+    remaining: Amount
+
+
+class CreditsBalance(BalanceFields):
+    """Keep credit balances denominated in credits."""
+    kind: Literal["credits"]
+    unit: Literal["credits"]
+
+
+class ExtraUsageBalance(BalanceFields):
+    """Keep extra usage balances denominated in dollars."""
+    kind: Literal["extra_usage"]
+    unit: Literal["USD"]
+
+
+# Select the balance schema from the producer's kind before projecting metadata.
+BALANCE = TypeAdapter(Annotated[CreditsBalance | ExtraUsageBalance, Field(discriminator="kind")])
+
+
+class Bonus(Boundary):
+    """Project only known bonus kinds with whole nonnegative counts."""
+    count: Annotated[int, Field(strict=True, ge=0)]
+    expiresAt: Timestamp | None
+    kind: Literal["promo_credits", "rate_limit_reset"]
+
+
+class Envelope(Boundary):
+    """Bind the Reader payload to its exact pool identity before using windows."""
+    account: Account
+    balances: OnErrorOmit[list[Any]] = None
+    bonuses: OnErrorOmit[list[Any]] = None
+    pool: Nonempty
+    windows: dict[str, Any]
+
+
+class Capture(Boundary):
+    """Separate command outcome from independently parsed Reader payloads."""
+    # Payload parsing follows exit status; failed commands need no usable stdout.
+    data: Any = None
+    exit: OnErrorOmit[StrictInt] = None
+    finishedAt: OnErrorOmit[Timestamp] = None
+    stdout: Any = None
+
+
+def metadata(document: Envelope | None, diagnostic):
+    """Project valid extras independently so one bad entry cannot hide its siblings."""
+    result = {}
+    for field, validate in (("balances", BALANCE.validate_python), ("bonuses", Bonus.model_validate)):
+        items = getattr(document, field) if document else None
+        result[field] = None if items is None else []
+        if document and field not in document.model_fields_set and field not in document._invalid:
+            continue
+        if document and items is None:
+            diagnostic("invalid-extras", component=field)
+        for item in items or []:
+            try:
+                clean = validate(item).model_dump()
+                clean["expiresAt"] = int(clean["expiresAt"].timestamp()) if clean["expiresAt"] else None
+                result[field].append(clean)
+            except ValidationError:
+                diagnostic("invalid-extras", component=field)
+    return result
+
+
+# Map recognized Reader states to known enforcement without guessing for others.
+ENFORCEMENT = dict.fromkeys(("active", "critical", "estimated", "normal", "ok", "warning"), True)
+
+
+def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int | None, now: int, diagnostic):
+    """Translate one registered window into native allowance facts and safe diagnostics."""
+    result = dict(id=identifier, capacity=spec.capacity, unit=spec.unit,
+                  role=spec.role, models=spec.models, remaining=None, used=None,
+                  windowSeconds=None, naturalResetAt=None, enforced=None,
+                  gateOpensAt=None, observedAt=observed, status="missing", readerStatus=None)
+    if raw is None:
+        diagnostic("missing-window")
+        return result
+    try:
+        window = Window.model_validate(raw)
+    except ValidationError:
+        diagnostic("invalid-window")
+        result["status"] = "invalid"
+        return result
+    invalid = observed is None
+    if window.remainingPercent is None:
+        diagnostic("invalid-quantity")
+        invalid = True
+    else:
+        result.update(remaining=spec.capacity * (window.remainingPercent / 100),
+                      used=spec.capacity * (window.usedPercent / 100))
+    result["windowSeconds"] = window.windowSeconds
+    if window.windowSeconds is None:
+        diagnostic("invalid-duration")
+        invalid = True
+    reset = int(window.resetsAt.timestamp()) if window.resetsAt else None
+    idle = result["used"] == 0 and result["remaining"] == spec.capacity
+    open_gate = spec.role == "gate" and result["remaining"] is not None and result["remaining"] > 0
+    result["naturalResetAt"] = reset
+    # Reader reset rounding and capture truncation can differ by one second.
+    if ("resetsAt" not in window.model_fields_set or (reset is None and not (idle or open_gate))
+            or (reset is not None and observed is not None and window.windowSeconds is not None
+                and reset - observed > window.windowSeconds + 1)):
+        diagnostic("invalid-reset")
+        invalid = True
+    if "status" not in window.model_fields_set:
+        diagnostic("invalid-status")
+        invalid = True
+    else:
+        result["readerStatus"] = window.status
+        result["enforced"] = ENFORCEMENT.get(window.status)
+        if result["enforced"] is None:
+            diagnostic("unknown-enforcement")
+    stale = observed is not None and (now - observed > 3600 or (reset is not None and reset <= now))
+    result["status"] = "invalid" if invalid else "stale" if stale else "valid"
+    if result["status"] == "valid" and spec.role == "gate" and result["remaining"] == 0:
+        result["gateOpensAt"] = reset
+    return result
+
+
+def capture_observation(raw: Any, reader_pool: str, now: int, diagnostic):
+    """Recover usable capture time and a pool-matched payload without exposing failures."""
+    if raw is None:
+        diagnostic("missing-capture")
+        return None, None
+    try:
+        capture = Capture.model_validate(raw)
+    except ValidationError:
+        diagnostic("invalid-capture")
+        return None, None
+    observed = int(capture.finishedAt.timestamp()) if capture.finishedAt else None
+    if observed is None:
+        diagnostic("invalid-observation-time")
+    elif observed > now:
+        diagnostic("future-observation")
+        observed = None
+    if capture.exit is None:
+        diagnostic("invalid-exit-status")
+    elif capture.exit != 0:
+        diagnostic("exit-nonzero", exitStatus=capture.exit)
+    else:
+        candidate = capture.data
+        if "stdout" in capture.model_fields_set:
+            try:
+                candidate = from_json(capture.stdout)
+            except (TypeError, ValueError):
+                diagnostic("invalid-json")
+                return observed, None
+        try:
+            document = Envelope.model_validate(candidate)
+        except ValidationError:
+            diagnostic("invalid-envelope")
+            return observed, None
+        if document.pool == reader_pool:
+            return observed, document
+        diagnostic("pool-mismatch")
+    return observed, None
+
+
+def normalize(snapshot, now):
+    """Return deterministic allowance facts using an explicit ISO 8601 clock."""
+    now = int(TypeAdapter(Timestamp).validate_python(now).timestamp())
+    snapshot = Snapshot.model_validate(snapshot)
+    diagnostics, pools = [], {}
+    for pool, registration in sorted(snapshot.pools.items()):
+        def diagnostic(reason, **details):
+            diagnostics.append({"pool": pool, "reason": reason, **details})
+
+        observed, document = capture_observation(snapshot.readers.get(pool), registration.readerPool, now, diagnostic)
+        windows = document.windows if document else {}
+        observations = [
+            window_observation(identifier, spec, windows.get(spec.window), observed, now,
+                               lambda reason: diagnostic(reason, limit=identifier))
+            for identifier, spec in sorted(registration.limits.items())
+        ]
+        unresolved = len(set(windows) - {spec.window for spec in registration.limits.values()})
+        if unresolved:
+            diagnostic("unregistered-window", count=unresolved)
+        pools[pool] = {"limits": observations, "readerMetadata": metadata(document, diagnostic),
+                       "scopeResolved": document is not None and unresolved == 0}
+    return {"asOf": now, "capability": "allowance-preview", "diagnostics": diagnostics,
+            "pools": pools, "routes": [route.model_dump() for route in snapshot.routes], "runtime": snapshot.runtime}
