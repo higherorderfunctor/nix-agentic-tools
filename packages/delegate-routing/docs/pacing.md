@@ -89,3 +89,31 @@ and all routes after failure. Captures use offset-bearing ISO timestamps; the
 caller supplies the observation clock, and tests can substitute the completion
 clock. Failure diagnostics contain fixed reasons and status codes, never stderr
 or exception text.
+
+## Allowance ranking
+
+The pure `scripts/pacing.py` engine adds `entries` while preserving `routes` and
+normalized observations. Entries match explicit limit `models` to canonical
+route `id`, retaining the served `model` separately. Multiple applicable pools
+remain inspection alternatives; an offer without applicable evidence has a null
+pool and unknown pace. They do not establish credential attribution.
+
+Pace is the minimum of remaining/capacity times windowSeconds/time-to-reset
+across applicable paced limits. It is not clipped: half a week remaining with
+half the allowance is 1, full allowance halfway through is 2. Each limit uses
+its own duration, including monthly periods. Positive valid gates do not lower
+pace; closed gates block readiness. Missing, stale, invalid, unresolved-scope or
+unknown-enforcement evidence cannot establish readiness. Unknown pace is null
+and scores zero; independently observed exhaustion still proves zero. An idle
+paced limit with no reset remains unknown; an open gate needs no reset.
+
+Optional snapshot `policy` maps observed pool keys to `{ "weight": 1.5 }`. Only
+`weight` is accepted, defaults to 1, and must be finite and nonnegative
+(booleans are refused). Every ready allowance score is pace times this weight,
+without reserve or reset conditions. Unknown pool keys are refused at the rank
+boundary. Weight zero changes preference without changing readiness.
+
+`delegate-routing-allowance-ranking` checks handwritten arithmetic and an
+independent rational reference, canonical scope, unknown evidence and policy
+validation. Its CLI cases use synthetic current snapshot shapes and an explicit
+clock; no production catalog inventory or operator configuration is copied.
