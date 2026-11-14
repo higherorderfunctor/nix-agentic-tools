@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import selectors
 import shlex
 import signal
@@ -20,6 +21,22 @@ credentials = ["/run/secrets/oauth-id", "/run/secrets/oauth-secret"]
 def invoke(wrapper, args, env):
     return subprocess.run([wrapper, *args], env=env, text=True, capture_output=True, timeout=10)
 
+
+for backend, entry in fixture["proxy"].items():
+    assert entry["clients"] == {
+        "meeting": {"type": "http", "url": "http://127.0.0.1:19592/"},
+        "messaging": {"type": "http", "url": "http://127.0.0.1:19593/"},
+    }
+    assert entry["rootOwners"] == ["mcp-proxy-meeting"]
+    assert entry["runtimeOwners"] == ["mcp-proxy-messaging"]
+    assert entry["restartPaths"] == {"mcp-proxy-meeting": [], "mcp-proxy-messaging": []}
+    for command in entry["commands"].values():
+        script = Path(command[0]).read_text()
+        source = Path(re.search(r"--config (\S+) --adapter", script)[1]).read_text()
+        token_path = entry["stateRoot"] + f"/mcp-oauth/{backend}/work/access-token"
+        assert token_path in source
+        assert "Bearer {vars.file_" in source
+    print(f"PASS: {backend} exact clients, owners, token paths and generated header")
 
 fixture = fixture["backends"]
 

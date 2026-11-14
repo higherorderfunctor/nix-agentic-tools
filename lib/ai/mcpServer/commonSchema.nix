@@ -241,6 +241,16 @@ in {
       '';
     };
     proxy = lib.mkOption {
+      apply = proxy:
+        if proxy == null || proxy.oauthAccount == null
+        then proxy
+        else if !proxy.enable
+        then throw "proxy.oauthAccount: requires proxy.enable"
+        else if !(builtins.elem proxy.host ["127.0.0.1" "::1"])
+        then throw "proxy.oauthAccount: requires a loopback proxy.host"
+        else if lib.any (name: lib.toLower name == "authorization") (builtins.attrNames proxy.headers)
+        then throw "proxy.oauthAccount: conflicts with proxy.headers.Authorization (ignoring case, including deletion)"
+        else proxy;
       type = lib.types.nullOr (lib.types.submodule {
         options = {
           enable = lib.mkOption {
@@ -309,6 +319,11 @@ in {
                 Caddy's autosave is disabled, so it no longer persists the
                 value in autosave.json.
             '';
+          };
+          oauthAccount = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Backend-local ai.mcp-oauth account whose access token the proxy reads per request. Requires an enabled loopback proxy and no Authorization override.";
           };
           port = lib.mkOption {
             type = lib.types.port;
