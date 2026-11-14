@@ -110,7 +110,7 @@
   # no rev to combine. Both are therefore unused here.
   upstreamVersion = "1.1.0";
 in
-  buildNpmPackage {
+  buildNpmPackage ((packageLib.patching {inherit pkgs;}).attrs {
     pname = "aihubmix-mcp";
 
     # `+<local>` is this repo's established local-delta separator
@@ -134,8 +134,7 @@ in
     npmDepsHash = "sha256-qn8MKMElLquIifuTxel3WiqHP+vRNZYNvVHR7EjhNHg=";
 
     # Lockfile not shipped in the tarball — use our vendored one. This runs
-    # BEFORE `patches` (stdenv applies patches in patchPhase, and postPatch
-    # follows), so the copy is unaffected by the patch and vice versa.
+    # after stdenv applies the patch; neither changes the other's files.
     postPatch = ''
       cp ${../../../../src/aihubmix-mcp-package-lock.json} package-lock.json
     '';
@@ -171,4 +170,4 @@ in
       platforms = lib.platforms.unix;
       mainProgram = "aihubmix-mcp";
     };
-  }
+  })

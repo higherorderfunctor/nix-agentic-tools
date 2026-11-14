@@ -63,7 +63,7 @@
     extractDir = ../../../../extract;
   };
 
-  package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
+  packageAttrs = prev: {
     name = "git-branchless";
     src = gbSrc;
     cargoDeps = rustPlatform.importCargoLock {
@@ -97,6 +97,9 @@
         # nixpkgs definition.
         inherit (prev.meta) description;
       };
-  });
+  };
+  package =
+    (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev:
+      (packageLib.patching {inherit pkgs;}).attrs (packageAttrs prev));
 in
   package

@@ -6,6 +6,7 @@
   repoPath,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) lib;
   pnpm = pkgs.ai.generic.pnpm_10;
   kimchi = pkgs.ai.kimchi;
@@ -76,13 +77,11 @@
     pname = "kimchi-workflows";
     targets = [packageLib.hashFixTargets.pnpmDeps];
   };
-in
-  pkgs.stdenv.mkDerivation (finalAttrs: {
+  packageAttrs = finalAttrs: {
     pname = "kimchi-workflows";
     inherit (sources) version;
     inherit src;
     patches = [./native-preflight.patch ./pi-agent-settled.patch ./pnpm-runtime.patch ./step-output-handoff.patch ./step-thinking.patch];
-    patchFlags = ["-p1" "--fuzz=0"];
     postPatch = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -191,4 +190,7 @@ in
       license = lib.licenses.asl20;
       platforms = ["aarch64-darwin" "x86_64-linux"];
     };
-  })
+  };
+in
+  pkgs.stdenv.mkDerivation (finalAttrs:
+    patching.attrs (packageAttrs finalAttrs))

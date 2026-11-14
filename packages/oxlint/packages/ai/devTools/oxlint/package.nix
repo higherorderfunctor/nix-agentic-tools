@@ -12,6 +12,7 @@
   repoPath,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   rustToolchainChannel = "1.100.0";
   rustPlatform = packageLib.mkRustPlatform {
     channel = rustToolchainChannel;
@@ -38,7 +39,7 @@
   verifyNapiPatch = ''
     node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
   '';
-  src = pkgs.applyPatches {
+  src = patching.source {
     src = unpatchedSrc;
     postPatch = ''
       if [ -e ${napiPatchPath} ]; then

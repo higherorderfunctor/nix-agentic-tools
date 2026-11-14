@@ -1,4 +1,9 @@
-{pkgs, ...}: let
+{
+  packageLib,
+  pkgs,
+  ...
+}: let
+  patching = packageLib.patching {inherit pkgs;};
   releases = {
     "3.10.1" = "sha256-7BFATrr7E3/mh9Yu8MNB0OqtKD8XXv8BZz4855i3pdk=";
     "3.10.4" = "sha256-TGIOOTGV8plTpjATQ3l747UAH+nBR3nIrsJo43FBHfY=";
@@ -20,8 +25,10 @@ in {
   });
   checks.oxlint-napi-patch =
     pkgs.runCommand "oxlint-napi-patch" {
-      nativeBuildInputs = [pkgs.gitMinimal pkgs.nodejs pkgs.python3];
+      nativeBuildInputs = [pkgs.nodejs pkgs.python3];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       python3 ${./checks/patch-meta.py} ${./src/oxlint-pnpm-patch-meta.awk}
       ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (version: hash: let
           source = pkgs.fetchurl {
@@ -40,13 +47,19 @@ in {
             exit 1
           fi
           grep -F 'spawn EPERM' pristine.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli" apply ${patch}
+          ${patching.command {
+            directory = "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           if node ${verify} "peers-${version}" >partial.log 2>&1; then
             echo "unpatched second peer unexpectedly passed" >&2
             exit 1
           fi
           grep -F 'spawn EPERM' partial.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli" apply ${patch}
+          ${patching.command {
+            directory = "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           node ${verify} "peers-${version}"
         '')
         releases)}
