@@ -124,6 +124,41 @@ the package's fragments, or for a consumer its `ai.programs.delegate-routing`
 routing and workflows entries. When the always-on render is empty, no router
 rule is emitted. Keep launch binding details and technique notes in the skill.
 
+Rubric and Subtractive expose `steps.<step>.rows.<name>`. Each row uses the same
+`enable`, `after`, `before`, `text` and `source` fields as other entries. Row
+text includes its label, such as `**Scope.**`. Step text inserts `{rows}` as a
+numbered list or `{bullets}` as a bullet list. Numbered rows count only enabled
+rows in their final order. Subtractive keeps bullets and tells the worker to
+append them after the current rubric, continuing its numbering; adding or
+removing Rubric rows therefore needs no starting-number override.
+
+Both Home Manager and devenv accept portable rows and runtime rows under
+`runtimes.<runtime>.workflows`. Runtime rows compose by name, replacing matching
+portable rows atomically. A runtime step with rows but no text inherits its
+portable text; supply text to replace that template. Other steps are unchanged.
+This example adds a house row, disables one row and moves the last shipped row
+to the front:
+
+```nix
+ai.programs.delegate-routing.workflows."Work and review".steps.Rubric.rows = {
+  Fixtures.enable = false;
+  "House rule" = {
+    after = ["Scope"];
+    before = ["Naming"];
+    text = "**House rule.** Every new option has a consumer example.";
+  };
+  "Temporary tools" = {
+    after = [];
+    before = ["Scope"];
+  };
+};
+```
+
+Replace a row with `text = "…"` or `source = ./house-row.md`. To move a shipped
+row, replace its `after` list and adjust any other edges that would otherwise
+create a cycle. Shipped rows follow all earlier rows so disabling an anchor
+preserves the remaining order.
+
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
 retaining its siblings. An explicit `enable = false` wins over content. `text`
@@ -140,11 +175,12 @@ from Nix priority merging within one scope. A runtime replacement that needs the
 portable wording must supply that wording explicitly; do not copy evaluated
 records with internal fields. A runtime workflow record that sets text replaces
 the portable header; one that sets no text keeps it. Portable and runtime step
-maps compose separately by step name. A runtime step replaces its portable step
-atomically; sibling steps remain. Workflow content is required after these step
-maps compose: a runtime can enable a catalog workflow without introductory text
-or local steps when enabled inherited steps provide content. An enabled workflow
-with no effective introductory text or enabled steps fails with a named error.
+maps compose separately by step name. Runtime steps compose their row maps by
+name; other step fields use the runtime values, and sibling steps remain.
+Workflow content is required after these step maps compose: a runtime can enable
+a catalog workflow without introductory text or local steps when enabled
+inherited steps provide content. An enabled workflow with no effective
+introductory text or enabled steps fails with a named error.
 
 `before` and `after` name ordering anchors in the same map. Topological sorting
 honors both forms among enabled entries. Edges to absent or disabled entries are

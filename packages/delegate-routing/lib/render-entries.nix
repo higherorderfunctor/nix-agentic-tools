@@ -1,5 +1,19 @@
 {lib}: let
   entries = import ./resolve-entries.nix {inherit lib;};
+  indentAfter = marker: text:
+    marker + lib.replaceStrings ["\n"] ["\n${lib.concatStrings (lib.replicate (builtins.stringLength marker) " ")}"] (lib.removeSuffix "\n" text);
+  stepText = scope: step: let
+    rows = entries.sort "${scope}.rows" (step.rows or {});
+    renderRows = marker: lib.concatStringsSep "\n" (lib.imap0 (index: row: indentAfter (marker index) row.value.text) rows);
+  in
+    if step.text == ""
+    then throw "${scope}: enabled step must have non-empty text after row composition."
+    else
+      lib.replaceStrings ["{rows}" "{bullets}"] [
+        (renderRows (index: "${toString (index + 1)}. "))
+        (renderRows (_: "- "))
+      ]
+      step.text;
   heading = name: text: ''
     ### ${name}
 
@@ -19,11 +33,8 @@ in {
       value,
     }: let
       steps = entries.sort "delegate-routing.workflows.${name}.steps" value.steps;
-      numbered = lib.concatStringsSep "\n\n" (lib.imap0 (index: step: let
-        marker = "${toString (index + 1)}. ";
-        indent = lib.concatStrings (lib.replicate (builtins.stringLength marker) " ");
-        text = lib.replaceStrings ["\n"] ["\n${indent}"] (lib.removeSuffix "\n" step.value.text);
-      in "${marker}**${step.name}:** ${text}")
+      numbered = lib.concatStringsSep "\n\n" (lib.imap0 (index: step:
+        indentAfter "${toString (index + 1)}. " "**${step.name}:** ${stepText "delegate-routing.workflows.${name}.steps.${step.name}" step.value}")
       steps);
     in
       if value.text == "" && steps == []
