@@ -105,6 +105,21 @@
       "description": "Mode controls cloaking behavior: \"auto\" (default), \"always\", \"never\", or \"uncloak\".\nSupplying this CloakConfig explicitly enables cloaking for an unprofiled API key.\n- \"auto\": cloak unless strong request signals identify a verified native entrypoint\n- \"always\": cloak every unconfirmed client; confirmed native Claude Code remains passthrough\n- \"never\" / \"uncloak\": never apply cloaking; on non-CLI API keys, also strip incoming Claude Code identity and billing attribution",
       "type": "string"
     },
+    "api-keys.claude[].keys[].cloak.sensitive-patterns-replace": {
+      "description": "SensitivePatternsReplace defines ordered Go RE2 regex replacement rules.",
+      "type": "list"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-patterns-replace[]": {
+      "type": "object"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-patterns-replace[].pattern": {
+      "description": "Pattern is the Go RE2 regular expression to match.",
+      "type": "string"
+    },
+    "api-keys.claude[].keys[].cloak.sensitive-patterns-replace[].replacement": {
+      "description": "Replacement is the substitution string (empty string deletes matches).",
+      "type": "string"
+    },
     "api-keys.claude[].keys[].cloak.sensitive-words": {
       "description": "SensitiveWords is a list of words to obfuscate with zero-width characters.\nThis can help bypass certain content filters.",
       "type": "list"
@@ -2549,7 +2564,7 @@
     },
     "oauth.providers.antigravity.antigravity-credits": {
       "description": "AntigravityCredits enables credits-based last-resort fallback for Claude models.\nWhen all free-tier auths are exhausted (429/503), the conductor retries with\nan auth that has available Google One AI credits.",
-      "template": "\"You are Codex, an agent based on GPT-5.\": \"You are a helpful coding assistant.\"\nUse credits as a last resort after free-tier Claude quota is exhausted.",
+      "template": "\"You are Codex, an agent based on GPT-5.\": \"You are a helpful coding assistant.\"\n(default \"6h\"; set \"0\"/\"off\"/\"false\"/\"none\"/\"disabled\" to disable the pause)\nUse credits as a last resort after free-tier Claude quota is exhausted.",
       "type": "bool"
     },
     "oauth.providers.antigravity.connection-pool": {
@@ -2568,6 +2583,21 @@
       "description": "MaxIdleConnsPerHost specifies the maximum number of idle connections to retain per host per credential.\nDefaults to 2.",
       "type": "int"
     },
+    "oauth.providers.antigravity.sensitive-patterns-replace": {
+      "description": "SensitivePatternsReplace defines ordered Go RE2 regex replacement rules for system instructions.",
+      "type": "list"
+    },
+    "oauth.providers.antigravity.sensitive-patterns-replace[]": {
+      "type": "object"
+    },
+    "oauth.providers.antigravity.sensitive-patterns-replace[].pattern": {
+      "description": "Pattern is the Go RE2 regular expression to match.",
+      "type": "string"
+    },
+    "oauth.providers.antigravity.sensitive-patterns-replace[].replacement": {
+      "description": "Replacement is the substitution string (empty string deletes matches).",
+      "type": "string"
+    },
     "oauth.providers.antigravity.sensitive-words": {
       "description": "SensitiveWords is a list of words to obfuscate with invisible combining grapheme joiners in system instructions.",
       "type": "list"
@@ -2584,6 +2614,10 @@
     "oauth.providers.antigravity.signature-cache-enabled": {
       "description": "AntigravitySignatureCacheEnabled controls whether signature cache validation is enabled for thinking blocks.\nWhen true (default), cached signatures are preferred and validated.\nWhen false, client signatures are used directly after normalization (bypass mode).",
       "type": "bool"
+    },
+    "oauth.providers.antigravity.tos-pause-window": {
+      "description": "TOSPauseWindow controls the pool-wide protective pause armed after the first\n403 TOS_VIOLATION. Accepts a Go duration string (default \"6h\"). Set to \"0\",\n\"off\", \"false\", \"none\", or \"disabled\" to disable the pause entirely; the\ncredential itself is always deactivated regardless of this setting.",
+      "type": "string"
     },
     "oauth.providers.codex": {
       "description": "Codex configures provider-wide Codex request behavior.",
@@ -2643,6 +2677,19 @@
     "oauth.providers.devin": {
       "description": "Devin configures provider-wide Devin request behavior.",
       "type": "object"
+    },
+    "oauth.providers.devin.sensitive-patterns-replace": {
+      "description": "SensitivePatternsReplace defines ordered Go RE2 regex replacement rules for system prompts.",
+      "type": "list"
+    },
+    "oauth.providers.devin.sensitive-patterns-replace[]": { "type": "object" },
+    "oauth.providers.devin.sensitive-patterns-replace[].pattern": {
+      "description": "Pattern is the Go RE2 regular expression to match.",
+      "type": "string"
+    },
+    "oauth.providers.devin.sensitive-patterns-replace[].replacement": {
+      "description": "Replacement is the substitution string (empty string deletes matches).",
+      "type": "string"
     },
     "oauth.providers.devin.sensitive-words": {
       "description": "SensitiveWords is a list of words to obfuscate with zero-width characters in system prompts and messages.",
