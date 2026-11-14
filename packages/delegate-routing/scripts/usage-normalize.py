@@ -12,10 +12,10 @@ import math
 from typing import Annotated, Any, Literal
 
 from pydantic import (
-    AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr,
+    AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, GetPydanticSchema,
     StrictInt, StrictStr, StringConstraints, TypeAdapter, ValidationError, model_validator,
 )
-from pydantic_core import from_json
+from pydantic_core import core_schema, from_json
 from pydantic.types import OnErrorOmit
 
 # Preserve exact external identifiers while requiring a usable spelling.
@@ -33,15 +33,13 @@ Timestamp = Annotated[AwareDatetime, BeforeValidator(TypeAdapter(IsoText).valida
 
 
 class Boundary(BaseModel):
-    """Isolate malformed optional components while retaining diagnostic field names."""
+    """Isolate malformed optional components and restore their missing defaults."""
     model_config = ConfigDict(extra="ignore")
-    _invalid: set[str] = PrivateAttr(default_factory=set)
 
     @model_validator(mode="after")
     def restore_omitted_defaults(self):
-        # OnErrorOmit isolates component failures; retain their names for diagnostics.
-        self._invalid = set(type(self).model_fields) - self.__dict__.keys()
-        for name in self._invalid:
+        # OnErrorOmit leaves invalid fields absent; callers consume their defaults.
+        for name in set(type(self).model_fields) - self.__dict__.keys():
             object.__setattr__(self, name, type(self).model_fields[name].default)
         return self
 
@@ -128,7 +126,10 @@ class Capture(Boundary):
     data: Any = None
     exit: OnErrorOmit[StrictInt] = None
     finishedAt: OnErrorOmit[Timestamp] = None
-    stdout: Any = None
+    # A supplied invalid stdout must still take precedence over decoded data.
+    stdout: Annotated[StrictStr, GetPydanticSchema(
+        lambda source, handler: core_schema.with_default_schema(handler(source), default=None, on_error="default")
+    )] = None
 
 
 class Observation(BaseModel):
