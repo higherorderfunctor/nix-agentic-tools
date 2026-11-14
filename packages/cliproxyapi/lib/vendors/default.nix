@@ -6,7 +6,7 @@
   # Each vendor owns extraction, identity evidence and transport construction.
   definitions = {
     opencode-go = import ./opencode-go.nix {inherit lib;};
-    z-ai = import ./z-ai.nix {inherit lib;};
+    zhipuai = import ./zhipuai.nix {inherit lib;};
   };
 in {
   # Contributions never depend on the merged catalog passed to constructors.

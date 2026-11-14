@@ -39,6 +39,6 @@
   update.targets = {
     cliproxyapi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/generic/cliproxyapi/package.nix)];};
     cliproxyapi-opencode-go-docs = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/docs/cliproxyapi-opencode-go-docs/package.nix)];};
-    cliproxyapi-z-ai-docs = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/docs/cliproxyapi-z-ai-docs/package.nix)];};
+    cliproxyapi-zhipuai-docs = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/docs/cliproxyapi-zhipuai-docs/package.nix)];};
   };
 }

@@ -131,9 +131,9 @@ model from the original client body and publishes one native usage record, with
 tokens only on success.
 
 The carried `patches/passthrough-provider.patch` applies after `key-allowlist`
-and `zai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its config,
-synthesis/alias/allowlist, management, executor, handler, registry and conductor
-tests through the shared Go CI check. `cliproxyapi-extracted` and
+and `zhipuai-tool-shims` with zero fuzz. `cliproxyapi-passthrough` runs its
+config, synthesis/alias/allowlist, management, executor, handler, registry and
+conductor tests through the shared Go CI check. `cliproxyapi-extracted` and
 `cliproxyapi-settings` gate measured schema and rendered settings.
 
 ## Named Nix credentials

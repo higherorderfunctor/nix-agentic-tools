@@ -151,16 +151,16 @@ revocation and could fail open, so that reorder was rejected.
 
 ## Credential tool shims
 
-`patches/zai-tool-shims.patch` adds two opt-in credential settings for the
-pinned CPA 8.0.69. They repair measured z.ai compatibility failures without
-changing credential selection. Named credentials with `vendor = "z-ai"` default
-both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
+`patches/zhipuai-tool-shims.patch` adds two opt-in credential settings for the
+pinned CPA 8.0.69. They repair measured Z.ai compatibility failures without
+changing credential selection. Named credentials with `vendor = "zhipuai"`
+default both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
 `apiKey.codexShellArgCleanup = true`. Set them to `{}` and `false` to disable
 them; other vendors default both off.
 
 ### Anthropic tool names
 
-In 12/12 exact-name probes, a client tool named `ToolSearch` made z.ai hide the
+In 12/12 exact-name probes, a client tool named `ToolSearch` made Z.ai hide the
 other declared tools and expose its native `tool_search_tool_regex`. Renaming it
 to `ToolSearch_` restored the other tools, including deferred tools;
 `tool_reference` results were accepted. Removing deferred declarations or tool
@@ -222,7 +222,7 @@ Manager and devenv.
 ## Bumping CPA
 
 The package applies `patches/key-allowlist.patch`, then
-`patches/zai-tool-shims.patch`, to the pinned source with `-p1 --fuzz=0`;
+`patches/zhipuai-tool-shims.patch`, to the pinned source with `-p1 --fuzz=0`;
 extraction and the Go checks read that same patched source. Fetch the version
 from `sources.json` into scratch, verify its unpacked NAR hash, apply the patch
 with `patch --dry-run -p1 --fuzz=0`, and inspect every changed

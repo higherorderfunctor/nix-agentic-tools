@@ -1,7 +1,7 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
 > **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
-> a secret account email; named API-key credentials can select the built-in z.ai
+> a secret account email; named API-key credentials can select the built-in Z.ai
 > or OpenCode Go vendor defaults and a priority, and serve per-API models.
 
 How a harness selects an instance and its client key is in
@@ -91,7 +91,7 @@ catalog defaults. Built-in CPA vendors require finite catalog model lists for
 their transport defaults. A maker-wide offer is refused at the credential's
 `vendor` option: set the vendor's `maker = null` and declare `models`, or omit
 `vendor` and configure `apiKey` explicitly. A normal
-`ai.catalog.vendors.z-ai.models = [...]` or
+`ai.catalog.vendors.zhipuai.models = [...]` or
 `ai.catalog.vendors.opencode-go.models = [...]` definition replaces the vendor's
 offered list and changes rendered credential defaults. Go identity aliases
 select known extracted transport metadata. The full extracted Go catalog
@@ -117,7 +117,7 @@ credentials are refused with the credential name. The default `[]` leaves the
 credential unchanged. Rendering, client model inventories and `exclusive`
 comparisons all consume the filtered offers.
 
-Built-in `vendor = "z-ai"` defaults
+Built-in `vendor = "zhipuai"` defaults
 `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
 repairing measured tool-name and empty-justification failures. Explicit
@@ -158,9 +158,9 @@ in {
         account = secret "claude-work-email";
         vendor = "claude";
       };
-      zai-api-personal.apiKey = {
+      zhipuai-api-personal.apiKey = {
         apis.anthropic.base-url = "https://api.z.ai/api/anthropic";
-        key = secret "zai-api-personal";
+        key = secret "zhipuai-api-personal";
         models = ["glm-5.3"];
       };
     };
@@ -168,12 +168,12 @@ in {
       claude-personal = client "claude-personal" [
         (route "claude-oauth-personal")
         (route "claude-api-personal")
-        (route "zai-api-personal")
+        (route "zhipuai-api-personal")
       ];
       claude-work = client "claude-work" [(route "claude-oauth-work")];
       codex-personal = client "codex-personal" [
         (route "chatgpt-oauth-personal")
-        (route "zai-api-personal")
+        (route "zhipuai-api-personal")
       ];
       codex-work = client "codex-work" [(route "chatgpt-oauth-work")];
     };

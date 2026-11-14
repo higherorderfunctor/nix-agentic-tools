@@ -729,9 +729,9 @@ delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
-direct read. `zai-usage claude|codex` and `opencode-usage claude|codex` select
-the route whose GLM or OpenCode Go pool they read; consumers attach them to a
-runtime through that runtime's usage techniques. `opencode-usage` reads the
+direct read. `zhipuai-usage claude|codex` and `opencode-usage claude|codex`
+select the route whose GLM or OpenCode Go pool they read; consumers attach them
+to a runtime through that runtime's usage techniques. `opencode-usage` reads the
 undocumented `GET https://opencode.ai/zen/go/v1/usage`, the request OpenCode's
 open-source client makes, and prints Go's `rolling`, `weekly` and `monthly`
 windows through the shared schema with UTC reset times.

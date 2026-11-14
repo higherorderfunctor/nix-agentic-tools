@@ -817,14 +817,14 @@ in {
             cliproxyapi.instances.main = {
               credentials = {
                 other.apiKey = provider "other" 28428 // {apis.chat.base-url = "${claudeBaseURL 28428}/v1";};
-                zai.apiKey = provider "zai" 28427;
+                zhipuai.apiKey = provider "zhipuai" 28427;
               };
               clientKeys = {
                 a = {
                   key = fileKey "a";
                   routes = [
                     {
-                      credential = "zai";
+                      credential = "zhipuai";
                       api = "anthropic";
                     }
                   ];
@@ -848,13 +848,13 @@ in {
           name = "runtime-providers";
           port = 28426;
           requests = ''
-            request 200 zai anthropic glm-shared key-a
+            request 200 zhipuai anthropic glm-shared key-a
             request 200 other responses glm-shared key-b
             request 503 auth_not_found anthropic other-model key-a
-            request 503 auth_not_found responses zai-model key-b
+            request 503 auth_not_found responses zhipuai-model key-b
             echo "ok: Codex CLI Responses reached chat-only upstream credential; unauthorized model refused"
           '';
-          upstreams = ["zai:28427:/v1/messages?beta=true" "other:28428:/v1/chat/completions"];
+          upstreams = ["zhipuai:28427:/v1/messages?beta=true" "other:28428:/v1/chat/completions"];
           verify = config: ''
             test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
             test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-inference.auth.command})" = key-b
