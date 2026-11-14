@@ -67,8 +67,8 @@ normalizer `Snapshot`. Its first callers are owner tests; it installs no
 command. Pass `credentialUsage`, `cpaRoutes` and `techniques` to the Nix
 library; `credentialUsage` is the evaluated registration option map on both Home
 Manager and devenv. Manual callers pass the same evaluated fields. Its keys
-identify existing CPA credentials, not new budget groups. The helper receives
-only `pools`; credential registrations are a separate input to collection.
+identify existing CPA credentials, not new budget groups. Credential
+registrations are a separate input to collection.
 
 Register a credential under
 `ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"`. Set
