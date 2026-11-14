@@ -59,7 +59,7 @@ def allowance(limits, resolved, now):
     ready = pace is not None and pace > 0 and not releases and not uncertain
     # All blockers must have known future releases; never advance an expired reset.
     available = now if ready else (
-        max(releases) if releases and None not in releases and not uncertain and pace is not None else None
+        max(releases) if releases and None not in releases and not uncertain else None
     )
     return dict(available_at=available, binding_limit=binding[1] if binding else None,
                 evidence=dict(scope_resolved=resolved, stale_limits=sorted(stale), unknown_limits=sorted(unknown)),
