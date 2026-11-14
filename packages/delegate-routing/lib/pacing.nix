@@ -1,27 +1,26 @@
-# Build collection manifests for library callers from evaluated pools and CPA routes.
+# Build collection manifests for library callers from evaluated credential registrations and CPA routes.
 # CPA supplies offers; module types supply Reader settings and native capacities.
 {lib}: {
   cpaRoutes,
-  pools,
+  credentialUsage,
   techniques,
 }: let
   # Scope checks consider every selected client, while output keeps each client's offers.
   allOffers = lib.concatLists (lib.filter (offers: offers != null) (builtins.attrValues cpaRoutes));
   # A collection registration names an offered credential, never a vendor or native pool.
-  unknown = lib.filterAttrs (name: pool:
-    (pool.limits != {} || (pool.usage != null && pool.usage.readerPool != null))
-    && !lib.any (offer: offer.credential == name) allOffers)
-  pools;
+  unknown = lib.filterAttrs (name: _:
+    !lib.any (offer: offer.credential == name) allOffers)
+  credentialUsage;
   # Missing registrations retain offers without making a Reader request.
   registration = offers: credential:
-    if !(pools ? ${credential})
+    if !(credentialUsage ? ${credential})
     then {
       command = null;
       limits = {};
       readerPool = credential;
     }
     else let
-      pool = pools.${credential};
+      pool = credentialUsage.${credential};
       inherit (pool) usage window;
       readerPool =
         if usage == null
@@ -41,7 +40,7 @@
       declared;
       limits = lib.filterAttrs (_: spec: spec.models != []) scoped;
       usd = lib.any (spec: spec.unit == "USD") (builtins.attrValues limits);
-      path = "ai.programs.delegate-routing.pools.${credential}";
+      path = "ai.programs.delegate-routing.credentialUsage.${credential}";
     in
       if lib.any (spec: spec.models != null && !lib.all (model: lib.elem model available) spec.models) (builtins.attrValues declared)
       then throw "${path}.limits: models must be canonical credential offers or null."
@@ -63,7 +62,7 @@
       };
 in
   if unknown != {}
-  then throw "ai.programs.delegate-routing.pools: collection registrations must name selected CPA credentials (<instance>/<credential>)."
+  then throw "ai.programs.delegate-routing.credentialUsage: collection registrations must name selected CPA credentials (<instance>/<credential>)."
   else
     lib.mapAttrs (runtime: offers: {
       inherit runtime;

@@ -405,9 +405,10 @@ For a budget without a reader, set `window.limit`, `window.unit` and
 `window.resetDay`. This declares an allowance per calendar month in UTC, with a
 reset day from 1 through 28. Current use stays unknown. A pool needs `usage` or
 `window`; both default to null. If both are set, the measured reader takes
-precedence. Configure `limits` and `usage.readerPool` for credential
-observations; see [registration options](pacing.md#credential-collection). The
-description defaults to an empty string.
+precedence. The description defaults to an empty string.
+
+Credential observations use the separate `credentialUsage` registration map; see
+[registration options](pacing.md#credential-collection).
 
 Bind a family through `families.<vendor>.<family>.pools.<runtime> = "<pool>"`.
 The key names the target harness that launches the model. Each native, external

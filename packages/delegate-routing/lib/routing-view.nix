@@ -13,8 +13,6 @@
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
-  # Both helper projections and session-pool types use the same registry partition.
-  helperPools = (import ./helper-pools.nix {inherit lib;}) pools;
   selection = import ./select-families.nix {inherit lib;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
@@ -187,19 +185,28 @@ in {
     lib.sort builtins.lessThan (lib.unique (map (family: family.name)
       (builtins.filter (family: builtins.elem pool (builtins.attrValues (family.pools or {})))
         (selection.flatten families)))))
-  helperPools;
+  pools;
   inherit routes;
   manualRoutes = lib.concatMap (target: map (family: reach family target) (selected target)) (lib.unique manualExternalDelegates);
   readers =
-    lib.mapAttrsToList (name: pool: {
+    lib.mapAttrsToList (name: declared: let
+      # Direct render/mkSkill callers may omit the module's optional defaults.
+      pool =
+        {
+          description = "";
+          usage = null;
+          window = null;
+        }
+        // declared;
+    in {
       inherit name pool;
       # The module's assertions own invalid-reader diagnostics, even when
-      # rendering is forced before assertion collection. Inventory every helper pool,
+      # rendering is forced before assertion collection. Inventory every pool,
       # including readers on runtimes outside automatic and manual targets.
       command =
         if pool.usage == null
         then null
         else techniques.${pool.usage.runtime}.${pool.usage.technique}.command or null;
     })
-    helperPools;
+    pools;
 }

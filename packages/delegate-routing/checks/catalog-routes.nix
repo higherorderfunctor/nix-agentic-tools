@@ -145,7 +145,7 @@
     # Collection scope properties use actual CPA projections, never a copied reach graph.
     collectionArgs = {
       cpaRoutes = overlapping;
-      pools."test/first" = {
+      credentialUsage."test/first" = {
         usage = {
           readerPool = "observed";
           runtime = "claude";
@@ -175,26 +175,26 @@
       };
     };
     # Evaluate production option defaults before handing registrations to the library.
-    modulePools = pools:
+    moduleUsage = credentialUsage:
       (change {
         ai.programs.delegate-routing = {
-          inherit pools;
+          inherit credentialUsage;
           runtimes.claude.techniques.read = {
             command = "fake-reader";
             kind = "usage";
           };
         };
-      }).ai.programs.delegate-routing.pools;
+      }).ai.programs.delegate-routing.credentialUsage;
     collection = overrides: let
       args = lib.recursiveUpdate collectionArgs overrides;
     in
-      (import ../lib/pacing.nix {inherit lib;}) (args // {pools = modulePools args.pools;});
+      (import ../lib/pacing.nix {inherit lib;}) (args // {credentialUsage = moduleUsage args.credentialUsage;});
     # USD transport fixtures vary the Reader label to exercise shell quoting.
     usdCollection = readerPool:
       (import ../lib/pacing.nix {inherit lib;}) {
         inherit (collectionArgs) cpaRoutes;
         techniques.claude.anthropic-api-usage = collectionArgs.techniques.claude.read;
-        pools = modulePools {
+        credentialUsage = moduleUsage {
           "test/first" = {
             usage = {
               inherit readerPool;
@@ -249,58 +249,11 @@
         "collection null scope uses family names or another credential" = (collection {}).claude.pools."test/first".limits.weekly.models == ["test-alpha-1" "test-unknown-1"];
         "collection explicit scope expands to every offer" = (collection {}).claude.pools."test/first".limits.scoped.models == ["test-alpha-1"];
         "collection scope ignores runtime API" = (collection {}).codex.pools."test/first".limits.weekly.models == ["test-beta-1"] && !(collection {}).codex.pools."test/first".limits ? scoped;
-        "collection vendor label accepted as credential" = refuses (collection {pools.vendor.limits.weekly = collectionArgs.pools."test/first".limits.weekly;});
-        "collection unknown canonical scope accepted" = refuses (collection {pools."test/first".limits.scoped.models = ["missing"];});
-        "collection empty explicit scope accepted" = refuses (collection {pools."test/first".limits.scoped.models = [];});
-        "collection missing label infers vendor" = (collection {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
-        "collection registration makes helper poolFamilies name an absent Reader" = let
-          helper = view {
-            pools = modulePools (collectionArgs.pools
-              // {
-                native.usage = {
-                  runtime = "claude";
-                  technique = "read";
-                };
-              });
-          };
-        in
-          map (reader: reader.name) helper.readers
-          == ["native"]
-          && builtins.attrNames helper.poolFamilies == ["native"];
-        "collection session pool reaches a helper that cannot read it" = let
-          pools =
-            collectionArgs.pools
-            // {
-              native.usage = {
-                runtime = "claude";
-                technique = "read";
-              };
-            };
-          configured = sessionPool:
-            change {
-              ai.programs.delegate-routing = {
-                inherit pools;
-                runtimes.claude = {
-                  inherit sessionPool;
-                  techniques.read = {
-                    command = "fake-reader";
-                    kind = "usage";
-                  };
-                };
-              };
-            };
-          manual = sessionPool:
-            content.mkSkill (args
-              // {
-                inherit sessionPool;
-                pools = modulePools pools;
-              });
-        in
-          refuses (configured "test/first").ai.programs.delegate-routing.runtimes.claude.sessionPool
-          && (configured "native").ai.programs.delegate-routing.runtimes.claude.sessionPool == "native"
-          && refuses (manual "test/first").outPath
-          && lib.hasInfix "session pool: native." (builtins.readFile "${manual "native"}/SKILL.md");
-        "collection conflicting USD capacity accepted" = refuses (modulePools {
+        "collection vendor label accepted as credential" = refuses (collection {credentialUsage.vendor.limits.weekly = collectionArgs.credentialUsage."test/first".limits.weekly;});
+        "collection unknown canonical scope accepted" = refuses (collection {credentialUsage."test/first".limits.scoped.models = ["missing"];});
+        "collection empty explicit scope accepted" = refuses (collection {credentialUsage."test/first".limits.scoped.models = [];});
+        "collection missing label infers vendor" = (collection {credentialUsage."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
+        "collection conflicting USD capacity accepted" = refuses (moduleUsage {
           "test/first" = {
             window = {
               limit = 200;
@@ -316,7 +269,7 @@
           };
         });
         "collection unrelated USD technique accepted" = refuses (collection {
-          pools."test/first" = {
+          credentialUsage."test/first" = {
             window = {
               limit = 100;
               resetDay = 3;
@@ -330,7 +283,7 @@
         });
         "collection module requires duplicate USD capacity" = let
           configured = change {
-            ai.programs.delegate-routing.pools."test/first" = {
+            ai.programs.delegate-routing.credentialUsage."test/first" = {
               window = {
                 limit = 200;
                 resetDay = 3;
@@ -344,9 +297,9 @@
             };
           };
         in
-          configured.ai.programs.delegate-routing.pools."test/first".limits.monthly.capacity == 200;
+          configured.ai.programs.delegate-routing.credentialUsage."test/first".limits.monthly.capacity == 200;
         "collection USD capacity is not derived" = (usdCollection "observed").claude.pools."test/first".limits.weekly.capacity == 200;
-        "collection independent USD budget accepted" = refuses (collection {pools."test/first".limits.weekly.unit = "USD";});
+        "collection independent USD budget accepted" = refuses (collection {credentialUsage."test/first".limits.weekly.unit = "USD";});
         "collection Reader pool label loses shell quoting" =
           (usdCollection "observed pool").claude.pools."test/first".command
           == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool'";

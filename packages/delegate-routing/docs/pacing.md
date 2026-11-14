@@ -64,10 +64,14 @@ Configured Reader collection, CPA attribution and ranking remain separate.
 `lib/pacing.nix` builds manifests from evaluated module options and existing CPA
 routes. `scripts/usage-collect.py` accepts a typed `Manifest` and returns a
 normalizer `Snapshot`. Its first callers are owner tests; it installs no
-command.
+command. Pass `credentialUsage`, `cpaRoutes` and `techniques` to the Nix
+library; `credentialUsage` is the evaluated registration option map on both Home
+Manager and devenv. Manual callers pass the same evaluated fields. Its keys
+identify existing CPA credentials, not new budget groups. The helper receives
+only `pools`; credential registrations are a separate input to collection.
 
 Register a credential under
-`ai.programs.delegate-routing.pools."<instance>/<credential>"`. Set
+`ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"`. Set
 `usage.runtime`, `usage.technique` and `usage.readerPool` to select its Reader
 and exact envelope label. Each `limits.<name>` needs a Reader `window`, `role`
 (`gate` or `pace`), `unit` and `capacity`. `models = null` covers that
@@ -77,8 +81,7 @@ windows such as `7d:fable`.
 USD capacity comes from the existing monthly USD `window.limit`; a conflicting
 explicit capacity fails. USD collection uses `anthropic-api-usage`, which
 receives the budget and reset day. No registration or no Reader label leaves the
-credential unmeasured. These registrations are separate from the routing
-helper's family-scoped Readers and cannot be selected as `sessionPool`.
+credential unmeasured.
 
 Collection shares the helper's timeout and retry policy and executes each
 distinct command once, including its retries. It preserves overlapping offers
