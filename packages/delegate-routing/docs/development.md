@@ -62,15 +62,28 @@ filtering; the shared inference options refuse a disabled instance or an
 undeclared client. OAuth offers expand catalog identities of the vendor's maker;
 finite vendor lists do not define OAuth reach. A missing OAuth vendor is
 refused. Canonical identities use vendor-scoped aliases while launches retain
-the served spelling.
+the served spelling. Every offer retains its credential name and vendor key.
 
 The projection feeds agent-file selection and `lib/routing-view.nix`.
 Unknown-maker offers remain inspectable in the projection but cannot become a
 concrete launch. Multiple credential offers remain available when CPA permits
-overlap. Route pools retain the configured `family.pools` bindings; credential
-names do not supply budget attribution. Native launches and external URLs retain
-the existing fallback selection. Inherited picker entries outside a selected
-client's reach are dropped; explicit entries are refused.
+overlap. With `family.pools = null` (the omitted default), a route defaults to
+its unique reachable first-party credential: the vendor key must equal the
+resolved model's maker. Resellers never supply this default. Several matching
+credentials or no match leave the pool unknown; repeated models from one
+credential do not create ambiguity. Explicit `family.pools`, including `{}`,
+wins as a complete map; missing runtime keys and null bindings stay unknown.
+Native launches and external URLs retain the existing fallback selection.
+Inherited picker entries outside a selected client's reach are dropped; explicit
+entries are refused.
+
+The route default identifies a CPA credential, not a Reader account. The
+packaged helper continues to receive null budget bindings for inferred routes,
+even when a registered pool happens to share the credential's name. To associate
+a Reader, explicitly bind `family.pools.<runtime>` to its registered key. This
+keeps inferred routes available for launch without inventing budget attribution
+or Reader registrations; family-table pool labels describe the credential
+default, while helper results describe the explicit budget binding.
 
 Module and manual builders pass the same `catalog`, `cpaRoutes` and resolved
 agent data to prose and manifest rendering. Manual callers projecting CPA routes
@@ -421,10 +434,12 @@ pool. A null binding means no pool is known for that reach. Unknown pool names
 fail evaluation. Two accounts for one family on one harness are out of scope;
 route and instance reaches are not represented.
 
-The pool registry and family bindings default to `{}`. A consumer with one
-vendor and one harness writes nothing extra. Without pools, a consumer's
-`{families}` table still renders an empty Pool column. The package does not
-infer budgets from vendors or add account names to its defaults.
+The pool registry defaults to `{}`; family bindings default to `null` for
+first-party credential inference. Set family bindings to `{}` to suppress it. A
+consumer with one vendor and one harness writes nothing extra. Without pools, a
+consumer's `{families}` table still renders an empty Pool column. The package
+does not infer Reader accounts from vendors or add account names to its
+defaults.
 
 ### Deterministic routing helper
 
