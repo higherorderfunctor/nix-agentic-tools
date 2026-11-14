@@ -1275,7 +1275,7 @@
     ```
 
     Portable `families.<vendor>.<family>` records describe tiers, task and effort
-    guidance, machine `defaultEffort` for every technique, and live-model patterns. Override any field or add a family. A non-null role effort overrides that default before shared fallback; null defaults mean no effort levels and require observed `efforts: []` to certify omission of the actual effort argument, flag or pin. The fixed package scale is `minimal < low < medium < high < xhigh < max`; observed support is unordered. Sol defaults to medium and Go Kimi K3.1 Pro to max; configure `families.zhipuai.glm.defaultEffort = "high"` for a custom glm (no preset is shipped). Go Crouton Alpha Free's medium is a provisional package choice. Quality versus spend remains consumer policy. Each
+    guidance, machine `defaultEffort` for every technique, and live-model patterns. Override any field or add a family. A non-null role effort overrides that default before shared fallback; null defaults mean no effort levels and require observed `efforts: []` to certify omission of the actual effort argument, flag or pin. The fixed package scale is `minimal < low < medium < high < xhigh < max`; observed support is unordered. Sol defaults to medium and Go Kimi K3.1 Pro to max. The shipped `zhipuai.glm` preset defaults to high; `zhipuai.glm-flash` leaves effort unset. Go Crouton Alpha Free's medium is a provisional package choice. Quality versus spend remains consumer policy. Each
     runtime's `models` is a list of selectors over `vendors`, `tiers` and `families`:
     selectors are alternatives, and every non-empty field in one selector must match.
     Selector enums come from configured families; tier selectors accept only tiers
