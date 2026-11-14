@@ -61,8 +61,9 @@ modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
 filtering; the shared inference options refuse a disabled instance or an
 undeclared client. OAuth offers expand catalog identities of the vendor's maker;
 finite vendor lists do not define OAuth reach. A missing OAuth vendor is
-refused. Canonical identities use vendor-scoped aliases while launches retain
-the served spelling.
+refused. Canonical identities resolve through CPA's vendor-scoped
+`ai.cliproxyapi.servedModels` mapping while launches retain the served spelling.
+Without CPA reach, native launch pins name canonical catalog ids.
 
 The projection feeds agent-file selection and `lib/routing-view.nix`.
 Unknown-maker offers remain inspectable in the projection but cannot become a

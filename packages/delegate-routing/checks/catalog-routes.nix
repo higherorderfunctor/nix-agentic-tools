@@ -12,8 +12,8 @@
     hm = harness.evalHmModules;
   };
   # Model facts are deliberately synthetic, with aliases shared across vendor scopes.
-  identity = maker: aliases: {
-    inherit aliases maker;
+  identity = maker: {
+    inherit maker;
     source = ["synthetic route identity"];
   };
   # Each credential offers two APIs; the client route must pick exactly one.
@@ -34,10 +34,10 @@
   fixture.ai = {
     catalog = {
       models = {
-        test-alpha-1 = identity "alpha" {zhipuai = ["short"];};
-        test-alpha-2 = identity "alpha" {};
-        test-beta-1 = identity "beta" {other = ["short"];};
-        test-unknown-1 = identity null {};
+        test-alpha-1 = identity "alpha";
+        test-alpha-2 = identity "alpha";
+        test-beta-1 = identity "beta";
+        test-unknown-1 = identity null;
       };
       vendors = {
         finite.models = ["test-alpha-1" "test-unknown-1"];
@@ -58,6 +58,10 @@
         instance = "test";
         clientKey = "two";
       };
+    };
+    cliproxyapi.servedModels = {
+      other.test-beta-1 = ["short"];
+      zhipuai.test-alpha-1 = ["short"];
     };
     cliproxyapi.instances.test = {
       enable = true;
@@ -123,6 +127,7 @@
     import ../lib/cpa-routes.nix {
       inherit lib;
       inherit (config.ai) catalog;
+      servedModels = config.ai.cliproxyapi.servedModels;
       instances = config.ai.cliproxyapi.instances;
       inferenceInstances = config.ai.internal.inferenceInstances;
       selections = lib.genAttrs ["claude" "codex"] (runtime: config.ai.${runtime}.settings.inference);
@@ -359,7 +364,7 @@
           && !(usd.codex.pools."test/first".limits ? weekly);
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
-          ai.catalog.models.test-alpha-2.aliases.zhipuai = ["short"];
+          ai.cliproxyapi.servedModels.zhipuai.test-alpha-2 = ["short"];
           ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [
             {
               credential = "aliased";

@@ -11,7 +11,7 @@
   models = facts.get (facts.load {dir = ../extracted;}).aggregate "models";
   # The independent inventory uses record values rather than list indices.
   ids = map (model: model.slug) models;
-  # CPA's raw vendor facts independently establish overlapping aliases and evidence.
+  # CPA's raw vendor facts independently establish overlapping identities and evidence.
   go = (facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo").models;
   # Shared ids must retain both owners' facts without assuming a rotating inventory.
   overlap = lib.filter (id: builtins.hasAttr id go) ids;
@@ -33,7 +33,6 @@
             ai.catalog = {
               models = {
                 ${chosen} = {
-                  aliases.codex = ["configured-alias"];
                   maker = "configured-maker";
                   source = ["configured evidence"];
                 };
@@ -58,10 +57,8 @@
           && catalog.models.${id}.maker == "openai"
           && lib.elem "chatgpt-codex:models" catalog.models.${id}.source)
         ids;
-        "lost CPA overlap aliases or evidence" = lib.all (id:
-          lib.all (alias: lib.elem alias catalog.models.${id}.aliases.opencode-go)
-          (lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)
-          && lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
+        "lost CPA overlap evidence" = lib.all (id:
+          lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
         overlap;
         "user addition lost or maker-wide offer narrowed" =
           configured.models.catalog-test-added.maker
@@ -74,8 +71,7 @@
         "user leaf overrides lost" =
           configured.models.${chosen}.maker
           == "configured-maker"
-          && configured.models.${chosen}.source == ["configured evidence"]
-          && configured.models.${chosen}.aliases.codex == ["configured-alias"];
+          && configured.models.${chosen}.source == ["configured evidence"];
         "vendor default cannot be overridden" = vendorOverride.maker == "configured-maker" && vendorOverride.models == null;
         "vendor narrowed to extracted inventory" =
           catalog.vendors.codex
