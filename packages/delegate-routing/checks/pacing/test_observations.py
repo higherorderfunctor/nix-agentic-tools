@@ -15,12 +15,18 @@ import unittest
 from hypothesis import given, settings, strategies as st
 from pydantic import TypeAdapter, ValidationError
 
+# Allow the owner check to supply its packaged scripts directory.
 SCRIPTS = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2] / "scripts"
+# Load the standalone normalizer without installing it as a Python package.
 N = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "usage-normalize.py")))
+# Keep generated cases reproducible offline without a persistent example database.
 settings.register_profile("offline", database=None, deadline=None, max_examples=60)
 settings.load_profile("offline")
+# Fix the replay clock so tests never depend on wall time.
 NOW = "2026-11-12T01:35:00Z"
+# Pin the independent Unix-second expectation for the replay clock.
 EPOCH = 1794447300
+# Distinguish canonical identities from served model spellings.
 ROUTES = [
     N.Route(id="canonical-a", maker=None, model="served-fable"),
     N.Route(id="canonical-b", maker="synthetic", model="fable"),
@@ -28,11 +34,13 @@ ROUTES = [
 
 
 def iso(seconds, offset=0):
+    """Generate equivalent offset timestamps for replay and boundary assertions."""
     return dt.datetime.fromtimestamp(seconds, dt.timezone(dt.timedelta(minutes=offset))).isoformat()
 
 
 @st.composite
 def windows(draw):
+    """Generate consistent quantities and resets across varied window durations."""
     remaining = draw(st.integers(0, 100))
     duration = draw(st.integers(2, 2678400))
     return N.Window(
@@ -41,6 +49,7 @@ def windows(draw):
     )
 
 
+# Exercise native capacities and both roles without copying production configuration.
 specs = st.builds(
     N.LimitSpec, capacity=st.integers(1, 100000), models=st.just(["canonical-a"]),
     role=st.sampled_from(["gate", "pace"]), unit=st.sampled_from(["USD", "percentagePoint"]),
@@ -49,6 +58,7 @@ specs = st.builds(
 
 
 def snapshot(spec=None, window=None):
+    """Build a minimal valid capture whose independent components tests can corrupt."""
     spec = spec or N.LimitSpec(capacity=40, models=["canonical-a"], role="pace", unit="USD", window="7d:fable")
     window = window or N.Window(remainingPercent=75, usedPercent=25, windowSeconds=604800,
                                 resetsAt="2026-11-18T01:35:00Z", status="active")
@@ -65,14 +75,27 @@ def snapshot(spec=None, window=None):
 
 
 def limit(result):
+    """Select the synthetic registered slot for focused allowance assertions."""
     return result["pools"]["budget"]["limits"][0]
 
 
 def reasons(result):
+    """Compare safe diagnostic codes independently of diagnostic ordering."""
     return {item["reason"] for item in result["diagnostics"]}
 
 
 class Observations(unittest.TestCase):
+    """Protect normalization, failure isolation and private-data projection at the boundary."""
+    @given(st.sampled_from([" reader", "reader ", "\treader\n"]))
+    def test_pool_identity_matches_verbatim(self, pool):
+        """Whitespace cannot turn a different Reader pool into the registered pool."""
+        value = snapshot()
+        value["readers"]["budget"]["data"]["pool"] = pool
+        result = N.normalize(value, NOW)
+        self.assertIn("pool-mismatch", reasons(result))
+        self.assertEqual((limit(result)["status"], limit(result)["remaining"]), ("missing", None))
+        self.assertFalse(result["pools"]["budget"]["scopeResolved"])
+
     @given(specs, windows())
     def test_native_amounts_roles_and_resets(self, spec, window):
         """Capacity scales percentages without changing the declared unit or role."""
@@ -192,6 +215,19 @@ class Observations(unittest.TestCase):
         result = N.normalize(value, NOW)
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
         self.assertNotIn("private-", json.dumps(result))
+
+    @given(st.sampled_from(["credits", "extra_usage"]), st.sampled_from(["credits", "USD"]))
+    def test_balance_kind_unit_pairs(self, kind, unit):
+        """Only the two producer kind/unit pairs survive metadata projection."""
+        value = snapshot()
+        value["readers"]["budget"]["data"]["balances"] = [
+            {"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}]
+        result = N.normalize(value, NOW)
+        allowed = (kind, unit) in {("credits", "credits"), ("extra_usage", "USD")}
+        self.assertEqual(result["pools"]["budget"]["readerMetadata"]["balances"],
+                         [{"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}] if allowed else [])
+        self.assertEqual("invalid-extras" in reasons(result), not allowed)
+        self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
 
     def test_literal_metadata_allowlist(self):
         """Known extras retain native values while invalid siblings and secrets disappear."""
