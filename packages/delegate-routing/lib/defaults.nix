@@ -1,8 +1,10 @@
+# Shared builder defaults supply portable family and routing configuration.
 {
   lib,
   claudeUsageScript,
   codexUsageScript,
 }: let
+  go = import ./opencode-go.nix {inherit lib;};
   picker = {
     claude.entries = [
       {
@@ -24,7 +26,7 @@
   };
 in {
   inherit picker;
-  families = import ./families.nix // {opencode-go = (import ./opencode-go.nix {inherit lib;}).families;};
+  families = import ./families.nix // {opencode-go = go.families;};
   models = {
     claude = [
       {
@@ -39,6 +41,7 @@ in {
     kimchi = [];
     kiro = [];
   };
+  opencodeGo.presetScope.excludeModelPrefixes = go.scopeOption.default;
   inherit (import ./entries.nix {inherit lib;}) routing skill workflows;
   techniques = import ./techniques.nix {inherit claudeUsageScript codexUsageScript;};
 }

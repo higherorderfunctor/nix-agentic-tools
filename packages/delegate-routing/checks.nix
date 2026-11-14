@@ -24,13 +24,62 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
-    # Every servable OpenCode Go catalog model belongs to exactly one preset,
-    # and every preset matches a catalog model.
+    # Extracted-data property: rejects missing or duplicate fit ownership,
+    # including models previously hidden by fixed prefix exclusions.
     delegate-routing-opencode-go-presets = let
       inherit (import ./lib/opencode-go.nix {inherit lib;}) drift;
     in
       harness.mkTest "delegate-routing-opencode-go-presets" (
         drift == [] || throw "delegate-routing opencode-go presets drift from the pinned catalog: ${lib.concatStringsSep "; " drift}"
+      );
+    # Synthetic properties: reject hidden prefix policy, ignored scope,
+    # ambiguous/incomplete guidance, and a stale-preset removal snapshot.
+    delegate-routing-opencode-go-scope = let
+      fit = {
+        avoidFor = "unverified output";
+        defaultEffort = null;
+        effort = "no effort pin";
+        match = "fixture-*";
+        useFor = "bounded fixture tasks";
+      };
+      check = args: (import ./lib/opencode-go.nix ({inherit lib;} // args)).drift;
+      fixture = {
+        guidance.example.test = fit;
+        modelIds = ["fixture-model"];
+      };
+    in
+      harness.mkTest "delegate-routing-opencode-go-scope" (
+        check fixture
+        == []
+        && check (fixture // {modelIds = [];}) == []
+        && check (fixture // {modelIds = ["claude-future" "glm-future" "gpt-future"];})
+        == [
+          "catalog model `claude-future` matches no preset"
+          "catalog model `glm-future` matches no preset"
+          "catalog model `gpt-future` matches no preset"
+        ]
+        && check (fixture
+          // {
+            modelIds = ["fixture-model" "other-model"];
+            presetScope.excludeModelPrefixes = ["OTHER-"];
+          })
+        == []
+        && check (fixture
+          // {
+            modelIds = ["fixture-model" "new-model" "other-model"];
+            presetScope.excludeModelPrefixes = ["other-"];
+          })
+        == ["catalog model `new-model` matches no preset"]
+        && check (fixture
+          // {
+            guidance.example = {
+              duplicate = fit;
+              test = fit;
+            };
+          })
+        == ["catalog model `fixture-model` matches several presets: example.duplicate, example.test"]
+        && check (fixture // {guidance.example.test = fit // {useFor = "";};}) == ["catalog model `fixture-model` lacks fit guidance"]
+        && lib.all (prefixes: !(builtins.tryEval (builtins.deepSeq (check (fixture // {presetScope.excludeModelPrefixes = prefixes;})) true)).success) [[""] [1] "fixture-"]
       );
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {

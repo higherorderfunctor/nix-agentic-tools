@@ -2,15 +2,35 @@
 # OpenCode Go preset families, their pool hints and their drift from the
 # pinned catalog. Every tier is a provisional routing judgment from the
 # per-model research; none was measured on the operator's Go workload.
-{lib}: let
+{
+  guidance ? null,
+  lib,
+  modelIds ? null,
+  presetScope ? {},
+}: let
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   fact = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
   # This preset-scope rule limits which Go models need routing guidance here;
   # it does not restrict the models a CPA credential may serve.
-  refuses = model: lib.any (prefix: lib.hasPrefix prefix (lib.toLower model)) ["claude-" "glm-" "gpt-"];
+  scopeOption = lib.mkOption {
+    type = lib.types.listOf (lib.types.strMatching ".+");
+    default = [];
+    description = "Case-insensitive model prefixes excluded from Go fit-guidance coverage; does not change CPA offers or runtime reach.";
+  };
+  # Manual builders and modules validate the same nonempty-prefix type.
+  prefixes = presetScope.excludeModelPrefixes or scopeOption.default;
+  refuses = model:
+    if scopeOption.type.check prefixes && lib.all scopeOption.type.nestedTypes.elemType.check prefixes
+    then lib.any (prefix: lib.hasPrefix (lib.toLower prefix) (lib.toLower model)) prefixes
+    else throw "opencodeGo.presetScope.excludeModelPrefixes must be a list of nonempty strings";
   vendor = "opencode-go";
-  # Catalog ids covered by this consumer's routing presets.
-  catalog = lib.filter (id: !(refuses id)) (builtins.attrNames fact.models);
+  # Keep full inventory for pool hints and overlap checks, independently of scope.
+  catalog =
+    if modelIds == null
+    then builtins.attrNames fact.models
+    else modelIds;
+
+  scopedCatalog = lib.filter (id: !(refuses id)) catalog;
 
   # Shell-style glob as a full-match POSIX regex: `*`, `?` and `[...]`/`[!...]`.
   globRegex = glob:
@@ -273,15 +293,21 @@
       "${id} (${lib.concatStringsSep ", " owners})")
     catalog;
 
-  # Catalog ids no preset matches, ids several presets match, and presets
-  # matching no catalog id.
+  # Coverage includes native guidance without copying it into Go families.
+  # Missing/ambiguous human guidance fails; disappearing models do not.
   drift = let
-    owners = id: lib.attrNames (lib.filterAttrs (_: family: matchesId family id) families);
+    flattened = (import ./select-families.nix {inherit lib;}).flatten (
+      if guidance == null
+      then import ./families.nix // {opencode-go = families;}
+      else guidance
+    );
+    owners = id: lib.filter (family: matchesId family id) flattened;
+    complete = family: (family.useFor or "") != "" && (family.avoidFor or "") != "" && (family.effort or "") != "";
   in
-    map (id: "catalog model `${id}` matches no preset") (lib.filter (id: owners id == []) catalog)
-    ++ map (id: "catalog model `${id}` matches several presets: ${lib.concatStringsSep ", " (owners id)}") (lib.filter (id: lib.length (owners id) > 1) catalog)
-    ++ lib.mapAttrsToList (name: _: "preset `${name}` matches no catalog model") (lib.filterAttrs (_: family: matches family == []) families);
+    map (id: "catalog model `${id}` matches no preset") (lib.filter (id: owners id == []) scopedCatalog)
+    ++ map (id: "catalog model `${id}` matches several presets: ${lib.concatStringsSep ", " (map (family: "${family.vendor}.${family.name}") (owners id))}") (lib.filter (id: lib.length (owners id) > 1) scopedCatalog)
+    ++ map (id: "catalog model `${id}` lacks fit guidance") (lib.filter (id: lib.any (family: !(complete family)) (owners id)) scopedCatalog);
 in {
-  inherit drift families overlaps poolHint vendor;
+  inherit drift families overlaps poolHint scopeOption vendor;
   plans = builtins.attrNames fact.monthlyLimits;
 }
