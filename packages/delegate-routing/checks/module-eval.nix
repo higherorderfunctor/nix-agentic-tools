@@ -1849,6 +1849,31 @@
               };
             };
         }).config.ai.programs.delegate-routing.families.opencode-go));
+    # Synthetic property: module/manual boundaries accept the same scope,
+    # reject empty prefixes, and keep guidance and catalog independent of it.
+    "module-delegate-routing-${name}-opencode-go-scope" = mkTest "delegate-routing-${name}-opencode-go-scope" (let
+      scoped = change {ai.programs.delegate-routing.opencodeGo.presetScope.excludeModelPrefixes = ["fixture-"];};
+      portable = scoped.config.ai.programs.delegate-routing;
+      builder = result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill;
+      manual = prefixes:
+        builder {
+          runtime = "claude";
+          opencodeGo.presetScope.excludeModelPrefixes = prefixes;
+        };
+      invalid = change {ai.programs.delegate-routing.opencodeGo.presetScope.excludeModelPrefixes = [""];};
+    in
+      result.config.ai.programs.delegate-routing.opencodeGo.presetScope.excludeModelPrefixes
+      == []
+      && portable.opencodeGo.presetScope.excludeModelPrefixes == ["fixture-"]
+      && passes scoped
+      && portable.families == result.config.ai.programs.delegate-routing.families
+      && scoped.config.ai.catalog == result.config.ai.catalog
+      && (manual ["fixture-"]).drvPath == (manual []).drvPath
+      && !(builtins.tryEval (manual [""]).drvPath).success
+      && !(builtins.tryEval (builtins.deepSeq invalid.config.ai.programs.delegate-routing.opencodeGo true)).success
+      && portable.families.zhipuai.glm.pools == {}
+      && portable.families.zhipuai.glm.defaultEffort == "high"
+      && portable.families.zhipuai.glm-flash.defaultEffort == null);
     "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
       goSelected = plan:
         change {
