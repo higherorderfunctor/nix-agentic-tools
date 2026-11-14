@@ -91,26 +91,11 @@
       then redact.filePaths key
       else [];
     prefix = "DELEGATE_USAGE_CPA_${lib.toUpper runtime}";
-    # Credential previews must not fall back to the runtime's direct login.
-    credentialPreview = lib.any (name: let
-      pool = portable.pools.${name};
-    in
-      selection.instance
-      != null
-      && lib.hasPrefix "${selection.instance}/" name
-      && pool.limits != {}
-      && pool.usage != null
-      && pool.usage.readerPool != null
-      && pool.usage.runtime == runtime)
-    (builtins.attrNames portable.pools);
   in
-    if credentialPreview && managementKeyFiles == []
-    then throw "ai.programs.delegate-routing.pools: credential preview for ${runtime} requires a CPA management secret-key file reference."
-    else
-      lib.optionalAttrs (managementKeyFiles != []) {
-        "${prefix}_MANAGEMENT_KEY_FILE" = lib.head managementKeyFiles;
-        "${prefix}_URL" = selected.url;
-      };
+    lib.optionalAttrs (managementKeyFiles != []) {
+      "${prefix}_MANAGEMENT_KEY_FILE" = lib.mkDefault (lib.head managementKeyFiles);
+      "${prefix}_URL" = lib.mkDefault selected.url;
+    };
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
     (lib.filter (target: builtins.elem target ["claude" "codex"]) (lib.unique (requiredTargets runtime ++ poolReaders)));
@@ -324,17 +309,19 @@ in {
             };
             limits = lib.mkOption {
               default = {};
-              description = "Allowance preview windows scoped to canonical CPA credential offers.";
+              description = "Allowance windows scoped to canonical CPA credential offers.";
               type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
                 options = {
                   capacity = lib.mkOption {
-                    type = lib.types.numbers.positive;
+                    type =
+                      lib.types.addCheck lib.types.numbers.positive
+                      (capacity: config.unit != "USD" || budget == null || capacity == budget.limit);
                     default =
                       if config.unit == "USD" && budget != null
                       then budget.limit
-                      else throw "percentagePoint limits require capacity";
+                      else throw "limits.capacity is required without a USD budget window";
                     defaultText = lib.literalExpression "pools.<name>.window.limit for USD with a configured window; required otherwise";
-                    description = "Native allowance capacity; USD defaults to the existing budget window.";
+                    description = "Native allowance capacity; USD derives from the budget window and refuses conflicting values.";
                   };
                   models = lib.mkOption {
                     type = lib.types.nullOr (lib.types.nonEmptyListOf lib.types.nonEmptyStr);
@@ -362,7 +349,7 @@ in {
                   readerPool = lib.mkOption {
                     type = lib.types.nullOr lib.types.nonEmptyStr;
                     default = null;
-                    description = "Expected Reader envelope label; null leaves allowance preview unmeasured.";
+                    description = "Expected Reader envelope label; null leaves allowance unmeasured.";
                   };
                   runtime = lib.mkOption {
                     type = lib.types.enum supportedRuntimes;
@@ -395,7 +382,7 @@ in {
                 };
               });
               default = null;
-              description = "Configured monthly budget for unread allowance or accounted Reader preview flags. Preview uses limits and usage.readerPool; see packages/delegate-routing/docs/pacing.md.";
+              description = "Configured monthly budget for unread allowance or accounted Reader arguments. Collection uses limits and usage.readerPool; see packages/delegate-routing/docs/pacing.md.";
             };
           };
         }));
@@ -427,21 +414,6 @@ in {
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
-    {
-      config =
-        lib.setAttrByPath (
-          if backend == "hm"
-          then ["home" "packages"]
-          else ["packages"]
-        )
-        (lib.mkIf (lib.any (runtime: sourceEnabled runtime && cpaRoutes.${runtime} or null != null) supportedRuntimes) [
-          (defaults.passthru.mkObservation {
-            inherit cpaRoutes techniques;
-            environment = lib.foldl' (env: runtime: env // usageEnvironment runtime) {} (lib.filter sourceEnabled supportedRuntimes);
-            inherit (portable) pools;
-          })
-        ]);
-    }
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
@@ -471,7 +443,7 @@ in {
           if runtime == "claude"
           then ["native" "settings" "env"]
           else lib.drop 2 (optionPaths.pool runtime "environmentVariables")
-        ) (lib.mapAttrs (_: lib.mkDefault) (usageEnvironment runtime)))))
+        ) (usageEnvironment runtime))))
       (lib.mkIf (sourceEnabled "claude" && techniques.claude.Workflow.enable) {
         # Plain lists coexist with consumer directories; mkForce opts out.
         claude.native.settings.permissions.additionalDirectories = [workflowResumeDirectory];

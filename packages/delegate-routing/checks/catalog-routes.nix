@@ -142,8 +142,8 @@
       inherit credential;
       api = "chat";
     }) ["first" "second"]);
-    # Preview scope properties use actual CPA projections, never a copied reach graph.
-    previewArgs = {
+    # Collection scope properties use actual CPA projections, never a copied reach graph.
+    collectionArgs = {
       cpaRoutes = overlapping;
       pools."test/first" = {
         usage = {
@@ -174,28 +174,44 @@
         kind = "usage";
       };
     };
-    preview = overrides: (import ../lib/pacing.nix {inherit lib;}) (lib.recursiveUpdate previewArgs overrides);
+    # Evaluate production option defaults before handing registrations to the library.
+    modulePools = pools:
+      (change {
+        ai.programs.delegate-routing = {
+          inherit pools;
+          runtimes.claude.techniques.read = {
+            command = "fake-reader";
+            kind = "usage";
+          };
+        };
+      }).ai.programs.delegate-routing.pools;
+    collection = overrides: let
+      args = lib.recursiveUpdate collectionArgs overrides;
+    in
+      (import ../lib/pacing.nix {inherit lib;}) (args // {pools = modulePools args.pools;});
     # USD transport fixtures vary the Reader label to exercise shell quoting.
-    usdPreview = readerPool:
+    usdCollection = readerPool:
       (import ../lib/pacing.nix {inherit lib;}) {
-        inherit (previewArgs) cpaRoutes;
-        techniques.claude.anthropic-api-usage = previewArgs.techniques.claude.read;
-        pools."test/first" = {
-          usage = {
-            inherit readerPool;
-            runtime = "claude";
-            technique = "anthropic-api-usage";
-          };
-          window = {
-            limit = 200;
-            resetDay = 3;
-            unit = "USD";
-          };
-          limits.weekly = {
-            models = ["test-alpha-1"];
-            role = "pace";
-            unit = "USD";
-            window = "monthly";
+        inherit (collectionArgs) cpaRoutes;
+        techniques.claude.anthropic-api-usage = collectionArgs.techniques.claude.read;
+        pools = modulePools {
+          "test/first" = {
+            usage = {
+              inherit readerPool;
+              runtime = "claude";
+              technique = "anthropic-api-usage";
+            };
+            window = {
+              limit = 200;
+              resetDay = 3;
+              unit = "USD";
+            };
+            limits.weekly = {
+              models = ["test-alpha-1"];
+              role = "pace";
+              unit = "USD";
+              window = "monthly";
+            };
           };
         };
       };
@@ -226,20 +242,47 @@
       }
       // lib.optionalAttrs projection {
         "credential replaced by vendor or first overlapping offer" = map (offer: offer.credential) overlapping.claude == ["test/first" "test/first" "test/second"];
-        "preview loses overlap or unmeasured credential" =
-          lib.length (preview {}).claude.routes
+        "collection loses overlap or unmeasured credential" =
+          lib.length (collection {}).claude.routes
           == 3
-          && (preview {}).claude.pools."test/second".command == null;
-        "preview null scope uses family names or another credential" = (preview {}).claude.pools."test/first".limits.weekly.models == ["test-alpha-1" "test-unknown-1"];
-        "preview explicit scope expands to every offer" = (preview {}).claude.pools."test/first".limits.scoped.models == ["test-alpha-1"];
-        "preview scope ignores runtime API" = (preview {}).codex.pools."test/first".limits.weekly.models == ["test-beta-1"] && !(preview {}).codex.pools."test/first".limits ? scoped;
-        "preview vendor label accepted as credential" = refuses (preview {pools.vendor.limits.weekly = previewArgs.pools."test/first".limits.weekly;});
-        "preview unknown canonical scope accepted" = refuses (preview {pools."test/first".limits.scoped.models = ["missing"];});
-        "preview empty explicit scope accepted" = refuses (preview {pools."test/first".limits.scoped.models = [];});
-        "preview duplicate window accepted" = refuses (preview {pools."test/first".limits.scoped.window = "7d";});
-        "preview missing label infers vendor" = (preview {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
-        "preview registration leaks into helper Readers" = (view {inherit (previewArgs) pools;}).readers == [];
-        "preview unrelated USD technique accepted" = refuses (preview {
+          && (collection {}).claude.pools."test/second".command == null;
+        "collection null scope uses family names or another credential" = (collection {}).claude.pools."test/first".limits.weekly.models == ["test-alpha-1" "test-unknown-1"];
+        "collection explicit scope expands to every offer" = (collection {}).claude.pools."test/first".limits.scoped.models == ["test-alpha-1"];
+        "collection scope ignores runtime API" = (collection {}).codex.pools."test/first".limits.weekly.models == ["test-beta-1"] && !(collection {}).codex.pools."test/first".limits ? scoped;
+        "collection vendor label accepted as credential" = refuses (collection {pools.vendor.limits.weekly = collectionArgs.pools."test/first".limits.weekly;});
+        "collection unknown canonical scope accepted" = refuses (collection {pools."test/first".limits.scoped.models = ["missing"];});
+        "collection empty explicit scope accepted" = refuses (collection {pools."test/first".limits.scoped.models = [];});
+        "collection missing label infers vendor" = (collection {pools."test/first".usage.readerPool = null;}).claude.pools."test/first".command == null;
+        "collection registration makes helper poolFamilies name an absent Reader" = let
+          helper = view {
+            pools = modulePools (collectionArgs.pools
+              // {
+                native.usage = {
+                  runtime = "claude";
+                  technique = "read";
+                };
+              });
+          };
+        in
+          map (reader: reader.name) helper.readers
+          == ["native"]
+          && builtins.attrNames helper.poolFamilies == ["native"];
+        "collection conflicting USD capacity accepted" = refuses (modulePools {
+          "test/first" = {
+            window = {
+              limit = 200;
+              resetDay = 3;
+              unit = "USD";
+            };
+            limits.monthly = {
+              capacity = 100;
+              role = "pace";
+              unit = "USD";
+              window = "monthly";
+            };
+          };
+        });
+        "collection unrelated USD technique accepted" = refuses (collection {
           pools."test/first" = {
             window = {
               limit = 100;
@@ -252,7 +295,7 @@
             };
           };
         });
-        "preview module requires duplicate USD capacity" = let
+        "collection module requires duplicate USD capacity" = let
           configured = change {
             ai.programs.delegate-routing.pools."test/first" = {
               window = {
@@ -269,17 +312,16 @@
           };
         in
           configured.ai.programs.delegate-routing.pools."test/first".limits.monthly.capacity == 200;
-        "preview USD capacity is not derived" = (usdPreview "observed").claude.pools."test/first".limits.weekly.capacity == 200;
-        "preview disabled Reader accepted" = refuses (preview {techniques.claude.read.enable = false;});
-        "preview independent USD budget accepted" = refuses (preview {pools."test/first".limits.weekly.unit = "USD";});
-        "preview Reader pool label loses shell quoting" =
-          (usdPreview "observed pool").claude.pools."test/first".command
-          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool' --now-ms <now-ms>";
-        "preview USD transport ignores retained runtime limits" = let
-          usd = usdPreview "observed";
+        "collection USD capacity is not derived" = (usdCollection "observed").claude.pools."test/first".limits.weekly.capacity == 200;
+        "collection independent USD budget accepted" = refuses (collection {pools."test/first".limits.weekly.unit = "USD";});
+        "collection Reader pool label loses shell quoting" =
+          (usdCollection "observed pool").claude.pools."test/first".command
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool'";
+        "collection USD transport ignores retained runtime limits" = let
+          usd = usdCollection "observed";
         in
           usd.claude.pools."test/first".command
-          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed --now-ms <now-ms>"
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed"
           && usd.codex.pools."test/first".command == null
           && !(usd.codex.pools."test/first".limits ? weekly);
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];

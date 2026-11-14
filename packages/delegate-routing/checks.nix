@@ -24,16 +24,15 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
-    # Fake executable Readers reject duplicate attempts, unsafe failures and live replay.
-    delegate-routing-observation-command =
-      pkgs.runCommand "delegate-routing-observation-command" {
-        nativeBuildInputs = [pkgs.bash pkgs.python3];
+    # Collection must deduplicate commands and preserve routes across safe failures.
+    delegate-routing-observation-collect =
+      pkgs.runCommand "delegate-routing-observation-collect" {
+        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        mkdir -p "$out"
-        export OBSERVATION_TEST_ROOT="$out"
-        python3 -I -B ${./checks/pacing}/test_observation_command.py ${./scripts}
+        python3 -I -B ${./checks/pacing}/test_collection.py ${./scripts}
+        touch "$out"
       '';
     # Saved captures retain routes and measured allowance when another component fails.
     delegate-routing-observation-normalize =
