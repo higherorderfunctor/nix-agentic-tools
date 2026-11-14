@@ -17,7 +17,7 @@ declare -rA delegate_usage_api_keys=(
 # Prepaid failures leave validated main usage untouched.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" --argjson clock "${DELEGATE_USAGE_NOW:-null}" '
+  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -83,7 +83,7 @@ usage_project() {
               | select(supported == true)
               | . + {epoch: (.expiry | capture("^(?<date>.{19})(?<fraction>\\.[0-9]+)?Z$")
                   | (.date + "Z" | fromdateiso8601) + ("0" + (.fraction // "") | tonumber))}
-              | select(.epoch > ($clock // now))] as $eligible
+              | select(.epoch > now)] as $eligible
             # A Codex reset restores the 5-hour limit, the weekly limit, or both, so it
             # covers the whole pool (scope null). The API reports only how many
             # resets are applicable; count that many, earliest expiry first.
