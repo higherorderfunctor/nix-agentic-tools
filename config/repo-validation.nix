@@ -100,6 +100,24 @@
       };
       ci.backend = "git-hooks";
     };
+    patch-policy = {
+      role = "validator";
+      hook = {
+        enable = true;
+        name = "patch-policy";
+        entry = lib.getExe (strictShellApplication {
+          name = "patch-policy";
+          runtimeInputs = [pkgs.ripgrep];
+          text = builtins.readFile ../checks/packaging/patch-policy.sh;
+        });
+        files = "\\.nix$";
+        pass_filenames = false;
+      };
+      ci = {
+        backend = "external";
+        check = "patch-policy";
+      };
+    };
     reject-default-branch-commit = {
       role = "commit-guard";
       hook = {

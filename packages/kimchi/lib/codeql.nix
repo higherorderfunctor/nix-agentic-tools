@@ -201,5 +201,5 @@
       ${lib.getExe (mkQueryRunner {inherit models queries;})} "$TMPDIR/db" "$out"
     '';
 in {
-  inherit createDatabase database databaseOf engine mkQueryRunner runQueries;
+  inherit createDatabase database databaseOf engine mkQueryRunner runQueries source;
 }

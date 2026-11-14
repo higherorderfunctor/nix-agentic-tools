@@ -504,7 +504,7 @@ names need no annotation rows. Feature maturity policy stays at the factory's
 - Package-manager dependency fetchers consume the source tree before normal
   build phases run. If a pnpm dependency needs a downstream patch, patching
   materialized `node_modules` in `preBuild` hides ownership at the final-package
-  layer. Instead, use `applyPatches` to add pnpm `patchedDependencies` metadata,
+  layer. Instead, use `patching.source` to add `patchedDependencies` metadata,
   its patch file, and the corresponding lock entries to the upstream source;
   pass that same patched source to both `fetchPnpmDeps` and the final package.
   Pnpm then applies it at dependency materialization and reaches every peer
