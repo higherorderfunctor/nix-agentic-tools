@@ -5,17 +5,21 @@
   flags = strip: ["-p${toString strip}" "--fuzz=0" "--no-backup-if-mismatch"];
   validStrip = strip: assert lib.assertMsg (builtins.isInt strip && strip >= 0) "patching: strip must be a nonnegative integer"; strip;
   # A shell word allows stdenv output variables as well as escaped store paths.
-  validate = root: ''
+  validateTree = {
+    follow ? true,
+    root,
+  }: ''
     (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      artifacts=$(${pkgs.findutils}/bin/find -L ${root} \( -name '*.orig' -o -name '*.rej' \) -print)
+      artifacts=$(${pkgs.findutils}/bin/find ${lib.optionalString follow "-L"} ${root} \( -name '*.orig' -o -name '*.rej' \) -print)
       if [ -n "$artifacts" ]; then
         printf 'patching: backup/reject contamination:\n%s\n' "$artifacts" >&2
         exit 1
       fi
     )
   '';
+  validate = root: validateTree {inherit root;};
   attrs = {
     patchFiles ? [],
     strip ? 1,
@@ -65,6 +69,53 @@ in {
         ${validate "."}
         ${lib.concatMapStringsSep "\n" apply patchFiles}
         ${validate "."}
+      )
+    '';
+
+  # pnpm owns dependency patches; inspect only their package roots, not unrelated
+  # registry content or dependents whose directory merely carries a patch hash.
+  # patchedDependencies is a shell word naming the existing JSON map.
+  validateDependencies = {
+    directory ? "node_modules/.pnpm",
+    layout ? "pnpm",
+    patchedDependencies,
+  }: let
+    select = pkgs.writeText "patched-dependency-roots.mjs" ''
+      import fs from "node:fs";
+      import path from "node:path";
+      const [directory, layout, map] = process.argv.slice(2);
+      const keys = Object.keys(JSON.parse(fs.readFileSync(map, "utf8")));
+      const roots = new Set();
+      for (const entry of fs.readdirSync(directory).sort()) {
+        for (const key of keys) {
+          const split = key.lastIndexOf("@");
+          const name = split > 0 ? key.slice(0, split) : key;
+          const version = split > 0 ? key.slice(split + 1) : null;
+          if (layout === "pnpm" && !entry.startsWith(name.replace("/", "+") + "@")) continue;
+          const root = layout === "pnpm"
+            ? path.join(directory, entry, "node_modules", name)
+            : path.join(directory, entry);
+          if (!fs.existsSync(path.join(root, "package.json"))) continue;
+          const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+          if (pkg.name === name && (version === null || pkg.version === version)) roots.add(root);
+        }
+      }
+      for (const root of roots) process.stdout.write(root + "\0");
+    '';
+  in
+    assert lib.elem layout ["pnpm" "runtime"]; ''
+      (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        # A pipeline propagates selector failure, unlike process substitution.
+        ${pkgs.nodejs}/bin/node ${select} ${lib.escapeShellArgs [directory layout]} ${patchedDependencies} |
+          # Dependency links leave the patched package; select each peer itself.
+          while IFS= read -r -d $'\0' patchedRoot; do
+            ${validateTree {
+        follow = false;
+        root = ''"$patchedRoot"'';
+      }}
+          done
       )
     '';
 

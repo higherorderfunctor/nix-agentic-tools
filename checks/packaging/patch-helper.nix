@@ -78,6 +78,15 @@
         inherit backend strip;
         patchFiles = [(patch strip)];
       };
+    dependencyMap = pkgs.writeText "patched-dependencies.json" (builtins.toJSON {
+      "@other/plain" = "plain.patch";
+      "@scope/patched@1.0.0" = "scoped.patch";
+    });
+    dependencyCheck = layout: directory:
+      pkgs.writeShellScript "check-patched-dependencies" (patching.validateDependencies {
+        inherit directory layout;
+        patchedDependencies = lib.escapeShellArg dependencyMap;
+      });
     rejectsOverride = builtins.tryEval (builtins.deepSeq (patching.attrs {patchFlags = ["--fuzz=2"];}) true);
   in
     assert !rejectsOverride.success;
@@ -130,6 +139,52 @@
               cmp ${input}/target ${name}-$suffix/target
             done
           '') [0 1]) ["git" "gnu"]}
+
+        # Match every direct peer by manifest, including name-only keys. A
+        # dependent's patch hash and an unrelated registry backup are not ours.
+        for peer in first second; do
+          for spec in '@scope/patched 1.0.0 @scope+patched@1.0.0' '@other/plain 2.0.0 @other+plain@2.0.0'; do
+            read -r name version encoded <<< "$spec"
+            root="dependencies/$encoded$peer/node_modules/$name"
+            mkdir -p "$root"
+            printf '{"name":"%s","version":"%s"}' "$name" "$version" > "$root/package.json"
+          done
+        done
+        for spec in 'unrelated 1.0.0 unrelated@1.0.0_patch_hash' '@scope/patched 9.0.0 @scope+patched@9.0.0'; do
+          read -r name version encoded <<< "$spec"
+          root="dependencies/$encoded/node_modules/$name"
+          mkdir -p "$root"
+          printf '{"name":"%s","version":"%s"}' "$name" "$version" > "$root/package.json"
+          touch "$root/upstream.orig"
+        done
+        ${dependencyCheck "pnpm" "dependencies"}
+        for peer in first second; do
+          for spec in '@scope/patched @scope+patched@1.0.0' '@other/plain @other+plain@2.0.0'; do
+            read -r name encoded <<< "$spec"
+            root="dependencies/$encoded$peer/node_modules/$name"
+            for suffix in orig rej; do
+              touch "$root/leaked.$suffix"
+              expect_failure ${dependencyCheck "pnpm" "dependencies"}
+              grep -F "$root/leaked.$suffix" failure.log
+              rm "$root/leaked.$suffix"
+            done
+          done
+        done
+        # Packed runtime roots have dependency symlinks; only the mapped
+        # package's own bytes are patch output, not its unrelated dependencies.
+        mkdir -p runtime/patched/node_modules runtime/unrelated
+        printf '{"name":"@other/plain","version":"2.0.0"}' > runtime/patched/package.json
+        printf '{"name":"unrelated","version":"1.0.0"}' > runtime/unrelated/package.json
+        touch runtime/unrelated/upstream.orig
+        ln -s ../../unrelated runtime/patched/node_modules/unrelated
+        ${dependencyCheck "runtime" "runtime"}
+        for suffix in orig rej; do
+          touch runtime/patched/leaked.$suffix
+          expect_failure ${dependencyCheck "runtime" "runtime"}
+          grep -F "runtime/patched/leaked.$suffix" failure.log
+          rm runtime/patched/leaked.$suffix
+        done
+        printf 'PASS: dependency map selects all peers; unrelated artifacts survive; every matched peer rejects orig/rej\n' >> "$out/results"
 
         fresh baseline-drift
         sed -i 's/^a$/changed/' baseline-drift/target

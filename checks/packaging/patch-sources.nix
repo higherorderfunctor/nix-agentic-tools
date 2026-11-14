@@ -33,13 +33,33 @@
         git-revise = packages.git-revise.patchedSource;
         httpx2 = sourceOnly packages.mcp.httpx2;
         kimchi = packages.kimchi.patchedSource;
+        kimchi-command-shell = self.checks.${system}.kimchi-command-shell;
+        kimchi-package-identity = "${self.checks.${system}.kimchi-package-identity}/identity-source";
         kimchi-workflows = sourceOnly packages.kimchi-workflows;
         oxlint = packages.oxlint.src;
+        oxlint-napi-patch = self.checks.${system}.oxlint-napi-patch;
         semble = sourceOnly packages.semble;
       }
       // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
         ci-hestia = sourceOnly (import ../../dev/ci-hestia.nix {inherit inputs pkgs;});
+        kimchi-codeql = packages.kimchi.codeql.source;
       };
+    dependencies = {
+      kimchi-package-identity-dependencies = {
+        patchedDependencies = lib.escapeShellArg packages.kimchi.patchedDependencies;
+        source = self.checks.${system}.kimchi-package-identity;
+      };
+      kimchi-workflows-toolchain = {
+        directory = "node_modules/.runtime";
+        layout = "runtime";
+        patchedDependencies = lib.escapeShellArg packages.kimchi.patchedDependencies;
+        source = packages.kimchi-workflows.toolchain;
+      };
+      oxlint-napi-materialization = {
+        patchedDependencies = ''<(${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' ${packages.oxlint.src}/pnpm-workspace.yaml)'';
+        source = self.checks.${system}.oxlint-napi-materialization;
+      };
+    };
   in
     pkgs.runCommand "patch-sources" {
       passthru = {inherit sources;};
@@ -53,5 +73,14 @@
           ${(packageLib.patching {inherit pkgs;}).validate ''"$out/${name}"''}
         '')
         sources)}
+      ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: args: ''
+          ln -s ${args.source} "$out/${name}"
+          echo "patch-sources: ${name} (${args.source})"
+          ${(packageLib.patching {inherit pkgs;}).validateDependencies ((removeAttrs args ["source" "directory"])
+            // {
+              directory = "${args.source}/${args.directory or "node_modules/.pnpm"}";
+            })}
+        '')
+        dependencies)}
     '';
 }

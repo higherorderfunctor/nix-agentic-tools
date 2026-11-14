@@ -27,6 +27,7 @@
   toolchain = pkgs.stdenv.mkDerivation {
     pname = "kimchi-workflow-toolchain";
     inherit (kimchi) pnpmDeps src version;
+    # pnpmConfigHook owns Kimchi patchedDependencies for every toolchain peer.
     nativeBuildInputs =
       [pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [pkgs.autoPatchelfHook];
@@ -38,6 +39,7 @@
       runHook preInstall
       mkdir -p "$out"
       echo '{}' > "$out/package.json"
+      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg kimchi.patchedDependencies;}}
       node ${../../../../src/install-runtime.mjs} "$out" ${toolchainConfiguration}
       runHook postInstall
     '';

@@ -97,7 +97,7 @@
     inherit (extractionSources) kimchi;
     # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
     dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
-    inherit patchedDependencies pkgs;
+    inherit packageLib patchedDependencies pkgs;
     inherit (sources) version;
   };
   # The `network` fact: ../../../lib/network.nix.
@@ -294,17 +294,21 @@ in
     src = patchedSource;
 
     preBuild = ''
+      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;}}
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
     '';
 
+    # pnpm owns patchedDependencies across peer variants during fetching.
     pnpmDeps = pkgs.fetchPnpmDeps {
       # fetchPnpmDeps derives its name from pname alone; see versionedName.
       pname = versionedName;
       inherit (finalAttrs) src version;
       inherit pnpm;
       fetcherVersion = 3;
+      postInstall = (packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;};
       hash = sources.pnpmDepsHash or lib.fakeHash;
     };
+    # pnpmConfigHook repeats the patchedDependencies install offline for the build.
     nativeBuildInputs =
       [
         pkgs.ai.generic.bun
@@ -362,6 +366,7 @@ in
 
     installPhase = ''
       runHook preInstall
+      ${(packageLib.patching {inherit pkgs;}).validateDependencies {patchedDependencies = lib.escapeShellArg patchedDependencies;}}
       mkdir -p "$out"
       cp -r dist/bin dist/share "$out/"
       runHook postInstall

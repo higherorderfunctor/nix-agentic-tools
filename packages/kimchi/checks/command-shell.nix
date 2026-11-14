@@ -1,5 +1,5 @@
 {
-  lib,
+  packageLib,
   pkgs,
   ...
 }: let
@@ -9,7 +9,7 @@
 in {
   checks.kimchi-command-shell = assert builtins.elem patch patchedSource.patches;
     pkgs.runCommand "kimchi-command-shell" {
-      nativeBuildInputs = [pkgs.gnupatch pkgs.nodejs];
+      nativeBuildInputs = [pkgs.nodejs];
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -21,8 +21,10 @@ in {
         exit 1
       fi
       grep -q 'AssertionError' pristine.log
-      patch ${lib.escapeShellArgs patchedSource.patchFlags} < ${patch}
+      ${(packageLib.patching {inherit pkgs;}).command {patchFiles = [patch];}}
       node --experimental-vm-modules ${./command-shell.mjs} .
-      echo PASS > "$out"
+      ${(packageLib.patching {inherit pkgs;}).validate "."}
+      mkdir "$out"
+      cp -r src "$out/"
     '';
 }

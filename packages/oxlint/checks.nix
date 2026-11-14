@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  packageLib,
+  pkgs,
+  ...
+}: let
   releases = {
     "3.10.1" = "sha256-7BFATrr7E3/mh9Yu8MNB0OqtKD8XXv8BZz4855i3pdk=";
     "3.10.4" = "sha256-TGIOOTGV8plTpjATQ3l747UAH+nBR3nIrsJo43FBHfY=";
@@ -13,15 +17,27 @@ in {
     name = "oxlint-napi-materialization";
     nativeBuildInputs = [pkgs.nodejs_24 package.pnpmDeps.pnpm pkgs.pnpmConfigHook];
     buildInputs = [];
-    buildPhase = "runHook preBuild";
-    installPhase = "touch $out";
+    buildPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      runHook preBuild
+    '';
+    installPhase = ''
+      ${(packageLib.patching {inherit pkgs;}).validateDependencies {
+        patchedDependencies = ''<(${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' pnpm-workspace.yaml)'';
+      }}
+      mkdir "$out"
+      cp -r node_modules "$out/"
+    '';
     doInstallCheck = false;
     dontFixup = true;
   });
   checks.oxlint-napi-patch =
     pkgs.runCommand "oxlint-napi-patch" {
-      nativeBuildInputs = [pkgs.gitMinimal pkgs.nodejs pkgs.python3];
+      nativeBuildInputs = [pkgs.nodejs pkgs.python3];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       python3 ${./checks/patch-meta.py} ${./src/oxlint-pnpm-patch-meta.awk}
       ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (version: hash: let
           source = pkgs.fetchurl {
@@ -40,13 +56,21 @@ in {
             exit 1
           fi
           grep -F 'spawn EPERM' pristine.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli" apply ${patch}
+          ${(packageLib.patching {inherit pkgs;}).command {
+            backend = "git";
+            directory = "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           if node ${verify} "peers-${version}" >partial.log 2>&1; then
             echo "unpatched second peer unexpectedly passed" >&2
             exit 1
           fi
           grep -F 'spawn EPERM' partial.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli" apply ${patch}
+          ${(packageLib.patching {inherit pkgs;}).command {
+            backend = "git";
+            directory = "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           node ${verify} "peers-${version}"
         '')
         releases)}
@@ -56,6 +80,8 @@ in {
         exit 1
       fi
       grep -F 'no installed @napi-rs/cli peer variants' empty.log
-      touch "$out"
+      ${(packageLib.patching {inherit pkgs;}).validate "."}
+      mkdir "$out"
+      cp -r peers-* "$out/"
     '';
 }
