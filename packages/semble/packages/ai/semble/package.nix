@@ -174,107 +174,108 @@
       sourceProvenance = with sourceTypes; [binaryNativeCode];
     };
   };
+  packageAttrs = finalAttrs: {
+    pname = "semble";
+    inherit (sembleSources) version;
+    pyproject = true;
+
+    src = fetchFromGitHub {
+      owner = "MinishLab";
+      repo = "semble";
+      tag = "v${sembleSources.version}";
+      inherit (sembleSources.src) hash;
+    };
+
+    build-system = buildSystem;
+
+    # One Semble build reads all variants' configuration at runtime.
+    patchFiles = [
+      ../../../patches/extra-grammars.patch
+      ../../../patches/models.patch
+    ];
+    # Scope strict mode: Python's later wrapping hook reads unset array keys.
+    postPatch = ''
+      (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        cp ${../../../runtime}/*.py src/semble/
+      )
+    '';
+
+    # setuptools_scm normally derives the version from git metadata, but the
+    # fetched source tarball has none. Inject the version explicitly so the
+    # build doesn't fall back to 0.0.0+unknown (which would also break the
+    # static `attr = semble.version.__version__` resolver in pyproject.toml).
+    env = {
+      # Import checks bypass the entry-point wrappers and still need the config.
+      SEMBLE_NIX_CONFIG = defaultConfig;
+      SETUPTOOLS_SCM_PRETEND_VERSION = finalAttrs.version;
+    };
+
+    # Ship the [mcp] extra unconditionally — Nix users get one closure either
+    # way, and exposing both binaries (`semble` and `semble-mcp`) is cleaner
+    # than gating MCP behind a separate derivation.
+    dependencies = with ps; [
+      mcp
+      model2vec
+      numpy
+      orjson
+      pathspec
+      questionary
+      semble-grammars
+      tqdm
+      tree-sitter
+      vicinity
+    ];
+
+    makeWrapperArgs = [
+      "--unset"
+      "PYTHONPATH"
+      "--set-default"
+      "SEMBLE_NIX_CONFIG"
+      "${defaultConfig}"
+    ];
+    nativeBuildInputs = [makeWrapper];
+
+    # `semble-mcp` is a stable entry-point name for the MCP role; with no
+    # subcommand upstream dispatches to the MCP server.
+    # Scope nounset: nixpkgs' later Python wrapping hook reads unset array keys.
+    postInstall = ''
+      (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        makeWrapper "$out/bin/semble" "$out/bin/semble-mcp"
+      )
+    '';
+
+    pythonImportsCheck = [
+      "semble"
+      "semble.cli"
+      "semble.mcp"
+    ];
+
+    doInstallCheck = true;
+    nativeInstallCheckInputs = [versionCheckHook];
+
+    passthru =
+      {
+        inherit updateScript;
+        # Direct interpreter scripts and extractors bypass the bin wrappers.
+        sembleConfig = defaultConfig;
+        sembleConfigSchema = 1;
+      }
+      // (import ../../../extract {inherit pkgs;}) finalAttrs.finalPackage;
+
+    meta = with lib; {
+      changelog = "https://github.com/MinishLab/semble/releases/tag/v${finalAttrs.version}";
+      description = "Fast and accurate local code search for AI agents — CLI and MCP server";
+      homepage = "https://github.com/MinishLab/semble";
+      license = licenses.mit;
+      mainProgram = "semble";
+      platforms = builtins.attrNames grammarPlatforms;
+      sourceProvenance = with sourceTypes; [fromSource];
+    };
+  };
 in
   ps.buildPythonApplication (finalAttrs:
-    (packageLib.patching {inherit pkgs;}).attrs {
-      pname = "semble";
-      inherit (sembleSources) version;
-      pyproject = true;
-
-      src = fetchFromGitHub {
-        owner = "MinishLab";
-        repo = "semble";
-        tag = "v${sembleSources.version}";
-        inherit (sembleSources.src) hash;
-      };
-
-      build-system = buildSystem;
-
-      # One Semble build reads all variants' configuration at runtime.
-      patchFiles = [
-        ../../../patches/extra-grammars.patch
-        ../../../patches/models.patch
-      ];
-      # Scope strict mode: Python's later wrapping hook reads unset array keys.
-      postPatch = ''
-        (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          cp ${../../../runtime}/*.py src/semble/
-        )
-      '';
-
-      # setuptools_scm normally derives the version from git metadata, but the
-      # fetched source tarball has none. Inject the version explicitly so the
-      # build doesn't fall back to 0.0.0+unknown (which would also break the
-      # static `attr = semble.version.__version__` resolver in pyproject.toml).
-      env = {
-        # Import checks bypass the entry-point wrappers and still need the config.
-        SEMBLE_NIX_CONFIG = defaultConfig;
-        SETUPTOOLS_SCM_PRETEND_VERSION = finalAttrs.version;
-      };
-
-      # Ship the [mcp] extra unconditionally — Nix users get one closure either
-      # way, and exposing both binaries (`semble` and `semble-mcp`) is cleaner
-      # than gating MCP behind a separate derivation.
-      dependencies = with ps; [
-        mcp
-        model2vec
-        numpy
-        orjson
-        pathspec
-        questionary
-        semble-grammars
-        tqdm
-        tree-sitter
-        vicinity
-      ];
-
-      makeWrapperArgs = [
-        "--unset"
-        "PYTHONPATH"
-        "--set-default"
-        "SEMBLE_NIX_CONFIG"
-        "${defaultConfig}"
-      ];
-      nativeBuildInputs = [makeWrapper];
-
-      # `semble-mcp` is a stable entry-point name for the MCP role; with no
-      # subcommand upstream dispatches to the MCP server.
-      # Scope nounset: nixpkgs' later Python wrapping hook reads unset array keys.
-      postInstall = ''
-        (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          makeWrapper "$out/bin/semble" "$out/bin/semble-mcp"
-        )
-      '';
-
-      pythonImportsCheck = [
-        "semble"
-        "semble.cli"
-        "semble.mcp"
-      ];
-
-      doInstallCheck = true;
-      nativeInstallCheckInputs = [versionCheckHook];
-
-      passthru =
-        {
-          inherit updateScript;
-          # Direct interpreter scripts and extractors bypass the bin wrappers.
-          sembleConfig = defaultConfig;
-          sembleConfigSchema = 1;
-        }
-        // (import ../../../extract {inherit pkgs;}) finalAttrs.finalPackage;
-
-      meta = with lib; {
-        changelog = "https://github.com/MinishLab/semble/releases/tag/v${finalAttrs.version}";
-        description = "Fast and accurate local code search for AI agents — CLI and MCP server";
-        homepage = "https://github.com/MinishLab/semble";
-        license = licenses.mit;
-        mainProgram = "semble";
-        platforms = builtins.attrNames grammarPlatforms;
-        sourceProvenance = with sourceTypes; [fromSource];
-      };
-    })
+    (packageLib.patching {inherit pkgs;}).attrs (packageAttrs finalAttrs))
