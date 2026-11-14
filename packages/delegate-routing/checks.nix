@@ -31,6 +31,7 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        export HYPOTHESIS_STORAGE_DIRECTORY="$TMPDIR/hypothesis"
         python3 -I -B ${./checks/pacing}/test_observations.py ${./scripts}
         touch "$out"
       '';
