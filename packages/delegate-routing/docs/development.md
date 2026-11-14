@@ -632,26 +632,30 @@ JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
-From this package directory, run the offline runtime suite with its explicit
-fixture input:
+From the repository root, run the offline runtime checks with their packaged
+Python dependencies, including hypothesis and pydantic:
 
 ```bash
-python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
+flock /tmp/nat-vm-spike.lock systemd-run --user --scope -q \
+  -p CPUQuota=200% -p MemoryMax=6G \
+  nix build --max-jobs 1 --cores 2 --no-link \
+  .#checks.x86_64-linux.delegate-routing-plan-runtime \
+  .#checks.x86_64-linux.delegate-routing-usage-runtime
 ```
 
-It exercises fake Readers and hand-written expectations, including a subprocess
-spy that rejects any candidate/probe launch. The fixture preserves five full
-successful Reader envelopes captured live from the five registered pools,
-evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index` and
-`account.name` are replaced with stable synthetic strings; nulls, field types,
-windows, balances and bonuses are preserved. These captures verify arithmetic
-and ranking; synthetic cases verify Reader failures. CI passes the fixture store
-path explicitly in `delegate-routing-plan-runtime`. Eight backend/runtime
-delivery fixtures check the rendered helper command, runtime/session-pool
-identity in the skill, and policy prose for Reader completeness, the session
-buffer and shared avoided-family fallback. Reader collection, ranking and buffer
-behavior are tested against the source Python helper with synthetic manifests.
-The
+The routing check exercises fake Readers and hand-written expectations,
+including a subprocess spy that rejects any candidate/probe launch. The fixture
+preserves five full successful Reader envelopes captured live from the five
+registered pools, evaluated at `2026-11-10T00:08:41Z`. Only `account.auth_index`
+and `account.name` are replaced with stable synthetic strings; nulls, field
+types, windows, balances and bonuses are preserved. These captures verify
+arithmetic and ranking; synthetic cases verify Reader failures. CI passes the
+fixture store path explicitly in `delegate-routing-plan-runtime`. Eight
+backend/runtime delivery fixtures check the rendered helper command,
+runtime/session-pool identity in the skill, and policy prose for Reader
+completeness, the session buffer and shared avoided-family fallback. Reader
+collection, ranking and buffer behavior are tested against the source Python
+helper with synthetic manifests. The
 `module-delegate-routing-{hm,devenv}-{claude,codex,kimchi,kiro}-packaged-helper`
 checks read each backend’s delivered `SKILL.md` for that runtime, follow its
 rendered command to the packaged wrapper and manifest, and run that wrapper with
