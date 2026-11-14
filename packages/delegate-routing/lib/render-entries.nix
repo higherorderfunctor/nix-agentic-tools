@@ -1,4 +1,11 @@
-{lib}: let
+{
+  lib,
+  stepPhrase ? null,
+}: let
+  phrase =
+    if stepPhrase == null
+    then {enable = true;} // (import ./entries.nix {inherit lib;}).skill.phrases."Workflow step"
+    else stepPhrase;
   entries = import ./resolve-entries.nix {inherit lib;};
   indentAfter = marker: text:
     marker + lib.replaceStrings ["\n"] ["\n${lib.concatStrings (lib.replicate (builtins.stringLength marker) " ")}"] (lib.removeSuffix "\n" text);
@@ -33,8 +40,18 @@ in {
       value,
     }: let
       steps = entries.sort "delegate-routing.workflows.${name}.steps" value.steps;
-      numbered = lib.concatStringsSep "\n\n" (lib.imap0 (index: step:
-        indentAfter "${toString (index + 1)}. " "**${step.name}:** ${stepText "delegate-routing.workflows.${name}.steps.${step.name}" step.value}")
+      numbered = lib.concatStringsSep "\n\n" (lib.imap0 (index: step: let
+        prefix = lib.replaceStrings ["{index}" "{name}"] [(toString (index + 1)) step.name] phrase.text;
+        marker = lib.head (lib.splitString "{text}" prefix);
+        rendered = stepText "delegate-routing.workflows.${name}.steps.${step.name}" step.value;
+        # Keep continuation indentation from the numbered list marker.
+        indent =
+          if lib.hasPrefix "${toString (index + 1)}. " marker
+          then "${toString (index + 1)}. "
+          else "";
+        body = lib.replaceStrings ["{text}"] [rendered] prefix;
+      in
+        lib.optionalString phrase.enable (indentAfter indent (lib.removePrefix indent body)))
       steps);
     in
       if value.text == "" && steps == []

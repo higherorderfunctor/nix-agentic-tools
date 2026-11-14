@@ -18,6 +18,9 @@ import sys
 import tempfile
 import time
 import uuid
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_TIERS = {
@@ -30,6 +33,34 @@ ROLE_TIERS = {
     "second-check": {"strong", "frontier"},
     "writer": {"small", "mid", "strong", "frontier"},
 }
+# Manifest policy is parsed once before any Reader or picker runs.
+Role = Literal["finder", "first-check", "investigator", "judge", "mechanical", "planner", "second-check", "writer"]
+Tier = Literal["frontier", "strong", "mid", "small"]
+
+
+class PolicyModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class PlanCheckPolicy(PolicyModel):
+    requireRubric: bool = True
+    requireSize: bool = True
+    requiredReviewRoles: list[Role] = Field(default_factory=lambda: ["first-check"])
+    workerRoles: list[Role] = Field(default_factory=lambda: ["investigator", "mechanical", "writer"])
+
+
+class RolePolicy(PolicyModel):
+    tiers: list[Tier]
+
+
+class ReviewPolicy(PolicyModel):
+    planCheck: PlanCheckPolicy = Field(default_factory=PlanCheckPolicy)
+    roles: dict[Role, RolePolicy] = Field(default_factory=dict)
+
+    def tiers_for(self, role):
+        return self.roles[role].tiers if role in self.roles else ROLE_TIERS[role]
+
+
 READER_RETRY_DELAY = 2
 READER_TIMEOUT = 10
 TASK_SUMMARY_LIMIT = 65536
@@ -782,8 +813,12 @@ def request_errors(manifest, context, roles):
     return errors
 
 
-def plan(manifest, context, roles, now, shell, run=run_reader):
+def plan(manifest, context, roles, now, shell, run=run_reader, check=None):
     errors = request_errors(manifest, context, roles)
+    try:
+        policy = ReviewPolicy.model_validate(manifest.get("reviewPolicy", {}) if isinstance(manifest, dict) else {})
+    except ValidationError as error:
+        errors.extend({"path": "manifest.reviewPolicy." + ".".join(map(str, issue["loc"])), "message": CONFIGURATION_FAULT + issue["msg"]} for issue in error.errors())
     if errors:
         raise InvalidRequest(errors)
     session = manifest["sessionPool"]
@@ -821,7 +856,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
                 excluded.append(record | {"reason": "excluded by caller"})
                 continue
             avoided = family["name"] in request.get("avoid", [])
-            if family["tier"] not in ROLE_TIERS[role]:
+            if family["tier"] not in policy.tiers_for(role):
                 excluded.append(record | {"reason": "below role tier floor"})
                 continue
             alternatives, unresolved = launch(route, context, request.get("effort"), avoided, manifest["effortLevels"])
@@ -887,11 +922,15 @@ def plan(manifest, context, roles, now, shell, run=run_reader):
         result["roles"][role] = {"candidates": usable, "exclusions": excluded}
         if not usable:
             result["roles"][role]["error"] = "never step down a tier; report a loop failure."
+    if check is not None:
+        artifact, directory, concurrency = check
+        result["validation"] = check_plan(artifact, result, directory, concurrency, policy.planCheck)
     return result
 
 
-def check_plan(artifact, current, directory, max_concurrency=10):
+def check_plan(artifact, current, directory, max_concurrency=10, policy: PlanCheckPolicy | None = None):
     """Check saved launch choices against a fresh decision, never a plan allowlist."""
+    policy = policy or PlanCheckPolicy()
     if not isinstance(artifact.get("task"), str) or not artifact["task"].strip():
         raise ValueError("plan requires task identity")
     if artifact["runtime"] != current["runtime"]:
@@ -916,8 +955,8 @@ def check_plan(artifact, current, directory, max_concurrency=10):
             raise ValueError("artifact paths must stay inside the plan directory")
         return resolved.read_bytes()
 
-    rubric = read_artifact(artifact["rubric"])
-    if not rubric.strip():
+    rubric = read_artifact(artifact["rubric"]) if policy.requireRubric else None
+    if policy.requireRubric and not rubric.strip():
         raise ValueError("saved rubric must not be empty")
     units = artifact["units"]
     if not isinstance(units, list) or not units:
@@ -937,24 +976,24 @@ def check_plan(artifact, current, directory, max_concurrency=10):
         for field in ("checks", "dependencies", "docs", "files"):
             if not isinstance(unit[field], list) or not all(isinstance(value, str) and value.strip() for value in unit[field]):
                 raise ValueError(f"{identity}: {field} must be a path/id list")
-        if not unit["files"] or not unit["size"]:
+        if not unit["files"] or (policy.requireSize and not unit.get("size")):
             raise ValueError(f"{identity}: file ownership and per-kind size required")
         if not set(unit["docs"] + unit["checks"]) <= set(unit["files"]):
             raise ValueError(f"{identity}: associated docs/checks need writer ownership")
         for path in unit["files"]:
             if path.startswith("/") or posixpath.normpath(path) in (".", "..") or posixpath.normpath(path).startswith("../"):
                 raise ValueError(f"{identity}: writer files must be repository-relative")
-        for counts in unit["size"].values():
+        for counts in unit.get("size", {}).values():
             if not isinstance(counts, dict) or set(counts) != {"added", "removed"} or any(type(value) is not int or value < 0 for value in counts.values()):
                 raise ValueError(f"{identity}: size needs nonnegative added/removed counts per kind")
         launches = unit["launches"]
         if not isinstance(launches, list) or not launches:
             raise ValueError(f"{identity}: prepared worker/reviewer launches required")
         roles = [record["role"] for record in launches]
-        if "planner" in roles or not set(roles) <= ROLE_TIERS.keys():
+        if not set(roles) <= (set(policy.workerRoles) | (ROLE_TIERS.keys() - {"planner"}) | set(policy.requiredReviewRoles)):
             raise ValueError(f"{identity}: only worker and reviewer roles are allowed in approved units")
-        if len(set(roles)) != len(roles) or sum(role in ("investigator", "mechanical", "writer") for role in roles) != 1 or "first-check" not in roles:
-            raise ValueError(f"{identity}: one worker and a first-check review barrier required")
+        if len(set(roles)) != len(roles) or sum(role in policy.workerRoles for role in roles) != 1 or not set(policy.requiredReviewRoles) <= set(roles):
+            raise ValueError(f"{identity}: one worker and configured review barriers required")
         for record in launches:
             role = record["role"]
             if record["runtime"] != current["runtime"]:
@@ -976,7 +1015,8 @@ def check_plan(artifact, current, directory, max_concurrency=10):
                     raise ValueError("saved helper snapshot requires candidate-bound pools")
             if not any(record["candidate"] == candidate["launch"] and record["line"] == candidate["line"] for candidate in saved_candidates):
                 raise ValueError(f"saved helper snapshot lacks {role} candidate/line")
-            if rubric not in read_artifact(record["brief"]):
+            brief = read_artifact(record["brief"])
+            if policy.requireRubric and rubric not in brief:
                 raise ValueError(f"{identity}: {role} brief must contain the full rubric verbatim")
     for identity, unit in indexed.items():
         if any(dependency not in indexed for dependency in unit["dependencies"]):
@@ -1057,10 +1097,8 @@ def main():
         found = request_errors(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
         return invalid_request(found + now_errors + saved_errors + manifest_errors + context_errors)
     try:
-        result = plan(manifest, context, args.role, now, args.reader_shell)
-        if args.check_plan:
-            path = Path(args.check_plan).resolve()
-            result["validation"] = check_plan(saved, result, path.parent, args.max_concurrency)
+        check = (saved, Path(args.check_plan).resolve().parent, args.max_concurrency) if args.check_plan else None
+        result = plan(manifest, context, args.role, now, args.reader_shell, check=check)
     except InvalidRequest as error:
         return invalid_request(error.errors)
     except (AttributeError, KeyError, TypeError, ValueError, OSError) as error:

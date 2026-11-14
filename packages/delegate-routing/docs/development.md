@@ -193,6 +193,36 @@ keep a terminal step last when inserting a new step, give the new step a
 Repository runtime and skill ownership is documented in
 `dev/fragments/pipeline/generation-architecture.md`.
 
+### Change helper review policy
+
+`ai.programs.delegate-routing.reviewPolicy` changes the checks the helper
+enforces. Both Home Manager and devenv carry it into every runtime's manifest.
+Workflow text remains separately editable: disabling a prose step alone does not
+disable its helper check.
+
+- `planCheck.requireRubric` defaults to `true`: require a saved, non-empty
+  rubric and its full bytes in every launch brief. Set it to `false` to omit the
+  rubric.
+- `planCheck.requireSize` defaults to `true`: require per-kind size records. Set
+  it to `false` to omit them; supplied records still need valid counts.
+- `planCheck.requiredReviewRoles` defaults to `["first-check"]`. Set it to `[]`
+  for units without a required reviewer.
+- `planCheck.workerRoles` defaults to `["investigator" "mechanical" "writer"]`.
+  Each unit needs exactly one worker from this list. It may include `planner`
+  when that is the unit's worker role.
+- `roles.<role>.tiers` lists allowed tiers. Review roles and `planner` default
+  to `["frontier" "strong"]`; worker roles allow all four tiers. An empty list
+  permits no candidates for that role.
+
+For a workflow without rubric or size records, set both requirements to `false`
+and disable the Rubric step or its Size row as appropriate. When changing the
+review roles or their tiers, update the Review step and
+`skill.entries."Routing helper"` together: both contain review guidance.
+
+`skill.phrases."Workflow step"` controls each step's label and body, with
+`{index}`, `{name}` and `{text}` placeholders. Its default is
+`{index}. **{name}:** {text}`. Existing step order still determines the index.
+
 ## Skill text
 
 The renderer holds no skill prose, only table and list glue and diagnostics.
@@ -669,7 +699,8 @@ the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
 From this package directory, run the offline runtime suite with its explicit
-fixture input:
+fixture input. This Python environment needs `pydantic` v2 and `hypothesis`; the
+packaged `delegate-routing-plan-runtime` check supplies both:
 
 ```bash
 python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json

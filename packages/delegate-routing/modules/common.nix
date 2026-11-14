@@ -145,6 +145,7 @@
     defaults.passthru.mkSkill {
       inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles;
       inherit (portable) families pools;
+      inherit (portable) reviewPolicy;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
     };
@@ -364,6 +365,12 @@ in {
         '';
       };
 
+      reviewPolicy = lib.mkOption {
+        type = lib.types.submodule (import ../lib/review-policy.nix {inherit lib;});
+        default = {};
+        description = "Helper enforcement for review plans and role tier eligibility; pair changes with workflow prose.";
+      };
+
       runtimes =
         lib.genAttrs supportedRuntimes (runtime:
           runtimeOptions runtime // reminderProgram.module.options.ai.programs.delegate-routing.runtimes.${runtime});
@@ -383,6 +390,7 @@ in {
           inherit lib;
           entries = (resolved runtime).routing;
           inherit (resolved runtime) workflows;
+          stepPhrase = (resolved runtime).skill.phrases."Workflow step";
         };
     })
   ];
