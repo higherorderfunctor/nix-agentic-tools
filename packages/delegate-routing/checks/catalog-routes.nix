@@ -447,7 +447,7 @@
         "singular credential replaces family pool" = (lib.head (view {}).routes).pool == null;
         "unknown offers disappear" = (lib.last routes.claude).maker == null;
         "unoffered alias borrows another vendor identity" = refuses (validate (oauth "wide") "short");
-        "unscoped ambiguous alias chooses first identity" = refuses (validate null "short");
+        "native launch accepts noncanonical transport spelling" = refuses (validate null "short");
         "vendor alias borrows another vendor" =
           validate
           (clientRoutes [

@@ -55,7 +55,7 @@ CODEX_RESETS = {"available_count": 2, "credits": [
     {"status": "available", "expires_at": "2030-03-17T17:46:40.987654Z"},
     {"status": "available", "expires_at": "2030-03-17T18:47:40+01:00"},
 ]}
-ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
+ZHIPUAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
     for unit, number in [(3, 5), (6, 1)]]}}
 # Manager+ fixture: endpoint shapes from the pinned 1.14.10 source, synthetic values.
@@ -99,7 +99,7 @@ class UsageTests(unittest.TestCase):
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
         self.configs = {"claude": [], "openai-compatibility": []}
         self.requests = []
-        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zhipuai": ZAI})
+        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zhipuai": ZHIPUAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
         self.management_redirect = None
@@ -748,7 +748,7 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
         executable.write_text(f"#!{sys.executable}\n" + f'''import sys
 assert "Authorization: Bearer direct-zhipuai-key" in sys.stdin.read()
 assert "/api/monitor/usage/quota/limit" in sys.argv[-1]
-print({json.dumps(json.dumps(ZAI))})
+print({json.dumps(json.dumps(ZHIPUAI))})
 ''')
         executable.chmod(0o755)
         self.key.write_text("direct-zhipuai-key")
