@@ -34,7 +34,7 @@ in {
       );
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {
-        nativeBuildInputs = [pkgs.bash pkgs.python3];
+        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -43,7 +43,7 @@ in {
       '';
     delegate-routing-usage-runtime =
       pkgs.runCommand "delegate-routing-usage-runtime" {
-        nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3];
+        nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.curl pkgs.jq (pkgs.python3.withPackages (ps: [ps.hypothesis]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

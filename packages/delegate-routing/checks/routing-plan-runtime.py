@@ -20,6 +20,11 @@ import time
 import unittest
 from unittest.mock import call, patch
 
+from hypothesis import example, given, settings, strategies as st
+
+settings.register_profile("offline", database=None, deadline=None, max_examples=30)
+settings.load_profile("offline")
+
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
@@ -1391,34 +1396,45 @@ class Routing(unittest.TestCase):
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
 
-    def test_reader_unpriced_diagnostic_is_closed_and_keeps_count(self):
-        # Wrong: generic failure drops the known count, or arbitrary stdout/stderr
-        # (including model names) becomes a warning. All cases are synthetic.
-        valid = {"count": 2, "reason": "unpriced-models"}
-        cases = [(json.dumps(valid), True)]
-        for count in [None, True, 0, -1, 2.5, "2", "secret-model"]:
-            cases.append((json.dumps({**valid, "count": count}), False))
-        cases.extend((json.dumps(value), False) for value in [
-            {**valid, "models": ["secret-model"]},
-            {**valid, "reason": "secret-reason"}, [valid], None,
-        ])
-        cases.extend([(json.dumps(valid) + "\n" + json.dumps(valid), False),
-                      ("secret-stdout", False), ("[" * 2000, False)])
-        for stdout, accepted in cases:
-            with self.subTest(stdout=stdout[:100]):
-                config = manifest([route(), route("other", pool="session")])
-                config["readers"][1]["command"] = "reader-outside"
-                failure = subprocess.CompletedProcess("secret-command", 7, stdout, "secret-stderr")
-                result, calls = self.run_plan(config, context(names=("sol", "other")),
-                                              outputs={"reader-outside": failure})
-                expected = {"status": "unreachable", **(valid if accepted else {"reason": "Reader exited 7"})}
-                self.assertEqual(result["pools"]["outside"], expected)
-                self.assertEqual(calls.count("reader-outside"), 2)
-                reason = "2 models have no price in CPA Manager" if accepted else "Reader exited 7"
-                self.assertEqual([w for w in result["warnings"] if "Reader for" in w],
-                                 [f"WARNING: Reader for outside, session failed: {reason}. Report this failure to the user."])
-                self.assertEqual(result["roles"]["writer"]["candidates"], [])
-                self.assertNotIn("secret-", json.dumps(result))
+    def assert_reader_diagnostic(self, stdout, count=None):
+        config = manifest([route(), route("other", pool="session")])
+        config["readers"][1]["command"] = "reader-outside"
+        failure = subprocess.CompletedProcess("secret-command", 7, stdout, "secret-stderr")
+        result, calls = self.run_plan(config, context(names=("sol", "other")),
+                                      outputs={"reader-outside": failure})
+        detail = {"count": count, "reason": "unpriced-models"} if count else {"reason": "Reader exited 7"}
+        self.assertEqual(result["pools"]["outside"], {"status": "unreachable", **detail})
+        self.assertEqual(calls.count("reader-outside"), 2)
+        reason = f"{count} models have no price in CPA Manager" if count else "Reader exited 7"
+        self.assertEqual([w for w in result["warnings"] if "Reader for" in w],
+                         [f"WARNING: Reader for outside, session failed: {reason}. Report this failure to the user."])
+        self.assertEqual(result["roles"]["writer"]["candidates"], [])
+        self.assertNotIn("secret-", json.dumps(result))
+
+    @given(st.one_of(st.none(), st.booleans(), st.integers(), st.floats(), st.text()))
+    @example(True)
+    @example(2)
+    def test_reader_diagnostic_accepts_only_positive_integer_counts(self, count):
+        # Only a positive integer count can reach the shared-command warning.
+        accepted = count if type(count) is int and count > 0 else None
+        self.assert_reader_diagnostic(json.dumps({"count": count, "reason": "unpriced-models"}), accepted)
+
+    @given(st.text().filter(lambda key: key not in {"count", "reason"}))
+    def test_reader_diagnostic_rejects_unknown_fields(self, key):
+        # Extra fields cannot expand the public diagnostic contract.
+        self.assert_reader_diagnostic(json.dumps({"count": 2, "reason": "unpriced-models", key: "secret-value"}))
+
+    @given(st.text().filter(lambda reason: reason != "unpriced-models"))
+    def test_reader_diagnostic_rejects_unknown_reasons(self, reason):
+        # Reader-controlled prose cannot become a diagnostic reason.
+        self.assert_reader_diagnostic(json.dumps({"count": 2, "reason": reason}))
+
+    def test_reader_diagnostic_rejects_non_objects_and_broken_json(self):
+        # Malformed stdout retains the exit failure without leaking parser errors.
+        for stdout in ['[]', 'null', '{}', '{"count":2,"reason":"unpriced-models"}\n{}',
+                       "secret-stdout", "[" * 2000]:
+            with self.subTest(stdout=stdout[:80]):
+                self.assert_reader_diagnostic(stdout)
 
     def test_reader_failures_never_supply_fit_only_routes(self):
         # Wrong: failed Readers become fit-only choices, including HTTP 429.

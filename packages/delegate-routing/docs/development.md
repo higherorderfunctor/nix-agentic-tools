@@ -780,21 +780,12 @@ that merges a priced and an unpriced billing model shows a positive total and is
 not detected; that is the limit of the estimate, which is why the window's
 status is `estimated`.
 
-The pinned Manager+ 1.14.10 `monitoring/service.go` declares `Response.Coverage`
-with `omitempty`; `analytics` assigns it only when `coverageWarningRequired`
-reports deleted raw events. This Reader requests a compact summary and model
-stats with no comparison or drill-down, so a healthy response omits coverage.
-Under that source contract, omission supports zero deleted raw events and
-preserves independently validated monthly cost, including literal zero cost. It
-does **not** establish complete accounting, no proxy bypass or zero total spend:
-total and unobserved accounting remain unknown, and the window remains
-`estimated`. Present null, malformed or partial coverage is refused; missing
-arbitrary facts never default to zero. Explicit zero deleted events and no
-degraded-summary limitations also preserve the estimate; that shape is synthetic
-in tests because the compact production request omits a healthy warning.
-Calendar boundaries, configured budgets and credential discovery are unchanged.
-At the exact reset instant the empty new window still reports zero without an
-analytics request.
+Healthy compact responses omit coverage. Omitted coverage, or explicit zero
+deleted events with no degraded-summary limitations, preserves the estimated
+monthly cost, including zero. Present null, malformed or partial coverage is
+refused. Neither accepted shape establishes complete accounting or measures
+traffic that bypassed the proxy. At the exact reset instant, the new window
+reports zero without an analytics request.
 
 An unpriced-model failure exits nonzero with only
 `{reason: "unpriced-models", count: N}` on stdout. The routing helper preserves

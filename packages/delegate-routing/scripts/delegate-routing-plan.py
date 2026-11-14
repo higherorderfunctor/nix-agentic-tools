@@ -17,7 +17,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from typing import Literal
 import uuid
+
+from pydantic import BaseModel, ConfigDict, Field
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_TIERS = {
@@ -470,6 +473,14 @@ def run_reader(argv, **kwargs):
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
 
+class UnpricedModelsDiagnostic(BaseModel):
+    """The only failed Reader payload that can supply a public diagnostic."""
+
+    model_config = ConfigDict(extra="forbid")
+    count: int = Field(gt=0, strict=True)
+    reason: Literal["unpriced-models"]
+
+
 def collect(readers, now, shell, run=run_reader):
     # Only this inventory reaches subprocess: candidate command guidance is data.
     commands, results = {}, {}
@@ -494,14 +505,11 @@ def collect(readers, now, shell, run=run_reader):
                     # Only this closed diagnostic is safe on failed Reader stdout.
                     # Arbitrary JSON, names and stderr never reach the warning.
                     try:
-                        detail = json.loads(proc.stdout)
+                        detail = UnpricedModelsDiagnostic.model_validate(json.loads(proc.stdout))
                     except (ValueError, RecursionError):
                         pass  # Retain the observed exit failure, not parsed inventory.
                     else:
-                        if (isinstance(detail, dict) and set(detail) == {"count", "reason"}
-                                and detail["reason"] == "unpriced-models"
-                                and type(detail["count"]) is int and detail["count"] > 0):
-                            result.update(detail)
+                        result.update(detail.model_dump())
                 else:
                     result = measure(proc.stdout, now)
             except subprocess.TimeoutExpired:

@@ -108,7 +108,7 @@
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
       text = ''
-        exec ${pkgs.python3}/bin/python3 ${../../scripts/delegate-routing-plan.py} "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+        exec ${pkgs.python3.withPackages (ps: [ps.pydantic])}/bin/python3 ${../../scripts/delegate-routing-plan.py} "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';
     };
     helperCommand = lib.getExe helper;
