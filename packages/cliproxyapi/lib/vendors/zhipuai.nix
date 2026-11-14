@@ -15,8 +15,6 @@
 in {
   # Static contributions do not depend on the consumer's merged configuration.
   inherit catalog;
-  # Owner default spellings; consumers extend ai.cliproxyapi.servedModels.zhipuai.
-  servedModels = lib.genAttrs extracted.models (id: [id]);
   # Both standalone callers and instances use this constructor and the selected identities.
   construct = servedModels: merged:
     extracted
@@ -32,4 +30,6 @@ in {
       merged.vendors.zhipuai.models;
       toolAliases.ToolSearch = "ToolSearch_";
     };
+  # Owner default spellings; consumers extend ai.cliproxyapi.servedModels.zhipuai.
+  servedModels = lib.genAttrs extracted.models (id: [id]);
 }

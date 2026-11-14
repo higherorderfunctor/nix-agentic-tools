@@ -11,7 +11,7 @@
     devenv = harness.evalDevenvModules;
     hm = harness.evalHmModules;
   };
-  # Model facts are deliberately synthetic, with aliases shared across vendor scopes.
+  # Model facts are deliberately synthetic, with served spellings shared across vendor scopes.
   identity = maker: {
     inherit maker;
     source = ["synthetic route identity"];
@@ -59,10 +59,6 @@
         clientKey = "two";
       };
     };
-    cliproxyapi.servedModels = {
-      other.test-beta-1 = ["short"];
-      zhipuai.test-alpha-1 = ["short"];
-    };
     cliproxyapi.instances.test = {
       enable = true;
       settings.config-version = 8;
@@ -100,6 +96,10 @@
           ];
         };
       };
+    };
+    cliproxyapi.servedModels = {
+      other.test-beta-1 = ["short"];
+      zhipuai.test-alpha-1 = ["short"];
     };
     programs.delegate-routing = {
       enable = true;
