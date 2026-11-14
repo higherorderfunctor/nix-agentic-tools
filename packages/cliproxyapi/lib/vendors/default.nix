@@ -2,7 +2,7 @@
 {
   lib,
   catalog ? null,
-  servedModels ? null,
+  servedModels ? {},
 }: let
   # Each vendor owns extraction, identity evidence and transport construction.
   definitions = {
@@ -32,13 +32,9 @@ in {
       else throw "ai.catalog.vendors.${name}.models names unknown model `${id}`; declare ai.catalog.models.${id} or remove the id from the vendor list.")
     ids;
   in
-    builtins.deepSeq checked (vendor.construct (
-        if servedModels == null
-        then vendor.servedModels
-        else servedModels.${name} or {}
-      ) (merged
-        // {
-          vendors = merged.vendors // {${name} = merged.vendors.${name} // {models = checked;};};
-        })))
+    builtins.deepSeq checked (vendor.construct (servedModels.${name} or {}) (merged
+      // {
+        vendors = merged.vendors // {${name} = merged.vendors.${name} // {models = checked;};};
+      })))
   definitions;
 }
