@@ -56,12 +56,39 @@ class LimitSpec:
         return result
 
 
+def bounded_stdout(raw):
+    # Refuse captured JSON deeper than 64 containers before recursive decoding.
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode(json.detect_encoding(raw), "surrogatepass")  # cspell:ignore surrogatepass
+    if not isinstance(raw, str):
+        raise ValueError("invalid-json")
+    depth = 0
+    quoted = escaped = False
+    for character in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in "[{":
+            depth += 1
+            if depth > 64:
+                raise ValueError("invalid-json")
+        elif character in "]}":
+            depth -= 1
+    return raw
+
+
 def stdout_document(capture):
     # Decode captured stdout when supplied, refusing malformed JSON safely.
     document = capture.get("data")
     if "stdout" in capture:
         try:
-            document = json.loads(capture["stdout"])
+            document = json.loads(bounded_stdout(capture["stdout"]))
         except (RecursionError, TypeError, ValueError):
             raise ValueError("invalid-json") from None
     return document
