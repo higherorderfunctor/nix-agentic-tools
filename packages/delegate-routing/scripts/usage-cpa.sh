@@ -14,7 +14,7 @@ declare -rA delegate_usage_api_keys=(
 
 # All usage techniques and the runtime fixtures read this common schema.
 # The optional fifth argument selects usage (default) or prepaid inventory.
-# Prepaid failures leave validated main usage untouched.
+# The caller maps prepaid failures without changing validated main usage.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
   jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" --argjson prepaid "${4:-null}" --arg observation "${5:-usage}" '
@@ -56,8 +56,7 @@ usage_project() {
         [{kind: "rate_limit_reset", count: $count, expiresAt: null}]
       else [] end;
     def prepaid_balances:
-      if . == null then [] else
-        if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
+      if (.promo_tranches | type) != "array" or (.tranches | type) != "array"
           then error("claude prepaid tranches") else . end
         | [((.promo_tranches[] | . + {funding: "promotional"}),
             (.tranches[] | . + {funding: "purchased"}))
@@ -65,8 +64,7 @@ usage_project() {
                or (.remaining_amount_minor_units | isfinite | not) or .remaining_amount_minor_units < 0
                or .currency != "USD" then error("claude prepaid lot") else . end
            | {kind: "usage_credit", funding, remaining: (.remaining_amount_minor_units / 100),
-              unit: .currency, expiresAt: (.expires_at | if . == null then null else utc end), scope: null}]
-      end;
+              unit: .currency, expiresAt: (.expires_at | if . == null then null else utc end), scope: null}];
     def grant_inventory:
       . as $usage | try {
         value: [.cedar_ember.grants[]?
@@ -85,10 +83,8 @@ usage_project() {
                   else ["claude-grants-unavailable"] end)}
       catch {value: [], missing: ["claude-grants-unavailable"]};
     if $observation == "prepaid" then
-      try ($prepaid | if type != "object" then error("claude prepaid") else . end
-        | {value: prepaid_balances, missing: []})
-      catch {value: [], missing: ["claude-prepaid-unavailable"]}
-    elif $observation == "usage" then
+      $prepaid | prepaid_balances
+    else
     if type != "object" then error("usage body") else . end
     | {pool: $vendor,
        account: {auth_index: ($account.auth_index // null),
@@ -159,7 +155,7 @@ usage_project() {
         | if $windows == [] then error("z.ai windows") else
             $base + {account: ($base.account + {plan: .data.level}), windows: ($windows | from_entries)} end
       end
-    else error("usage observation") end
+    end
   ' 2>/dev/null
 }
 
@@ -200,7 +196,7 @@ EOF_CLAUDE
 
 usage_claude() {
   local delegate_usage_claude_account=${1:-null} delegate_usage_claude_agent version body result
-  local profile org prepaid inventory='{"value":[],"missing":[]}' missing=''
+  local profile org prepaid balances='[]' missing=''
   if ! version=$(claude --version 2>/dev/null) ||
     [[ ! $version =~ ^([0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.-]+)?)(\ \(Claude\ Code\))?$ ]]; then
     printf '%s\n' 'usage: claude version unavailable or invalid' >&2
@@ -217,20 +213,15 @@ usage_claude() {
   }
   # Only the captured OAuth profile field establishes the token's organization.
   # Optional failures preserve main usage without inventing a zero balance.
-  if profile=$(usage_claude_request 'https://api.anthropic.com/api/oauth/profile' 2>/dev/null) &&
-    org=$(jq -er '.organization.uuid | select(type == "string") | select(test("^[A-Za-z0-9-]+$"))' <<<"$profile" 2>/dev/null); then
-    if prepaid=$(usage_claude_request "https://api.anthropic.com/api/oauth/organizations/$org/prepaid/credits" 2>/dev/null) &&
-      inventory=$(usage_project claude "$delegate_usage_claude_account" null "$prepaid" prepaid <<<null); then
-      :
-    else
-      inventory='{"value":[],"missing":["claude-prepaid-unavailable"]}'
-    fi
-  else
+  if ! profile=$(usage_claude_request 'https://api.anthropic.com/api/oauth/profile' 2>/dev/null) ||
+    ! org=$(jq -er '.organization.uuid | select(type == "string") | select(test("^[A-Za-z0-9-]+$"))' <<<"$profile" 2>/dev/null); then
     missing=claude-prepaid-organization-unknown
+  elif ! prepaid=$(usage_claude_request "https://api.anthropic.com/api/oauth/organizations/$org/prepaid/credits" 2>/dev/null) ||
+    ! balances=$(usage_project claude null null "$prepaid" prepaid <<<null); then
+    balances='[]' missing=claude-prepaid-unavailable
   fi
-  jq --argjson inventory "$inventory" --arg missing "$missing" '
-    .balances = $inventory.value
-    | .missingExtras = ([$missing | select(. != "")] + $inventory.missing + .missingExtras)
+  jq --argjson balances "$balances" --arg missing "$missing" '
+    .balances = $balances | .missingExtras = ([$missing | select(. != "")] + .missingExtras)
   ' <<<"$result"
 }
 
