@@ -64,7 +64,7 @@ class CollectionTests(unittest.TestCase):
     def test_success_keeps_literal_allowance_and_overlapping_routes(self):
         """Reject collectors that lose duplicate offers or parse allowance in the helper."""
         snapshot = collect(["reader"], lambda argv, **kw: subprocess.CompletedProcess(argv, 0, ENVELOPE, "private-stderr"))
-        result = N.normalize(snapshot, NOW)
+        result = N.normalize(snapshot, NOW).model_dump()
         self.assertEqual(result["routes"], ROUTES)
         self.assertEqual(result["pools"]["instance/0"]["limits"][0]["remaining"], 40)
         self.assertEqual(result["diagnostics"], [])
@@ -99,7 +99,7 @@ class CollectionTests(unittest.TestCase):
         snapshot = collect(commands, run)
         self.assertCountEqual(calls, set(commands) - {None})
         self.assertEqual(set(snapshot.readers), {f"instance/{i}" for i, command in enumerate(commands) if command is not None})
-        result = N.normalize(snapshot, NOW)
+        result = N.normalize(snapshot, NOW).model_dump()
         self.assertEqual(result["routes"], ROUTES)
         for i, command in enumerate(commands):
             self.assertEqual(result["pools"][f"instance/{i}"]["limits"][0]["remaining"], None if command is None else 40)
@@ -123,7 +123,7 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         expected = 0 if recover else {"exit": 9, "timeout": 124, "oserror": 127, "unicode": 65}[outcome]
         self.assertEqual({capture.exit for capture in snapshot.readers.values()}, {expected})
-        result = N.normalize(snapshot, NOW)
+        result = N.normalize(snapshot, NOW).model_dump()
         self.assertEqual(result["routes"], ROUTES)
         self.assertNotIn("private", json.dumps(result))
         self.assertEqual(result["diagnostics"], [] if recover else [
@@ -139,7 +139,7 @@ class CollectionTests(unittest.TestCase):
         def run(argv, **kw):
             calls.append(argv)
             return subprocess.CompletedProcess(argv, 0, payload)
-        result = N.normalize(collect(["reader", "reader"], run), NOW)
+        result = N.normalize(collect(["reader", "reader"], run), NOW).model_dump()
         self.assertEqual(len(calls), 1)
         self.assertEqual(result["routes"], ROUTES)
         self.assertEqual(result["pools"]["instance/0"]["limits"][0]["remaining"], None)

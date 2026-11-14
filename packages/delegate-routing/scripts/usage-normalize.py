@@ -162,6 +162,42 @@ class Capture(Boundary):
     stdout: Any = None
 
 
+
+class Observation(BaseModel):
+    """Carry normalized allowance facts to ranking without parsing Reader fields again."""
+    capacity: Positive
+    enforced: bool | None
+    gateOpensAt: int | None
+    id: str
+    models: list[str]
+    naturalResetAt: int | None
+    observedAt: int | None
+    readerStatus: str | None
+    remaining: Amount | None
+    role: Literal["gate", "pace"]
+    status: Literal["invalid", "missing", "stale", "valid"]
+    unit: Literal["percentagePoint", "USD"]
+    used: Amount | None
+    windowSeconds: Positive | None
+
+
+class PoolEvidence(BaseModel):
+    """Keep scope completeness beside each credential's independent observations."""
+    limits: list[Observation]
+    readerMetadata: dict[str, list[dict[str, Any]] | None]
+    scopeResolved: bool
+
+
+class Normalized(BaseModel):
+    """Return trusted observations and safe diagnostics while retaining every route."""
+    asOf: int
+    capability: Literal["allowance-preview"] = "allowance-preview"
+    diagnostics: list[dict[str, str | int]]
+    pools: dict[str, PoolEvidence]
+    routes: list[Route]
+    runtime: str
+
+
 def metadata(document: Envelope | None, diagnostic):
     """Project valid extras independently so one bad entry cannot hide its siblings."""
     result = {}
@@ -276,7 +312,7 @@ def capture_observation(raw: Any, reader_pool: str, now: int, diagnostic):
     return observed, None
 
 
-def normalize(snapshot, now):
+def normalize(snapshot: Snapshot | dict, now: str) -> Normalized:
     """Return deterministic allowance facts using an explicit ISO 8601 clock."""
     now = int(TypeAdapter(Timestamp).validate_python(now).timestamp())
     snapshot = Snapshot.model_validate(snapshot)
@@ -297,5 +333,5 @@ def normalize(snapshot, now):
             diagnostic("unregistered-window", count=unresolved)
         pools[pool] = {"limits": observations, "readerMetadata": metadata(document, diagnostic),
                        "scopeResolved": document is not None and unresolved == 0}
-    return {"asOf": now, "capability": "allowance-preview", "diagnostics": diagnostics,
-            "pools": pools, "routes": [route.model_dump() for route in snapshot.routes], "runtime": snapshot.runtime}
+    return Normalized(asOf=now, diagnostics=diagnostics, pools=pools,
+                      routes=snapshot.routes, runtime=snapshot.runtime)

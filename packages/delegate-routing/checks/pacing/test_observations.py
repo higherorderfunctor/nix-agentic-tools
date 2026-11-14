@@ -91,7 +91,7 @@ class Observations(unittest.TestCase):
         """Whitespace cannot turn a different Reader pool into the registered pool."""
         value = snapshot()
         value["readers"]["budget"]["data"]["pool"] = pool
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertIn("pool-mismatch", reasons(result))
         self.assertEqual((limit(result)["status"], limit(result)["remaining"]), ("missing", None))
         self.assertFalse(result["pools"]["budget"]["scopeResolved"])
@@ -99,7 +99,7 @@ class Observations(unittest.TestCase):
     @given(specs, windows())
     def test_native_amounts_roles_and_resets(self, spec, window):
         """Capacity scales percentages without changing the declared unit or role."""
-        result = limit(N.normalize(snapshot(spec, window), NOW))
+        result = limit(N.normalize(snapshot(spec, window), NOW).model_dump())
         self.assertAlmostEqual(result["remaining"], spec.capacity * window.remainingPercent / 100)
         self.assertAlmostEqual(result["used"], spec.capacity * window.usedPercent / 100)
         self.assertEqual((result["role"], result["unit"], result["status"]), (spec.role, spec.unit, "valid"))
@@ -114,8 +114,8 @@ class Observations(unittest.TestCase):
         value = snapshot()
         instant = dt.datetime.fromisoformat(iso(EPOCH, offset)).replace(microsecond=microsecond).isoformat()
         value["readers"]["budget"]["finishedAt"] = instant
-        first = N.normalize(value, instant)
-        self.assertEqual(first, N.normalize(value, NOW))
+        first = N.normalize(value, instant).model_dump()
+        self.assertEqual(first, N.normalize(value, NOW).model_dump())
         self.assertEqual((first["asOf"], limit(first)["observedAt"]), (EPOCH, EPOCH))
 
     def test_timestamp_boundary_has_one_text_contract(self):
@@ -130,7 +130,7 @@ class Observations(unittest.TestCase):
         """Exact registrations preserve canonical ids and refuse unknown scope expansion."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"].update({f"7d:private-{i}": {} for i in range(count)})
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual(limit(result)["models"], ["canonical-a"])
         self.assertFalse(result["pools"]["budget"]["scopeResolved"])
         self.assertIn({"pool": "budget", "reason": "unregistered-window", "count": count}, result["diagnostics"])
@@ -143,7 +143,7 @@ class Observations(unittest.TestCase):
         value["pools"]["budget"]["limits"]["allowance"]["role"] = role
         value["readers"]["budget"]["data"]["windows"]["7d:fable"].update(
             remainingPercent=remaining, usedPercent=100 - remaining, resetsAt=None)
-        result = limit(N.normalize(value, NOW))
+        result = limit(N.normalize(value, NOW).model_dump())
         self.assertEqual(result["status"], "valid" if remaining == 100 or role == "gate" and remaining > 0 else "invalid")
         self.assertIsNone(result["naturalResetAt"])
         self.assertIsNone(result["gateOpensAt"])
@@ -155,11 +155,11 @@ class Observations(unittest.TestCase):
         window.update(remainingPercent=0, usedPercent=100, windowSeconds=2678400)
         for seconds, status in [(2678401, "valid"), (2678402, "invalid"), (0, "stale")]:
             window["resetsAt"] = iso(EPOCH + seconds)
-            result = limit(N.normalize(value, NOW))
+            result = limit(N.normalize(value, NOW).model_dump())
             self.assertEqual((result["status"], result["remaining"], result["naturalResetAt"]), (status, 0, EPOCH + seconds))
         window["resetsAt"] = iso(EPOCH + 2678400)
         for age, status in [(3600, "valid"), (3601, "stale")]:
-            self.assertEqual(limit(N.normalize(value, iso(EPOCH + age)))["status"], status)
+            self.assertEqual(limit(N.normalize(value, iso(EPOCH + age)).model_dump())["status"], status)
 
     @given(st.sampled_from(["finishedAt", "resetsAt", "windowSeconds"]),
            st.sampled_from([None, True, "private-invalid", {}, []]))
@@ -170,7 +170,7 @@ class Observations(unittest.TestCase):
         window = capture["data"]["windows"]["7d:fable"]
         window.update(remainingPercent=0, usedPercent=100)
         (capture if field == "finishedAt" else window)[field] = bad
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual((limit(result)["remaining"], limit(result)["used"], limit(result)["status"]), (0, 40, "invalid"))
         self.assertNotIn("private-", json.dumps(result))
 
@@ -180,7 +180,7 @@ class Observations(unittest.TestCase):
         """Malformed optional arrays cannot erase a valid independent allowance."""
         value = snapshot()
         value["readers"]["budget"]["data"][field] = bad
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
         self.assertIn("invalid-extras", reasons(result))
         self.assertNotIn("private-", json.dumps(result))
@@ -188,10 +188,10 @@ class Observations(unittest.TestCase):
     def test_absent_and_empty_extras_are_distinct(self):
         """Absent extras are unknown while explicit empty arrays are known empty."""
         value = snapshot()
-        metadata = N.normalize(value, NOW)["pools"]["budget"]["readerMetadata"]
+        metadata = N.normalize(value, NOW).model_dump()["pools"]["budget"]["readerMetadata"]
         self.assertEqual(metadata, {"balances": None, "bonuses": None})
         value["readers"]["budget"]["data"].update(balances=[], bonuses=[])
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual(result["pools"]["budget"]["readerMetadata"], {"balances": [], "bonuses": []})
         self.assertNotIn("invalid-extras", reasons(result))
 
@@ -201,7 +201,7 @@ class Observations(unittest.TestCase):
         value = snapshot()
         bonus = N.Bonus(count=count, expiresAt=None, kind="promo_credits").model_dump(mode="json")
         value["readers"]["budget"]["data"]["bonuses"] = [bonus, {**bonus, "count": invalid}]
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual(result["pools"]["budget"]["readerMetadata"]["bonuses"],
                          [{"count": count, "expiresAt": None, "kind": "promo_credits"}])
         self.assertIn("invalid-extras", reasons(result))
@@ -212,7 +212,7 @@ class Observations(unittest.TestCase):
         value = snapshot()
         value["readers"]["budget"]["data"]["account"] = {
             "auth_index": "private-auth", "name": "private-name", "plan": "private-plan"}
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "valid"))
         self.assertNotIn("private-", json.dumps(result))
 
@@ -222,7 +222,7 @@ class Observations(unittest.TestCase):
         value = snapshot()
         value["readers"]["budget"]["data"]["balances"] = [
             {"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}]
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         allowed = (kind, unit) in {("credits", "credits"), ("extra_usage", "USD")}
         self.assertEqual(result["pools"]["budget"]["readerMetadata"]["balances"],
                          [{"kind": kind, "unit": unit, "remaining": 7, "expiresAt": None}] if allowed else [])
@@ -237,7 +237,7 @@ class Observations(unittest.TestCase):
                       {"kind": "extra_usage", "unit": "USD", "remaining": 7, "expiresAt": NOW}],
             bonuses=[{"kind": "rate_limit_reset", "count": 2, "expiresAt": NOW}, {"kind": "private"}],
         )
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual(result["pools"]["budget"]["readerMetadata"], {
             "balances": [{"kind": "credits", "unit": "credits", "remaining": 12, "expiresAt": None},
                          {"kind": "extra_usage", "unit": "USD", "remaining": 7, "expiresAt": EPOCH}],
@@ -257,7 +257,7 @@ class Observations(unittest.TestCase):
         patch, reason = case
         value = snapshot()
         value["readers"]["budget"].update(patch, stderr="private")
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual(result["routes"], [
             {"id": "canonical-a", "maker": None, "model": "served-fable"},
             {"id": "canonical-b", "maker": "synthetic", "model": "fable"},
@@ -271,19 +271,19 @@ class Observations(unittest.TestCase):
     def test_stdout_and_decoded_replay_agree(self, window):
         """JSON captures and decoded captures produce the same deterministic facts."""
         value = snapshot(window=window)
-        expected = N.normalize(value, NOW)
+        expected = N.normalize(value, NOW).model_dump()
         capture = value["readers"]["budget"]
         capture["stdout"] = json.dumps(capture.pop("data"))
-        self.assertEqual(N.normalize(value, NOW), expected)
+        self.assertEqual(N.normalize(value, NOW).model_dump(), expected)
         capture["data"] = {"private": "ignored because stdout takes precedence"}
-        self.assertEqual(N.normalize(value, NOW), expected)
+        self.assertEqual(N.normalize(value, NOW).model_dump(), expected)
 
     @given(st.integers(201, 1500))
     def test_json_depth_is_bounded(self, depth):
         """Excessive JSON nesting becomes a safe parse failure before envelope validation."""
         value = snapshot()
         value["readers"]["budget"]["stdout"] = "[" * depth + "0" + "]" * depth
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertIn("invalid-json", reasons(result))
         self.assertEqual(limit(result)["status"], "missing")
 
@@ -305,7 +305,7 @@ class Observations(unittest.TestCase):
         """Unknown enforcement leaves valid measured allowance available for inspection."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = status
-        result = limit(N.normalize(value, NOW))
+        result = limit(N.normalize(value, NOW).model_dump())
         self.assertEqual((result["readerStatus"], result["remaining"], result["status"]), (status, 30, "valid"))
         self.assertEqual(result["enforced"], True if status in {"active", "critical", "estimated", "normal", "ok", "warning"} else None)
 
@@ -314,7 +314,7 @@ class Observations(unittest.TestCase):
         """A malformed status cannot erase quantities or expose a non-scalar payload."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = bad
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "invalid"))
         self.assertIsNone(limit(result)["readerStatus"])
         self.assertIn("invalid-status", reasons(result))
@@ -329,7 +329,7 @@ class Observations(unittest.TestCase):
         windows = value["readers"]["budget"]["data"]["windows"]
         windows["monthly"] = windows["7d:fable"].copy()
         windows["7d:fable"]["remainingPercent"] = bad
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         broken, independent = result["pools"]["budget"]["limits"]
         self.assertEqual((broken["status"], broken["remaining"]), ("invalid", None))
         self.assertEqual((independent["status"], independent["remaining"]), ("valid", 30))
@@ -339,11 +339,11 @@ class Observations(unittest.TestCase):
         """Missing captures keep slots; future capture times preserve independently measured amounts."""
         value = snapshot()
         value["readers"]["budget"]["finishedAt"] = "2026-11-12T01:35:01Z"
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertIn("future-observation", reasons(result))
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (30, "invalid"))
         value["readers"].clear()
-        result = N.normalize(value, NOW)
+        result = N.normalize(value, NOW).model_dump()
         self.assertIn("missing-capture", reasons(result))
         self.assertEqual((limit(result)["remaining"], limit(result)["status"]), (None, "missing"))
 
@@ -353,12 +353,12 @@ class Observations(unittest.TestCase):
             value = snapshot()
             value["pools"]["budget"]["limits"]["allowance"].update(patch)
             with self.assertRaisesRegex(ValidationError, error):
-                N.normalize(value, NOW)
+                N.normalize(value, NOW).model_dump()
         value = snapshot()
         limits = value["pools"]["budget"]["limits"]
         limits["duplicate"] = limits["allowance"].copy()
         with self.assertRaisesRegex(ValidationError, "duplicate-window-registration"):
-            N.normalize(value, NOW)
+            N.normalize(value, NOW).model_dump()
 
 
 if __name__ == "__main__":
