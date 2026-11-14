@@ -27,11 +27,11 @@ count and set `scopeResolved` to false. They grant no unrestricted allowance.
 Each capture has integer `exit`, ISO 8601 `finishedAt` with an offset, and JSON
 text `stdout`. Offline callers can instead supply the decoded envelope as
 `data`. If `stdout` is present it takes precedence. Nonzero exits ignore the
-payload and report only the exit status. Successful envelopes have `account`
-(with nullable string `auth_index`, `name` and `plan`), `pool` exactly matching
-`readerPool` (including whitespace), and a `windows` map. Concatenated accounts
-and excessive JSON nesting are refused by the JSON parser. Account values and
-unknown fields are never copied to output.
+payload and report the exit status plus any safe capture-time diagnostic.
+Successful envelopes have `account` (with nullable string `auth_index`, `name`
+and `plan`), `pool` exactly matching `readerPool` (including whitespace), and a
+`windows` map. Concatenated accounts and excessive JSON nesting are refused by
+the JSON parser. Account values and unknown fields are never copied to output.
 
 Window quantities, timing and status are checked independently. Bad timing
 preserves measured zero. Extras are not projected and cannot erase valid

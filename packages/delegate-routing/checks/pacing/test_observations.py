@@ -253,6 +253,25 @@ class Observations(unittest.TestCase):
         capture["data"] = {"private": "ignored because stdout takes precedence"}
         self.assertEqual(normalize(value, NOW), expected)
 
+    @given(st.one_of(st.none(), st.booleans(), st.integers(), st.binary(),
+                     st.lists(st.integers()), st.dictionaries(st.text(), st.integers())))
+    def test_nontext_stdout_cannot_fall_back_to_data(self, stdout):
+        """Supplied nontext stdout yields invalid-json even when decoded data is valid."""
+        value = snapshot()
+        value["readers"]["budget"]["stdout"] = stdout
+        result = normalize(value, NOW)
+        self.assertIn("invalid-json", reasons(result))
+        self.assertEqual((limit(result)["status"], limit(result)["remaining"]), ("missing", None))
+        self.assertFalse(result["pools"]["budget"]["scopeResolved"])
+
+    def test_json_bytes_are_not_a_second_stdout_format(self):
+        """Even valid UTF-8 JSON bytes are refused by the strict text boundary."""
+        value = snapshot()
+        value["readers"]["budget"]["stdout"] = json.dumps(value["readers"]["budget"]["data"]).encode()
+        result = normalize(value, NOW)
+        self.assertIn("invalid-json", reasons(result))
+        self.assertEqual(limit(result)["status"], "missing")
+
     @given(st.integers(201, 1500))
     def test_json_depth_is_bounded(self, depth):
         """Excessive JSON nesting becomes a safe parse failure before envelope validation."""
@@ -277,7 +296,7 @@ class Observations(unittest.TestCase):
         st.text().filter(lambda status: status not in {"active", "critical", "estimated", "normal", "ok", "warning"}),
     ))
     def test_status_controls_enforcement_only(self, status):
-        """Unknown enforcement leaves valid measured allowance available for inspection."""
+        """Unknown enforcement leaves valid measured allowance available in the typed result."""
         value = snapshot()
         value["readers"]["budget"]["data"]["windows"]["7d:fable"]["status"] = status
         result = limit(normalize(value, NOW))
