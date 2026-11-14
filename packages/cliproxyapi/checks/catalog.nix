@@ -109,12 +109,12 @@
       renamed = render (evaluate [
         fixture
         {
+          ai.cliproxyapi.servedModels = {
+            opencode-go.configured = [chosen];
+            zhipuai.configured = [chosenZhipuai];
+          };
           ai.catalog = {
             models.configured = {
-              aliases = {
-                opencode-go = [chosen];
-                zhipuai = [chosenZhipuai];
-              };
               source = ["configured identity"];
             };
             vendors = {
@@ -151,14 +151,16 @@
               catalog.models = lib.mapAttrs (_: identity: identity // {source = ["maker exclusion fixture"];}) {
                 fixture-blocked = {
                   maker = "fixture-maker";
-                  aliases.opencode-go = ["fixture-alias"];
                 };
                 fixture-kept = {
                   maker = "fixture-other";
-                  aliases.zhipuai = ["fixture-alias" "fixture-blocked"];
                 };
                 fixture-null.maker = null;
                 fixture-unset = {};
+              };
+              cliproxyapi.servedModels = {
+                opencode-go.fixture-blocked = ["fixture-alias"];
+                zhipuai.fixture-kept = ["fixture-alias" "fixture-blocked"];
               };
               cliproxyapi.instances.main = {
                 enable = true;
@@ -255,6 +257,19 @@
         (builtins.tryEval (builtins.deepSeq
           (evaluate [fixture {ai.catalog.vendors.${vendor}.models = ["fixture-missing-identity"];}]).config.ai.cliproxyapi.instances.main.credentials.${vendor}
           true)).success;
+      # A selected identity cannot silently render an unmeasured owner spelling.
+      acceptsUnknownServed = vendor: id:
+        (builtins.tryEval (builtins.deepSeq
+          (evaluate [
+            fixture
+            {
+              ai.catalog.vendors.${vendor}.models = [id];
+              ai.cliproxyapi.servedModels.${vendor}.${id} = ["fixture-unmeasured"];
+            }
+          ]).config.ai.cliproxyapi.instances.main.credentials.${
+            vendor
+          }
+          true)).success;
       # Repeated owner declarations describe one offer, including equal-priority module merges.
       repeated = vendor: id:
         render (evaluate [
@@ -265,17 +280,19 @@
       # No exclusive flag is set: maker filtering itself must refuse the shared alias.
       ambiguousExclusion = evaluate [
         {
-          ai.catalog.models = lib.genAttrs ["fixture-first" "fixture-second"] (_: {
-            aliases.opencode-go = ["fixture-shared"];
-            maker = "fixture-maker";
-            source = ["maker exclusion fixture"];
-          });
-          ai.cliproxyapi.instances.main.credentials.filtered = {
-            excludeMakers = ["fixture-maker"];
-            apiKey = {
-              apis.chat.base-url = "https://filtered.example/chat";
-              key = redact.file "/run/secrets/filtered";
-              models = ["fixture-shared"];
+          ai = {
+            catalog.models = lib.genAttrs ["fixture-first" "fixture-second"] (_: {
+              maker = "fixture-maker";
+              source = ["maker exclusion fixture"];
+            });
+            cliproxyapi.servedModels.opencode-go = lib.genAttrs ["fixture-first" "fixture-second"] (_: ["fixture-shared"]);
+            cliproxyapi.instances.main.credentials.filtered = {
+              excludeMakers = ["fixture-maker"];
+              apiKey = {
+                apis.chat.base-url = "https://filtered.example/chat";
+                key = redact.file "/run/secrets/filtered";
+                models = ["fixture-shared"];
+              };
             };
           };
         }
@@ -300,6 +317,7 @@
             resolver = import ../lib/providers.nix {
               inherit lib;
               catalog = ambiguousExclusion.config.ai.catalog;
+              servedModels = ambiguousExclusion.config.ai.cliproxyapi.servedModels;
             };
           in
             (resolver.canonical null "fixture-shared").errors
@@ -328,11 +346,11 @@
                 provider = "openai-compatible-filtered";
               }
             ];
-          "lost alias or missing/wrong maker" =
+          "lost owner mapping or missing/wrong maker" =
             lib.all (id: let
               identity = catalog.models.${id};
             in
-              expectedMaker id != "" && identity.maker == expectedMaker id && sorted identity.aliases.opencode-go == lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id) (builtins.attrNames go)
+              expectedMaker id != "" && identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)) (builtins.attrNames go)
             && lib.all (id: catalog.models.${id}.maker == "zhipuai") zhipuai.models;
           "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "zhipuai" == expectedZhipuai;
           "maker exclusion ignored or native APIs changed" = offers filteredGo "opencode-go" == expectedFilteredGo;
@@ -367,6 +385,7 @@
           "session header missing from API block" = lib.all (api: (block result.config.ai.cliproxyapi.instances.main.settings families.${api} "opencode-go").headers.x-opencode-session == manual.literalHeader pkgs "$CPA-SESSION-ID") (builtins.attrNames expectedGo);
           "standalone constructor diverges from module defaults" = manual.vendors == constructed.vendors;
           "unknown identity reaches vendor transport defaults" = lib.all (vendor: !(acceptsUnknownIdentity vendor)) ["opencode-go" "zhipuai"];
+          "unknown served id reaches vendor transport defaults" = !(acceptsUnknownServed "opencode-go" chosen) && !(acceptsUnknownServed "zhipuai" chosenZhipuai);
           "unknown maker exclusion accepted before rendering" =
             !(acceptsExclusions {
               excludeMakers = ["fixture-typo"];

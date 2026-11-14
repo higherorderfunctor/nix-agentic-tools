@@ -2,17 +2,12 @@
 {lib}: let
   # Use ordinary module fields so independent owners merge at each leaf.
   inherit (lib) mkOption types;
-  # Model identifiers and aliases are exact, nonempty strings.
+  # Model identifiers are exact, nonempty strings.
   names = types.listOf types.nonEmptyStr;
 in {
   # An unknown maker is valid for a configured finite-only identity.
   model = types.submodule {
     options = {
-      aliases = mkOption {
-        type = types.attrsOf names;
-        default = {};
-        description = "Exact vendor spellings of this canonical model.";
-      };
       maker = mkOption {
         type = types.nullOr types.nonEmptyStr;
         default = null;

@@ -7,7 +7,6 @@
   # Z.ai serves GLM models; zhipuai is the maker namespace upstream ids use (OpenCode Go canonical_id).
   catalog = {
     models = lib.genAttrs extracted.models (_: {
-      aliases = {};
       maker = "zhipuai";
       source = ["cliproxyapi:zhipuai.models"];
     });
@@ -16,15 +15,19 @@
 in {
   # Static contributions do not depend on the consumer's merged configuration.
   inherit catalog;
+  servedModels = lib.genAttrs extracted.models (id: [id]);
   # Both standalone callers and instances use this constructor and the selected identities.
-  construct = merged:
+  construct = servedModels: merged:
     extracted
     // {
       codexShellArgCleanup = true;
       models = map (id: let
-        aliases = merged.models.${id}.aliases.zhipuai or [];
+        spellings = servedModels.${id} or [];
+        upstream = lib.findFirst (name: lib.elem name extracted.models) null spellings;
       in
-        lib.findFirst (name: lib.elem name extracted.models) id ([id] ++ aliases))
+        if upstream == null
+        then throw "cliproxyapi zhipuai: catalog model `${id}` has unknown served ids ${builtins.toJSON spellings}; no extracted transport metadata."
+        else upstream)
       merged.vendors.zhipuai.models;
       toolAliases.ToolSearch = "ToolSearch_";
     };
