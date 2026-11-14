@@ -137,6 +137,7 @@
   # One projection supplies both generated agents and the skill/manifest builder.
   cpaRoutes = import ../lib/cpa-routes.nix {
     inherit lib catalog;
+    servedModels = config.ai.cliproxyapi.servedModels;
     instances = config.ai.cliproxyapi.instances or {};
     inferenceInstances = config.ai.internal.inferenceInstances or {};
     selections = lib.genAttrs supportedRuntimes (runtime:

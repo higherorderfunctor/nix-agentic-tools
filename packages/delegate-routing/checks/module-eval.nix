@@ -1061,7 +1061,6 @@
         && map (e: e.model) (inherited {
           catalog.models.test-sonnet-9-1 = {
             maker = "fixture-maker";
-            aliases = {};
           };
           families = lib.recursiveUpdate content.families {anthropic.sonnet.match = "test-sonnet-*";};
           resolvedAgentFiles = (import ../lib/agent-files.nix {inherit lib;}).resolve ["test-sonnet-4-5" "test-sonnet-9-1" "test-sonnet-5-5"] [

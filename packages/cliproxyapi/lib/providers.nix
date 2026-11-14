@@ -2,10 +2,11 @@
 {
   lib,
   catalog ? null,
+  servedModels ? (import ./vendors {inherit lib;}).servedModels,
 }: let
   inherit (lib) mkOption types;
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (import ./vendors {inherit lib catalog;}) opencodeGo vendors;
+  inherit (import ./vendors {inherit lib catalog servedModels;}) opencodeGo vendors;
 
   # CPA's OpenAICompatibleProviderKey preserves one exact name and one prefix.
   # Provider names are ASCII (../modules/instances.nix), so toLower agrees.
@@ -155,13 +156,13 @@
 
   # Exact canonical ids win; scoped aliases never borrow another vendor's spelling.
   canonical = vendor: spelling: let
-    matches = builtins.attrNames (lib.filterAttrs (_: model:
-      lib.elem spelling (
-        if vendor == null
-        then lib.concatLists (builtins.attrValues model.aliases)
-        else model.aliases.${vendor} or []
-      ))
-    catalog.models);
+    mappings =
+      if vendor == null
+      then builtins.attrValues servedModels
+      else [(servedModels.${vendor} or {})];
+    matches = lib.sort builtins.lessThan (lib.unique (lib.concatMap (mapping:
+      builtins.attrNames (lib.filterAttrs (_: spellings: lib.elem spelling spellings) mapping))
+    mappings));
   in
     if catalog.models ? ${spelling}
     then {

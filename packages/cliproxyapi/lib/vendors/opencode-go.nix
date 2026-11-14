@@ -15,7 +15,6 @@
         then null
         else lib.head (lib.splitString "/" canonical);
     in {
-      aliases.opencode-go = lib.optional (canonical != null) canonical;
       maker =
         if id == "iceman-contributor-free"
         then "iceman"
@@ -26,6 +25,8 @@
         ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
     })
     extracted;
+  # External spellings belong to this owner, never the shared identity catalog.
+  servedModels = lib.mapAttrs (id: model: [id] ++ lib.optional (model ? canonical_id) model.canonical_id) extracted;
   # Full extracted offers supply defaults; consumers choose their own model subsets.
   catalog = {
     models = identities;
@@ -90,18 +91,17 @@
   };
 in {
   # Merged identities select vendor metadata; no transport facts leave this owner.
-  construct = merged:
+  construct = servedModels: merged:
     opencodeGo (lib.listToAttrs (map (id: let
-      identity = merged.models.${id};
-      spellings = [id] ++ (identity.aliases.opencode-go or []);
+      spellings = servedModels.${id} or [];
       upstream = lib.findFirst (name: lib.elem name spellings || lib.elem (extracted.${name}.canonical_id or null) spellings) null (builtins.attrNames extracted);
     in
       if upstream == null
-      then throw "cliproxyapi opencode-go: catalog model `${id}` has no extracted transport metadata."
+      then throw "cliproxyapi opencode-go: catalog model `${id}` has unknown served ids ${builtins.toJSON spellings}; no extracted transport metadata."
       else lib.nameValuePair upstream extracted.${upstream})
     merged.vendors.opencode-go.models));
   # Static definitions are read by modules/catalog.nix and standalone construction.
-  inherit catalog;
+  inherit catalog servedModels;
   # checks/catalog.nix supplies synthetic catalogs to exercise placement refusals.
   inherit opencodeGo;
 }
