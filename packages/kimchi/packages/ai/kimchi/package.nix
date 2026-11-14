@@ -11,6 +11,7 @@
   ripgrep,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) fetchzip lib;
   pnpm = pkgs.ai.generic.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
@@ -69,11 +70,10 @@
   # the source. Rehash every reference (including peer snapshots) without
   # regenerating unrelated lock resolutions. Registry tarball bytes stay intact.
   piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
-  patchedSource = pkgs.applyPatches {
+  patchedSource = patching.source {
     src = kimchiSource;
     # Apply source patches once for both the build and settings extractor.
-    patchFlags = ["-p1" "--fuzz=0"];
-    patches = [
+    patchFiles = [
       ./command-shell.patch
       ./disable-self-update.patch
       ./keep-telemetry-opt-out.patch
@@ -98,7 +98,7 @@
     inherit (extractionSources) kimchi;
     # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
     dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
-    inherit patchedDependencies pkgs;
+    inherit packageLib patchedDependencies pkgs;
     inherit (sources) version;
   };
   # The `network` fact: ../../../lib/network.nix.
@@ -295,6 +295,7 @@ in
     src = patchedSource;
 
     preBuild = ''
+      ${patching.validateDependencies {inherit patchedDependencies;}}
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
     '';
 
@@ -304,6 +305,7 @@ in
       inherit (finalAttrs) src version;
       inherit pnpm;
       fetcherVersion = 3;
+      postInstall = patching.validateDependencies {inherit patchedDependencies;};
       hash = sources.pnpmDepsHash or lib.fakeHash;
     };
     nativeBuildInputs =
@@ -363,6 +365,7 @@ in
 
     installPhase = ''
       runHook preInstall
+      ${patching.validateDependencies {inherit patchedDependencies;}}
       mkdir -p "$out"
       cp -r dist/bin dist/share "$out/"
       runHook postInstall

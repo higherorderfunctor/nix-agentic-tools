@@ -1,9 +1,8 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-20 — updates are dispatched as the CI `Update`
-> workflow; source patching defers to the overlays `source-patches` rule: a
-> no-fuzz `.patch`, or `--replace-fail` for churning text.
->
+> **Last verified:** 2026-11-13 — source builds use the shared patch helper for
+> strict context and backup suppression.
+
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
 ### Overlay Architecture
@@ -88,9 +87,9 @@ than a git repo, and three things follow that do NOT follow for the
 
 ### A local patch is an update-cadence decision, not a detail
 
-`patches = [ ./<name>-<topic>.patch ]` against upstream's PUBLISHED BUILD OUTPUT
-(not source) is maximally fragile: any upstream rebuild of the patched file
-breaks it, and no update script can re-author a patch.
+A helper-applied `patchFiles = [ ./<name>-<topic>.patch ]` against upstream's
+PUBLISHED BUILD OUTPUT (not source) is maximally fragile: any upstream rebuild
+of the patched file breaks it, and no update script can re-author a patch.
 
 The decision this drives is about SWEEPABILITY, not about which version to
 carry. Tracking `dist-tags.latest` is normal and expected; what the patch costs
@@ -131,11 +130,11 @@ WRONG shape for it:
   rebuilt `dist/`. The aihubmix failure mode — a rebuild with no source change
   invalidating every hunk — cannot occur.
 - Express it as `source-patches.md` (overlays category) says: a `.patch` with
-  `patchFlags = ["-p1" "--fuzz=0"]`, or `substituteInPlace … --replace-fail` in
-  `postPatch` when the target is text that churns. Both turn drift into a loud
-  build failure. A `.patch` under stdenv's default flags applies with fuzz and
-  can land in the wrong place silently; that, not the `.patch` format, is what
-  to avoid.
+  `patchFiles` passed to `(packageLib.patching {inherit pkgs;}).attrs`, or
+  `substituteInPlace … --replace-fail` in `postPatch` when the target is text
+  that churns. Both turn drift into a loud build failure. A `.patch` under
+  stdenv's default flags applies with fuzz and can land in the wrong place
+  silently; that, not the `.patch` format, is what to avoid.
 - So keep the `config.update.targets` row. A sweep that goes red here is the
   SIGNAL, not a channel-occupying nuisance: it means upstream touched the exact
   lines being patched, which is precisely when a human must look.

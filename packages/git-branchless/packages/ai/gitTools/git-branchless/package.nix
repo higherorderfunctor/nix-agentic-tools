@@ -63,40 +63,41 @@
     extractDir = ../../../../extract;
   };
 
-  package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
-    name = "git-branchless";
-    src = gbSrc;
-    cargoDeps = rustPlatform.importCargoLock {
-      lockFile = gbSrc + "/Cargo.lock";
-    };
-    patches =
-      (prev.patches or [])
-      ++ [
-        ../../../../patches/protect-checked-out-branches.patch
-        ../../../../patches/repair-idempotent.patch
-        ../../../../patches/restack-scope.patch
-      ];
-    postPatch = "";
-    nativeInstallCheckInputs =
-      builtins.filter
-      (p: (p.pname or "") != "version-check-hook")
-      (prev.nativeInstallCheckInputs or []);
-    passthru =
-      (prev.passthru or {})
-      // rustPlatform.passthru
-      // {
-        inherit extracted patchedSource;
-        # Source and Cargo.lock move with the normal flake-input sweep.
-        updateFlakeInput = "git-branchless";
+  package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev:
+    (packageLib.patching {inherit pkgs;}).override prev {
+      name = "git-branchless";
+      src = gbSrc;
+      cargoDeps = rustPlatform.importCargoLock {
+        lockFile = gbSrc + "/Cargo.lock";
       };
-    meta =
-      (removeAttrs prev.meta ["maintainers"])
-      // {
-        # Re-inherit description to regenerate meta.position so
-        # back traces point at this override, not the base
-        # nixpkgs definition.
-        inherit (prev.meta) description;
-      };
-  });
+      patchFiles =
+        (prev.patches or [])
+        ++ [
+          ../../../../patches/protect-checked-out-branches.patch
+          ../../../../patches/repair-idempotent.patch
+          ../../../../patches/restack-scope.patch
+        ];
+      postPatch = "";
+      nativeInstallCheckInputs =
+        builtins.filter
+        (p: (p.pname or "") != "version-check-hook")
+        (prev.nativeInstallCheckInputs or []);
+      passthru =
+        (prev.passthru or {})
+        // rustPlatform.passthru
+        // {
+          inherit extracted patchedSource;
+          # Source and Cargo.lock move with the normal flake-input sweep.
+          updateFlakeInput = "git-branchless";
+        };
+      meta =
+        (removeAttrs prev.meta ["maintainers"])
+        // {
+          # Re-inherit description to regenerate meta.position so
+          # back traces point at this override, not the base
+          # nixpkgs definition.
+          inherit (prev.meta) description;
+        };
+    });
 in
   package

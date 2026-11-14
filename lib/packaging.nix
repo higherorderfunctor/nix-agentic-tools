@@ -13,6 +13,9 @@
 # body to avoid the self-reference would be the DRY loss this file
 # exists to prevent. Same shape as lib/ai/transformers/*.nix.
 rec {
+  # Strict patch application shared by recipes and packaging checks.
+  patching = import ./packaging/patching.nix;
+
   # The flake attribute path of a package in the internal unfree-enabled set
   # (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
   # every generated script that reads a package by name goes through here.

@@ -4,6 +4,7 @@
   lib,
   pkgs,
 }: let
+  patchPolicyPython = import ../checks/packaging/patch-policy-python.nix pkgs;
   shellStrict = import ./shell-strict.nix;
   strictShellApplication = import ../lib/strict-shell-application.nix pkgs;
 
@@ -99,6 +100,20 @@
         stages = ["pre-commit"];
       };
       ci.backend = "git-hooks";
+    };
+    patch-policy = {
+      role = "validator";
+      hook = {
+        enable = true;
+        name = "patch-policy";
+        entry = "${patchPolicyPython}/bin/python ${../checks/packaging/patch-policy.py}";
+        files = "^(packages|lib|checks|dev)/.*\\.nix$";
+        pass_filenames = false;
+      };
+      ci = {
+        backend = "external";
+        check = "patch-policy";
+      };
     };
     reject-default-branch-commit = {
       role = "commit-guard";

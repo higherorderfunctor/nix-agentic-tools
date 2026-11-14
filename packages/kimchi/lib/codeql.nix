@@ -18,9 +18,11 @@
   dependencies,
   # Validated JSON from Kimchi's pnpm-workspace.yaml, shared with install-runtime.mjs.
   patchedDependencies,
+  packageLib,
   pkgs,
   version,
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) lib;
   meta = {inherit (engine.meta) platforms;};
   # Dependencies land under node_modules, where Kimchi's imports resolve them.
@@ -35,13 +37,14 @@
   # they are a third of pi's bytes.
   source =
     pkgs.runCommand "kimchi-codeql-source-${version}" {
-      nativeBuildInputs = [pkgs.gitMinimal pkgs.jq];
+      nativeBuildInputs = [pkgs.jq];
       inherit meta;
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out/kimchi" # bare-commands: ok (runCommand builder PATH)
       cp -R --no-preserve=mode ${kimchi}/src ${kimchi}/package.json ${kimchi}/tsconfig.json "$out/kimchi/" # bare-commands: ok (runCommand builder PATH)
+      ${patching.validate ''"$out"''}
       find "$out/kimchi/src" -name __mocks__ -type d -prune -exec rm -rf {} +
       find "$out/kimchi/src" -name '*.test.ts' -type f -delete
       for tree in ${lib.escapeShellArgs (map toString dependencies)}; do
@@ -75,8 +78,16 @@
         # pnpm accepts missing EOF markers and unequal leading/trailing
         # context counts. GNU patch --fuzz=0 rejects those pi 1.3.0 hunks.
         # Match every context line with Git, allowing whitespace changes.
-        git -C "$dest" apply --ignore-space-change ${kimchi}/"$file"
+        (
+          cd "$dest"
+          ${patching.command {
+        backend = "git";
+        ignoreSpaceChange = true;
+        patchFiles = ["-"];
+      }}
+        ) < ${kimchi}/"$file"
       done < patches
+      ${patching.validate ''"$out"''}
       find "$out" -name '*.map' -type f -delete
     '';
 

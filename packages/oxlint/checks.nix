@@ -1,4 +1,9 @@
-{pkgs, ...}: let
+{
+  packageLib,
+  pkgs,
+  ...
+}: let
+  patching = packageLib.patching {inherit pkgs;};
   releases = {
     "3.10.1" = "sha256-7BFATrr7E3/mh9Yu8MNB0OqtKD8XXv8BZz4855i3pdk=";
     "3.10.4" = "sha256-TGIOOTGV8plTpjATQ3l747UAH+nBR3nIrsJo43FBHfY=";
@@ -7,21 +12,32 @@
   patch = ./patches/oxlint-napi-rs-cli.patch;
   verify = ./src/verify-napi-patch.mjs;
 in {
-  # Exercise the real offline configure hook and production preBuild probe,
-  # without compiling Rust. This catches a probe scheduled before pnpm installs.
+  # Run the offline install hook and probe without compiling Rust.
+  # A probe scheduled before pnpm installs must fail.
   checks.oxlint-napi-materialization = package.overrideAttrs (_: {
     name = "oxlint-napi-materialization";
     nativeBuildInputs = [pkgs.nodejs_24 package.pnpmDeps.pnpm pkgs.pnpmConfigHook];
     buildInputs = [];
-    buildPhase = "runHook preBuild";
-    installPhase = "touch $out";
+    buildPhase = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      runHook preBuild
+    '';
+    installPhase = ''
+      ${patching.validateDependencies {
+        inherit (package) patchedDependencies;
+      }}
+      touch "$out"
+    '';
     doInstallCheck = false;
     dontFixup = true;
   });
   checks.oxlint-napi-patch =
     pkgs.runCommand "oxlint-napi-patch" {
-      nativeBuildInputs = [pkgs.gitMinimal pkgs.nodejs pkgs.python3];
+      nativeBuildInputs = [pkgs.nodejs pkgs.python3];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       python3 ${./checks/patch-meta.py} ${./src/oxlint-pnpm-patch-meta.awk}
       ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (version: hash: let
           source = pkgs.fetchurl {
@@ -40,13 +56,21 @@ in {
             exit 1
           fi
           grep -F 'spawn EPERM' pristine.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli" apply ${patch}
+          ${patching.command {
+            backend = "git";
+            directory = "peers-${version}/@napi-rs+cli@${version}_first/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           if node ${verify} "peers-${version}" >partial.log 2>&1; then
             echo "unpatched second peer unexpectedly passed" >&2
             exit 1
           fi
           grep -F 'spawn EPERM' partial.log
-          git -C "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli" apply ${patch}
+          ${patching.command {
+            backend = "git";
+            directory = "peers-${version}/@napi-rs+cli@${version}_second/node_modules/@napi-rs/cli";
+            patchFiles = [patch];
+          }}
           node ${verify} "peers-${version}"
         '')
         releases)}
@@ -56,6 +80,7 @@ in {
         exit 1
       fi
       grep -F 'no installed @napi-rs/cli peer variants' empty.log
+      ${patching.validate "."}
       touch "$out"
     '';
 }

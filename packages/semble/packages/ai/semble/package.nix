@@ -174,8 +174,7 @@
       sourceProvenance = with sourceTypes; [binaryNativeCode];
     };
   };
-in
-  ps.buildPythonApplication (finalAttrs: {
+  packageAttrs = finalAttrs: {
     pname = "semble";
     inherit (sembleSources) version;
     pyproject = true;
@@ -190,11 +189,10 @@ in
     build-system = buildSystem;
 
     # One Semble build reads all variants' configuration at runtime.
-    patches = [
+    patchFiles = [
       ../../../patches/extra-grammars.patch
       ../../../patches/models.patch
     ];
-    patchFlags = ["-p1" "--fuzz=0"];
     # Scope strict mode: Python's later wrapping hook reads unset array keys.
     postPatch = ''
       (
@@ -277,4 +275,7 @@ in
       platforms = builtins.attrNames grammarPlatforms;
       sourceProvenance = with sourceTypes; [fromSource];
     };
-  })
+  };
+in
+  ps.buildPythonApplication (finalAttrs:
+    (packageLib.patching {inherit pkgs;}).attrs (packageAttrs finalAttrs))

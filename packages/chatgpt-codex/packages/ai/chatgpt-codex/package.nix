@@ -56,12 +56,7 @@
       rustyV8=$(${pkgs.jq}/bin/jq --arg h "$hash" '.${key}."${system}" = $h' <<<"$rustyV8")
     '') (builtins.attrNames rustyV8.assets))
   rustyV8.systems;
-in
-  (pkgs.codex.override ({inherit rustPlatform;}
-    // lib.optionalAttrs (rustyV8.pin != null) {
-      librusty_v8 = fetchRustyV8 "librusty_v8" "archive";
-      librusty_v8_src_binding = fetchRustyV8 "src_binding" "srcBinding";
-    })).overrideAttrs (finalAttrs: prev: {
+  packageAttrs = finalAttrs: prev: {
     pname = "chatgpt-codex";
     # nixpkgs uses buildCommit for src, STABLE_GIT_COMMIT and CODEX_BUILD_COMMIT.
     inherit (sources) buildCommit version;
@@ -85,12 +80,11 @@ in
     # explicitly, while the binary retains upstream's feature default. Until
     # nixpkgs reaches this version, its layout patch's substitutions apply to
     # our copy rebased onto the pinned source.
-    patches = map (patch:
+    patchFiles = map (patch:
       if patch.name or null == "nix-package-layout.patch"
       then patch.overrideAttrs {src = ../../../patches/nix-package-layout.patch;}
       else patch)
     (builtins.filter (patch: baseNameOf patch != "no-daemon_auto_start.patch") prev.patches);
-    patchFlags = ["-p1" "--fuzz=0"];
 
     postInstall =
       (prev.postInstall or "")
@@ -181,4 +175,11 @@ in
       // {
         description = "OpenAI Codex CLI — coding agent that runs locally in your terminal";
       };
-  })
+  };
+in
+  (pkgs.codex.override ({inherit rustPlatform;}
+    // lib.optionalAttrs (rustyV8.pin != null) {
+      librusty_v8 = fetchRustyV8 "librusty_v8" "archive";
+      librusty_v8_src_binding = fetchRustyV8 "src_binding" "srcBinding";
+    })).overrideAttrs (finalAttrs: prev:
+    (packageLib.patching {inherit pkgs;}).override prev (packageAttrs finalAttrs prev))

@@ -12,6 +12,7 @@
   repoPath,
   ...
 }: let
+  patching = packageLib.patching {inherit pkgs;};
   rustToolchainChannel = "1.100.0";
   rustPlatform = packageLib.mkRustPlatform {
     channel = rustToolchainChannel;
@@ -35,12 +36,24 @@
   napiPatch = ../../../../patches/oxlint-napi-rs-cli.patch;
   napiPatchPath = "patches/${builtins.baseNameOf napiPatch}";
   napiPatchHash = builtins.hashFile "sha256" napiPatch;
-  verifyNapiPatch = ''
-    node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
+  patchedDependencies = pkgs.runCommand "oxlint-patched-dependencies.json" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.yq-go}/bin/yq -o=json '.patchedDependencies' ${src}/pnpm-workspace.yaml > "$out"
   '';
-  src = pkgs.applyPatches {
+  verifyNapiPatch = ''
+    (
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
+    ${patching.validateDependencies {inherit patchedDependencies;}}
+    )
+  '';
+  src = patching.source {
     src = unpatchedSrc;
     postPatch = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       if [ -e ${napiPatchPath} ]; then
         echo "oxlint: upstream already owns ${napiPatchPath}; reconcile the patches" >&2
         exit 1
@@ -67,7 +80,7 @@ in
     inherit (rustPlatform.rust) cargo rustc;
   }).overrideAttrs (finalAttrs: prev: {
     inherit version src;
-    passthru = (prev.passthru or {}) // rustPlatform.passthru;
+    passthru = (prev.passthru or {}) // rustPlatform.passthru // {inherit patchedDependencies;};
     cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
       hash = "sha256-6jGwMJmGol9EFfBVBmpD1ouhaJgilwAQvs1KHE9aEzU=";
@@ -81,6 +94,7 @@ in
     };
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
+    preInstall = patching.validateDependencies {inherit patchedDependencies;} + (prev.preInstall or "");
     # Oxc declares pnpm@12.3.2 in `packageManager`, and we DELIBERATELY stay on
     # pnpm 11 until a swap is validated against this consumer. pnpm 12 needs a
     # non-empty registry base: given an empty one, every request becomes a
