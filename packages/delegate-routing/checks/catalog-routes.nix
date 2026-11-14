@@ -267,6 +267,39 @@
           map (reader: reader.name) helper.readers
           == ["native"]
           && builtins.attrNames helper.poolFamilies == ["native"];
+        "collection session pool reaches a helper that cannot read it" = let
+          pools =
+            collectionArgs.pools
+            // {
+              native.usage = {
+                runtime = "claude";
+                technique = "read";
+              };
+            };
+          configured = sessionPool:
+            change {
+              ai.programs.delegate-routing = {
+                inherit pools;
+                runtimes.claude = {
+                  inherit sessionPool;
+                  techniques.read = {
+                    command = "fake-reader";
+                    kind = "usage";
+                  };
+                };
+              };
+            };
+          manual = sessionPool:
+            content.mkSkill (args
+              // {
+                inherit sessionPool;
+                pools = modulePools pools;
+              });
+        in
+          refuses (configured "test/first").ai.programs.delegate-routing.runtimes.claude.sessionPool
+          && (configured "native").ai.programs.delegate-routing.runtimes.claude.sessionPool == "native"
+          && refuses (manual "test/first").outPath
+          && lib.hasInfix "session pool: native." (builtins.readFile "${manual "native"}/SKILL.md");
         "collection conflicting USD capacity accepted" = refuses (modulePools {
           "test/first" = {
             window = {

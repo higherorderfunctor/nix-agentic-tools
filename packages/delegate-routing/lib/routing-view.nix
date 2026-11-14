@@ -13,21 +13,8 @@
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
-  # Manual builders omit optional defaults; both helper projections share this inventory.
-  helperPools =
-    lib.filterAttrs (_: pool: pool.limits == {} && (pool.usage == null || pool.usage.readerPool == null))
-    (lib.mapAttrs (_: pool:
-      {
-        description = "";
-        limits = {};
-        usage = null;
-        window = null;
-      }
-      // pool
-      // lib.optionalAttrs (pool.usage or null != null) {
-        usage = {readerPool = null;} // pool.usage;
-      })
-    pools);
+  # Both helper projections and session-pool types use the same registry partition.
+  helperPools = (import ./helper-pools.nix {inherit lib;}) pools;
   selection = import ./select-families.nix {inherit lib;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};

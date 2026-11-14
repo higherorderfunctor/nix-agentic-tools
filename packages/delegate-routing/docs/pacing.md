@@ -81,7 +81,7 @@ USD capacity comes from the existing monthly USD `window.limit`; a conflicting
 explicit capacity fails. USD collection uses `anthropic-api-usage`, which
 receives the budget and reset day. No registration or no Reader label leaves the
 credential unmeasured. These registrations are separate from the routing
-helper's family-scoped Readers.
+helper's family-scoped Readers and cannot be selected as `sessionPool`.
 
 Collection shares the helper's timeout and retry policy and executes each
 distinct command once, including its retries. It preserves overlapping offers

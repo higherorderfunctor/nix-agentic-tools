@@ -33,18 +33,25 @@
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
   entryTypes = import ../../lib/entry-type.nix {inherit lib;};
-  # Caller techniques for mkSkill get the same option defaults as the shipped set.
-  normalizeTechniques = techniques:
+  # Manual mkSkill inputs use option types before rendering a helper manifest.
+  normalizeInputs = args:
     (lib.evalModules {
       modules = [
         {
-          options.techniques = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+          options = {
+            sessionPool = lib.mkOption {
+              type =
+                lib.types.nullOr (lib.types.enum (builtins.attrNames
+                    ((import ../../lib/helper-pools.nix {inherit lib;}) (args.pools or {}))));
+            };
+            techniques = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+            };
           };
-          config = {inherit techniques;};
+          config = {inherit (args) sessionPool techniques;};
         }
       ];
-    }).config.techniques;
+    }).config;
   normalized =
     (lib.evalModules {
       modules = [
@@ -89,7 +96,7 @@
       }
       // args);
   buildSkill = args: let
-    techniques = normalizeTechniques args.techniques;
+    inherit (normalizeInputs args) sessionPool techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
       inherit (args) catalog runtime families models;
@@ -101,9 +108,11 @@
     };
     pools = args.pools or {};
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
-      if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
-      then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
-      else view // {inherit (args) runtime sessionPool;}
+      view
+      // {
+        inherit sessionPool;
+        inherit (args) runtime;
+      }
     ));
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
@@ -113,9 +122,9 @@
     };
     helperCommand = lib.getExe helper;
     helperInstruction = "Runtime: ${args.runtime}; session pool: ${
-      if args.sessionPool == null
+      if sessionPool == null
       then "unknown (buffer cannot be certified)"
-      else args.sessionPool
+      else sessionPool
     }. Run `${helperCommand} --role <role> --launch-context <json-path>` before choosing a route. The command collects registered Readers and prints JSON and canonical routing specifications; it never launches delegates. Load the skill for launch-context guidance.";
   in
     generated.mkTree {

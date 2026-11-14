@@ -193,9 +193,9 @@
         description = "Ordered one-shot model pickers. Empty or unproven tool removal warns and uses tier/pool fallback. Exact tuples must be unique.";
       };
       sessionPool = lib.mkOption {
-        type = lib.types.nullOr (lib.types.enum (builtins.attrNames portable.pools));
+        type = lib.types.nullOr (lib.types.enum (builtins.attrNames ((import ../lib/helper-pools.nix {inherit lib;}) portable.pools)));
         default = null;
-        description = "Registered budget spent by this runtime's session; null warns that the buffer rule cannot be certified. Set the actual pool for proxied runtimes.";
+        description = "Registered helper budget spent by this runtime's session; credential-observation registrations are excluded. Null warns that the buffer rule cannot be certified. Set the actual pool for proxied runtimes.";
       };
       models = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
