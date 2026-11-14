@@ -14,15 +14,22 @@ from pydantic import (
 from pydantic_core import from_json
 from pydantic.types import OnErrorOmit
 
+# Preserve exact external identifiers while requiring a usable spelling.
 Nonempty = Annotated[str, StringConstraints(strict=True, min_length=1)]
+# Keep native allowance amounts finite and nonnegative.
 Amount = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
+# Require capacity and duration to define a nonzero scale.
 Positive = Annotated[Amount, Field(gt=0)]
+# Bound Reader shares to their percentage scale.
 Percent = Annotated[Amount, Field(le=100)]
+# Restrict timestamps to the producer's ISO text representation.
 IsoText = Annotated[str, StringConstraints(strict=True, pattern=r"^\d{4}-\d{2}-\d{2}T")]
+# Require an offset so replay does not depend on the local timezone.
 Timestamp = Annotated[AwareDatetime, BeforeValidator(TypeAdapter(IsoText).validate_python)]
 
 
 class Boundary(BaseModel):
+    """Isolate malformed optional components while retaining diagnostic field names."""
     model_config = ConfigDict(extra="ignore")
     _invalid: set[str] = PrivateAttr(default_factory=set)
 
@@ -36,6 +43,7 @@ class Boundary(BaseModel):
 
 
 class LimitSpec(Boundary):
+    """Bind one Reader window to an explicit native allowance and model scope."""
     model_config = ConfigDict(extra="forbid")
     capacity: Positive
     models: Annotated[list[Nonempty], Field(min_length=1)]
@@ -45,6 +53,7 @@ class LimitSpec(Boundary):
 
 
 class Registration(Boundary):
+    """Keep window attribution unique within each configured Reader pool."""
     limits: dict[str, LimitSpec]
     readerPool: Nonempty
 
@@ -56,6 +65,7 @@ class Registration(Boundary):
 
 
 class Route(Boundary):
+    """Preserve declared launch identities independently of Reader availability."""
     model_config = ConfigDict(extra="forbid")
     id: Nonempty
     maker: StrictStr | None
@@ -63,6 +73,7 @@ class Route(Boundary):
 
 
 class Snapshot(Boundary):
+    """Validate registrations against the declared routes before capture parsing."""
     pools: dict[str, Registration]
     # Capture failures belong to one pool, so each payload is parsed separately.
     readers: dict[str, Any]
@@ -78,12 +89,14 @@ class Snapshot(Boundary):
 
 
 class Account(Boundary):
+    """Recognize the Reader account shape without projecting private identity."""
     auth_index: StrictStr | None
     name: StrictStr | None
     plan: StrictStr | None
 
 
 class Window(Boundary):
+    """Keep valid quantities available when independent timing or status fails."""
     remainingPercent: OnErrorOmit[Percent] = None
     resetsAt: OnErrorOmit[Timestamp | None] = None
     status: OnErrorOmit[StrictStr | None] = None
@@ -98,34 +111,46 @@ class Window(Boundary):
         return self
 
 
-class Balance(Boundary):
+class BalanceFields(Boundary):
+    """Share native amounts and expiry across Reader balance variants."""
     expiresAt: Timestamp | None
-    kind: Literal["credits", "extra_usage"]
     remaining: Amount
-    unit: Literal["credits", "USD"]
 
-    @model_validator(mode="after")
-    def kind_matches_unit(self):
-        if self.unit != {"credits": "credits", "extra_usage": "USD"}[self.kind]:
-            raise ValueError("balance-unit")
-        return self
+
+class CreditsBalance(BalanceFields):
+    """Keep credit balances denominated in credits."""
+    kind: Literal["credits"]
+    unit: Literal["credits"]
+
+
+class ExtraUsageBalance(BalanceFields):
+    """Keep extra usage balances denominated in dollars."""
+    kind: Literal["extra_usage"]
+    unit: Literal["USD"]
+
+
+# Select the balance schema from the producer's kind before projecting metadata.
+BALANCE = TypeAdapter(Annotated[CreditsBalance | ExtraUsageBalance, Field(discriminator="kind")])
 
 
 class Bonus(Boundary):
+    """Project only known bonus kinds with whole nonnegative counts."""
     count: Annotated[int, Field(strict=True, ge=0)]
     expiresAt: Timestamp | None
     kind: Literal["promo_credits", "rate_limit_reset"]
 
 
 class Envelope(Boundary):
+    """Bind the Reader payload to its exact pool identity before using windows."""
     account: Account
     balances: OnErrorOmit[list[Any]] = None
     bonuses: OnErrorOmit[list[Any]] = None
-    pool: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
+    pool: Nonempty
     windows: dict[str, Any]
 
 
 class Capture(Boundary):
+    """Separate command outcome from independently parsed Reader payloads."""
     # Payload parsing follows exit status; failed commands need no usable stdout.
     data: Any = None
     exit: OnErrorOmit[StrictInt] = None
@@ -134,8 +159,9 @@ class Capture(Boundary):
 
 
 def metadata(document: Envelope | None, diagnostic):
+    """Project valid extras independently so one bad entry cannot hide its siblings."""
     result = {}
-    for field, model in (("balances", Balance), ("bonuses", Bonus)):
+    for field, validate in (("balances", BALANCE.validate_python), ("bonuses", Bonus.model_validate)):
         items = getattr(document, field) if document else None
         result[field] = None if items is None else []
         if document and field not in document.model_fields_set and field not in document._invalid:
@@ -144,7 +170,7 @@ def metadata(document: Envelope | None, diagnostic):
             diagnostic("invalid-extras", component=field)
         for item in items or []:
             try:
-                clean = model.model_validate(item).model_dump()
+                clean = validate(item).model_dump()
                 clean["expiresAt"] = int(clean["expiresAt"].timestamp()) if clean["expiresAt"] else None
                 result[field].append(clean)
             except ValidationError:
@@ -152,10 +178,12 @@ def metadata(document: Envelope | None, diagnostic):
     return result
 
 
+# Map recognized Reader states to known enforcement without guessing for others.
 ENFORCEMENT = dict.fromkeys(("active", "critical", "estimated", "normal", "ok", "warning"), True)
 
 
 def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int | None, now: int, diagnostic):
+    """Translate one registered window into native allowance facts and safe diagnostics."""
     result = dict(id=identifier, capacity=spec.capacity, unit=spec.unit,
                   role=spec.role, models=spec.models, remaining=None, used=None,
                   windowSeconds=None, naturalResetAt=None, enforced=None,
@@ -206,6 +234,7 @@ def window_observation(identifier: str, spec: LimitSpec, raw: Any, observed: int
 
 
 def capture_observation(raw: Any, reader_pool: str, now: int, diagnostic):
+    """Recover usable capture time and a pool-matched payload without exposing failures."""
     if raw is None:
         diagnostic("missing-capture")
         return None, None
