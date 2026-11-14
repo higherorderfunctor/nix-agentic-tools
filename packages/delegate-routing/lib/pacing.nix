@@ -41,14 +41,17 @@
       limits = lib.filterAttrs (_: spec: spec.models != []) scoped;
       usd = lib.any (spec: spec.unit == "USD") (builtins.attrValues limits);
       path = "ai.programs.delegate-routing.credentialUsage.${credential}";
+      technique = techniques.${usage.runtime}.${usage.technique};
+      # Substitute values before quoting each complete argument for the Reader shell.
+      budgetArgs = map (lib.replaceStrings
+        ["<limit>" "<reset-day>" "<reader-pool>"]
+        [(toString window.limit) (toString window.resetDay) readerPool])
+      technique.monthlyBudgetArgs;
     in
       if lib.any (spec: spec.models != null && !lib.all (model: lib.elem model available) spec.models) (builtins.attrValues declared)
       then throw "${path}.limits: models must be canonical credential offers or null."
       else if lib.any (spec: spec.unit == "USD") (builtins.attrValues declared) && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && spec.window != "monthly") (builtins.attrValues declared))
       then throw "${path}.limits: USD limits must use the existing monthly USD window."
-      # Only the accounted Reader accepts monthly budget transport arguments.
-      else if usd && readerPool != null && usage.technique != "anthropic-api-usage"
-      then throw "${path}.limits: USD transport requires the accounted Reader (anthropic-api-usage)."
       else {
         inherit limits;
         readerPool =
@@ -58,7 +61,7 @@
         command =
           if readerPool == null || limits == {}
           then null
-          else techniques.${usage.runtime}.${usage.technique}.command + lib.optionalString usd " --limit ${toString window.limit} --reset-day ${toString window.resetDay} --time-zone UTC --pool ${lib.escapeShellArg readerPool}";
+          else technique.command + lib.optionalString (usd && budgetArgs != []) " ${lib.escapeShellArgs budgetArgs}";
       };
 in
   if unknown != {}

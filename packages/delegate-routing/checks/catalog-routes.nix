@@ -185,33 +185,43 @@
           };
         };
       }).ai.programs.delegate-routing.credentialUsage;
-    collection = overrides: let
-      args = lib.recursiveUpdate collectionArgs overrides;
+    # Both registrations and techniques cross their module type boundary before collection.
+    collected = args: let
+      configured =
+        (change {
+          ai.programs.delegate-routing = {
+            inherit (args) credentialUsage;
+            runtimes = lib.mapAttrs (_: techniques: {inherit techniques;}) args.techniques;
+          };
+        }).ai.programs.delegate-routing;
     in
-      (import ../lib/pacing.nix {inherit lib;}) (args // {credentialUsage = moduleUsage args.credentialUsage;});
-    # USD transport fixtures vary the Reader label to exercise shell quoting.
-    usdCollection = readerPool:
       (import ../lib/pacing.nix {inherit lib;}) {
+        inherit (args) cpaRoutes;
+        inherit (configured) credentialUsage;
+        techniques = lib.mapAttrs (_: runtime: runtime.techniques) configured.runtimes;
+      };
+    collection = overrides: collected (lib.recursiveUpdate collectionArgs overrides);
+    # An equivalent Reader with a consumer-chosen name exercises configurable argv.
+    usdCollection = readerPool: techniqueOverrides:
+      collected {
         inherit (collectionArgs) cpaRoutes;
-        techniques.claude.anthropic-api-usage = collectionArgs.techniques.claude.read;
-        credentialUsage = moduleUsage {
-          "test/first" = {
-            usage = {
-              inherit readerPool;
-              runtime = "claude";
-              technique = "anthropic-api-usage";
-            };
-            window = {
-              limit = 200;
-              resetDay = 3;
-              unit = "USD";
-            };
-            limits.weekly = {
-              models = ["test-alpha-1"];
-              role = "pace";
-              unit = "USD";
-              window = "monthly";
-            };
+        techniques.claude.accounted-budget = collectionArgs.techniques.claude.read // techniqueOverrides;
+        credentialUsage."test/first" = {
+          usage = {
+            inherit readerPool;
+            runtime = "claude";
+            technique = "accounted-budget";
+          };
+          window = {
+            limit = 200;
+            resetDay = 3;
+            unit = "USD";
+          };
+          limits.weekly = {
+            models = ["test-alpha-1"];
+            role = "pace";
+            unit = "USD";
+            window = "monthly";
           };
         };
       };
@@ -236,6 +246,22 @@
     withoutHelper = value: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" value));
     properties =
       {
+        "collection Reader pool label loses shell quoting" =
+          (usdCollection "observed pool" {}).claude.pools."test/first".command
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool'";
+        "collection USD transport ignores retained runtime limits" = let
+          usd = usdCollection "observed" {};
+        in
+          usd.claude.pools."test/first".command
+          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed"
+          && usd.codex.pools."test/first".command == null
+          && !(usd.codex.pools."test/first".limits ? weekly);
+        "collection appends arguments despite empty list" =
+          (usdCollection "observed" {monthlyBudgetArgs = [];}).claude.pools."test/first".command == "fake-reader";
+        "collection ignores monthly argument override or quotes before substitution" =
+          (usdCollection "reader's pool" {monthlyBudgetArgs = ["--budget=<limit>" "--account=<reader-pool>"];}).claude.pools."test/first".command
+          == "fake-reader '--budget=200' '--account=reader'\\''s pool'";
+        "collection missing USD label leaves command null" = (usdCollection null {}).claude.pools."test/first".command == null;
         "manual builder diverges from module" = withoutHelper text == withoutHelper moduleText && lib.hasInfix "pinning `test-alpha-1`" text;
         "module reach differs from projection" = pinned.model.value == (lib.head routes.claude).model;
         "rendered agent and launch pins differ" = pinned.model.value == "test-alpha-1" && lib.hasInfix "model: \"test-alpha-1\"" config.ai.claude.agents.alpha;
@@ -268,19 +294,6 @@
             };
           };
         });
-        "collection unrelated USD technique accepted" = refuses (collection {
-          credentialUsage."test/first" = {
-            window = {
-              limit = 100;
-              resetDay = 3;
-              unit = "USD";
-            };
-            limits.weekly = {
-              unit = "USD";
-              window = "monthly";
-            };
-          };
-        });
         "collection module requires duplicate USD capacity" = let
           configured = change {
             ai.programs.delegate-routing.credentialUsage."test/first" = {
@@ -298,18 +311,8 @@
           };
         in
           configured.ai.programs.delegate-routing.credentialUsage."test/first".limits.monthly.capacity == 200;
-        "collection USD capacity is not derived" = (usdCollection "observed").claude.pools."test/first".limits.weekly.capacity == 200;
+        "collection USD capacity is not derived" = (usdCollection "observed" {}).claude.pools."test/first".limits.weekly.capacity == 200;
         "collection independent USD budget accepted" = refuses (collection {credentialUsage."test/first".limits.weekly.unit = "USD";});
-        "collection Reader pool label loses shell quoting" =
-          (usdCollection "observed pool").claude.pools."test/first".command
-          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool'";
-        "collection USD transport ignores retained runtime limits" = let
-          usd = usdCollection "observed";
-        in
-          usd.claude.pools."test/first".command
-          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool observed"
-          && usd.codex.pools."test/first".command == null
-          && !(usd.codex.pools."test/first".limits ? weekly);
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
           ai.catalog.models.test-alpha-2.aliases.z-ai = ["short"];

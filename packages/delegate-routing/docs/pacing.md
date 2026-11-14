@@ -66,9 +66,9 @@ routes. `scripts/usage-collect.py` accepts a typed `Manifest` and returns a
 normalizer `Snapshot`. Its first callers are owner tests; it installs no
 command. Pass `credentialUsage`, `cpaRoutes` and `techniques` to the Nix
 library; `credentialUsage` is the evaluated registration option map on both Home
-Manager and devenv. Manual callers pass the same evaluated fields. Its keys
-identify existing CPA credentials, not new budget groups. Credential
-registrations are a separate input to collection.
+Manager and devenv. Manual callers pass the same evaluated registration and
+technique fields. Its keys identify existing CPA credentials, not new budget
+groups. Credential registrations are a separate input to collection.
 
 Register a credential under
 `ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"`. Set
@@ -79,9 +79,15 @@ credential's actual offers; a model list scopes the limit explicitly, including
 windows such as `7d:fable`.
 
 USD capacity comes from the existing monthly USD `window.limit`; a conflicting
-explicit capacity fails. USD collection uses `anthropic-api-usage`, which
-receives the budget and reset day. No registration or no Reader label leaves the
-credential unmeasured.
+explicit capacity fails. The selected technique's `monthlyBudgetArgs` controls
+the arguments appended for retained monthly USD limits. Its default is
+`["--limit" "<limit>" "--reset-day" "<reset-day>" "--time-zone" "UTC" "--pool" "<reader-pool>"]`.
+The manifest builder substitutes the credential's limit, reset day and Reader
+label before shell-quoting each argument. Configure
+`runtimes.<runtime>.techniques.<name>.monthlyBudgetArgs` to use another CLI;
+`[]` appends nothing. Technique names do not choose the argument protocol.
+Non-USD limits append no budget arguments. No registration or no Reader label
+leaves the credential unmeasured.
 
 Collection shares the helper's timeout and retry policy and executes each
 distinct command once, including its retries. It preserves overlapping offers
