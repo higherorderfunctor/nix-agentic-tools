@@ -55,7 +55,7 @@ CODEX_RESETS = {"available_count": 2, "credits": [
     {"status": "available", "expires_at": "2030-03-17T17:46:40.987654Z"},
     {"status": "available", "expires_at": "2030-03-17T18:47:40+01:00"},
 ]}
-ZAI = {"code": 200, "data": {"level": "test-level", "limits": [
+ZHIPUAI = {"code": 200, "data": {"level": "test-level", "limits": [
     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}
     for unit, number in [(3, 5), (6, 1)]]}}
 # Manager+ fixture: endpoint shapes from the pinned 1.14.10 source, synthetic values.
@@ -85,7 +85,7 @@ class UsageTests(unittest.TestCase):
         self.home = Path(self.temp.name)
         self.helpers = {}
         header = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
-        for vendor in ["claude", "codex", "opencode", "zai"]:
+        for vendor in ["claude", "codex", "opencode", "zhipuai"]:
             helper = self.home / f"{vendor}-usage"
             helper.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
@@ -99,7 +99,7 @@ class UsageTests(unittest.TestCase):
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
         self.configs = {"claude": [], "openai-compatibility": []}
         self.requests = []
-        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zai": ZAI})
+        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zhipuai": ZHIPUAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
         self.management_redirect = None
@@ -154,7 +154,7 @@ class UsageTests(unittest.TestCase):
                         if owner.reset_failure == "malformed":
                             response = {}
                     else:
-                        vendor = ("cloudflare" if "api.cloudflare.com" in body["url"] else "zai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
+                        vendor = ("cloudflare" if "api.cloudflare.com" in body["url"] else "zhipuai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
                                   else "claude" if "anthropic.com" in body["url"] else "codex")
                         response = owner.envelope or {"status_code": 200, "body": json.dumps(owner.usage[vendor])}
                 else:
@@ -184,7 +184,7 @@ class UsageTests(unittest.TestCase):
 
     def run_helper(self, vendor, cpa=True, route=None, **overrides):
         env = self.env.copy()
-        routed = vendor in ("cloudflare", "opencode", "zai")
+        routed = vendor in ("cloudflare", "opencode", "zhipuai")
         route = route or ("claude" if routed else vendor)
         if cpa:
             env.update({f"DELEGATE_USAGE_CPA_{route.upper()}_URL": self.url,
@@ -697,7 +697,7 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
             {"api-key": "upstream-private-key", "auth_index": "z1"}]}]
         self.configs["codex"] = [{"base-url": "https://opencode.ai/inference/go/openai/v1", "keys": [
             {"api-key": "upstream-private-key", "auth_index": "o1"}]}]
-        for vendor in ["codex", "opencode", "zai"]:
+        for vendor in ["codex", "opencode", "zhipuai"]:
             result = self.run_helper(vendor, PATH=str(binary) + os.pathsep + self.env["PATH"])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn("upstream-private-key", result.stdout + result.stderr)
@@ -713,12 +713,12 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
         self.assertIn("no enabled codex login", result.stderr)
         self.assertEqual(result.stdout, "")
 
-    def test_zai_transports_and_key_ambiguity(self):
+    def test_zhipuai_transports_and_key_ambiguity(self):
         def group(key, index, host="api.z.ai"):
             return {"base-url": f"https://{host}/api/anthropic", "keys": [{"api-key": key, "auth_index": index}]}
         self.configs = {"claude": [group("upstream-private-key", "z1")],
                         "openai-compatibility": [group("upstream-private-key", "z2"), group("other-private-key", "evil", "api.z.ai.evil.test")]}
-        result = self.run_helper("zai")
+        result = self.run_helper("zhipuai")
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertEqual(set(value["windows"]), {"5h", "7d"})
@@ -731,28 +731,28 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
             with self.subTest(surface=surface):
                 self.configs = {}
                 self.configs[surface] = [group("upstream-private-key", "only")]
-                result = self.run_helper("zai", route="codex")
+                result = self.run_helper("zhipuai", route="codex")
                 self.assertEqual(result.returncode, 0, result.stderr)
         for groups in [[], [group("upstream-private-key", "z1"), group("different-private-key", "z2")],
                        [group("upstream-private-key", "z1", "api.z.ai.evil.test")]]:
             self.configs = {"claude": groups, "openai-compatibility": []}
-            result = self.run_helper("zai")
+            result = self.run_helper("zhipuai")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("exactly one distinct key", result.stderr)
             self.assertEqual(result.stdout, "")
             self.assertNotIn("private-key", result.stderr)
 
-    def test_direct_zai_and_route(self):
+    def test_direct_zhipuai_and_route(self):
         executable = self.home / "bin/curl"
         executable.parent.mkdir()
         executable.write_text(f"#!{sys.executable}\n" + f'''import sys
-assert "Authorization: Bearer direct-zai-key" in sys.stdin.read()
+assert "Authorization: Bearer direct-zhipuai-key" in sys.stdin.read()
 assert "/api/monitor/usage/quota/limit" in sys.argv[-1]
-print({json.dumps(json.dumps(ZAI))})
+print({json.dumps(json.dumps(ZHIPUAI))})
 ''')
         executable.chmod(0o755)
-        self.key.write_text("direct-zai-key")
-        result = self.run_helper("zai", cpa=False, ZAI_API_KEY_FILE=str(self.key), PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
+        self.key.write_text("direct-zhipuai-key")
+        result = self.run_helper("zhipuai", cpa=False, ZAI_API_KEY_FILE=str(self.key), PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(result.stdout)
         self.assertEqual(value["windows"]["5h"]["windowSeconds"], 18000)
@@ -763,38 +763,38 @@ print({json.dumps(json.dumps(ZAI))})
         self.assertEqual(value["account"], {"auth_index": None, "name": None, "plan": "test-level"})
         self.assertEqual(value["balances"], [])
         self.assertEqual(value["bonuses"], [])
-        result = subprocess.run([self.helpers["zai"]], env=self.env, text=True, capture_output=True)
+        result = subprocess.run([self.helpers["zhipuai"]], env=self.env, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("expected route", result.stderr)
 
-    def test_zai_duration_names_follow_unit_and_number(self):
+    def test_zhipuai_duration_names_follow_unit_and_number(self):
         self.configs["claude"] = [{"base-url": "https://api.z.ai/api/anthropic",
                                     "keys": [{"api-key": "duration-fixture", "auth_index": "z1"}]}]
         for unit, number, seconds, name in [(3, 1, 3600, "3600s"), (3, 5, 18000, "5h"),
                                             (6, 1, 604800, "7d"), (6, 2, 1209600, "1209600s")]:
             with self.subTest(unit=unit, number=number):
-                self.usage["zai"]["data"]["limits"] = [
+                self.usage["zhipuai"]["data"]["limits"] = [
                     {"unit": unit, "number": number, "percentage": 29, "nextResetTime": 1900000000123}]
-                result = self.run_helper("zai")
+                result = self.run_helper("zhipuai")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 windows = json.loads(result.stdout)["windows"]
                 self.assertEqual(set(windows), {name})
                 self.assertEqual(windows[name]["windowSeconds"], seconds)
 
-    def test_zai_unstarted_window_has_no_reset(self):
+    def test_zhipuai_unstarted_window_has_no_reset(self):
         self.configs["claude"] = [{"base-url": "https://api.z.ai/api/anthropic",
                                     "keys": [{"api-key": "unstarted-fixture", "auth_index": "z1"}]}]
-        self.usage["zai"]["data"]["limits"] = [
+        self.usage["zhipuai"]["data"]["limits"] = [
             {"unit": 3, "number": 5, "percentage": 0},
             {"unit": 6, "number": 1, "percentage": 18, "nextResetTime": 1900000000123}]
-        result = self.run_helper("zai")
+        result = self.run_helper("zhipuai")
         self.assertEqual(result.returncode, 0, result.stderr)
         windows = json.loads(result.stdout)["windows"]
         self.assertEqual(windows["5h"], {"usedPercent": 0, "remainingPercent": 100, "resetsAt": None,
                                          "status": None, "windowSeconds": 18000})
         self.assertEqual(windows["7d"]["resetsAt"], RESET)
-        self.usage["zai"]["data"]["limits"][0]["percentage"] = 4
-        result = self.run_helper("zai")
+        self.usage["zhipuai"]["data"]["limits"][0]["percentage"] = 4
+        result = self.run_helper("zhipuai")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid vendor usage response", result.stderr)
 
@@ -1029,7 +1029,7 @@ print({json.dumps(json.dumps(OPENCODE))})
         self.key.write_text("direct-private-key")
         offline = {"https_proxy": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1", "CURL_HOME": str(self.home)}
         for vendor, extra in [("claude", {}), ("opencode", {"OPENCODE_API_KEY_FILE": str(self.key)}),
-                              ("zai", {"ZAI_API_KEY_FILE": str(self.key)})]:
+                              ("zhipuai", {"ZAI_API_KEY_FILE": str(self.key)})]:
             with self.subTest(vendor=vendor):
                 self.requests.clear()
                 result = self.run_helper(vendor, cpa=False, **offline, **extra)

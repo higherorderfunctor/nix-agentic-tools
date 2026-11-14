@@ -937,7 +937,6 @@
         && map (e: e.model) (inherited {
           catalog.models.test-sonnet-9-1 = {
             maker = "fixture-maker";
-            aliases = {};
           };
           families = lib.recursiveUpdate content.families {anthropic.sonnet.match = "test-sonnet-*";};
           resolvedAgentFiles = (import ../lib/agent-files.nix {inherit lib;}).resolve ["test-sonnet-4-5" "test-sonnet-9-1" "test-sonnet-5-5"] [
@@ -1456,11 +1455,11 @@
             families.zhipuai.glm = {
               example.claude = "test-glm-1";
               match = "glm-*";
-              pools.claude = "zai-coding";
+              pools.claude = "zhipuai-coding";
               tier = "strong";
               useFor = "TEST GLM";
             };
-            pools.zai-coding.window = {
+            pools.zhipuai-coding.window = {
               limit = 100;
               resetDay = 1;
               unit = "credits";
@@ -1480,7 +1479,7 @@
         && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-native-opus-1`, else `Workflow` with full model id `test-native-opus-1`" withExample
         && !(lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-opus-5-10`, else `Workflow` with full model id the highest id matching `test-opus-*`" withExample)
         && lib.hasInfix "glm (zhipuai) `glm-*`" glm
-        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-glm-1`, else `Workflow` with full model id `test-glm-1`, else `claude -p` with full model id `test-glm-1` (pool zai-coding)" glm
+        && lib.hasInfix "claude: `Agent with generated agent file` with the generated agent file pinning `test-glm-1`, else `Workflow` with full model id `test-glm-1`, else `claude -p` with full model id `test-glm-1` (pool zhipuai-coding)" glm
         && lib.all (runtime: !(lib.hasInfix "native (" (readSkill poolResult runtime))) ["claude" "codex" "kiro"]
         && skillFails {
           ai.programs.delegate-routing.runtimes.claude.techniques = {

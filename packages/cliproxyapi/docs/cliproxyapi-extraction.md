@@ -1,18 +1,18 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
 > **Last verified:** 2026-10-30 — CPA 8.0.41 custom YAML decoders are probed
-> through yaml.v3; z.ai documentation and the OpenCode Go catalog and plan page
+> through yaml.v3; Z.ai documentation and the OpenCode Go catalog and plan page
 > use the shared `webDocsLib.mkSnapshot` updater and validate candidates.
 
 ## Why reflection also needs the v8 tables
 
-`packages/docs/cliproxyapi-z-ai-docs/package.nix` pins three official Markdown
-documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs` and
-`slack-mcp`. Its explicit URL-to-path mapping produces a recursively hashed
-snapshot. The `cliproxyapi-z-ai-docs` update target fetches the mutable URLs on
-every sweep, keeps pins unchanged when the bytes match, and validates changed
-pages with `extract/z-ai.py` before publishing the content and NAR hashes.
-`extract/z-ai.py` parses the overview's chat API table, Claude Code's JSON
+`packages/docs/cliproxyapi-zhipuai-docs/package.nix` pins three official
+Markdown documents through `webDocsLib.mkSnapshot`, shared with `kimchi-docs`
+and `slack-mcp`. Its explicit URL-to-path mapping produces a recursively hashed
+snapshot. The `cliproxyapi-zhipuai-docs` update target fetches the mutable URLs
+on every sweep, keeps pins unchanged when the bytes match, and validates changed
+pages with `extract/zhipuai.py` before publishing the content and NAR hashes.
+`extract/zhipuai.py` parses the overview's chat API table, Claude Code's JSON
 environment example, and the quick start's Python AST for the two base URLs.
 Featured/Text Models tables require a known chat reference on every model row,
 accepting relative paths or absolute links on `https://docs.z.ai` only; image,

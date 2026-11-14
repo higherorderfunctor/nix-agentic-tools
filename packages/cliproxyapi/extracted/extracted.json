@@ -5386,7 +5386,7 @@
       }
     }
   },
-  "zAi": {
+  "zhipuai": {
     "apis": {
       "anthropic": { "base-url": "https://api.z.ai/api/anthropic" },
       "chat": { "base-url": "https://api.z.ai/api/paas/v4" }

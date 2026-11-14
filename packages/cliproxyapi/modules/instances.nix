@@ -18,6 +18,7 @@ backend: {
   providersLib = import ../lib/providers.nix {
     inherit lib;
     catalog = config.ai.catalog;
+    servedModels = config.ai.cliproxyapi.servedModels;
   };
   # Assertions consume CPA's per-client comparison without rewriting routes or grants.
   exclusive = import ../lib/exclusive.nix {

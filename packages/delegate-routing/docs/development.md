@@ -61,8 +61,9 @@ modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
 filtering; the shared inference options refuse a disabled instance or an
 undeclared client. OAuth offers expand catalog identities of the vendor's maker;
 finite vendor lists do not define OAuth reach. A missing OAuth vendor is
-refused. Canonical identities use vendor-scoped aliases while launches retain
-the served spelling.
+refused. Canonical identities resolve through CPA's vendor-scoped
+`ai.cliproxyapi.servedModels` mapping while launches retain the served spelling.
+Without CPA reach, native launch pins name canonical catalog ids.
 
 The projection feeds agent-file selection and `lib/routing-view.nix`.
 Unknown-maker offers remain inspectable in the projection but cannot become a
@@ -729,9 +730,9 @@ delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
 content package injects packaged usage helper paths into technique defaults. The
 helpers share a proxy backend; Codex also needs the consumer's Codex CLI for its
-direct read. `zai-usage claude|codex` and `opencode-usage claude|codex` select
-the route whose GLM or OpenCode Go pool they read; consumers attach them to a
-runtime through that runtime's usage techniques. `opencode-usage` reads the
+direct read. `zhipuai-usage claude|codex` and `opencode-usage claude|codex`
+select the route whose GLM or OpenCode Go pool they read; consumers attach them
+to a runtime through that runtime's usage techniques. `opencode-usage` reads the
 undocumented `GET https://opencode.ai/zen/go/v1/usage`, the request OpenCode's
 open-source client makes, and prints Go's `rolling`, `weekly` and `monthly`
 windows through the shared schema with UTC reset times.

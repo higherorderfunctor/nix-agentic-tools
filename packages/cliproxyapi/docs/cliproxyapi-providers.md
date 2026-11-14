@@ -1,7 +1,7 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
 > **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
-> a secret account email; named API-key credentials can select the built-in z.ai
+> a secret account email; named API-key credentials can select the built-in Z.ai
 > or OpenCode Go vendor defaults and a priority, and serve per-API models.
 
 How a harness selects an instance and its client key is in
@@ -91,12 +91,15 @@ catalog defaults. Built-in CPA vendors require finite catalog model lists for
 their transport defaults. A maker-wide offer is refused at the credential's
 `vendor` option: set the vendor's `maker = null` and declare `models`, or omit
 `vendor` and configure `apiKey` explicitly. A normal
-`ai.catalog.vendors.z-ai.models = [...]` or
+`ai.catalog.vendors.zhipuai.models = [...]` or
 `ai.catalog.vendors.opencode-go.models = [...]` definition replaces the vendor's
-offered list and changes rendered credential defaults. Go identity aliases
-select known extracted transport metadata. The full extracted Go catalog
-supplies credential defaults; explicit API and model overrides select what a
-consumer serves.
+offered list and changes rendered credential defaults.
+`ai.cliproxyapi.servedModels.<vendor>.<canonical-id>` maps each identity to
+exact served spellings, supplied by the vendor owner and extensible by
+consumers. The selected spellings must identify known extracted transport
+metadata; an unknown mapping is refused with its vendor and model. The full
+extracted Go catalog supplies credential defaults; explicit API and model
+overrides select what a consumer serves.
 
 Set `excludeMakers` on an individual API-key credential to keep it off models
 served by other subscriptions, while retaining the vendor's evolving defaults:
@@ -110,14 +113,14 @@ ai.cliproxyapi.instances.main.credentials.go = {
 ```
 
 Exclusions filter every API's effective models, including explicit model lists
-and vendor-scoped catalog aliases. An API with no remaining models is removed;
-routes must select an API that remains. Models with null or absent catalog
-makers remain available. Unknown maker names and nonempty exclusions on OAuth
-credentials are refused with the credential name. The default `[]` leaves the
-credential unchanged. Rendering, client model inventories and `exclusive`
+and vendor-scoped CPA served spellings. An API with no remaining models is
+removed; routes must select an API that remains. Models with null or absent
+catalog makers remain available. Unknown maker names and nonempty exclusions on
+OAuth credentials are refused with the credential name. The default `[]` leaves
+the credential unchanged. Rendering, client model inventories and `exclusive`
 comparisons all consume the filtered offers.
 
-Built-in `vendor = "z-ai"` defaults
+Built-in `vendor = "zhipuai"` defaults
 `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` for Anthropic and
 `apiKey.codexShellArgCleanup = true` for chat-to-Responses shell calls,
 repairing measured tool-name and empty-justification failures. Explicit
@@ -158,9 +161,9 @@ in {
         account = secret "claude-work-email";
         vendor = "claude";
       };
-      zai-api-personal.apiKey = {
+      zhipuai-api-personal.apiKey = {
         apis.anthropic.base-url = "https://api.z.ai/api/anthropic";
-        key = secret "zai-api-personal";
+        key = secret "zhipuai-api-personal";
         models = ["glm-5.3"];
       };
     };
@@ -168,12 +171,12 @@ in {
       claude-personal = client "claude-personal" [
         (route "claude-oauth-personal")
         (route "claude-api-personal")
-        (route "zai-api-personal")
+        (route "zhipuai-api-personal")
       ];
       claude-work = client "claude-work" [(route "claude-oauth-work")];
       codex-personal = client "codex-personal" [
         (route "chatgpt-oauth-personal")
-        (route "zai-api-personal")
+        (route "zhipuai-api-personal")
       ];
       codex-work = client "codex-work" [(route "chatgpt-oauth-work")];
     };
@@ -211,10 +214,11 @@ Set `credentials.<name>.exclusive = true` to refuse overlapping conversational
 models on a client key routing to that credential and another credential. It
 defaults to `false`, preserving overlapping fallback credentials and priorities.
 API-key offers use only the APIs selected by that client, resolving exact
-catalog ids before provider aliases. Custom credentials without a vendor may use
-an unambiguous alias; ambiguous aliases require a canonical id. Unknown finite
-ids can compare exactly without a maker. Against OAuth, every finite model needs
-a catalog maker: the diagnostic names the model requiring that declaration.
+catalog ids before owner-provided served spellings. Custom credentials without a
+vendor may use an unambiguous alias; ambiguous aliases require a canonical id.
+Unknown finite ids can compare exactly without a maker. Against OAuth, every
+finite model needs a catalog maker: the diagnostic names the model requiring
+that declaration.
 
 OAuth offers are all catalog models whose maker matches
 `ai.catalog.vendors.<oauth.vendor>.maker`, including later additions. The Claude

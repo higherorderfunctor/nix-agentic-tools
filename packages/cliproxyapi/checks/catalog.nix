@@ -12,7 +12,7 @@
   # Go owns transport metadata; only identities and offers reach the catalog.
   go = (fact "opencodeGo").models;
   # z.ai's independent model table covers both supported APIs.
-  zai = fact "zAi";
+  zhipuai = fact "zhipuai";
   # Sets deliberately ignore grant and module merge ordering.
   sorted = values: lib.sort builtins.lessThan (lib.unique values);
   # Every extracted offer is eligible, regardless of its maker or id prefix.
@@ -30,7 +30,7 @@
   redact = import ../../../lib/redact {inherit lib;};
   # Production fixtures exercise vendor construction, lowering and typed settings on both backends.
   fixture.ai.cliproxyapi.instances.main = {
-    credentials = lib.genAttrs ["opencode-go" "z-ai"] (vendor: {
+    credentials = lib.genAttrs ["opencode-go" "zhipuai"] (vendor: {
       inherit vendor;
       apiKey.key = redact.file "/run/secrets/catalog-${vendor}";
     });
@@ -83,7 +83,7 @@
   # A singleton native model proves overrides change credentials; Gemini alone lacks a chat URL.
   chosen = lib.head (lib.filter (id: !(go.${id}.api ? generate-content)) eligible);
   # Select by input data rather than pinning a removable release model id.
-  chosenZai = lib.head zai.models;
+  chosenZhipuai = lib.head zhipuai.models;
   # Independent maker expectations expose missing identity evidence and namespace drift.
   expectedMaker = id: let
     namespace = lib.head (lib.splitString "/" (go.${id}.canonical_id or ""));
@@ -102,24 +102,24 @@
         {
           ai.catalog.vendors = {
             opencode-go.models = [chosen];
-            z-ai.models = [chosenZai];
+            zhipuai.models = [chosenZhipuai];
           };
         }
       ]);
       renamed = render (evaluate [
         fixture
         {
+          ai.cliproxyapi.servedModels = {
+            opencode-go.configured = [chosen];
+            zhipuai.configured = [chosenZhipuai];
+          };
           ai.catalog = {
             models.configured = {
-              aliases = {
-                opencode-go = [chosen];
-                z-ai = [chosenZai];
-              };
               source = ["configured identity"];
             };
             vendors = {
               opencode-go.models = ["configured"];
-              z-ai.models = ["configured"];
+              zhipuai.models = ["configured"];
             };
           };
         }
@@ -151,14 +151,16 @@
               catalog.models = lib.mapAttrs (_: identity: identity // {source = ["maker exclusion fixture"];}) {
                 fixture-blocked = {
                   maker = "fixture-maker";
-                  aliases.opencode-go = ["fixture-alias"];
                 };
                 fixture-kept = {
                   maker = "fixture-other";
-                  aliases.z-ai = ["fixture-alias" "fixture-blocked"];
                 };
                 fixture-null.maker = null;
                 fixture-unset = {};
+              };
+              cliproxyapi.servedModels = {
+                opencode-go.fixture-blocked = ["fixture-alias"];
+                zhipuai.fixture-kept = ["fixture-alias" "fixture-blocked"];
               };
               cliproxyapi.instances.main = {
                 enable = true;
@@ -211,19 +213,19 @@
           ]).config.ai.cliproxyapi.instances.main.credentials
           true)).success;
       # z.ai tool defaults and explicit disabling are provider behavior, owned here.
-      zaiOverride = overrides: evaluate [fixture {ai.cliproxyapi.instances.main.credentials.z-ai.apiKey = overrides;}];
-      disabled = render (zaiOverride {
+      zhipuaiOverride = overrides: evaluate [fixture {ai.cliproxyapi.instances.main.credentials.zhipuai.apiKey = overrides;}];
+      disabled = render (zhipuaiOverride {
         codexShellArgCleanup = false;
         toolAliases = {};
       });
-      zaiCustomModels = render (zaiOverride {
+      zhipuaiCustomModels = render (zhipuaiOverride {
         apis = {
           anthropic = null;
-          chat.base-url = "https://zai-override.example/v1";
+          chat.base-url = "https://zhipuai-override.example/v1";
         };
-        models = ["fixture-zai-model"];
+        models = ["fixture-zhipuai-model"];
       });
-      customized = render (zaiOverride {toolAliases.ToolSearch = "SearchProxy";});
+      customized = render (zhipuaiOverride {toolAliases.ToolSearch = "SearchProxy";});
       # Select named blocks rather than their incidental render order.
       blocks = value: family: vendor: lib.filter (entry: entry.name == vendor) (value.api-keys.${family} or []);
       block = value: family: vendor: lib.head (blocks value family vendor);
@@ -255,6 +257,19 @@
         (builtins.tryEval (builtins.deepSeq
           (evaluate [fixture {ai.catalog.vendors.${vendor}.models = ["fixture-missing-identity"];}]).config.ai.cliproxyapi.instances.main.credentials.${vendor}
           true)).success;
+      # A selected identity cannot silently render an unmeasured owner spelling.
+      acceptsUnknownServed = vendor: id:
+        (builtins.tryEval (builtins.deepSeq
+          (evaluate [
+            fixture
+            {
+              ai.catalog.vendors.${vendor}.models = [id];
+              ai.cliproxyapi.servedModels.${vendor}.${id} = ["fixture-unmeasured"];
+            }
+          ]).config.ai.cliproxyapi.instances.main.credentials.${
+            vendor
+          }
+          true)).success;
       # Repeated owner declarations describe one offer, including equal-priority module merges.
       repeated = vendor: id:
         render (evaluate [
@@ -265,17 +280,19 @@
       # No exclusive flag is set: maker filtering itself must refuse the shared alias.
       ambiguousExclusion = evaluate [
         {
-          ai.catalog.models = lib.genAttrs ["fixture-first" "fixture-second"] (_: {
-            aliases.opencode-go = ["fixture-shared"];
-            maker = "fixture-maker";
-            source = ["maker exclusion fixture"];
-          });
-          ai.cliproxyapi.instances.main.credentials.filtered = {
-            excludeMakers = ["fixture-maker"];
-            apiKey = {
-              apis.chat.base-url = "https://filtered.example/chat";
-              key = redact.file "/run/secrets/filtered";
-              models = ["fixture-shared"];
+          ai = {
+            catalog.models = lib.genAttrs ["fixture-first" "fixture-second"] (_: {
+              maker = "fixture-maker";
+              source = ["maker exclusion fixture"];
+            });
+            cliproxyapi.servedModels.opencode-go = lib.genAttrs ["fixture-first" "fixture-second"] (_: ["fixture-shared"]);
+            cliproxyapi.instances.main.credentials.filtered = {
+              excludeMakers = ["fixture-maker"];
+              apiKey = {
+                apis.chat.base-url = "https://filtered.example/chat";
+                key = redact.file "/run/secrets/filtered";
+                models = ["fixture-shared"];
+              };
             };
           };
         }
@@ -291,7 +308,7 @@
         }
       ];
       constructed = import ../lib/providers.nix {inherit lib catalog;};
-      expectedZai = lib.genAttrs (builtins.attrNames zai.apis) (_: sorted zai.models);
+      expectedZhipuai = lib.genAttrs (builtins.attrNames zhipuai.apis) (_: sorted zhipuai.models);
       expectedNarrowGo = {${nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}} = [chosen];};
       cases =
         catalogShapes
@@ -300,14 +317,15 @@
             resolver = import ../lib/providers.nix {
               inherit lib;
               catalog = ambiguousExclusion.config.ai.catalog;
+              servedModels = ambiguousExclusion.config.ai.cliproxyapi.servedModels;
             };
           in
             (resolver.canonical null "fixture-shared").errors
             == ["ambiguous model alias `fixture-shared`: fixture-first, fixture-second; use a canonical catalog id."]
             && !(builtins.tryEval (builtins.deepSeq ambiguousExclusion.config.ai.cliproxyapi.instances.main.credentials true)).success;
-          "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
-          "configured identity aliases ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "z-ai" == lib.genAttrs (builtins.attrNames zai.apis) (_: [chosenZai]);
-          "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.z-ai.models == sorted zai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zai.models);
+          "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
+          "configured identity aliases ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
+          "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zhipuai.models);
           "empty exclusions change rendered defaults" = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = [];}]) == settings;
           "excluded explicit aliases survive or unknown makers disappear" = offers explicitSettings "filtered" == {chat = sorted expectedExplicit;};
           "excluded models remain in inference registry" =
@@ -328,15 +346,15 @@
                 provider = "openai-compatible-filtered";
               }
             ];
-          "lost alias or missing/wrong maker" =
+          "lost owner mapping or missing/wrong maker" =
             lib.all (id: let
               identity = catalog.models.${id};
             in
-              expectedMaker id != "" && identity.maker == expectedMaker id && sorted identity.aliases.opencode-go == lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id) (builtins.attrNames go)
-            && lib.all (id: catalog.models.${id}.maker == "zhipuai") zai.models;
-          "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "z-ai" == expectedZai;
+              expectedMaker id != "" && identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)) (builtins.attrNames go)
+            && lib.all (id: catalog.models.${id}.maker == "zhipuai") zhipuai.models;
+          "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "zhipuai" == expectedZhipuai;
           "maker exclusion ignored or native APIs changed" = offers filteredGo "opencode-go" == expectedFilteredGo;
-          "maker-wide vendor accepted before finite constructor" = lib.all (vendor: !(acceptsMakerOffer vendor)) ["opencode-go" "z-ai"];
+          "maker-wide vendor accepted before finite constructor" = lib.all (vendor: !(acceptsMakerOffer vendor)) ["opencode-go" "zhipuai"];
           "model edge whitespace accepted" = !(acceptsModel " fixture-model") && !(acceptsModel "fixture-model ");
           "native base URLs changed" = lib.all (api: (block settings families.${api} "opencode-go").base-url == expectedUrl api) (builtins.attrNames expectedGo);
           "neither-kind exclusions hide exactly-one assertion" = lib.any (entry: !entry.assertion && entry.message == "ai.cliproxyapi.instances.main.credentials.bad: declare exactly one of oauth or apiKey.") neitherKind.config.assertions;
@@ -359,14 +377,15 @@
               vendor = "opencode-go";
             }
             {
-              apis = builtins.attrNames zai.apis;
-              id = chosenZai;
-              vendor = "z-ai";
+              apis = builtins.attrNames zhipuai.apis;
+              id = chosenZhipuai;
+              vendor = "zhipuai";
             }
           ];
           "session header missing from API block" = lib.all (api: (block result.config.ai.cliproxyapi.instances.main.settings families.${api} "opencode-go").headers.x-opencode-session == manual.literalHeader pkgs "$CPA-SESSION-ID") (builtins.attrNames expectedGo);
           "standalone constructor diverges from module defaults" = manual.vendors == constructed.vendors;
-          "unknown identity reaches vendor transport defaults" = lib.all (vendor: !(acceptsUnknownIdentity vendor)) ["opencode-go" "z-ai"];
+          "unknown identity reaches vendor transport defaults" = lib.all (vendor: !(acceptsUnknownIdentity vendor)) ["opencode-go" "zhipuai"];
+          "unknown served id reaches vendor transport defaults" = !(acceptsUnknownServed "opencode-go" chosen) && !(acceptsUnknownServed "zhipuai" chosenZhipuai);
           "unknown maker exclusion accepted before rendering" =
             !(acceptsExclusions {
               excludeMakers = ["fixture-typo"];
@@ -376,11 +395,11 @@
                 models = ["fixture-model"];
               };
             });
-          "vendor tool defaults lost" = (block settings "claude" "z-ai").tool-aliases == {ToolSearch = "ToolSearch_";} && (block settings "openai-compatibility" "z-ai").codex-shell-arg-cleanup && lib.all (api: let value = block settings families.${api} "opencode-go"; in !(value ? tool-aliases) && !(value ? codex-shell-arg-cleanup)) (builtins.attrNames expectedGo);
-          "z.ai explicit model or API overrides ignored" = offers zaiCustomModels "z-ai" == {chat = ["fixture-zai-model"];} && (block zaiCustomModels "openai-compatibility" "z-ai").base-url == "https://zai-override.example/v1";
-          "z.ai explicit tool overrides ignored" = (block customized "claude" "z-ai").tool-aliases == {ToolSearch = "SearchProxy";} && !((block disabled "claude" "z-ai") ? tool-aliases) && !((block disabled "openai-compatibility" "z-ai") ? codex-shell-arg-cleanup);
-          "z.ai extracted API URL ignored" = lib.all (api: (block settings families.${api} "z-ai").base-url == zai.apis.${api}.base-url) (builtins.attrNames zai.apis);
-          "z.ai unexpected vendor headers" = lib.all (api: !((block settings families.${api} "z-ai") ? headers)) (builtins.attrNames zai.apis);
+          "vendor tool defaults lost" = (block settings "claude" "zhipuai").tool-aliases == {ToolSearch = "ToolSearch_";} && (block settings "openai-compatibility" "zhipuai").codex-shell-arg-cleanup && lib.all (api: let value = block settings families.${api} "opencode-go"; in !(value ? tool-aliases) && !(value ? codex-shell-arg-cleanup)) (builtins.attrNames expectedGo);
+          "z.ai explicit model or API overrides ignored" = offers zhipuaiCustomModels "zhipuai" == {chat = ["fixture-zhipuai-model"];} && (block zhipuaiCustomModels "openai-compatibility" "zhipuai").base-url == "https://zhipuai-override.example/v1";
+          "z.ai explicit tool overrides ignored" = (block customized "claude" "zhipuai").tool-aliases == {ToolSearch = "SearchProxy";} && !((block disabled "claude" "zhipuai") ? tool-aliases) && !((block disabled "openai-compatibility" "zhipuai") ? codex-shell-arg-cleanup);
+          "z.ai extracted API URL ignored" = lib.all (api: (block settings families.${api} "zhipuai").base-url == zhipuai.apis.${api}.base-url) (builtins.attrNames zhipuai.apis);
+          "z.ai unexpected vendor headers" = lib.all (api: !((block settings families.${api} "zhipuai") ? headers)) (builtins.attrNames zhipuai.apis);
         };
       failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
     in
