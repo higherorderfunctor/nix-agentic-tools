@@ -20,7 +20,7 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_TIERS = {
@@ -47,6 +47,12 @@ class PlanCheckPolicy(PolicyModel):
     requireSize: bool = True
     requiredReviewRoles: list[Role] = Field(default_factory=lambda: ["first-check"])
     workerRoles: list[Role] = Field(default_factory=lambda: ["investigator", "mechanical", "writer"])
+
+    @model_validator(mode="after")
+    def disjoint_worker_and_review_roles(self):
+        if set(self.workerRoles) & set(self.requiredReviewRoles):
+            raise ValueError("workerRoles and requiredReviewRoles must not overlap")
+        return self
 
 
 class RolePolicy(PolicyModel):

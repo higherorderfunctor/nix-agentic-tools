@@ -1899,7 +1899,7 @@ class Routing(unittest.TestCase):
 
     def test_invalid_review_policy_refuses_before_readers(self):
         """Manifest policy errors are configuration faults and never spend budget."""
-        for policy in ({"planCheck": {"requireSize": "false"}}, {"roles": {"judge": {"tiers": ["tiny"]}}}, {"planCheck": {"workerRoles": ["invented"]}}):
+        for policy in ({"planCheck": {"requireSize": "false"}}, {"roles": {"judge": {"tiers": ["tiny"]}}}, {"planCheck": {"workerRoles": ["invented"]}}, {"planCheck": {"requiredReviewRoles": ["writer"], "workerRoles": ["writer"]}}):
             config = manifest()
             config["reviewPolicy"] = policy
             with patch.object(helper, "collect", side_effect=AssertionError("Reader ran")):

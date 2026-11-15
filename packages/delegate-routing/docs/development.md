@@ -215,9 +215,10 @@ disable its helper check.
   permits no candidates for that role.
 
 For a workflow without rubric or size records, set both requirements to `false`
-and disable the Rubric step or its Size row as appropriate. When changing the
-review roles or their tiers, update the Review step and
-`skill.entries."Routing helper"` together: both contain review guidance.
+and disable the Rubric step or its Size row as appropriate. Update the Plan step
+when changing rubric, size or role requirements. For review role changes, also
+update the Review step and `skill.entries."Routing helper"`. For tier changes,
+update all three and `routing."Pool drain"`.
 
 `skill.phrases."Workflow step"` controls each step's label and body, with
 `{index}`, `{name}` and `{text}` placeholders. Its default is
