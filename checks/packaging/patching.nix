@@ -12,7 +12,8 @@
       sources =
         map (name: packages.${name}.src) ["cliproxyapi" "cpa-manager-plus" "kimchi" "oxlint"]
         ++ map (name: packages.${name}.patchedSource) ["git-absorb" "git-branchless" "git-revise"]
-        ++ [packages.kimchi.passthru.codeql.source];
+        # CodeQL engines exist on x86_64-linux only, like the Kimchi CodeQL checks.
+        ++ pkgs.lib.optional (pkgs.stdenv.hostPlatform.system == "x86_64-linux") packages.kimchi.passthru.codeql.source;
     in
       pkgs.runCommand "patch-artifacts" {} ''
         set -euETo pipefail
