@@ -14,9 +14,9 @@ A snapshot has three parts:
   `id`, a nullable `maker`, and the served `model` spelling.
 - `pools`: a map of pool registrations. Each registration names the exact
   `readerPool` it accepts and a `limits` map. A limit names its positive
-  `capacity`, canonical model `ids`, `gate` or `pace` role, and the exact Reader
-  `window` key that supplies it. Two limits in one pool cannot claim the same
-  window.
+  `capacity`, a `models` list of canonical model ids, `gate` or `pace` role, and
+  the exact Reader `window` key that supplies it. Two limits in one pool cannot
+  claim the same window.
 - `readers`: a map keyed by pool name. Each value is one saved command result:
   an integer `exit` and the Reader's JSON `stdout`. On success, that JSON names
   its `pool` and carries a `windows` map.
