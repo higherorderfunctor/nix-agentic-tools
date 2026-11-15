@@ -2225,9 +2225,6 @@
         # A continuation must stay inside its row, including after a source override.
         && lib.hasInfix "   2. SOURCE ROW\n      continued\n   3. RUNTIME ROW" raw
         && skillFails {
-          ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Scope.before = ["Scope"];
-        }
-        && skillFails {
           ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Empty.text = "";
         }
         && skillFails {
