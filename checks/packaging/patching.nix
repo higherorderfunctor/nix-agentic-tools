@@ -46,7 +46,6 @@
         cmp expected ${patched}/target
         bash ${./patch-artifacts.sh} ${patched}
         cp ${input}/target target
-        chmod u+w target
         sed -i 's/^a$/changed/' target
         if ${apply} > failure.log 2>&1; then
           echo 'changed context unexpectedly applied' >&2
