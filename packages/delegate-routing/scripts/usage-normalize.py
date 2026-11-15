@@ -82,7 +82,9 @@ def window_observation(
     The reason tells the caller why an unusable allowance cannot be ranked, and
     whether the saved capture or this window supplied the failed evidence.
     """
-    observation = Observation(id=identifier, **spec.model_dump(exclude={"window"}))
+    observation = Observation.model_construct(
+        capacity=spec.capacity, id=identifier, models=spec.models, role=spec.role
+    )
     if outcome is None:
         return observation.model_copy(update={"reason": capture_reason or "missing-window"})
 
