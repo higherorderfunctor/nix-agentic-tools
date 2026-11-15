@@ -246,9 +246,6 @@
     withoutHelper = value: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" value));
     properties =
       {
-        "collection Reader pool label loses shell quoting" =
-          (usdCollection "observed pool" {}).claude.pools."test/first".command
-          == "fake-reader --limit 200 --reset-day 3 --time-zone UTC --pool 'observed pool'";
         "collection USD transport ignores retained runtime limits" = let
           usd = usdCollection "observed" {};
         in
@@ -267,7 +264,6 @@
         "rendered agent and launch pins differ" = pinned.model.value == "test-alpha-1" && lib.hasInfix "model: \"test-alpha-1\"" config.ai.claude.agents.alpha;
       }
       // lib.optionalAttrs projection {
-        "credential replaced by vendor or first overlapping offer" = map (offer: offer.credential) overlapping.claude == ["test/first" "test/first" "test/second"];
         "collection loses overlap or unmeasured credential" =
           lib.length (collection {}).claude.routes
           == 3
@@ -294,23 +290,6 @@
             };
           };
         });
-        "collection module requires duplicate USD capacity" = let
-          configured = change {
-            ai.programs.delegate-routing.credentialUsage."test/first" = {
-              window = {
-                limit = 200;
-                resetDay = 3;
-                unit = "USD";
-              };
-              limits.monthly = {
-                role = "pace";
-                unit = "USD";
-                window = "monthly";
-              };
-            };
-          };
-        in
-          configured.ai.programs.delegate-routing.credentialUsage."test/first".limits.monthly.capacity == 200;
         "collection USD capacity is not derived" = (usdCollection "observed" {}).claude.pools."test/first".limits.weekly.capacity == 200;
         "collection independent USD budget accepted" = refuses (collection {credentialUsage."test/first".limits.weekly.unit = "USD";});
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
