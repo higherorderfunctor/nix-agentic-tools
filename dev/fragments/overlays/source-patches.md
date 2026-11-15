@@ -1,7 +1,7 @@
 # Source patches: least update friction
 
-> **Last verified:** 2026-11-15 — operator rule from the Kimchi 1.15.1 bump;
-> every patch goes through the shared `packageLib.patching` helper.
+> **Last verified:** 2026-11-15 — operator rule from the Kimchi 1.15.1 bump; GNU
+> patch flags come from one list, `packageLib.patchFlags`.
 
 Pick the patch method that survives the most upstream churn while still failing
 loudly when its target is gone. Best tool for the job, not one tool for all.
@@ -11,13 +11,14 @@ loudly when its target is gone. Best tool for the job, not one tool for all.
   leave upstream's help text, messages and import blocks alone. An unused import
   or an unreachable message costs nothing; a hunk anchored on prose breaks on
   the next rewording. Accept stale upstream wording and document it.
-- **A git patch by default, through the shared helper.** Use
-  `packageLib.patching {inherit pkgs;}`: pass native `patches` to `attrs` for
-  stdenv or to `source` for a patched tree, or `patchFiles` to `command` in
-  shell. It applies with `-p1 --fuzz=0 --no-backup-if-mismatch`: no fuzz means
-  the patch survives lines moving and refuses changed context, which is the loud
-  failure we want, and no `.orig` backups land in the output. The Git caller may
-  allow whitespace differences for pnpm patches GNU patch cannot read.
+- **A git patch by default, applied with no fuzz.** Set
+  `inherit (packageLib) patchFlags;` (`-p1 --fuzz=0 --no-backup-if-mismatch`)
+  wherever stdenv or `applyPatches` applies patches, and pass the same list to a
+  shell `patch` call. stdenv's default `-p1` lets GNU patch apply with fuzz 2,
+  which can land a hunk in the wrong place silently. With no fuzz the patch
+  survives lines moving and refuses changed context, which is the loud failure
+  we want; no `.orig` backups land in the output. `git apply` is already this
+  strict by default and needs no flags.
 - **A pattern replace when the target is text that churns.** When a patch must
   remove or rewrite something that changes with the slightest rewording or
   reformat, a match-and-replace in the build (`substituteInPlace --replace-fail`
@@ -28,8 +29,8 @@ loudly when its target is gone. Best tool for the job, not one tool for all.
 - **A byte patcher for binaries** stays exact and length-preserving. It refuses
   rather than guesses.
 
-`patch-policy` catches direct patch calls and flag overrides; `patch-artifacts`
-checks the patched source trees for `.orig` and `.rej` files.
+`patch-flags` proves the list's behavior on a fixture; `patch-artifacts` checks
+the patched source trees for `.orig` and `.rej` files.
 
 When a patch breaks on a bump, that is ordinary maintenance. Fix the anchor, and
 prefer moving it to a less brittle method over re-anchoring the same text.

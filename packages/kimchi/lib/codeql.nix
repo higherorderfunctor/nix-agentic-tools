@@ -18,11 +18,9 @@
   dependencies,
   # Validated JSON from Kimchi's pnpm-workspace.yaml, shared with install-runtime.mjs.
   patchedDependencies,
-  packageLib,
   pkgs,
   version,
 }: let
-  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) lib;
   meta = {inherit (engine.meta) platforms;};
   # Dependencies land under node_modules, where Kimchi's imports resolve them.
@@ -37,7 +35,7 @@
   # they are a third of pi's bytes.
   source =
     pkgs.runCommand "kimchi-codeql-source-${version}" {
-      nativeBuildInputs = [pkgs.jq];
+      nativeBuildInputs = [pkgs.gitMinimal pkgs.jq];
       inherit meta;
     } ''
       set -euETo pipefail
@@ -77,14 +75,7 @@
         # pnpm accepts missing EOF markers and unequal leading/trailing
         # context counts. GNU patch --fuzz=0 rejects those pi 1.3.0 hunks.
         # Match every context line with Git, allowing whitespace changes.
-        # The patch filename is chosen at runtime; "-" reads redirected stdin.
-        (
-          cd "$dest"
-          ${patching.command {
-        gitArgs = ["--ignore-space-change"];
-        patchFiles = ["-"];
-      }}
-        ) < ${kimchi}/"$file"
+        git -C "$dest" apply --ignore-space-change ${kimchi}/"$file"
       done < patches
       find "$out" -name '*.map' -type f -delete
     '';

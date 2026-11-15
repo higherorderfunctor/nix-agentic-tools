@@ -14,9 +14,10 @@
   package =
     shipped
     // {
-      src = (packageLib.patching {inherit pkgs;}).source {
+      src = pkgs.applyPatches {
         name = "cliproxyapi-tool-shims-source";
         inherit (shipped) src;
+        inherit (packageLib) patchFlags;
         patches = [./ci-timing.patch];
       };
     };

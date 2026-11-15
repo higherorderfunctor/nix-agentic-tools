@@ -13,7 +13,7 @@
   inherit (sources) version;
   # The patched tree is `src` itself, so the web app, the server, the
   # extractor and the settings check (which copy `package.src`) all read it.
-  src = (packageLib.patching {inherit pkgs;}).source {
+  src = pkgs.applyPatches {
     src = fetchzip {
       name = "${pname}-${version}-source";
       url = "https://github.com/seakee/CPA-Manager-Plus/archive/v${version}.tar.gz";
@@ -28,6 +28,8 @@
       ../../../../patches/default-theme.patch
       ../../../../patches/passthrough-view.patch
     ];
+    # A release that moves the patched context fails here, loudly.
+    inherit (packageLib) patchFlags;
   };
   modRoot = "apps/manager-server";
   goModPath = "${modRoot}/go.mod";

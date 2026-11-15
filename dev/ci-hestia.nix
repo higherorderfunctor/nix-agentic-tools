@@ -6,7 +6,6 @@
   pkgs,
 }: let
   inherit (pkgs) lib;
-  patching = (import ../lib/packaging.nix).patching {inherit pkgs;};
   version = "3.1.0";
   rev = "dfed9ced335d28978ba74e513939a10db1f71025";
   src = pkgs.fetchFromGitHub {
@@ -28,9 +27,10 @@
     (package: lib.hasPrefix "git+" (package.source or ""))
     (builtins.fromTOML (builtins.readFile "${src}/Cargo.lock")).package;
 in
-  rustPlatform.buildRustPackage (patching.attrs {
+  rustPlatform.buildRustPackage {
     pname = "ci-hestia";
     inherit version src;
+    inherit (import ../lib/packaging.nix) patchFlags;
     patches = [
       ../.github/actions/check-cache/patches/pr-manifest-scope.patch
       ../.github/actions/check-cache/patches/gc-pr-manifest-retention.patch
@@ -89,4 +89,4 @@ in
       mainProgram = "hestia";
       platforms = lib.platforms.linux;
     };
-  })
+  }

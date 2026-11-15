@@ -1,11 +1,9 @@
 {
   harness,
   lib,
-  packageLib,
   pkgs,
   ...
 }: let
-  patching = packageLib.patching {inherit pkgs;};
   kimchi = pkgs.ai.kimchi;
   # Exercise the actual files/settings emitted by each backend, with cheap
   # payloads that share a package name but have distinct store targets.
@@ -61,7 +59,7 @@ in {
   checks.kimchi-package-identity = pkgs.stdenvNoCC.mkDerivation {
     name = "kimchi-package-identity";
     inherit (kimchi) pnpmDeps src;
-    nativeBuildInputs = [pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook];
+    nativeBuildInputs = [pkgs.gnupatch pkgs.nodejs kimchi.pnpmDeps.pnpm pkgs.pnpmConfigHook];
     dontFixup = true;
     buildPhase = ''
       set -euETo pipefail
@@ -82,10 +80,7 @@ in {
       mkdir -p identity-source/dist/core
       cp ${kimchi.extractionSources.pi}/dist/core/package-manager.js identity-source/dist/core/
       chmod u+w identity-source/dist/core/package-manager.js
-      ${patching.command {
-        directory = "identity-source";
-        patchFiles = [../packages/ai/kimchi/package-identity.patch];
-      }}
+      patch -d identity-source ${lib.escapeShellArgs kimchi.passthru.patchedSource.patchFlags} < ${../packages/ai/kimchi/package-identity.patch}
       cp identity-source/dist/core/package-manager.js "''${manager%.js}.identity-only.js"
       node ${./package-identity.mjs} "''${manager%.js}.identity-only.js" ${layout}
       node ${./package-identity.mjs} "$manager" ${layout}
@@ -98,10 +93,7 @@ in {
       grep -q 'only final packages may warn' warnings-pristine.log
       cp ${kimchi.extractionSources.pi}/dist/core/resource-loader.js identity-source/dist/core/
       chmod u+w identity-source/dist/core/resource-loader.js
-      ${patching.command {
-        directory = "identity-source";
-        patchFiles = [../packages/ai/kimchi/extension-package-warnings.patch];
-      }}
+      patch -d identity-source ${lib.escapeShellArgs kimchi.passthru.patchedSource.patchFlags} < ${../packages/ai/kimchi/extension-package-warnings.patch}
       cp identity-source/dist/core/resource-loader.js "''${loader%.js}.warnings-only.js"
       node ${./extension-package-warnings.mjs} "''${loader%.js}.warnings-only.js" ${layout}
       node ${./extension-package-warnings.mjs} "$loader" ${layout}

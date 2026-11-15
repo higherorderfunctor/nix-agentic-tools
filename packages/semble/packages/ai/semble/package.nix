@@ -174,7 +174,8 @@
       sourceProvenance = with sourceTypes; [binaryNativeCode];
     };
   };
-  packageAttrs = finalAttrs: {
+in
+  ps.buildPythonApplication (finalAttrs: {
     pname = "semble";
     inherit (sembleSources) version;
     pyproject = true;
@@ -193,6 +194,7 @@
       ../../../patches/extra-grammars.patch
       ../../../patches/models.patch
     ];
+    inherit (packageLib) patchFlags;
     # Scope strict mode: Python's later wrapping hook reads unset array keys.
     postPatch = ''
       (
@@ -275,7 +277,4 @@
       platforms = builtins.attrNames grammarPlatforms;
       sourceProvenance = with sourceTypes; [fromSource];
     };
-  };
-in
-  ps.buildPythonApplication (finalAttrs:
-    (packageLib.patching {inherit pkgs;}).attrs (packageAttrs finalAttrs))
+  })

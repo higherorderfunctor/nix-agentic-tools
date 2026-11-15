@@ -11,7 +11,6 @@
   ripgrep,
   ...
 }: let
-  patching = packageLib.patching {inherit pkgs;};
   inherit (pkgs) fetchzip lib;
   pnpm = pkgs.ai.generic.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
@@ -70,9 +69,10 @@
   # the source. Rehash every reference (including peer snapshots) without
   # regenerating unrelated lock resolutions. Registry tarball bytes stay intact.
   piPatchPath = "patches/@earendil-works__pi-coding-agent@${extraction.piPackage.version}.patch";
-  patchedSource = patching.source {
+  patchedSource = pkgs.applyPatches {
     src = kimchiSource;
     # Apply source patches once for both the build and settings extractor.
+    inherit (packageLib) patchFlags;
     patches = [
       ./command-shell.patch
       ./disable-self-update.patch
@@ -98,7 +98,7 @@
     inherit (extractionSources) kimchi;
     # TypeBox 1.3.27 supplies pi declarations to extract.mjs; Kimchi runs 1.3.7.
     dependencies = builtins.attrValues (builtins.removeAttrs extractionSources ["kimchi" "typebox"]);
-    inherit packageLib patchedDependencies pkgs;
+    inherit patchedDependencies pkgs;
     inherit (sources) version;
   };
   # The `network` fact: ../../../lib/network.nix.

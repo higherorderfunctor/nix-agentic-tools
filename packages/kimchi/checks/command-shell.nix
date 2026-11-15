@@ -1,16 +1,15 @@
 {
-  packageLib,
+  lib,
   pkgs,
   ...
 }: let
-  patching = packageLib.patching {inherit pkgs;};
   # The release tree proves the unpatched failure; patchedSource carries the patch.
   inherit (pkgs.ai.kimchi.passthru) extractionSources patchedSource;
   patch = ../packages/ai/kimchi/command-shell.patch;
 in {
   checks.kimchi-command-shell = assert builtins.elem patch patchedSource.patches;
     pkgs.runCommand "kimchi-command-shell" {
-      nativeBuildInputs = [pkgs.nodejs];
+      nativeBuildInputs = [pkgs.gnupatch pkgs.nodejs];
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -22,7 +21,7 @@ in {
         exit 1
       fi
       grep -q 'AssertionError' pristine.log
-      ${patching.command {patchFiles = [patch];}}
+      patch ${lib.escapeShellArgs patchedSource.patchFlags} < ${patch}
       node --experimental-vm-modules ${./command-shell.mjs} .
       echo PASS > "$out"
     '';
