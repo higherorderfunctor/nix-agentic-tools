@@ -1,0 +1,31 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "allowance": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {
+      "budget": {
+        "exit": 0,
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"other\",\"windows\":{\"7d\":{\"remainingPercent\":75.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":25.0,\"windowSeconds\":604800}}}"
+      }
+    },
+    "routes": [
+      {
+        "id": "canonical-a",
+        "maker": null,
+        "model": "served-fable"
+      }
+    ]
+  }
+}

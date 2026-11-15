@@ -1,0 +1,43 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "enforced": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d:enforced"
+          },
+          "not-enforced": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d:not-enforced"
+          },
+          "unknown-enforced": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d:unknown-enforced"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {
+      "budget": {
+        "exit": 0,
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d:enforced\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":25.0,\"windowSeconds\":604800},\"7d:not-enforced\":{\"enforced\":false,\"remainingPercent\":50.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":50.0,\"windowSeconds\":604800},\"7d:unknown-enforced\":{\"remainingPercent\":25.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":null,\"usedPercent\":75.0,\"windowSeconds\":604800}}}"
+      }
+    },
+    "routes": [
+      {
+        "id": "canonical-a",
+        "maker": null,
+        "model": "served-fable"
+      }
+    ]
+  }
+}

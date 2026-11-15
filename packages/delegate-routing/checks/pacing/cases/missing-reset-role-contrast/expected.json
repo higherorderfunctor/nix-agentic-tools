@@ -1,0 +1,41 @@
+{
+  "asOf": 1794447300,
+  "pools": {
+    "budget": {
+      "limits": [
+        {
+          "capacity": 40.0,
+          "enforced": true,
+          "id": "gate",
+          "models": ["canonical-a"],
+          "naturalResetAt": null,
+          "reason": null,
+          "remaining": 10.0,
+          "role": "gate",
+          "status": "valid",
+          "windowSeconds": 604800
+        },
+        {
+          "capacity": 40.0,
+          "enforced": true,
+          "id": "pace",
+          "models": ["canonical-a"],
+          "naturalResetAt": null,
+          "reason": "missing-reset: resetsAt",
+          "remaining": null,
+          "role": "pace",
+          "status": "invalid",
+          "windowSeconds": 604800
+        }
+      ],
+      "scopeResolved": true
+    }
+  },
+  "routes": [
+    {
+      "id": "canonical-a",
+      "maker": null,
+      "model": "served-fable"
+    }
+  ]
+}
