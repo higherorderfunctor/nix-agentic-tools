@@ -4465,7 +4465,7 @@
         "family": "kimi-k3",
         "id": "kimi-k3",
         "last_updated": "2026-07-16",
-        "limit": { "context": 1048576, "output": 131072 },
+        "limit": { "context": 1048576, "output": 1048576 },
         "modalities": {
           "input": [
             "text",
@@ -4538,7 +4538,7 @@
         "family": "kimi-k3",
         "id": "kimi-k3.1-pro",
         "last_updated": "2026-10-23",
-        "limit": { "context": 1048576, "output": 131072 },
+        "limit": { "context": 1048576, "output": 1048576 },
         "modalities": {
           "input": [
             "text",
