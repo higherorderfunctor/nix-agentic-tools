@@ -1,0 +1,75 @@
+# Build collection manifests for library callers from evaluated credential registrations and CPA routes.
+# CPA supplies offers; module types supply Reader settings and native capacities.
+{lib}: {
+  cpaRoutes,
+  credentialUsage,
+  techniques,
+}: let
+  # Scope checks consider every selected client, while output keeps each client's offers.
+  allOffers = lib.concatLists (lib.filter (offers: offers != null) (builtins.attrValues cpaRoutes));
+  # A collection registration names an offered credential, never a vendor or native pool.
+  unknown = lib.filterAttrs (name: _:
+    !lib.any (offer: offer.credential == name) allOffers)
+  credentialUsage;
+  # Missing registrations retain offers without making a Reader request.
+  registration = offers: credential:
+    if !(credentialUsage ? ${credential})
+    then {
+      command = null;
+      limits = {};
+      readerPool = credential;
+    }
+    else let
+      pool = credentialUsage.${credential};
+      inherit (pool) usage window;
+      readerPool =
+        if usage == null
+        then null
+        else usage.readerPool;
+      models = lib.unique (map (offer: offer.id) (lib.filter (offer: offer.credential == credential) offers));
+      available = lib.unique (map (offer: offer.id) (lib.filter (offer: offer.credential == credential) allOffers));
+      declared = pool.limits;
+      scoped = lib.mapAttrs (_: spec:
+        spec
+        // {
+          models =
+            if spec.models == null
+            then models
+            else lib.intersectLists models spec.models;
+        })
+      declared;
+      limits = lib.filterAttrs (_: spec: spec.models != []) scoped;
+      usd = lib.any (spec: spec.unit == "USD") (builtins.attrValues limits);
+      path = "ai.programs.delegate-routing.credentialUsage.${credential}";
+      technique = techniques.${usage.runtime}.${usage.technique};
+      # Substitute values before quoting each complete argument for the Reader shell.
+      budgetArgs = map (lib.replaceStrings
+        ["<limit>" "<reset-day>" "<reader-pool>"]
+        [(toString window.limit) (toString window.resetDay) readerPool])
+      technique.monthlyBudgetArgs;
+    in
+      if lib.any (spec: spec.models != null && !lib.all (model: lib.elem model available) spec.models) (builtins.attrValues declared)
+      then throw "${path}.limits: models must be canonical credential offers or null."
+      else if lib.any (spec: spec.unit == "USD") (builtins.attrValues declared) && (window == null || window.unit != "USD" || lib.any (spec: spec.unit == "USD" && spec.window != "monthly") (builtins.attrValues declared))
+      then throw "${path}.limits: USD limits must use the existing monthly USD window."
+      else {
+        inherit limits;
+        readerPool =
+          if readerPool == null
+          then credential
+          else readerPool;
+        command =
+          if readerPool == null || limits == {}
+          then null
+          else technique.command + lib.optionalString (usd && budgetArgs != []) " ${lib.escapeShellArgs budgetArgs}";
+      };
+in
+  if unknown != {}
+  then throw "ai.programs.delegate-routing.credentialUsage: collection registrations must name selected CPA credentials (<instance>/<credential>)."
+  else
+    lib.mapAttrs (runtime: offers: {
+      inherit runtime;
+      pools = lib.genAttrs (lib.unique (map (offer: offer.credential) offers)) (registration offers);
+      # Overlapping offers remain distinct; collection never picks a launch credential.
+      routes = map (offer: {inherit (offer) id maker model;}) offers;
+    }) (lib.filterAttrs (_: offers: offers != null) cpaRoutes)

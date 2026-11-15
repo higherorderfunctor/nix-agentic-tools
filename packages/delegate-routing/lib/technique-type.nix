@@ -30,6 +30,11 @@ lib.types.submodule {
       default = [];
       description = "Session modes exposing this technique.";
     };
+    monthlyBudgetArgs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["--limit" "<limit>" "--reset-day" "<reset-day>" "--time-zone" "UTC" "--pool" "<reader-pool>"];
+      description = "Arguments appended for retained monthly USD limits. Substitute <limit>, <reset-day> and <reader-pool> from the credential registration. An empty list appends no arguments.";
+    };
     notes = lib.mkOption {
       type = lib.types.str;
       default = "";

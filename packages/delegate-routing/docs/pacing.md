@@ -58,3 +58,40 @@ unknown; malformed status values are omitted.
 Run the owner check `delegate-routing-observation-normalize` to check the
 boundary. It uses Pydantic v2 and Hypothesis through its Nix Python environment.
 Configured Reader collection, CPA attribution and ranking remain separate.
+
+## Credential collection
+
+`lib/pacing.nix` builds manifests from evaluated module options and existing CPA
+routes. `scripts/usage-collect.py` accepts a typed `Manifest` and returns a
+normalizer `Snapshot`. Its first callers are owner tests; it installs no
+command. Pass `credentialUsage`, `cpaRoutes` and `techniques` to the Nix
+library; `credentialUsage` is the evaluated registration option map on both Home
+Manager and devenv. Manual callers pass the same evaluated registration and
+technique fields. Its keys identify existing CPA credentials, not new budget
+groups. Credential registrations are a separate input to collection.
+
+Register a credential under
+`ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"`. Set
+`usage.runtime`, `usage.technique` and `usage.readerPool` to select its Reader
+and exact envelope label. Each `limits.<name>` needs a Reader `window`, `role`
+(`gate` or `pace`), `unit` and `capacity`. `models = null` covers that
+credential's actual offers; a model list scopes the limit explicitly, including
+windows such as `7d:fable`.
+
+USD capacity comes from the existing monthly USD `window.limit`; a conflicting
+explicit capacity fails. The selected technique's `monthlyBudgetArgs` controls
+the arguments appended for retained monthly USD limits. Its default is
+`["--limit" "<limit>" "--reset-day" "<reset-day>" "--time-zone" "UTC" "--pool" "<reader-pool>"]`.
+The manifest builder substitutes the credential's limit, reset day and Reader
+label before shell-quoting each argument. Configure
+`runtimes.<runtime>.techniques.<name>.monthlyBudgetArgs` to use another CLI;
+`[]` appends nothing. Technique names do not choose the argument protocol.
+Non-USD limits append no budget arguments. No registration or no Reader label
+leaves the credential unmeasured.
+
+Collection shares the helper's timeout and retry policy and executes each
+distinct command once, including its retries. It preserves overlapping offers
+and all routes after failure. Captures use offset-bearing ISO timestamps; the
+caller supplies the observation clock, and tests can substitute the completion
+clock. Failure diagnostics contain fixed reasons and status codes, never stderr
+or exception text.

@@ -24,6 +24,16 @@ in {
         python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
         touch "$out"
       '';
+    # Collection must deduplicate commands and preserve routes across safe failures.
+    delegate-routing-observation-collect =
+      pkgs.runCommand "delegate-routing-observation-collect" {
+        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 -I -B ${./checks/pacing}/test_collection.py ${./scripts}
+        touch "$out"
+      '';
     # Saved captures retain routes and measured allowance when another component fails.
     delegate-routing-observation-normalize =
       pkgs.runCommand "delegate-routing-observation-normalize" {

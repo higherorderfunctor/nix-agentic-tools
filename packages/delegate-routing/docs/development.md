@@ -407,6 +407,9 @@ reset day from 1 through 28. Current use stays unknown. A pool needs `usage` or
 `window`; both default to null. If both are set, the measured reader takes
 precedence. The description defaults to an empty string.
 
+Credential observations use the separate `credentialUsage` registration map; see
+[registration options](pacing.md#credential-collection).
+
 Bind a family through `families.<vendor>.<family>.pools.<runtime> = "<pool>"`.
 The key names the target harness that launches the model. Each native, external
 or manual reach shows its binding. Several families or harnesses can share one

@@ -5,6 +5,47 @@
   pkgs,
   ...
 }: let
+  # Share Reader and monthly-window options between independent registration inventories.
+  poolModule = {
+    options = {
+      usage = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          options = {
+            runtime = lib.mkOption {
+              type = lib.types.enum supportedRuntimes;
+              description = "Enabled runtime whose usage technique reads this pool.";
+            };
+            technique = lib.mkOption {
+              type = lib.types.str;
+              description = "Enabled usage technique with a non-empty command for this pool.";
+            };
+          };
+        });
+        default = null;
+        description = "Canonical usage reader for this budget, resolved from the runtime's techniques.";
+      };
+      window = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          options = {
+            limit = lib.mkOption {
+              type = lib.types.numbers.positive;
+              description = "Configured monthly allowance, not an observed remaining balance.";
+            };
+            resetDay = lib.mkOption {
+              type = lib.types.ints.between 1 28;
+              description = "Day of the calendar month when the allowance resets, in UTC.";
+            };
+            unit = lib.mkOption {
+              type = lib.types.nonEmptyStr;
+              description = "Unit of the configured allowance.";
+            };
+          };
+        });
+        default = null;
+        description = "Configured monthly window for an unmeasured budget; current use remains unknown. A usage reader takes precedence.";
+      };
+    };
+  };
   # Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kimchi" "kiro"];
   # This flake's build unless the overlay is applied (ai.internal.roots).
@@ -66,7 +107,7 @@
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   requiredTargets = runtime:
     lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
-  poolReaders = map (pool: pool.usage.runtime) (lib.filter (pool: pool.usage != null) (builtins.attrValues portable.pools));
+  poolReaders = map (pool: pool.usage.runtime) (lib.filter (pool: pool.usage != null) (builtins.attrValues portable.pools ++ builtins.attrValues portable.credentialUsage));
   redact = import ../../../lib/redact {inherit lib;};
   usageFor = runtime: let
     # The runtime's selection already carries the root fields it inherits.
@@ -230,6 +271,62 @@ in {
   options.ai.programs.delegate-routing =
     entryOptions
     // {
+      credentialUsage = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule ({config, ...}: let
+          budget = config.window;
+        in {
+          imports = [poolModule];
+          options = {
+            limits = lib.mkOption {
+              default = {};
+              description = "Allowance windows scoped to canonical CPA credential offers.";
+              type = lib.types.attrsOf (lib.types.submodule ({config, ...}: {
+                options = {
+                  capacity = lib.mkOption {
+                    type =
+                      lib.types.addCheck lib.types.numbers.positive
+                      (capacity: config.unit != "USD" || budget == null || capacity == budget.limit);
+                    default =
+                      if config.unit == "USD" && budget != null
+                      then budget.limit
+                      else throw "limits.capacity is required without a USD budget window";
+                    defaultText = lib.literalExpression "credentialUsage.<name>.window.limit for USD with a configured window; required otherwise";
+                    description = "Native allowance capacity; USD derives from the budget window and refuses conflicting values.";
+                  };
+                  models = lib.mkOption {
+                    type = lib.types.nullOr (lib.types.nonEmptyListOf lib.types.nonEmptyStr);
+                    default = null;
+                    description = "Canonical model IDs, or all actual credential offers when null.";
+                  };
+                  role = lib.mkOption {
+                    type = lib.types.enum ["gate" "pace"];
+                    description = "Declared enforcement or pacing role.";
+                  };
+                  unit = lib.mkOption {
+                    type = lib.types.enum ["USD" "percentagePoint"];
+                    description = "Native capacity unit.";
+                  };
+                  window = lib.mkOption {
+                    type = lib.types.nonEmptyStr;
+                    description = "Exact Reader window key, including any scope suffix.";
+                  };
+                };
+              }));
+            };
+            usage = lib.mkOption {
+              type = lib.types.nullOr (lib.types.submodule {
+                options.readerPool = lib.mkOption {
+                  type = lib.types.nullOr lib.types.nonEmptyStr;
+                  default = null;
+                  description = "Expected Reader envelope label; null leaves allowance unmeasured.";
+                };
+              });
+            };
+          };
+        }));
+        default = {};
+        description = "Reader registrations keyed by existing CPA credential identity (<instance>/<credential>), consumed by the allowance collection library.";
+      };
       families = lib.mkOption {
         type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
           options = {
@@ -299,48 +396,11 @@ in {
       };
       pools = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
-          options = {
-            description = lib.mkOption {
-              type = lib.types.str;
-              default = "";
-              description = "Budget description shown in consumer {pools} table entries.";
-            };
-            usage = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                options = {
-                  runtime = lib.mkOption {
-                    type = lib.types.enum supportedRuntimes;
-                    description = "Enabled runtime whose usage technique reads this pool.";
-                  };
-                  technique = lib.mkOption {
-                    type = lib.types.str;
-                    description = "Enabled usage technique with a non-empty command for this pool.";
-                  };
-                };
-              });
-              default = null;
-              description = "Canonical usage reader for this budget, resolved from the runtime's techniques.";
-            };
-            window = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                options = {
-                  limit = lib.mkOption {
-                    type = lib.types.numbers.positive;
-                    description = "Configured monthly allowance, not an observed remaining balance.";
-                  };
-                  resetDay = lib.mkOption {
-                    type = lib.types.ints.between 1 28;
-                    description = "Day of the calendar month when the allowance resets, in UTC.";
-                  };
-                  unit = lib.mkOption {
-                    type = lib.types.nonEmptyStr;
-                    description = "Unit of the configured allowance.";
-                  };
-                };
-              });
-              default = null;
-              description = "Configured monthly window for an unmeasured budget; current use remains unknown. A usage reader takes precedence.";
-            };
+          imports = [poolModule];
+          options.description = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Budget description shown in consumer {pools} table entries.";
           };
         });
         default = {};
@@ -495,28 +555,29 @@ in {
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
         }
       ]
-      ++ lib.concatLists (lib.mapAttrsToList (name: pool: let
-          path = "ai.programs.delegate-routing.pools.${lib.strings.escapeNixIdentifier name}";
-          reader = pool.usage;
-          node =
-            if reader == null
-            then null
-            else techniques.${reader.runtime}.${reader.technique} or null;
-        in [
-          {
-            assertion = reader != null || pool.window != null;
-            message = "${path}: set usage or window for this pool.";
-          }
-          {
-            assertion = reader == null || runtimeEnabled reader.runtime;
-            message = "${path}.usage.runtime: the reader runtime must be enabled through ai.<runtime>.enable.";
-          }
-          {
-            assertion = reader == null || (node != null && node.enable && node.kind == "usage" && node.command != null && lib.trim node.command != "");
-            message = "${path}.usage.technique: reference an enabled usage technique with a non-empty command.";
-          }
-        ])
-        portable.pools)
+      ++ lib.concatMap (inventory:
+        lib.concatLists (lib.mapAttrsToList (name: pool: let
+            path = "ai.programs.delegate-routing.${inventory}.${lib.strings.escapeNixIdentifier name}";
+            reader = pool.usage;
+            node =
+              if reader == null
+              then null
+              else techniques.${reader.runtime}.${reader.technique} or null;
+          in [
+            {
+              assertion = reader != null || pool.window != null;
+              message = "${path}: set usage or window for this pool.";
+            }
+            {
+              assertion = reader == null || runtimeEnabled reader.runtime;
+              message = "${path}.usage.runtime: the reader runtime must be enabled through ai.<runtime>.enable.";
+            }
+            {
+              assertion = reader == null || (node != null && node.enable && node.kind == "usage" && node.command != null && lib.trim node.command != "");
+              message = "${path}.usage.technique: reference an enabled usage technique with a non-empty command.";
+            }
+          ])
+          portable.${inventory})) ["credentialUsage" "pools"]
       ++ [
         {
           assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool != null;
