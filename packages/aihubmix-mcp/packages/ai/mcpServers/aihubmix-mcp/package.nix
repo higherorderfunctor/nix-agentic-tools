@@ -133,9 +133,8 @@ in
     # Generated via: nix run nixpkgs#prefetch-npm-deps -- package-lock.json
     npmDepsHash = "sha256-qn8MKMElLquIifuTxel3WiqHP+vRNZYNvVHR7EjhNHg=";
 
-    # Lockfile not shipped in the tarball — use our vendored one. This runs
-    # BEFORE `patches` (stdenv applies patches in patchPhase, and postPatch
-    # follows), so the copy is unaffected by the patch and vice versa.
+    # Lockfile not shipped in the tarball — use our vendored one. postPatch
+    # runs after stdenv applies `patches`; neither touches the other's files.
     postPatch = ''
       cp ${../../../../src/aihubmix-mcp-package-lock.json} package-lock.json
     '';

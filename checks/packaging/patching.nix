@@ -9,7 +9,9 @@
   inherit (pkgs) lib;
 in {
   checks = {
-    # Catch backup/reject leakage in actual patched source trees.
+    # Catch backup/reject leakage in actual patched source trees. These are the
+    # recipes that expose their patched tree as a derivation; recipes that patch
+    # inside their own build rely on patch-flags proving the shared list.
     patch-artifacts = let
       packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
       sources =
