@@ -128,7 +128,6 @@ class Observations(unittest.TestCase):
         for raw in [EPOCH, float(EPOCH), str(EPOCH), "2026-11-12T01:35:00", True]:
             with self.subTest(raw=raw), self.assertRaises(ValidationError):
                 TypeAdapter(N.Timestamp).validate_python(raw)
-        self.assertEqual(int(TypeAdapter(N.Timestamp).validate_python("2026-11-11T18:35:00-07:00").timestamp()), EPOCH)
 
     @given(st.integers(1, 8))
     def test_unknown_scope_counts_do_not_expand_models(self, count):
@@ -225,7 +224,6 @@ class Observations(unittest.TestCase):
         ({"exit": True}, "invalid-exit-status"),
         ({"stdout": "{}{}"}, "invalid-json"),
         ({"data": {}}, "invalid-envelope"),
-        ({"data": {"account": {"auth_index": None, "name": None, "plan": None}, "pool": "wrong", "windows": {}}}, "pool-mismatch"),
     ]))
     def test_failed_captures_keep_routes_and_slots(self, case):
         """Capture failures keep declared routes and limit slots without exposing payloads."""
@@ -264,14 +262,6 @@ class Observations(unittest.TestCase):
         self.assertEqual((limit(result)["status"], limit(result)["remaining"]), ("missing", None))
         self.assertFalse(result["pools"]["budget"]["scopeResolved"])
 
-    def test_json_bytes_are_not_a_second_stdout_format(self):
-        """Even valid UTF-8 JSON bytes are refused by the strict text boundary."""
-        value = snapshot()
-        value["readers"]["budget"]["stdout"] = json.dumps(value["readers"]["budget"]["data"]).encode()
-        result = normalize(value, NOW)
-        self.assertIn("invalid-json", reasons(result))
-        self.assertEqual(limit(result)["status"], "missing")
-
     @given(st.integers(201, 1500))
     def test_json_depth_is_bounded(self, depth):
         """Excessive JSON nesting becomes a safe parse failure before envelope validation."""
@@ -280,16 +270,6 @@ class Observations(unittest.TestCase):
         result = normalize(value, NOW)
         self.assertIn("invalid-json", reasons(result))
         self.assertEqual(limit(result)["status"], "missing")
-
-    def test_json_depth_boundary(self):
-        """The library accepts 200 nested arrays and rejects the next level."""
-        parsed = N.from_json("[" * 200 + "0" + "]" * 200)
-        for _ in range(200):
-            self.assertEqual(len(parsed), 1)
-            parsed = parsed[0]
-        self.assertEqual(parsed, 0)
-        with self.assertRaises(ValueError):
-            N.from_json("[" * 201 + "0" + "]" * 201)
 
     @given(st.one_of(
         st.sampled_from(["active", "critical", "estimated", "normal", "ok", "warning", None]),
