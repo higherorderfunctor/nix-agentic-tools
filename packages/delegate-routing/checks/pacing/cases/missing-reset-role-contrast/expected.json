@@ -21,7 +21,7 @@
           "id": "pace",
           "models": ["canonical-a"],
           "naturalResetAt": null,
-          "reason": "missing-reset: resetsAt",
+          "reason": "missing-reset",
           "remaining": null,
           "role": "pace",
           "status": "invalid",

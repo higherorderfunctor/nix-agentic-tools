@@ -104,7 +104,7 @@ def window_observation(
     open_gate = spec.role == "gate" and window.remainingPercent > 0
     if observation.naturalResetAt is None and not idle and not open_gate:
         observation.status = "invalid"
-        observation.reason = "missing-reset: resetsAt"
+        observation.reason = "missing-reset"
     elif observation.naturalResetAt is not None and observation.naturalResetAt <= now and not idle:
         observation.status = "stale"
         observation.reason = "expired-reset"

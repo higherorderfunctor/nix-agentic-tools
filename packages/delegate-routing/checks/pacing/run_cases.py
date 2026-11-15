@@ -106,50 +106,33 @@ class WholeOutcomes(unittest.TestCase):
                 ).model_dump(mode="json")
                 self.assertEqual(actual, expected.root)
 
-    @example(
-        remaining=0,
-        inconsistent_used=100,
-        quantity_consistency_is_broken=True,
-        invalid_duration="-604800",
-    )
-    @example(
-        remaining=1,
-        inconsistent_used=100,
-        quantity_consistency_is_broken=True,
-        invalid_duration="-604800",
-    )
+    @example(remaining=0, breakage="quantities-total-not-100")
     @given(
         remaining=st.integers(min_value=0, max_value=100),
-        inconsistent_used=st.integers(min_value=0, max_value=100),
-        quantity_consistency_is_broken=st.booleans(),
-        invalid_duration=st.sampled_from(["not-a-duration", "-604800", "0"]),
+        breakage=st.sampled_from(
+            ["negative-duration", "zero-duration", "text-duration", "quantities-total-not-100"]
+        ),
     )
-    def test_broken_window_preserves_proven_zero_and_withholds_positive_allowance(
-        self,
-        remaining: int,
-        inconsistent_used: int,
-        quantity_consistency_is_broken: bool,
-        invalid_duration: str,
+    def test_broken_window_keeps_a_reported_zero_and_never_a_positive_allowance(
+        self, remaining: int, breakage: str
     ) -> None:
-        """Wrong: invalid quantities or durations leak into ranking."""
-        full_used = 100 - remaining
-        used = inconsistent_used if quantity_consistency_is_broken else full_used
-        if quantity_consistency_is_broken and used == full_used:
-            used = (full_used + 1) % 101
-        duration = 604800.0 if quantity_consistency_is_broken else invalid_duration
+        """Wrong: a broken window leaks a positive allowance, or loses a reported zero."""
         window: dict[str, object] = {
             "remainingPercent": float(remaining),
-            "usedPercent": float(used),
+            "usedPercent": float(100 - remaining),
             "resetsAt": "2026-11-19T01:35:00Z",
-            "windowSeconds": duration,
+            "windowSeconds": 604800.0,
         }
+        if breakage == "quantities-total-not-100":
+            # Shift used by one so the two shares total 99 or 101.
+            window["usedPercent"] = float(99 - remaining) if remaining < 100 else 1.0
+        else:
+            durations = {"negative-duration": -604800.0, "zero-duration": 0.0, "text-duration": "not-a-duration"}
+            window["windowSeconds"] = durations[breakage]
         result = N.normalize(snapshot_with_windows({"7d": window}), NOW)
         observation = result.pools["budget"].limits[0]
         self.assertEqual(observation.status, "invalid")
-        if remaining == 0:
-            self.assertEqual(observation.remaining, 0)
-        else:
-            self.assertIsNone(observation.remaining)
+        self.assertEqual(observation.remaining, 0 if remaining == 0 else None)
 
     @given(
         names=st.lists(
