@@ -170,14 +170,14 @@ class Observations(unittest.TestCase):
         """The chosen age boundary expires observations without erasing measured amounts."""
         value = snapshot()
         for age, status in [(freshness, "valid"), (freshness + 1, "stale")]:
-            result = limit(normalize(value, iso(EPOCH + age), freshness_seconds=freshness))
+            result = limit(normalize(value, iso(EPOCH + age), max_capture_age_seconds=freshness))
             self.assertEqual((result["status"], result["remaining"]), (status, 30))
 
     @given(st.sampled_from([-1, True, "3600", float("inf"), float("nan")]))
     def test_invalid_freshness_is_refused(self, freshness):
         """Freshness must be a finite nonnegative number at the call boundary."""
         with self.assertRaises(ValidationError):
-            N.normalize(snapshot(), NOW, freshness_seconds=freshness)
+            N.normalize(snapshot(), NOW, max_capture_age_seconds=freshness)
 
     def test_normalized_result_is_typed(self):
         """Ranking receives typed routes, pools and observations directly."""
