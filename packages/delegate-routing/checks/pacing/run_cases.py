@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import example, given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel, ValidationError
 
 SCRIPTS = Path(sys.argv[1])
@@ -88,6 +88,8 @@ def snapshot_with_windows(windows: dict[str, object]) -> N.Snapshot:
 
 
 class WholeOutcomes(unittest.TestCase):
+    """Check complete normalizer results and properties that span many inputs."""
+
     def test_handwritten_cases_match_the_complete_normalizer_result(self) -> None:
         """Wrong: any changed or omitted output field passes unnoticed."""
         cases = load_cases()
@@ -104,24 +106,50 @@ class WholeOutcomes(unittest.TestCase):
                 ).model_dump(mode="json")
                 self.assertEqual(actual, expected.root)
 
-    @given(
-        remaining=st.integers(min_value=1, max_value=100),
-        invalid_duration=st.text(min_size=1),
+    @example(
+        remaining=0,
+        inconsistent_used=100,
+        quantity_consistency_is_broken=True,
+        invalid_duration="-604800",
     )
-    def test_broken_positive_window_never_reports_allowance(
-        self, remaining: int, invalid_duration: str
+    @example(
+        remaining=1,
+        inconsistent_used=100,
+        quantity_consistency_is_broken=True,
+        invalid_duration="-604800",
+    )
+    @given(
+        remaining=st.integers(min_value=0, max_value=100),
+        inconsistent_used=st.integers(min_value=0, max_value=100),
+        quantity_consistency_is_broken=st.booleans(),
+        invalid_duration=st.sampled_from(["not-a-duration", "-604800", "0"]),
+    )
+    def test_broken_window_preserves_proven_zero_and_withholds_positive_allowance(
+        self,
+        remaining: int,
+        inconsistent_used: int,
+        quantity_consistency_is_broken: bool,
+        invalid_duration: str,
     ) -> None:
-        """Wrong: a positive window that fails validation leaks into ranking."""
+        """Wrong: invalid quantities or durations leak into ranking."""
+        full_used = 100 - remaining
+        used = inconsistent_used if quantity_consistency_is_broken else full_used
+        if quantity_consistency_is_broken and used == full_used:
+            used = (full_used + 1) % 101
+        duration = 604800.0 if quantity_consistency_is_broken else invalid_duration
         window: dict[str, object] = {
             "remainingPercent": float(remaining),
-            "usedPercent": float(100 - remaining),
+            "usedPercent": float(used),
             "resetsAt": "2026-11-19T01:35:00Z",
-            "windowSeconds": invalid_duration,
+            "windowSeconds": duration,
         }
         result = N.normalize(snapshot_with_windows({"7d": window}), NOW)
         observation = result.pools["budget"].limits[0]
         self.assertEqual(observation.status, "invalid")
-        self.assertIsNone(observation.remaining)
+        if remaining == 0:
+            self.assertEqual(observation.remaining, 0)
+        else:
+            self.assertIsNone(observation.remaining)
 
     @given(
         names=st.lists(
