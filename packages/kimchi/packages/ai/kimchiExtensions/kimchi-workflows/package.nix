@@ -82,7 +82,7 @@ in
     inherit (sources) version;
     inherit src;
     patches = [./native-preflight.patch ./pi-agent-settled.patch ./pnpm-runtime.patch ./step-output-handoff.patch ./step-thinking.patch];
-    patchFlags = ["-p1" "--fuzz=0"];
+    inherit (packageLib) patchFlags;
     postPatch = ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

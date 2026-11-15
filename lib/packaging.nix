@@ -13,6 +13,11 @@
 # body to avoid the self-reference would be the DRY loss this file
 # exists to prevent. Same shape as lib/ai/transformers/*.nix.
 rec {
+  # GNU patch flags for every recipe and check: exact context (no fuzz), and no
+  # `.orig` backups when a hunk lands at an offset. `git apply` is already
+  # strict by default and takes no flags from here.
+  patchFlags = ["-p1" "--fuzz=0" "--no-backup-if-mismatch"];
+
   # The flake attribute path of a package in the internal unfree-enabled set
   # (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
   # every generated script that reads a package by name goes through here.

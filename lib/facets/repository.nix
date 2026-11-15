@@ -15,6 +15,7 @@
   # path into the repository's lib/ directory.
   extractedLib = import ../extracted;
   gitToolExtraction = import ../git-tool-settings/extraction.nix;
+  packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
   webDocsLib = import ../web-docs;
   packageWorldFor = pkgs: let
     system = pkgs.stdenv.hostPlatform.system;
@@ -22,11 +23,10 @@
     facets.realizePackages {
       inherit index inputs pkgs system;
       scopeArgs = {
-        inherit extractedLib gitToolExtraction repoPath webDocsLib;
+        inherit extractedLib gitToolExtraction packageLib repoPath webDocsLib;
         fragmentsLib = import ../fragments.nix {inherit lib;};
         # `generatedLib pkgs`: the builder generated files are formatted in.
         generatedLib = import ../generated.nix {inherit lib;};
-        packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
         traceSource = import ../traceSource.nix {inherit lib;};
       };
     };
@@ -202,7 +202,7 @@
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit buildOverlay extractedLib gitToolExtraction harnessFor inputs lib natSystemOf rootsFor;
+          inherit buildOverlay extractedLib gitToolExtraction harnessFor inputs lib natSystemOf packageLib rootsFor;
           # The leaf paths the exported overlay re-exports on this system, and
           # those of them that owner overlay.nix files claim rather than
           # package recipes.

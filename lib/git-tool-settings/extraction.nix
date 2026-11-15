@@ -41,6 +41,7 @@ in {
       inherit (package) src;
       name = "${name}-patched";
       patches = package.patches or [];
+      inherit (import ../packaging.nix) patchFlags;
       postPatch = package.postPatch or "";
       stdenv = pkgs.stdenvNoCC;
     };

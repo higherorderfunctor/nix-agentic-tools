@@ -72,7 +72,7 @@
   patchedSource = pkgs.applyPatches {
     src = kimchiSource;
     # Apply source patches once for both the build and settings extractor.
-    patchFlags = ["-p1" "--fuzz=0"];
+    inherit (packageLib) patchFlags;
     patches = [
       ./command-shell.patch
       ./disable-self-update.patch

@@ -90,7 +90,7 @@ in
       then patch.overrideAttrs {src = ../../../patches/nix-package-layout.patch;}
       else patch)
     (builtins.filter (patch: baseNameOf patch != "no-daemon_auto_start.patch") prev.patches);
-    patchFlags = ["-p1" "--fuzz=0"];
+    inherit (packageLib) patchFlags;
 
     postInstall =
       (prev.postInstall or "")

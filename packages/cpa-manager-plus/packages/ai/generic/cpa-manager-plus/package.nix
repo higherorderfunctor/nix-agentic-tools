@@ -29,7 +29,7 @@
       ../../../../patches/passthrough-view.patch
     ];
     # A release that moves the patched context fails here, loudly.
-    patchFlags = ["-p1" "--fuzz=0"];
+    inherit (packageLib) patchFlags;
   };
   modRoot = "apps/manager-server";
   goModPath = "${modRoot}/go.mod";

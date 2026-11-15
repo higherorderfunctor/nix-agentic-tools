@@ -112,7 +112,7 @@
       # before EOF races the caller on loaded Darwin runners: EOF can arrive
       # before receive starts, correctly yielding a network error instead.
       patches = (old.patches or []) ++ [../../../../patches/httpx2-receive-timeout.patch];
-      patchFlags = ["-p1" "--fuzz=0"];
+      inherit (packageLib) patchFlags;
     });
 
   sdkSource = githubSource "mcp";

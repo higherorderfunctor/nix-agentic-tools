@@ -35,7 +35,7 @@
           ../../../../patches/passthrough-provider.patch
         ];
         # A CPA release that changes the patched context fails here, loudly.
-        patchFlags = ["-p1" "--fuzz=0"];
+        inherit (packageLib) patchFlags;
       };
       vendorHash = sources.vendorHash or lib.fakeHash;
       passthru =

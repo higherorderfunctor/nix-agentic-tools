@@ -32,6 +32,8 @@ in
       inherit rev;
     };
     inherit src;
+    # nixpkgs' own patches apply here too, so they take the shared strict flags.
+    inherit (packageLib) patchFlags;
     passthru = (prev.passthru or {}) // toolchain.passthru;
     vendorHash = "sha256-Xt3Coh+Q2VneVz+PfnT80sN9FAlMZbvPWxYWQUuGXYo=";
   })

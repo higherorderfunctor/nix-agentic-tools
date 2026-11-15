@@ -131,7 +131,7 @@ WRONG shape for it:
   rebuilt `dist/`. The aihubmix failure mode — a rebuild with no source change
   invalidating every hunk — cannot occur.
 - Express it as `source-patches.md` (overlays category) says: a `.patch` with
-  `patchFlags = ["-p1" "--fuzz=0"]`, or `substituteInPlace … --replace-fail` in
+  `inherit (packageLib) patchFlags`, or `substituteInPlace … --replace-fail` in
   `postPatch` when the target is text that churns. Both turn drift into a loud
   build failure. A `.patch` under stdenv's default flags applies with fuzz and
   can land in the wrong place silently; that, not the `.patch` format, is what

@@ -66,6 +66,7 @@
   package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
     name = "git-branchless";
     src = gbSrc;
+    inherit (packageLib) patchFlags;
     cargoDeps = rustPlatform.importCargoLock {
       lockFile = gbSrc + "/Cargo.lock";
     };

@@ -2,6 +2,7 @@
 # package and extractor, including upstream OAuth regressions in the executor.
 {
   extractedLib,
+  packageLib,
   pkgs,
   self,
   ...
@@ -16,7 +17,7 @@
       src = pkgs.applyPatches {
         name = "cliproxyapi-tool-shims-source";
         inherit (shipped) src;
-        patchFlags = ["-p1" "--fuzz=0"];
+        inherit (packageLib) patchFlags;
         patches = [./ci-timing.patch];
       };
     };

@@ -194,7 +194,7 @@ in
       ../../../patches/extra-grammars.patch
       ../../../patches/models.patch
     ];
-    patchFlags = ["-p1" "--fuzz=0"];
+    inherit (packageLib) patchFlags;
     # Scope strict mode: Python's later wrapping hook reads unset array keys.
     postPatch = ''
       (

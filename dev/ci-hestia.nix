@@ -30,6 +30,7 @@ in
   rustPlatform.buildRustPackage {
     pname = "ci-hestia";
     inherit version src;
+    inherit (import ../lib/packaging.nix) patchFlags;
     patches = [
       ../.github/actions/check-cache/patches/pr-manifest-scope.patch
       ../.github/actions/check-cache/patches/gc-pr-manifest-retention.patch
