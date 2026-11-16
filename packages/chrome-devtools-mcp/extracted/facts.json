@@ -1,0 +1,97 @@
+{
+  "cli.options.mcp.<name>": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "cli.options.mcp.executablePath.alias": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.executablePath.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.filesystemRoot.alias": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.filesystemRoot.default": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
+  "cli.options.mcp.filesystemRoot.defaultDescription": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.filesystemRoot.string": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "bool"
+  },
+  "cli.options.mcp.filesystemRoot.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.performanceCrux.default": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "bool"
+  },
+  "cli.options.mcp.performanceCrux.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.redactNetworkHeaders.default": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "bool"
+  },
+  "cli.options.mcp.redactNetworkHeaders.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.screenshotFormat.choices": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
+  "cli.options.mcp.screenshotFormat.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.screenshotMaxWidth.coerce": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
+  "cli.options.mcp.screenshotMaxWidth.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.usageStatistics.default": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "bool"
+  },
+  "cli.options.mcp.usageStatistics.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  },
+  "cli.options.mcp.userDataDir.type": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "string"
+  }
+}

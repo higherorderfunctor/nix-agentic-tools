@@ -1,6 +1,6 @@
 {repoPath, ...}: {
   documentation.mcpServerMeta.chrome-devtools-mcp = {
-    description = "Chrome DevTools browser automation (stdio)";
+    description = "Chrome DevTools browser automation (stdio/bridge)";
     credentials = "None";
   };
   update.targets.chrome-devtools-mcp = {

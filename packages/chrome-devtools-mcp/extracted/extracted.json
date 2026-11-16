@@ -1,0 +1,438 @@
+{
+  "cli": {
+    "options": {
+      "mcp": {
+        "acceptInsecureCerts": {
+          "default": false,
+          "description": "If enabled, ignores errors relative to self-signed and expired certificates. Use with caution.",
+          "type": "boolean"
+        },
+        "allowUnrestrictedPaths": {
+          "default": false,
+          "deprecated": "Use --workspace=/ instead.",
+          "describe": "If set, disables the default path restriction that applies when the MCP client does not negotiate the roots capability. By default, tools that read or write local files are restricted to the OS temp directory when no roots are configured. Use this only when connecting a trusted local client that does not implement MCP roots and requires access to paths outside the temp directory.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "allowedUrlPattern": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(arg) => {\n            if (arg === undefined) {\n                return undefined;\n            }\n            if (arg.length === 0) {\n                throw new Error('Invalid --allowedUrlPattern: at least one pattern is required.');\n            }\n            validateUrlPatterns(arg, '--allowedUrlPattern');\n            return arg;\n        }"
+            }
+          },
+          "describe": "Restricts browser's network access by allowing only specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Requires Chrome 149+. Silently detaches from targets with unallowed URLs upon connection, and blocks runtime requests (including navigations and subresources); targets already open when patterns are updated via --watchConfig remain attached. Accepts an array of patterns. A pattern that uses a regexp group, a named group (`:name`), or a partial IPv4 wildcard (for example `(127\\.\\d+\\.\\d+\\.\\d+)`, `*://127.0.0.1::port/*`, or `*://127.0.0.*/*`) is rejected, because it is not enforced on redirects or subresources; use an exact value or a `*` wildcard instead. Patterns follow URL Pattern defaults: an omitted port matches only the scheme's default port (for example, `https://internal.corp/*` does not match `https://internal.corp:8443/`; use `https://internal.corp:*/*` to match any port), and the hostname must match exactly (a trailing-dot host such as `internal.corp.` is a different hostname).",
+          "reloadable": true,
+          "string": true,
+          "type": "array"
+        },
+        "autoConnect": {
+          "default": false,
+          "description": "If specified, automatically connects to a browser (Chrome 144+) running locally from the user data directory identified by the channel param (default channel is stable). Requires the remote debugging server to be started in the Chrome instance via chrome://inspect/#remote-debugging.",
+          "type": "boolean"
+        },
+        "blockedUrlPattern": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(arg) => {\n            if (arg === undefined || arg.length === 0) {\n                return undefined;\n            }\n            validateUrlPatterns(arg, '--blockedUrlPattern');\n            return arg;\n        }"
+            }
+          },
+          "describe": "Restricts browser's network access by blocking specified URL patterns (uses https://urlpattern.spec.whatwg.org/). Silently detaches from targets with blocked URLs upon connection, and blocks runtime requests (including navigations and subresources); targets already open when patterns are updated via --watchConfig remain attached. Accepts an array of patterns. A pattern that uses a regexp group, a named group (`:name`), or a partial IPv4 wildcard (for example `(127\\.\\d+\\.\\d+\\.\\d+)`, `*://127.0.0.1::port/*`, or `*://127.0.0.*/*`) is rejected, because it is not enforced on redirects or subresources; use an exact value or a `*` wildcard instead. Patterns follow URL Pattern defaults: an omitted port matches only the scheme's default port (for example, `https://internal.corp/*` does not match `https://internal.corp:8443/`; use `https://internal.corp:*/*` to match any port), and the hostname must match exactly (a trailing-dot host such as `internal.corp.` is a different hostname).",
+          "reloadable": true,
+          "string": true,
+          "type": "array"
+        },
+        "browserUrl": {
+          "alias": "u",
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(url) => {\n            if (!url) {\n                return;\n            }\n            try {\n                new URL(url);\n            }\n            catch {\n                throw new Error(`Provided browserUrl ${url} is not valid URL.`);\n            }\n            return url;\n        }"
+            }
+          },
+          "description": "Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md#connecting-to-a-running-chrome-instance.",
+          "type": "string"
+        },
+        "categoryDebugging": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to debugging.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryEmulation": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to emulation.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryExperimentalThirdParty": {
+          "describe": "Set to true to enable third-party developer tools exposed by the inspected page itself (via WebMCP or devtoolstooldiscovery)",
+          "offByDefault": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryExperimentalWebmcp": {
+          "describe": "Set to true to enable WebMCP tools (excluding debugging tools, which are exposed under the third-party developer tools category). Requires Chrome 150+ with the following flag: `--enable-features=WebMCP`",
+          "offByDefault": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryExtensions": {
+          "describe": "Set to true to include tools related to extensions.",
+          "offByDefault": true,
+          "reloadable": false,
+          "type": "boolean"
+        },
+        "categoryInput": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to input.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryMemory": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to memory.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryNavigation": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to navigation.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryNetwork": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to network.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryNetworkMocks": {
+          "describe": "Set to true to include network mocking tools. Changing this option requires restarting the server.",
+          "offByDefault": true,
+          "reloadable": false,
+          "type": "boolean"
+        },
+        "categoryPerformance": {
+          "default": true,
+          "describe": "Set to false to exclude tools related to performance.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryPwa": {
+          "describe": "Set to true to include tools for automating Progressive Web Apps (install, launch, uninstall, and OS state). This feature is only supported with a pipe connection; autoConnect, browserUrl, and wsEndpoint are not supported.",
+          "offByDefault": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "categoryWebauthn": {
+          "describe": "Set to true to include a tool that manages virtual WebAuthn authenticators, for testing passkey and security key flows.",
+          "offByDefault": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "channel": {
+          "choices": ["canary", "dev", "beta", "stable"],
+          "default": "stable",
+          "description": "Specify a different Chrome channel that should be used. The default is the stable channel version.",
+          "type": "string"
+        },
+        "chromeArg": {
+          "describe": "Additional arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.",
+          "string": true,
+          "type": "array"
+        },
+        "clearcutEndpoint": {
+          "describe": "Endpoint for Clearcut telemetry.",
+          "hidden": true,
+          "type": "string"
+        },
+        "clearcutForceFlushIntervalMs": {
+          "describe": "Force flush interval in milliseconds (for testing).",
+          "hidden": true,
+          "type": "number"
+        },
+        "clearcutIncludePidHeader": {
+          "default": false,
+          "describe": "Include watchdog PID in Clearcut request headers (for testing).",
+          "hidden": true,
+          "type": "boolean"
+        },
+        "config": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(configPath) => {\n            if (!configPath) {\n                return;\n            }\n            return path.resolve(configPath);\n        }"
+            }
+          },
+          "describe": "Path to JSON configuration file.",
+          "type": "string"
+        },
+        "devtoolsComments": {
+          "default": false,
+          "describe": "Whether to enable DevTools comments tools. Internal WIP feature.",
+          "hidden": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "executablePath": {
+          "alias": "e",
+          "description": "Path to custom Chrome executable.",
+          "type": "string"
+        },
+        "experimentalDataFormat": {
+          "choices": ["default", "toon", "gcf"],
+          "defaultDescription": "default",
+          "describe": "Override format for structured data in text responses. Default uses built-in formatters. \"toon\" (requires @toon-format/toon) or \"gcf\" (requires @blackwell-systems/gcf) replace structured content with the specified encoding.",
+          "hidden": true,
+          "reloadable": true,
+          "type": "string"
+        },
+        "experimentalDevtools": {
+          "default": false,
+          "describe": "Whether to enable automation over DevTools targets. This exposes the DevTools UI to input tools, including the Console, which can evaluate JavaScript in the inspected page. --no-javascript-evaluation does not restrict this path.",
+          "type": "boolean"
+        },
+        "experimentalFfmpegPath": {
+          "describe": "Path to ffmpeg executable for legacy screencast recording (requires --experimentalScreencast).",
+          "reloadable": true,
+          "type": "string"
+        },
+        "experimentalIncludeAllPages": {
+          "default": false,
+          "describe": "Whether to include all kinds of pages such as webviews or background pages as pages.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "experimentalInteropTools": {
+          "default": false,
+          "describe": "Whether to enable interoperability tools",
+          "hidden": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "experimentalScreencast": {
+          "default": false,
+          "describe": "Use the legacy ffmpeg-based screencast implementation instead of the built-in Chrome recorder. Install ffmpeg https://www.ffmpeg.org/download.html and ensure it is available in the MCP server PATH. This option is deprecated and will be removed in favour of dependency-free screencast commands that are available by default.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "experimentalStructuredContent": {
+          "default": false,
+          "describe": "Whether to output structured formatted content.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "experimentalToonFormat": {
+          "default": false,
+          "describe": "Deprecated: use --experimentalDataFormat=toon instead. Whether to format structured data using TOON (requires @toon-format/toon).",
+          "hidden": true,
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "experimentalVision": {
+          "default": false,
+          "describe": "Whether to enable coordinate-based tools such as click_at(x,y). Usually requires a computer-use model able to produce accurate coordinates by looking at screenshots.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "fileNavigations": {
+          "default": true,
+          "describe": "Set to false to disallow navigating to file: URLs. When disabled, new_page, navigate_page and the slim navigate tool reject file: URLs, including view-source: URLs that target them. This restricts navigations the server performs. It is not a filesystem sandbox: it does not affect pages the browser already had open when the server connected, and the browser can reach the filesystem by other means. Use OS sandboxing for full filesystem confinement.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "filesystemRoot": {
+          "alias": "workspace",
+          "default": ["/tmp"],
+          "defaultDescription": "OS temp directory",
+          "describe": "A directory that filesystem tools are allowed to access. May be specified more than once.",
+          "reloadable": true,
+          "string": true,
+          "type": "array"
+        },
+        "headless": {
+          "default": false,
+          "description": "Whether to run in headless (no UI) mode.",
+          "type": "boolean"
+        },
+        "ignoreDefaultChromeArg": {
+          "describe": "Explicitly disable default arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.",
+          "string": true,
+          "type": "array"
+        },
+        "isolated": {
+          "default": false,
+          "description": "If specified, creates a temporary user-data-dir that is automatically cleaned up after the browser is closed. Defaults to false.",
+          "type": "boolean"
+        },
+        "javascriptEvaluation": {
+          "default": true,
+          "describe": "Set to false to disable the server entry points for evaluating caller-provided JavaScript: evaluation tools (evaluate_script, set_logpoints, and slim evaluate) are disabled, the initScript parameter in navigate_page is turned off, and navigating to javascript:, data:, or vbscript: URLs is disallowed. This is not a JavaScript sandbox: page scripts and JavaScript triggered through other permitted browser interactions (e.g. clicks or typing) still run. If --experimentalDevtools is also enabled, the DevTools UI, including the Console that evaluates code in the inspected page, can be automated and is not restricted by this option. The client remains responsible for validating tool calls and parameters.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "logFile": {
+          "describe": "Path to a file to write debug logs to. Set the env variable `NODE_DEBUG` to `*` to enable verbose logs. Useful for submitting bug reports.",
+          "type": "string"
+        },
+        "maxNavigationSaved": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(value) => {\n            if (value === undefined) {\n                return;\n            }\n            if (!Number.isInteger(value) ||\n                value <= 0 ||\n                value > MAX_NAVIGATION_SAVED_LIMIT) {\n                throw new Error(`Invalid maxNavigationSaved ${value}. Expected an integer between 1 and ${MAX_NAVIGATION_SAVED_LIMIT}.`);\n            }\n            return value;\n        }"
+            }
+          },
+          "default": 3,
+          "describe": "Number of navigations (including the current one) for which network requests and console messages are retained per page. Must be between 1 and 25. For earlier navigations, request URLs, status codes, and request and response headers are retained, which is sufficient to trace redirect hops, but response bodies are generally no longer available.",
+          "type": "number"
+        },
+        "memoryDebugging": {
+          "alias": "experimentalMemory",
+          "default": false,
+          "describe": "Whether to enable memory debugging tools.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "pageIdRouting": {
+          "default": true,
+          "describe": "Require pageId on page-scoped tools and route requests by page ID (useful for concurrent agent sessions). Use --no-page-id-routing to disable.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "performanceCrux": {
+          "default": true,
+          "describe": "Set to false to disable sending URLs from performance traces to CrUX API to get field performance data.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "proxyServer": {
+          "description": "Proxy server configuration for Chrome passed as --proxy-server when launching the browser. See https://www.chromium.org/developers/design-documents/network-settings/ for details.",
+          "type": "string"
+        },
+        "redactNetworkHeaders": {
+          "default": false,
+          "describe": "If true, redacts some of the network headers considered sensitive before returning to the client.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "screencastFps": {
+          "alias": "experimentalScreencastFps",
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(value) => {\n            if (value === undefined) {\n                return;\n            }\n            if (!Number.isInteger(value) || value <= 0) {\n                throw new Error(`Invalid screencastFps ${value}. Expected a positive integer.`);\n            }\n            return value;\n        }"
+            }
+          },
+          "describe": "Frames per second to use for screencast recording. Lower values reduce file size and encoding load.",
+          "reloadable": true,
+          "type": "number"
+        },
+        "screenshotFormat": {
+          "choices": ["jpeg", "png", "webp"],
+          "default": "png",
+          "description": "Override the default output format used by take_screenshot when the caller does not specify one. JPEG and WebP are ~3-5x smaller than PNG, which reduces transfer and storage size. To reduce context size use --screenshotMaxWidth / --screenshotMaxHeight, since image tokens scale with dimensions rather than encoded bytes. Unset preserves the existing default (\"png\").",
+          "reloadable": true,
+          "type": "string"
+        },
+        "screenshotMaxHeight": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(value) => {\n            if (value === undefined) {\n                return;\n            }\n            if (!Number.isInteger(value) || value <= 0) {\n                throw new Error(`Invalid screenshotMaxHeight ${value}. Expected a positive integer.`);\n            }\n            return value;\n        }"
+            }
+          },
+          "description": "Maximum height in pixels for screenshots. If the captured image is taller, it is downscaled (preserving aspect ratio) before being returned. Can be combined with --screenshot-max-width; the smaller scale factor wins. Unset means no resize.",
+          "reloadable": true,
+          "type": "number"
+        },
+        "screenshotMaxWidth": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(value) => {\n            if (value === undefined) {\n                return;\n            }\n            if (!Number.isInteger(value) || value <= 0) {\n                throw new Error(`Invalid screenshotMaxWidth ${value}. Expected a positive integer.`);\n            }\n            return value;\n        }"
+            }
+          },
+          "description": "Maximum width in pixels for screenshots. If the captured image is wider, it is downscaled (preserving aspect ratio) before being returned. Reduces context size in AI conversations. Unset means no resize.",
+          "reloadable": true,
+          "type": "number"
+        },
+        "screenshotQuality": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(value) => {\n            if (value === undefined) {\n                return;\n            }\n            if (!Number.isInteger(value) || value < 0 || value > 100) {\n                throw new Error(`Invalid screenshotQuality ${value}. Expected an integer between 0 and 100.`);\n            }\n            return value;\n        }"
+            }
+          },
+          "description": "Override the default compression quality (0-100) used by take_screenshot for JPEG and WebP when the caller does not specify one. Lower values mean smaller files. Ignored for PNG. Unset preserves the Puppeteer default.",
+          "reloadable": true,
+          "type": "number"
+        },
+        "slim": {
+          "default": false,
+          "describe": "Exposes a \"slim\" set of 3 tools covering navigation, script execution and screenshots only. Useful for basic browser tasks.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "sourceMaps": {
+          "default": true,
+          "describe": "Whether to enable source maps in DevTools. Use --no-source-maps to disable.",
+          "reloadable": true,
+          "type": "boolean"
+        },
+        "usageStatistics": {
+          "default": true,
+          "describe": "Set to false to opt-out of usage statistics collection. Google collects usage data to improve the tool, handled under the Google Privacy Policy (https://policies.google.com/privacy). This is independent from Chrome browser metrics. Disabled if `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS` or `CI` env variables are set.",
+          "type": "boolean"
+        },
+        "userDataDir": {
+          "description": "Path to the user data directory for Chrome. Default is $HOME/.cache/chrome-devtools-mcp/chrome-profile$CHANNEL_SUFFIX_IF_NON_STABLE",
+          "type": "string"
+        },
+        "viaCli": {
+          "default": false,
+          "describe": "Set by Chrome DevTools CLI if the MCP server is started via the CLI client (this arg exists for usage stats)",
+          "hidden": true,
+          "type": "boolean"
+        },
+        "viewport": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(arg) => {\n            if (arg === undefined) {\n                return;\n            }\n            const [width, height] = arg.split('x').map(Number);\n            if (!Number.isInteger(width) ||\n                !Number.isInteger(height) ||\n                width <= 0 ||\n                height <= 0) {\n                throw new Error('Invalid viewport. Expected format is `1280x720` with positive integer width and height.');\n            }\n            return {\n                width,\n                height,\n            };\n        }"
+            }
+          },
+          "describe": "Initial viewport size for the Chrome instances started by the server. For example, `1280x720`. In headless mode, max size is 3840x2160px.",
+          "type": "string"
+        },
+        "watchConfig": {
+          "default": false,
+          "describe": "Watch the config file for changes and apply them without restarting. Tools (except --categoryExtensions) are enabled, disabled and updated on the fly; options used to launch or connect to the browser still require a restart.",
+          "type": "boolean"
+        },
+        "wsEndpoint": {
+          "alias": "w",
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(url) => {\n            if (!url) {\n                return;\n            }\n            try {\n                const parsed = new URL(url);\n                if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {\n                    throw new Error(`Provided wsEndpoint ${url} must use ws:// or wss:// protocol.`);\n                }\n                return url;\n            }\n            catch (error) {\n                if (error.message.includes('ws://')) {\n                    throw error;\n                }\n                throw new Error(`Provided wsEndpoint ${url} is not valid URL.`);\n            }\n        }"
+            }
+          },
+          "description": "WebSocket endpoint to connect to a running Chrome instance (e.g., ws://127.0.0.1:9222/devtools/browser/<id>). Alternative to --browserUrl.",
+          "type": "string"
+        },
+        "wsHeaders": {
+          "coerce": {
+            "function": {
+              "name": "coerce",
+              "source": "(val) => {\n            if (!val) {\n                return;\n            }\n            try {\n                const parsed = typeof val === 'string' ? JSON.parse(val) : val;\n                if (typeof parsed !== 'object' ||\n                    parsed === null ||\n                    Array.isArray(parsed)) {\n                    throw new Error('Headers must be a JSON object');\n                }\n                const headers = {};\n                for (const [key, value] of Object.entries(parsed)) {\n                    if (typeof value !== 'string') {\n                        throw new Error(`Header \"${key}\" must have a string value`);\n                    }\n                    headers[key] = value;\n                }\n                return headers;\n            }\n            catch (error) {\n                throw new Error(`Invalid JSON for wsHeaders: ${error instanceof Error ? error.message : String(error)}`);\n            }\n        }"
+            }
+          },
+          "description": "Custom headers for WebSocket connection in JSON format (e.g., '{\"Authorization\":\"Bearer token\"}'). Only works with --wsEndpoint.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

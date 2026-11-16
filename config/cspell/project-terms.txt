@@ -32,6 +32,7 @@ ITIMER
 libxcb
 Menlo
 mktime
+navigations
 newurl
 nonliteral
 NOSYSTEM
@@ -55,10 +56,14 @@ SYSTEMONE
 TERMUX
 TIOCSCTTY
 TIOCSWINSZ
+toon
 TYPESAFE
 ufeff
 uncarried
 userconfig
+webauthn
+webmcp
+webp
 WEZTERM
 WHATWG
 WINDIR

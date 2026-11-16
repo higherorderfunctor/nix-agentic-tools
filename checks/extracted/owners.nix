@@ -1,6 +1,7 @@
 # Logical export names remain stable if owner directories move.
 {
   chatgpt-codex = ../../packages/chatgpt-codex/extracted;
+  chrome-devtools-mcp = ../../packages/chrome-devtools-mcp/extracted;
   claude-code = ../../packages/claude-code/extracted;
   cliproxyapi = ../../packages/cliproxyapi/extracted;
   cpa-manager-plus = ../../packages/cpa-manager-plus/extracted;

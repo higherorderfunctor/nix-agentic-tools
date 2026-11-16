@@ -16,8 +16,8 @@
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
   sourcesFile = repoPath ../../../../sources.json;
-in
-  stdenv.mkDerivation {
+
+  package = stdenv.mkDerivation {
     pname = "chrome-devtools-mcp";
     inherit (sources) version;
 
@@ -81,4 +81,26 @@ in
       platforms = lib.platforms.unix;
       mainProgram = "chrome-devtools-mcp";
     };
+  };
+in
+  package
+  // {
+    passthru =
+      package.passthru
+      // {
+        # Reads the installed bundle so every generated import resolves exactly
+        # as the server resolves it.
+        extracted =
+          pkgs.runCommand "chrome-devtools-mcp-extracted.json" {
+            nativeBuildInputs = [nodejs_22 pkgs.jq];
+          } ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            # Upstream computes the workspace default from os.tmpdir(), and the
+            # sandbox's TMPDIR is /build. Pin the conventional host value.
+            TMPDIR=/tmp ${lib.getBin nodejs_22}/bin/node ${../../../../extract/mcp-options.mjs} \
+              ${package}/lib/chrome-devtools-mcp/config/mcp-options.js \
+              | ${pkgs.jq}/bin/jq -S . > "$out"
+          '';
+      };
   }
