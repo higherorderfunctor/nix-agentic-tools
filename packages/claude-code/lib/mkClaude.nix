@@ -8,6 +8,18 @@
   pkgs,
   ...
 }: let
+  # https://code.claude.com/docs/en/mcp: per-server timeout is milliseconds.
+  supportsStdioTimeout = server:
+    (server.url or null)
+    != null
+    || (server.timeout or null) == null
+    || server.timeout >= 1000;
+  renderTimeoutServer = name: server:
+    lib.ai.renderServer pkgs name (
+      if supportsStdioTimeout server
+      then server
+      else removeAttrs server ["timeout"]
+    );
   inherit (lib.ai) agent;
   sharedHooks = lib.ai.hooks;
   # Eval-pure reads of committed facts (no IFD). See overlays.md
@@ -255,7 +267,14 @@ in
       };
       hooks = {};
       jail = {};
-      mcpServers = {};
+      mcpServers.gaps = [
+        {
+          each = true;
+          path = ["timeout"];
+          when = {value, ...}: !supportsStdioTimeout value;
+          reason = _: "Claude ignores per-server timeouts below 1000 ms; the timeout is omitted.";
+        }
+      ];
       proxy = {};
       rules = {};
       settings.fields = ["inference" "reasoningEffort"];
@@ -570,7 +589,7 @@ in
       # `native.settings`, so a consumer's own key beats a generated default
       # by the ordinary option priorities.
       settingsDocument = removeAttrs nativeSettings ["hooks"] // lib.optionalAttrs (hooks != {}) {inherit hooks;};
-      renderedServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+      renderedServers = lib.mapAttrs renderTimeoutServer mergedServers;
       personalPluginFiles = lib.filterAttrs (_: value: value != {}) {
         ".mcp.json" = lib.optionalAttrs (mergedServers != {}) {mcpServers = renderedServers;};
       };

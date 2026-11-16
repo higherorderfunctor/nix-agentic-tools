@@ -13,6 +13,12 @@
   pkgs,
   ...
 }: let
+  # pi-mcp-adapter 5.3.1 elicitation-handler.ts clamps tool timers to MAX_TIMER_MS (2 ** 31 - 1).
+  supportsStdioTimeout = server:
+    (server.url or null)
+    != null
+    || (server.timeout or null) == null
+    || server.timeout <= 2147483647;
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   redact = import ../../../lib/redact {inherit lib;};
@@ -604,7 +610,17 @@
           ++ [
             (settingsCopy "mcpServers" "${mcpAndSkillsDir}/mcp.json" {
               content.value = lib.optionalAttrs (mergedServers != {}) {
-                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+                mcpServers = lib.mapAttrs (name: server: let
+                  rendered = lib.ai.renderServer pkgs name server;
+                in
+                  # pi-mcp-adapter 5.3.1 src/types.ts: requestTimeoutMs.
+                  # https://www.npmjs.com/package/pi-mcp-adapter/v/5.3.1
+                  if (server.url or null) == null
+                  then
+                    removeAttrs rendered ["timeout"]
+                    // lib.optionalAttrs (rendered ? timeout && supportsStdioTimeout server) {requestTimeoutMs = rendered.timeout;}
+                  else rendered)
+                mergedServers;
               };
             })
             (settingsCopy "settings" "${permissionsDir}/permissions.json" {content.value = filteredPermissions;})
@@ -748,6 +764,12 @@ in
       };
       jail = {};
       mcpServers.gaps = [
+        {
+          each = true;
+          path = ["timeout"];
+          when = {value, ...}: !supportsStdioTimeout value;
+          reason = _: "Kimchi's pi-mcp-adapter caps tool timers at 2147483647 ms; larger timeouts are omitted.";
+        }
         {
           each = true;
           path = ["toolPolicy"];

@@ -144,10 +144,13 @@
     settings ? {},
     env ? {},
     args ? [],
-  }: {
-    type = "stdio";
-    inherit package settings env args;
-  };
+    timeout ? null,
+  }:
+    {
+      type = "stdio";
+      inherit package settings env args;
+    }
+    // lib.optionalAttrs (timeout != null) {inherit timeout;};
 
   # ── Render typed entry → freeform JSON shape ────────────────────
   # Translates a typed `commonSchema` entry into the freeform shape
@@ -210,13 +213,15 @@
       }
       // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if command != null
-    then {
-      type =
-        if type != null
-        then type
-        else "stdio";
-      inherit command args env;
-    }
+    then
+      {
+        type =
+          if type != null
+          then type
+          else "stdio";
+        inherit command args env;
+      }
+      // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if package != null
     then let
       serverDef = loadServer name;
@@ -231,23 +236,25 @@
         inherit pkgs name credentialVars package;
         settings = evaluatedSettings;
       };
-    in {
-      type = "stdio";
-      command =
-        if needsWrapper
-        then wrappedCommand
-        else builtins.head stdioArgv;
-      args = builtins.tail stdioArgv ++ srvArgs;
-      # Prevent Python path pollution from parent process (e.g.,
-      # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
-      # Python 3.14 servers).
-      env =
-        srvEnv
-        // {
-          PYTHONPATH = "";
-          PYTHONNOUSERSITE = "true";
-        };
-    }
+    in
+      {
+        type = "stdio";
+        command =
+          if needsWrapper
+          then wrappedCommand
+          else builtins.head stdioArgv;
+        args = builtins.tail stdioArgv ++ srvArgs;
+        # Prevent Python path pollution from parent process (e.g.,
+        # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
+        # Python 3.14 servers).
+        env =
+          srvEnv
+          // {
+            PYTHONPATH = "";
+            PYTHONNOUSERSITE = "true";
+          };
+      }
+      // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 
   # ── Resolve a typed remote entry ───────────────────────────────────

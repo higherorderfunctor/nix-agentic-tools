@@ -70,8 +70,8 @@ in {
 
       # The field warnings judge the resolved entry: a remote server's timeout
       # is an http field, delivered or proxied, and its consumed settings are
-      # not an ignored field. Fields http ignores still warn, and so does a
-      # stdio entry's timeout.
+      # not an ignored field. Fields http ignores still warn; a representable
+      # stdio timeout is delivered without a warning.
       factory-slack-mcp-http-field-warnings = mkTest "slack-mcp-http-field-warnings" (
         let
           warned = entry: field:
@@ -89,10 +89,10 @@ in {
           lib.all (entry: !(warned entry "timeout") && !(warned entry "settings")) [direct proxied]
           && warned (direct // {args = ["--verbose"];}) "args"
           && warned (proxied // {env.DEBUG = "1";}) "env"
-          && warned {
+          && !(warned {
             command = "slack-mcp";
             timeout = 300000;
-          } "timeout"
+          } "timeout")
       );
 
       # One file printed by a flake app and a devenv task, nothing installed.
