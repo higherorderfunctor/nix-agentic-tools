@@ -203,12 +203,13 @@ git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (13 servers)</summary>
+<summary><strong>MCP Servers</strong> (14 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
 |--------|-------------|-------------|
 | `aihubmix-mcp` | AIHubMix image and video generation | Required |
+| `chrome-devtools-mcp` | Chrome DevTools browser automation (stdio) | None |
 | `context7-mcp` | Library documentation lookup | None |
 | `effect-mcp` | Effect-TS documentation | None |
 | `git-intel-mcp` | Git repository analytics | None |

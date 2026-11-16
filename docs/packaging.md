@@ -290,6 +290,7 @@ Fetching itself is nixpkgs' to test.
 | kiro-gateway        | root       | GitHub main                           | python                    | —                     | pytest (1413) | —                   |
 | semble              | root       | GitHub tag + PyPI (grouped)           | python                    | —                     | —             | version check       |
 | aihubmix-mcp        | mcpServers | npm tarball (manual)                  | npm (vendored lock+patch) | —                     | —             | MCP stdio marker    |
+| chrome-devtools-mcp | mcpServers | npm tarball                           | published JS (no deps)    | —                     | —             | MCP stdio marker    |
 | context7-mcp        | mcpServers | GitHub main                           | pnpm (nixpkgs override)   | `context7-mcp`        | vitest (2)    | version check       |
 | effect-mcp          | mcpServers | GitHub main                           | pnpm                      | —                     | —             | MCP stdin           |
 | git-intel-mcp       | mcpServers | GitHub main                           | npm                       | —                     | vitest (40)   | MCP stdin           |
@@ -326,3 +327,6 @@ Fetching itself is nixpkgs' to test.
 | pnpm_12             | generic    | npm `latest-12` tag                   | cargo (nixpkgs override)  | `pnpm_12`             | —             | --version, pnpx     |
 | agnix-mcp           | mcpServers | mainProgram override                  | —                         | —                     | —             | —                   |
 | agnix-lsp           | lspServers | mainProgram override                  | —                         | —                     | —             | —                   |
+
+The `chrome-devtools-mcp` row installs the npm artifact directly: npm has
+already published its JavaScript, and the Nix build downloads no browser.

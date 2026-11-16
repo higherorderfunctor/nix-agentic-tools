@@ -20,9 +20,12 @@ patches, and source sidecars stay beside the owner registry.
 
 Servers use one of three Nix builders depending on upstream language:
 
-- **npm** (`buildNpmPackage` / pnpm override) — aihubmix-mcp, context7-mcp,
-  effect-mcp, git-intel-mcp, gitlab-mcp. Require `pnpmDeps` or `npmDeps` hash
-  inline in the owner recipe
+- **npm** (`buildNpmPackage` / pnpm override, or a directly installed npm
+  tarball) — aihubmix-mcp, chrome-devtools-mcp, context7-mcp, effect-mcp,
+  git-intel-mcp, gitlab-mcp. Dependency builds require `pnpmDeps` or `npmDeps`
+  hash inline in the owner recipe. `chrome-devtools-mcp` instead uses the flat
+  npm tarball directly (`sourceRoot = "package"`) because its published JS has
+  no runtime dependencies; it needs no fabricated lock or dependency hash.
 - **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy. Some use
   `pyproject = true` with hatchling or setuptools
 - **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in the
@@ -63,9 +66,9 @@ Dependency hashes (pnpmDeps, vendorHash) are also inline in the same file.
 
 ### An npm-REGISTRY server is not a GitHub server
 
-`aihubmix-mcp` is the one server sourced from an npm-registry tarball rather
-than a git repo, and three things follow that do NOT follow for the
-`fetchFromGitHub` / `fetchgit` servers above:
+`aihubmix-mcp` and `chrome-devtools-mcp` are the servers sourced from
+npm-registry tarballs rather than a git repo, and three things follow that do
+NOT follow for the `fetchFromGitHub` / `fetchgit` servers above:
 
 - **No rev, so no `vu.mkVersion` and no `vu.readPackageJsonVersion`.** A flat
   `fetchurl` yields the `.tgz` FILE, not a tree, so there is nothing to
@@ -84,7 +87,9 @@ than a git repo, and three things follow that do NOT follow for the
   `postPatch`. Automated generators may require a different location; follow
   `dev/fragments/packaging/naming-conventions.md`. Formatter and spelling
   exclusions cover standard and prefixed npm lock names; npm owns their
-  formatting.
+  formatting. This applies to `aihubmix-mcp`: `chrome-devtools-mcp` declares no
+  runtime dependencies, so its prebuilt tarball is installed directly without a
+  lock or `npmDeps`.
 
 ### A local patch is an update-cadence decision, not a detail
 
