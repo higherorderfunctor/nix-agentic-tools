@@ -4,6 +4,7 @@
 {lib}: let
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   inherit (facts.load {dir = ../extracted;}) aggregate;
+  conflicts = facts.get aggregate "cli.conflicts.mcp";
   options = facts.children aggregate "cli.options.mcp.<name>";
 
   setting = name: flag: {inherit name flag;};
@@ -213,15 +214,28 @@
   # (/opt/google/chrome on Linux) and fails on the first tool call where it is
   # absent, as on NixOS. Refuse that implicit lookup at evaluation instead.
   browserChoices = ["autoConnect" "browserUrl" "executablePath" "wsEndpoint"];
+  isSet = value: value != null && value != false;
   choosesBrowser = values:
-    lib.any (name: let value = values.${name}; in value != null && value != false) browserChoices;
+    lib.any (name: isSet values.${name}) browserChoices;
+
+  # Upstream refuses every pair in a conflict group. Excluded options cannot
+  # be set here; canonical option names map to public settings (e.g. workspace).
+  conflictingSettings = values:
+    lib.filter (names: builtins.length names > 1) (map (group:
+      map (key: settings.${key}.name)
+      (lib.filter (key: settings ? ${key} && isSet values.${settings.${key}.name}) group))
+    conflicts);
 in {
   settingsOptions = generated.options;
 
   # Common MCP `timeout` is an external-http-entry field. A stdio child has no
   # per-server timeout here, so no such setting is fabricated below it.
-  settingsToArgs = values:
-    if choosesBrowser values
+  settingsToArgs = values: let
+    collisions = conflictingSettings values;
+  in
+    if collisions != []
+    then throw "chrome-devtools-mcp: conflicting settings: ${lib.concatMapStringsSep "; " (names: lib.concatMapStringsSep " and " (name: "settings.${name}") names) collisions}"
+    else if choosesBrowser values
     then argsOf values
     else throw "chrome-devtools-mcp: choose a browser: set settings.executablePath to launch one, or settings.browserUrl, settings.wsEndpoint or settings.autoConnect to connect to a running Chrome";
 

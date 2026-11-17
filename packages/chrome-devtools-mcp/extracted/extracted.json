@@ -1,5 +1,18 @@
 {
   "cli": {
+    "conflicts": {
+      "mcp": [
+        ["channel", "executablePath", "browserUrl", "wsEndpoint"],
+        ["userDataDir", "browserUrl", "wsEndpoint"],
+        ["userDataDir", "isolated"],
+        ["autoConnect", "isolated"],
+        ["autoConnect", "executablePath"],
+        ["blockedUrlPattern", "allowedUrlPattern"],
+        ["allowUnrestrictedPaths", "filesystemRoot"],
+        ["categoryPwa", "autoConnect"],
+        ["categoryPwa", "browserUrl", "wsEndpoint"]
+      ]
+    },
     "options": {
       "mcp": {
         "acceptInsecureCerts": {

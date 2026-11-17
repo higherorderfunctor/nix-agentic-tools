@@ -20,19 +20,26 @@ needs a page launches or connects one. By default the profile in
 
 ## Configure the server
 
-The entry key must be `chrome-devtools-mcp`: it names the owner whose module
-types `settings`. Each set option renders as `--<flag>=<value>`; an unset option
-renders nothing, so upstream's own default applies.
+A stdio entry names its package, so build it with `lib.ai.mkStdioEntry`. The
+entry key must be `chrome-devtools-mcp`: it names the owner whose module types
+`settings`. Each set option renders as `--<flag>=<value>`; an unset option
+renders nothing, so upstream's own default applies. `isolated` gives every
+server process its own temporary profile, so parallel sessions never contend for
+Chrome's profile lock; set `userDataDir` instead only when the browser must keep
+its logins, and run one session at a time.
 
 ```nix
-ai.mcpServers.chrome-devtools-mcp.settings = {
-  executablePath = "${pkgs.chromium}/bin/chromium";
-  userDataDir = "/var/lib/example/chrome-devtools-profile";
-  usageStatistics = false;
-  performanceCrux = false;
-  redactNetworkHeaders = true;
-  screenshotMaxWidth = 1600;
-  workspace = ["/srv/example/project"];
+ai.mcpServers.chrome-devtools-mcp = inputs.nix-agentic-tools.lib.ai.mkStdioEntry {
+  package = pkgs.ai.mcpServers.chrome-devtools-mcp;
+  settings = {
+    executablePath = lib.getExe pkgs.chromium;
+    isolated = true;
+    usageStatistics = false;
+    performanceCrux = false;
+    redactNetworkHeaders = true;
+    screenshotMaxWidth = 1600;
+  };
+  timeout = 300000;
 };
 ```
 
@@ -40,7 +47,11 @@ The settings are generated from upstream's option table in
 `extracted/extracted.json`, so every upstream option is available except the
 hidden ones `lib/extracted.nix` excludes with a reason. Upstream's
 `filesystemRoot` is exposed as `workspace`. An unknown enum value, an
-out-of-range number, or an empty list is refused at evaluation.
+out-of-range number, or an empty list is refused at evaluation. Conflicting
+options are also refused before argv is rendered, using upstream's extracted
+conflict groups: for example, `userDataDir` with `isolated = true`, or
+`autoConnect = true` with `executablePath`. The error names the conflicting
+settings. Null is unset, and a boolean participates only when true.
 
 Leave `screenshotFormat` unset to keep upstream's lossless PNG. Image tokens
 scale with pixel dimensions, not encoded bytes, so `screenshotMaxWidth` and
