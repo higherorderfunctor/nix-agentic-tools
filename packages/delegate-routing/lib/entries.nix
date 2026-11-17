@@ -119,37 +119,105 @@ in {
         source = ../fragments/review-rubric.md;
         rows = chain [
           {
-            name = "Scope";
+            name = "Review order";
             text = ''
-              **Scope.** A plan item names the current artifact field or behavior it
-              replaces; one that replaces nothing is cut, or is an optional follow-up with
-              its own reason. A mechanism is proportional to what it judges: one that fires
-              on changes outside its input (a fingerprint wider than the judged spans,
-              failing on every unrelated bump) is a finding, not strictness. The planner
-              plans to this row; the plan's first reviewer judges scope against the stated
-              goal before any row.
+              **Review order.** Apply R1-R6 first to each unit of code. If any
+              readability row fails, stop for that unit and report only those failures.
+              Only after all six pass does the same reviewer apply E1-E4 to that unit.
+              This ordering does not change how many independent reviewers the workflow
+              requires.
+            '';
+          }
+          {
+            name = "R1";
+            text = ''
+              **R1.** State what the unit does, its inputs, its output, and why it exists
+              before judging its details.
+            '';
+          }
+          {
+            name = "R2";
+            text = ''
+              **R2.** Mentally remove prose and comments. Names, types, and structure must
+              lead the reader to the same conclusion; if they do not, fix them before
+              adding prose.
+            '';
+          }
+          {
+            name = "R3";
+            text = ''
+              **R3.** Names say what a thing returns or decides, clearly enough that a reader
+              never opens an implementation only to learn what the name means. They never
+              name a plan phase, review round, or finding id; write the decision the label
+              stands for.
+            '';
+          }
+          {
+            name = "R4";
+            text = ''
+              **R4.** With well-named things and its doc comments, the unit reads line by
+              line without jumping around to follow one idea.
+            '';
+          }
+          {
+            name = "R5";
+            text = ''
+              **R5.** Each unit has one short doc comment giving its purpose, inputs,
+              output, callers, and reason to exist. Each file states its purpose, callers,
+              and how data flows through it.
+            '';
+          }
+          {
+            name = "R6";
+            text = ''
+              **R6.** Comments explain only why code cannot, such as why failures are
+              collected instead of raised. They carry no plan labels or narration.
+            '';
+          }
+          {
+            name = "E1";
+            text = ''
+              **E1.** Judge each unit against the program's stated goal. Every part must
+              serve that goal proportionally, and each declaration needs an existing or
+              same-change caller; a future-only declaration moves later and one with no
+              reader is deleted. Before calling a missing test a finding, show that the
+              code is needed.
+            '';
+          }
+          {
+            name = "E2";
+            text = ''
+              **E2.** Ask whether a clearer form exists and name it. Prefer an established
+              library or package when it fits, and prefer a table of cases over a chain of
+              special cases when the table is clearer.
+            '';
+          }
+          {
+            name = "E3";
+            text = ''
+              **E3.** Look for the simpler, cheaper shape. A finding that says a part can go also
+              says what breaks if it is removed. Implement each decision once, and abstract
+              repeated decisions only when that avoids needless jumping between files.
+            '';
+          }
+          {
+            name = "E4";
+            text = ''
+              **E4.** Parse each external input once, at the earliest boundary that can
+              refuse it, into a typed model. Document one input format; another shape needs
+              a named producer that sends it. Typed values flow downstream without
+              conversion or revalidation. Choosing by type is acceptable only in a downstream
+              unit whose actual job is to choose by type, never as a reason to skip boundary
+              validation.
             '';
           }
           {
             name = "Fixtures";
             text = ''
-              **Fixtures.** Fixtures send what a production client sends: a Host or
-              authority without a port on a default-port destination, a plain push and not
-              only a forced one. A fixture that cannot reproduce production (a port it
-              cannot bind) names the difference and what it hides; a path no fixture
-              exercises is a finding. Generated or property tests cover input spaces with
-              few literal examples. Each test says which behavior it protects; large
-              hand-written fixtures need a stated reason.
-            '';
-          }
-          {
-            name = "Naming";
-            text = ''
-              **Naming.** A comment or doc names behaviors, files and options, never a plan
-              phase, review round or finding id whose document is not in the repository;
-              write the decision the label stands for. Numbering the artifact itself
-              defines (a script's own phase headings) is a name and stays. Names say what a
-              thing returns or decides, not just the type it handles.
+              **Fixtures.** Fixtures send the production client's exact shape, use bounded
+              literal cases for contract edges, and cover input spaces with a few named
+              properties. A fixture that cannot reproduce production names the difference;
+              a path no fixture exercises is a finding.
             '';
           }
           {
@@ -157,19 +225,18 @@ in {
             text = ''
               **Size.** Estimate while planning and count the final diff while reviewing:
               200-400 lines per PR is the target, and about 500 is where a change counts as
-              over. The signal is the added lines of the ready change's line breakdown, its
-              hand-written code row plus its docs row; removed lines count separately and
-              never raise it. Tests, fixtures and checks fit within about twice the
-              change's actual hand-written code unless the brief says why. These are
-              steering signals, never caps: being over never stops work, never needs the
-              user's approval, and being over on code lines alone does not fail this row;
-              the row fails a change that is over on code with neither a split nor a stated
-              reason, or whose tests, fixtures and checks run past about twice its code
-              with no stated reason. If an estimate is over and a seam exists that a
-              reviewer can read alone, split into stacked PRs without asking; each piece
-              passes its checks on its own. If no seam exists, make one change and say why
-              in the brief and PR summary.
-
+              over. Measure the line budget on normally formatted code. The signal is the
+              added lines of the ready change's line breakdown, its hand-written code row
+              plus its docs row; removed lines count separately and never raise it. Tests,
+              fixtures and checks fit within about twice the change's actual hand-written
+              code unless the brief says why. These are steering signals, never caps: being
+              over never stops work, never needs the user's approval, and being over on
+              code lines alone does not fail this row; the row fails a change that is over
+              on code with neither a split nor a stated reason, or whose tests, fixtures
+              and checks run past about twice its code with no stated reason. If an estimate
+              is over and a seam exists that a reviewer can read alone, split into stacked
+              PRs without asking; each piece passes its checks on its own. If no seam
+              exists, make one change and say why in the brief and PR summary.
             '';
           }
           {
@@ -182,60 +249,12 @@ in {
               words: readers need not unpack the wording or guess its purpose.
             '';
           }
-          {
-            name = "Input boundary";
-            text = ''
-              **Input boundary.** External input becomes typed structures once at the
-              boundary; downstream code uses those structures without revalidating them.
-            '';
-          }
-          {
-            name = "Input format";
-            text = ''
-              **Input format.** Support one documented input format unless a named producer
-              sends another.
-            '';
-          }
-          {
-            name = "Standard tools";
-            text = ''
-              **Standard tools.** Use the standard library or an established package before
-              a hand-written parser, decoder, depth limiter or validator. A hand-written
-              implementation states why none fits.
-            '';
-          }
-          {
-            name = "Temporary tools";
-            text = ''
-              **Temporary tools.** A preview or inspection tool that will be replaced later
-              belongs as a runnable snippet in the change description, not in the change.
-            '';
-          }
         ];
       }
       {
         name = "Subtractive";
         source = ../fragments/review-subtractive.md;
         rows = chain [
-          {
-            name = "Callers";
-            text = ''
-              **Callers.** Each added line must name a caller or the concrete input it
-              refuses (value, path or environment); otherwise remove it. A guard with a real
-              but unstated refused input needs that input named where the guard lives. Flag
-              wrappers, shims, compatibility branches and tests kept only to preserve an old
-              shape; propose the simpler form when the code can collapse.
-            '';
-          }
-          {
-            name = "Same-change caller";
-            text = ''
-              **Same-change caller.** A caller counts if it already exists or lands in the
-              same change. A declaration, option, field or export whose first reader is in a
-              later change moves there; one with no reader anywhere is deleted. The warning,
-              check or mirroring the declaration itself drags in is not a reader.
-            '';
-          }
           {
             name = "Checks";
             text = ''
@@ -245,55 +264,6 @@ in {
               expected value by hand or take it from an observed result, or delete the
               check. A check for a race or a regression is shown to fail against the code
               before the fix.
-            '';
-          }
-          {
-            name = "Earliest layer";
-            text = ''
-              **Earliest layer.** For each refused input, ask which layer first sees it. If
-              that layer can refuse it without dropping a supported case, refuse it there
-              and delete the later guard. If nothing refuses it yet, add the refusal there
-              rather than a guard downstream. Do not size a guard to an input that only a
-              fallback or an over-broad argument lets through.
-            '';
-          }
-          {
-            name = "Necessity";
-            text = ''
-              **Necessity.** A missing test is a finding only once the code is shown needed:
-              a caller or real input in the repository reaches it. Otherwise the finding is
-              to delete the code.
-            '';
-          }
-          {
-            name = "One source of truth";
-            text = ''
-              **One source of truth.** Each behavior is implemented once, and callers use it
-              rather than wrapping it.
-            '';
-          }
-          {
-            name = "Readable in one pass";
-            text = ''
-              **Readable in one pass.** A reader can state what the code does in two
-              sentences without opening another file. Each file has a short header naming
-              its purpose, callers and data flow. Comments explain why; delete comments the
-              reader cannot act on.
-            '';
-          }
-          {
-            name = "Abstract on the third repeat";
-            text = ''
-              **Abstract on the third repeat.** Repetition is a defect only when it
-              duplicates a decision. If removing it would force a reader to jump between
-              files to follow one idea, it stays.
-            '';
-          }
-          {
-            name = "Data over control flow";
-            text = ''
-              **Data over control flow.** Prefer one function driven by a table of cases
-              over a chain of special cases. A case-specific branch needs a stated reason.
             '';
           }
         ];

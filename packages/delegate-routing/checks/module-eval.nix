@@ -306,6 +306,9 @@
         text = "CUSTOM WORKFLOW STEP";
       };
     };
+    rowWorkflow = change (
+      import ./fixtures/workflow-rows/runtime-rows/input.nix {inherit pkgs;}
+    );
     runtimeWorkflow = change {
       ai.programs.delegate-routing = {
         workflows.Consumer = {
@@ -2119,8 +2122,14 @@
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
-      # Fails if a runtime's rendered skill loses the shared review rubric.
-      && lib.all (runtime: hasProse "**Input boundary.**" (readSkill result runtime)) runtimes
+      # Fails if any runtime loses the two-gate rubric or regains consumer house rules.
+      && lib.all (runtime:
+        lib.hasInfix "1. **Review order.**" (readSkill result runtime)
+        && lib.hasInfix "14. **Human prose.**" (readSkill result runtime)
+        && lib.hasInfix "- **Checks.**" (readSkill result runtime)
+        && !(lib.hasInfix "**Temporary tools.**" (readSkill result runtime))
+        && !(lib.hasInfix "**No preview commands.**" (readSkill result runtime)))
+      runtimes
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
@@ -2150,80 +2159,46 @@
       lib.hasInfix "Step 1: Rubric —" (readSkill custom "claude")
       && !(lib.hasInfix "1. **Rubric:**" (readSkill custom "claude"))
       && !(lib.hasInfix "1. **Rubric:**" (readSkill disabled "claude")));
-    # Rows compose on both backends; dropping inherited rows or freezing numbers fails.
+    # Rows compose on both backends; literal rendered output catches every row operation.
     "module-delegate-routing-${name}-workflow-rows" = mkTest "delegate-routing-${name}-workflow-rows" (
       let
-        customized = change {
-          ai.programs.delegate-routing = {
-            workflows.${workflowName}.steps = {
-              Rubric.rows = {
-                Fixtures.enable = false;
-                "House rule" = {
-                  after = ["Scope"];
-                  before = ["Naming"];
-                  text = "HOUSE ROW";
-                };
-                Scope.source = pkgs.writeText "scope-row.md" "SOURCE ROW\ncontinued";
-                "Temporary tools" = {
-                  after = [];
-                  before = ["Scope"];
-                };
-              };
-              Subtractive.rows = {
-                Callers.enable = false;
-                "House subtraction" = {
-                  before = ["Same-change caller"];
-                  text = "HOUSE SUBTRACTION";
-                };
-              };
-            };
-            runtimes.claude.workflows.${workflowName}.steps = {
-              Rubric.rows = {
-                "House rule" = {
-                  after = ["Scope"];
-                  before = ["Naming"];
-                  text = "RUNTIME ROW";
-                };
-                "Input boundary".enable = false;
-              };
-              Subtractive.rows.Checks = {
-                before = ["House subtraction"];
-                text = "RUNTIME CHECK";
-              };
-            };
-          };
-        };
-        portable = readSkill customized "codex";
-        runtime = readSkill customized "claude";
-        guidance = customized.config.ai.programs.delegate-routing;
-        raw =
-          (import ../lib/render-entries.nix {inherit lib;}).workflows false
-          ((import ../lib/resolve-entries.nix {inherit lib;}).resolveWorkflows
-            guidance.workflows
-            guidance.runtimes.claude.workflows);
+        guidance = result.config.ai.programs.delegate-routing;
+        rowEntrySort = import ../lib/resolve-entries.nix {inherit lib;};
+        rowRenderer = import ../lib/render-entries.nix {inherit lib;};
+        orderedRowNames = step: map (row: row.name) (rowEntrySort.sort "test.rows" step.rows);
+        defaultRows = import ./fixtures/workflow-rows/default-rows/input.nix;
+        expectedDefaultRows = import ./fixtures/workflow-rows/default-rows/expected.nix;
+        portableWorkflow = rowWorkflow.config.ai.programs.delegate-routing.workflows.Rows;
+        runtimeWorkflow =
+          rowWorkflow.config.ai.programs.delegate-routing.runtimes.claude.workflows.Rows;
+        resolvedPortable =
+          (rowEntrySort.resolveWorkflows {Rows = portableWorkflow;} {}).Rows;
+        renderedPortable = rowRenderer.workflows false {Rows = resolvedPortable;};
+        resolvedRuntime =
+          (
+            rowEntrySort.resolveWorkflows
+            {Rows = portableWorkflow;}
+            {Rows = runtimeWorkflow;}
+          ).Rows;
+        renderedRuntime = rowRenderer.workflows false {Rows = resolvedRuntime;};
+        expectedPortable = import ./fixtures/workflow-rows/portable-rows/expected.nix;
+        expectedRuntime = import ./fixtures/workflow-rows/runtime-rows/expected.nix;
       in
-        lib.all (text:
-          lib.hasInfix "1. **Temporary tools.**" text
-          && hasProse "2. SOURCE ROW continued 3." text
-          && !(lib.hasInfix "**Fixtures.**" text)
-          && lib.hasInfix "4. **Naming.**" text
-          && lib.hasInfix "5. **Size.**" text
-          && lib.hasInfix "6. **Human prose.**" text
-          && !(lib.hasInfix "**Callers.**" text)
-          && hasProse "Append these rows to the rubric file, continuing its numbering" text
-          && hasProse "- HOUSE SUBTRACTION - **Same-change caller.**" text)
-        [portable runtime]
-        && lib.hasInfix "3. HOUSE ROW" portable
-        && lib.hasInfix "7. **Input boundary.**" portable
-        && lib.hasInfix "9. **Standard tools.**" portable
-        && lib.hasInfix "3. RUNTIME ROW" runtime
-        && !(lib.hasInfix "HOUSE ROW" runtime)
-        && !(lib.hasInfix "**Input boundary.**" runtime)
-        && lib.hasInfix "8. **Standard tools.**" runtime
-        && hasProse "- RUNTIME CHECK - HOUSE SUBTRACTION" runtime
-        && lib.hasInfix "**Checks.**" portable
-        # A continuation must stay inside its row, including after a source override.
-        && lib.hasInfix "   2. SOURCE ROW\n      continued\n   3. RUNTIME ROW" raw
+        orderedRowNames
+        guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.rubricStep}
+        == expectedDefaultRows.rubric
+        && orderedRowNames
+        guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.subtractiveStep}
+        == expectedDefaultRows.subtractive
+        && lib.all (
+          name:
+            guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.rubricStep}.rows.${name}.enable
+        )
+        expectedDefaultRows.rubric
+        && guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.subtractiveStep}.rows.Checks.enable
+        && renderedPortable == expectedPortable
+        && resolvedRuntime.steps.Check.text == portableWorkflow.steps.Check.text
+        && renderedRuntime == expectedRuntime
         && skillFails {
           ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Empty.text = "";
         }

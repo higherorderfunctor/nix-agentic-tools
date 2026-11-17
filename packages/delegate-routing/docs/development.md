@@ -126,30 +126,31 @@ rule is emitted. Keep launch binding details and technique notes in the skill.
 
 Rubric and Subtractive expose `steps.<step>.rows.<name>`. Each row uses the same
 `enable`, `after`, `before`, `text` and `source` fields as other entries. Row
-text includes its label, such as `**Scope.**`. Step text inserts `{rows}` as a
-numbered list or `{bullets}` as a bullet list. Numbered rows count only enabled
-rows in their final order. Subtractive keeps bullets and tells the worker to
-append them after the current rubric, continuing its numbering; adding or
-removing Rubric rows therefore needs no starting-number override.
+text includes its label, such as `**Review order.**`. Step text inserts `{rows}`
+as a numbered list or `{bullets}` as a bullet list. Numbered rows count only
+enabled rows in their final order. Subtractive keeps bullets and tells the
+worker to append them after the current rubric, continuing its numbering; adding
+or removing Rubric rows therefore needs no starting-number override.
 
 Both Home Manager and devenv accept portable rows and runtime rows under
 `runtimes.<runtime>.workflows`. Runtime rows compose by name, replacing matching
 portable rows atomically. A runtime step with rows but no text inherits its
 portable text; supply text to replace that template. Other steps are unchanged.
-This example adds a house row, disables one row and moves the last shipped row
-to the front:
+
+Every R and E row remains an individually configurable entry. This example adds
+a consumer house rule first, disables one shipped row, and moves the last
+shipped row to the front:
 
 ```nix
 ai.programs.delegate-routing.workflows."Work and review".steps.Rubric.rows = {
-  Fixtures.enable = false;
-  "House rule" = {
-    after = ["Scope"];
-    before = ["Naming"];
-    text = "**House rule.** Every new option has a consumer example.";
-  };
-  "Temporary tools" = {
+  E4.enable = false;
+  "Human prose" = {
     after = [];
-    before = ["Scope"];
+    before = ["No preview commands"];
+  };
+  "No preview commands" = {
+    before = ["Review order"];
+    text = "**No preview commands.** Run preview commands from the change description instead of committing them.";
   };
 };
 ```
@@ -158,6 +159,28 @@ Replace a row with `text = "…"` or `source = ./house-row.md`. To move a shippe
 row, replace its `after` list and adjust any other edges that would otherwise
 create a cycle. Shipped rows follow all earlier rows so disabling an anchor
 preserves the remaining order.
+
+**Breaking row migration:** the removed Rubric rows and `Subtractive` rows have
+no aliases. Delete overrides for their keys; move any policy they carried into
+the row below or into a consumer row. House rules such as preview-command bans
+and same-phase throwaway bans stay consumer rows.
+
+| Removed default              | New home          |
+| ---------------------------- | ----------------- |
+| Temporary tools              | Consumer row only |
+| Callers                      | E1                |
+| Necessity                    | E1                |
+| Same-change caller           | E1                |
+| Scope                        | E1                |
+| Data over control flow       | E2                |
+| Standard tools               | E2                |
+| Abstract on the third repeat | E3                |
+| One source of truth          | E3                |
+| Earliest layer               | E4                |
+| Input boundary               | E4                |
+| Input format                 | E4                |
+| Readable in one pass         | R1 and R4-R6      |
+| Naming                       | R3 and R6         |
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
