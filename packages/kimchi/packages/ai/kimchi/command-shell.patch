@@ -2,6 +2,8 @@ Honor Pi's existing shellPath setting in the replacement bash tool.
 The shared settings reader respects project trust, synced before this extension.
 Every command spawns through the registry with these local operations.
 
+diff --git a/src/extensions/bash-background/index.ts b/src/extensions/bash-background/index.ts
+index fee8443..11e2a3b 100644
 --- a/src/extensions/bash-background/index.ts
 +++ b/src/extensions/bash-background/index.ts
 @@ -23,6 +23,7 @@
@@ -9,10 +11,10 @@ Every command spawns through the registry with these local operations.
  import { resolveBashProcessLimitSeconds } from "../../cli-args.js"
  import { SHELLS_STATUS_KEY } from "../../components/status-line.js"
 +import { getSettingsManager } from "../../settings-watcher.js"
- import { bashToolDescription } from "../bash-tool-guard.js"
- import { readE2eSeam } from "../e2e-seam.js"
- import { createBackgroundBashToolDefinition } from "./bash-background-tool.js"
-@@ -109,6 +110,7 @@
+ import {
+ 	BASH_BACKGROUND_SETTLE_MESSAGE_TYPE,
+ 	type BashBackgroundSettleData,
+@@ -147,6 +148,7 @@ export function bashBackgroundExtension(pi: ExtensionAPI): void {
  		// though our registration wins the tool-name slot.
  		const tool = createBackgroundBashToolDefinition(sessionCtx.cwd, {
  			state,

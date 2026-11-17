@@ -36,6 +36,9 @@ const dependencies = {
   "../../settings-watcher.js": {
     getSettingsManager: () => ({ getShellPath: () => shellPath }),
   },
+  "../../shared/bash-background-settle.js": {
+    BASH_BACKGROUND_SETTLE_MESSAGE_TYPE: "bash-background-settle",
+  },
   "../agents/subagent-bash-clamp.js": { DEFAULT_BASH_TIMEOUT_SECONDS: 120 },
   "../bash-tool-guard.js": { bashToolDescription: () => "bash" },
   "../e2e-seam.js": { readE2eSeam() {} },
@@ -66,6 +69,7 @@ const dependencies = {
   },
   "./terminal-delivery.js": { createTerminalDelivery: () => ({}) },
   "./terminal-status.js": { appendStatus() {}, throwIfTerminal() {} },
+  "./unsettled-handoffs.js": { findUnsettledHandoffs: () => [] },
   "@earendil-works/pi-coding-agent": {
     createBashToolDefinition: () => ({ description: "bash" }),
     createLocalBashOperations: (options) => options,
@@ -120,7 +124,7 @@ for (const value of ["/configured/shell", undefined]) {
     {},
     {
       cwd: "/project",
-      sessionManager: { getSessionId: () => "session" },
+      sessionManager: { getEntries: () => [], getSessionId: () => "session" },
       ui: { setStatus() {} },
     },
   );
