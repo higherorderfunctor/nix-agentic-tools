@@ -109,9 +109,13 @@ func (x *natExtractor) doc(owner reflect.Type, name string) string {
 // non-mapping makes the type `any`. PluginInstanceConfig
 // (plugins.configs.<name>) keeps any YAML subtree, and
 // DisableImageGenerationMode (multimedia.disable-image-generation) reads `true`.
-// If both reject, require `{}` to succeed before walk publishes `object`
-// with reflected children; otherwise extraction fails. The empty mapping
-// avoids inventing valid values for tagged fields such as durations.
+// If both reject, `{}` must succeed before walk publishes `object` with
+// reflected children; the empty mapping avoids inventing valid values for
+// tagged fields such as durations. A decoder that rejects `{}` too gets one
+// string entry, `{k: v}`, and publishes the kind Go reflects: PayloadReplacement
+// (requests.payload.replace[].replacements[]) is a map[string]string whose
+// decoder requires exactly one entry. Extraction fails when both mappings are
+// rejected.
 // CredentialConcurrencyConfig (credentials.concurrency) and
 // CodexLiveMediaRelayConfig (oauth.providers.codex.live-media-relay) first
 // decode ordinary structs, which reject both non-mappings and accept `{}`.
@@ -135,10 +139,12 @@ func (x *natExtractor) kind(t reflect.Type, path string) string {
 				return "any"
 			}
 		}
-		if !natDecodes(t, "{}") {
-			x.t.Fatalf("%s: Go type %s rejects YAML mapping probe {}", path, t)
+		if natDecodes(t, "{}") {
+			return "object"
 		}
-		return "object"
+		if !natDecodes(t, "{k: v}") {
+			x.t.Fatalf("%s: Go type %s rejects YAML mapping probes {} and {k: v}", path, t)
+		}
 	}
 	kind, ok := natKind(t)
 	if !ok {
