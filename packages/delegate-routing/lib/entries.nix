@@ -6,7 +6,7 @@
         inherit (record) name;
         value =
           {after = map (earlier: earlier.name) (lib.take index records);}
-          // lib.getAttrs (builtins.filter (key: record ? ${key}) ["source" "text"]) record;
+          // lib.getAttrs (builtins.filter (key: record ? ${key}) ["rows" "source" "text"]) record;
       })
       records);
   columns = names:
@@ -108,6 +108,7 @@ in {
       "Pool window" = {text = "configured: {limit} {unit} per month, resets day {resetDay}; current use unknown";};
       "Technique notes heading" = {text = "### {harness} technique notes";};
       "Technique table heading" = {text = "### {harness} techniques";};
+      "Workflow step" = {text = "{index}. **{name}:** {text}";};
     };
   };
   workflows."Work and review" = {
@@ -116,10 +117,156 @@ in {
       {
         name = "Rubric";
         source = ../fragments/review-rubric.md;
+        rows = chain [
+          {
+            name = "Review order";
+            text = ''
+              **Review order.** Apply R1-R6 first to each unit of code. If any
+              readability row fails, stop for that unit and report only those failures.
+              Only after all six pass does the same reviewer apply E1-E4 to that unit.
+              This ordering does not change how many independent reviewers the workflow
+              requires.
+            '';
+          }
+          {
+            name = "R1";
+            text = ''
+              **R1.** State what the unit does, its inputs, its output, and why it exists
+              before judging its details.
+            '';
+          }
+          {
+            name = "R2";
+            text = ''
+              **R2.** Mentally remove prose and comments. Names, types, and structure must
+              lead the reader to the same conclusion; if they do not, fix them before
+              adding prose.
+            '';
+          }
+          {
+            name = "R3";
+            text = ''
+              **R3.** Names say what a thing returns or decides, clearly enough that a reader
+              never opens an implementation only to learn what the name means. They never
+              name a plan phase, review round, or finding id; write the decision the label
+              stands for.
+            '';
+          }
+          {
+            name = "R4";
+            text = ''
+              **R4.** With well-named things and its doc comments, the unit reads line by
+              line without jumping around to follow one idea.
+            '';
+          }
+          {
+            name = "R5";
+            text = ''
+              **R5.** Each unit has one short doc comment giving its purpose, inputs,
+              output, callers, and reason to exist. Each file states its purpose, callers,
+              and how data flows through it.
+            '';
+          }
+          {
+            name = "R6";
+            text = ''
+              **R6.** Comments explain only why code cannot, such as why failures are
+              collected instead of raised. They carry no plan labels or narration.
+            '';
+          }
+          {
+            name = "E1";
+            text = ''
+              **E1.** Judge each unit against the program's stated goal. Every part must
+              serve that goal proportionally, and each declaration needs an existing or
+              same-change caller; a future-only declaration moves later and one with no
+              reader is deleted. Before calling a missing test a finding, show that the
+              code is needed.
+            '';
+          }
+          {
+            name = "E2";
+            text = ''
+              **E2.** Ask whether a clearer form exists and name it. Prefer an established
+              library or package when it fits, and prefer a table of cases over a chain of
+              special cases when the table is clearer.
+            '';
+          }
+          {
+            name = "E3";
+            text = ''
+              **E3.** Look for the simpler, cheaper shape. A finding that says a part can go also
+              says what breaks if it is removed. Implement each decision once, and abstract
+              repeated decisions only when that avoids needless jumping between files.
+            '';
+          }
+          {
+            name = "E4";
+            text = ''
+              **E4.** Parse each external input once, at the earliest boundary that can
+              refuse it, into a typed model. Document one input format; another shape needs
+              a named producer that sends it. Typed values flow downstream without
+              conversion or revalidation. Choosing by type is acceptable only in a downstream
+              unit whose actual job is to choose by type, never as a reason to skip boundary
+              validation.
+            '';
+          }
+          {
+            name = "Fixtures";
+            text = ''
+              **Fixtures.** Fixtures send the production client's exact shape, use bounded
+              literal cases for contract edges, and cover input spaces with a few named
+              properties. A fixture that cannot reproduce production names the difference;
+              a path no fixture exercises is a finding.
+            '';
+          }
+          {
+            name = "Size";
+            text = ''
+              **Size.** Estimate while planning and count the final diff while reviewing:
+              200-400 lines per PR is the target, and about 500 is where a change counts as
+              over. Measure the line budget on normally formatted code. The signal is the
+              added lines of the ready change's line breakdown, its hand-written code row
+              plus its docs row; removed lines count separately and never raise it. Tests,
+              fixtures and checks fit within about twice the change's actual hand-written
+              code unless the brief says why. These are steering signals, never caps: being
+              over never stops work, never needs the user's approval, and being over on
+              code lines alone does not fail this row; the row fails a change that is over
+              on code with neither a split nor a stated reason, or whose tests, fixtures
+              and checks run past about twice its code with no stated reason. If an estimate
+              is over and a seam exists that a reviewer can read alone, split into stacked
+              PRs without asking; each piece passes its checks on its own. If no seam
+              exists, make one change and say why in the brief and PR summary.
+            '';
+          }
+          {
+            name = "Human prose";
+            text = ''
+              **Human prose.** Writers and rewriters load and follow `peer-communication`
+              when installed for human docs, maintainer comments and change descriptions.
+              Without that skill, lead with what the thing does or how to use it in short,
+              plain sentences. Reviewers grade prose for a point-first explanation in plain
+              words: readers need not unpack the wording or guess its purpose.
+            '';
+          }
+        ];
       }
       {
         name = "Subtractive";
         source = ../fragments/review-subtractive.md;
+        rows = chain [
+          {
+            name = "Checks";
+            text = ''
+              **Checks.** Each added check names the wrong implementation it fails on. A
+              check whose expected value is computed by the expression under test, or read
+              back from the input the check itself supplied, fails on none: write the
+              expected value by hand or take it from an observed result, or delete the
+              check. A check for a race or a regression is shown to fail against the code
+              before the fix.
+            '';
+          }
+        ];
       }
       {
         name = "Plan";

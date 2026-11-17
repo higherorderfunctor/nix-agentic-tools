@@ -2,8 +2,9 @@
   entries,
   lib,
   workflows ? {},
+  stepPhrase ? null,
 }: let
-  renderer = import ./lib/render-entries.nix {inherit lib;};
+  renderer = import ./lib/render-entries.nix {inherit lib stepPhrase;};
   rendered = lib.concatStringsSep "\n" (lib.filter (text: text != "") [
     (renderer.routing true entries)
     (renderer.workflows true workflows)

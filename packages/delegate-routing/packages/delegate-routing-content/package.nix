@@ -85,6 +85,7 @@
     lib.makeOverridable buildSkill (defaults
       // {
         picker = null;
+        reviewPolicy = (lib.evalModules {modules = [(import ../../lib/review-policy.nix {inherit lib;})];}).config;
         sessionPool = null;
       }
       // args);
@@ -103,12 +104,12 @@
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
       if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
       then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
-      else view // {inherit (args) runtime sessionPool;}
+      else view // {inherit (args) runtime sessionPool reviewPolicy;}
     ));
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
       text = ''
-        exec ${pkgs.python3}/bin/python3 ${../../scripts/delegate-routing-plan.py} "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+        exec ${pkgs.python3.withPackages (ps: [ps.pydantic])}/bin/python3 ${../../scripts/delegate-routing-plan.py} "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';
     };
     helperCommand = lib.getExe helper;
@@ -128,7 +129,7 @@
           # as a dependency of the delivered file, including its manifest.
           body =
             builtins.appendContext
-            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["picker" "sessionPool"] // {inherit helperInstruction techniques;}))
+            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
             (builtins.getContext helperInstruction);
         };
       };

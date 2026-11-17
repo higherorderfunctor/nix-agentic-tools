@@ -124,6 +124,64 @@ the package's fragments, or for a consumer its `ai.programs.delegate-routing`
 routing and workflows entries. When the always-on render is empty, no router
 rule is emitted. Keep launch binding details and technique notes in the skill.
 
+Rubric and Subtractive expose `steps.<step>.rows.<name>`. Each row uses the same
+`enable`, `after`, `before`, `text` and `source` fields as other entries. Row
+text includes its label, such as `**Review order.**`. Step text inserts `{rows}`
+as a numbered list or `{bullets}` as a bullet list. Numbered rows count only
+enabled rows in their final order. Subtractive keeps bullets and tells the
+worker to append them after the current rubric, continuing its numbering; adding
+or removing Rubric rows therefore needs no starting-number override.
+
+Both Home Manager and devenv accept portable rows and runtime rows under
+`runtimes.<runtime>.workflows`. Runtime rows compose by name, replacing matching
+portable rows atomically. A runtime step with rows but no text inherits its
+portable text; supply text to replace that template. Other steps are unchanged.
+
+Every R and E row remains an individually configurable entry. This example adds
+a consumer house rule first, disables one shipped row, and moves the last
+shipped row to the front:
+
+```nix
+ai.programs.delegate-routing.workflows."Work and review".steps.Rubric.rows = {
+  E4.enable = false;
+  "Human prose" = {
+    after = [];
+    before = ["No preview commands"];
+  };
+  "No preview commands" = {
+    before = ["Review order"];
+    text = "**No preview commands.** Run preview commands from the change description instead of committing them.";
+  };
+};
+```
+
+Replace a row with `text = "…"` or `source = ./house-row.md`. To move a shipped
+row, replace its `after` list and adjust any other edges that would otherwise
+create a cycle. Shipped rows follow all earlier rows so disabling an anchor
+preserves the remaining order.
+
+**Breaking row migration:** the removed Rubric rows and `Subtractive` rows have
+no aliases. Delete overrides for their keys; move any policy they carried into
+the row below or into a consumer row. House rules such as preview-command bans
+and same-phase throwaway bans stay consumer rows.
+
+| Removed default              | New home          |
+| ---------------------------- | ----------------- |
+| Temporary tools              | Consumer row only |
+| Callers                      | E1                |
+| Necessity                    | E1                |
+| Same-change caller           | E1                |
+| Scope                        | E1                |
+| Data over control flow       | E2                |
+| Standard tools               | E2                |
+| Abstract on the third repeat | E3                |
+| One source of truth          | E3                |
+| Earliest layer               | E4                |
+| Input boundary               | E4                |
+| Input format                 | E4                |
+| Readable in one pass         | R1 and R4-R6      |
+| Naming                       | R3 and R6         |
+
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
 retaining its siblings. An explicit `enable = false` wins over content. `text`
@@ -140,11 +198,12 @@ from Nix priority merging within one scope. A runtime replacement that needs the
 portable wording must supply that wording explicitly; do not copy evaluated
 records with internal fields. A runtime workflow record that sets text replaces
 the portable header; one that sets no text keeps it. Portable and runtime step
-maps compose separately by step name. A runtime step replaces its portable step
-atomically; sibling steps remain. Workflow content is required after these step
-maps compose: a runtime can enable a catalog workflow without introductory text
-or local steps when enabled inherited steps provide content. An enabled workflow
-with no effective introductory text or enabled steps fails with a named error.
+maps compose separately by step name. Runtime steps compose their row maps by
+name; other step fields use the runtime values, and sibling steps remain.
+Workflow content is required after these step maps compose: a runtime can enable
+a catalog workflow without introductory text or local steps when enabled
+inherited steps provide content. An enabled workflow with no effective
+introductory text or enabled steps fails with a named error.
 
 `before` and `after` name ordering anchors in the same map. Topological sorting
 honors both forms among enabled entries. Edges to absent or disabled entries are
@@ -156,6 +215,37 @@ keep a terminal step last when inserting a new step, give the new step a
 
 Repository runtime and skill ownership is documented in
 `dev/fragments/pipeline/generation-architecture.md`.
+
+### Change helper review policy
+
+`ai.programs.delegate-routing.reviewPolicy` changes the checks the helper
+enforces. Both Home Manager and devenv carry it into every runtime's manifest.
+Workflow text remains separately editable: disabling a prose step alone does not
+disable its helper check.
+
+- `planCheck.requireRubric` defaults to `true`: require a saved, non-empty
+  rubric and its full bytes in every launch brief. Set it to `false` to omit the
+  rubric.
+- `planCheck.requireSize` defaults to `true`: require per-kind size records. Set
+  it to `false` to omit them; supplied records still need valid counts.
+- `planCheck.requiredReviewRoles` defaults to `["first-check"]`. Set it to `[]`
+  for units without a required reviewer.
+- `planCheck.workerRoles` defaults to `["investigator" "mechanical" "writer"]`.
+  Each unit needs exactly one worker from this list. It may include `planner`
+  when that is the unit's worker role.
+- `roles.<role>.tiers` lists allowed tiers. Review roles and `planner` default
+  to `["frontier" "strong"]`; worker roles allow all four tiers. An empty list
+  permits no candidates for that role.
+
+For a workflow without rubric or size records, set both requirements to `false`
+and disable the Rubric step or its Size row as appropriate. Update the Plan step
+when changing rubric, size or role requirements. For review role changes, also
+update the Review step and `skill.entries."Routing helper"`. For tier changes,
+update all three and `routing."Pool drain"`.
+
+`skill.phrases."Workflow step"` controls each step's label and body, with
+`{index}`, `{name}` and `{text}` placeholders. Its default is
+`{index}. **{name}:** {text}`. Existing step order still determines the index.
 
 ## Skill text
 
@@ -638,7 +728,8 @@ the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
 From this package directory, run the offline runtime suite with its explicit
-fixture input:
+fixture input. This Python environment needs `pydantic` v2 and `hypothesis`; the
+packaged `delegate-routing-plan-runtime` check supplies both:
 
 ```bash
 python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json

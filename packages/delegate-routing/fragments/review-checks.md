@@ -45,14 +45,17 @@ accepted cuts, and an accepted cut lands only if checks still pass. The user
 remains the final spot-check and is not consulted about cuts.
 
 **First check:** gets the draft, the description's guarantee claims (never its
-review history or the writer's notes) and the rubric file verbatim. Grades the
-description's claims first, then every rubric row in order: pass with the line
-that meets it, fail with location and evidence, or unknown with what would
-settle it. A guarantee with no enforcing line in this diff is an issue of at
-least medium severity. Then lists issues no row covers, checking each against
-the draft itself. For each fail or issue, returns its location, the row or
-requirement it breaks, evidence, whether it holds, and a proposed severity; if
-uncertain, returns the open question that would settle it.
+review history or the writer's notes) and the rubric file verbatim. The
+orchestrator reads the first unit's diff itself before trusting any report about
+it. For each code unit, the reviewer applies R1-R6 first; if one fails, it stops
+for that unit and reports only those failures. Only after that unit passes
+readability does the reviewer examine E1-E4, the rubric rows for other
+artifacts, and the guarantee claims. Every engineering or guarantee question not
+yet examined is unknown, not passed. A guarantee with no enforcing line in this
+diff is an issue of at least medium severity. For each fail or issue, returns
+its location, the row or requirement it breaks, evidence, whether it holds, and
+a proposed severity; if uncertain, returns the open question that would settle
+it.
 
 The reviewer, not the writer, searches for dead code: removed names, dead
 branches, checks pinning removed behavior, stale prose and shims. It lists what

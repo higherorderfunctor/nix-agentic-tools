@@ -472,6 +472,7 @@ in {
           opencodeGo.pool = "null or string";
           pools = "attribute set of (submodule)";
           reminder = "submodule";
+          reviewPolicy = "submodule";
           routing = "attribute set of (submodule)";
           skill = "submodule";
           workflows = "attribute set of (submodule)";

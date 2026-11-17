@@ -306,6 +306,9 @@
         text = "CUSTOM WORKFLOW STEP";
       };
     };
+    rowWorkflow = change (
+      import ./fixtures/workflow-rows/runtime-rows/input.nix {inherit pkgs;}
+    );
     runtimeWorkflow = change {
       ai.programs.delegate-routing = {
         workflows.Consumer = {
@@ -632,6 +635,15 @@
       change {
         ai.kiro.cli.workflows.enable = true;
         ai.programs.delegate-routing = {
+          reviewPolicy = {
+            planCheck = {
+              requireRubric = false;
+              requireSize = false;
+              requiredReviewRoles = [];
+              workerRoles = ["planner"];
+            };
+            roles.judge.tiers = lib.mkForce ["mid"];
+          };
           families.fixture.packaged = {
             defaultEffort = "high";
             example.${runtime} = "fixture-model";
@@ -743,6 +755,8 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["reviewPolicy"]["planCheck"] == {"requireRubric": False, "requireSize": False, "requiredReviewRoles": [], "workerRoles": ["planner"]}
+        assert manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["mid"]
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"], p["toolFree"]) for p in manifest["pickerEntries"]] == [("fixture-picker", "fixture-model", "packaged", "medium", runtime, True)], "module picker entries did not reach packaged helper"
         assert manifest["pickerEntries"][0]["outputFormat"] == "claude-json"
@@ -754,6 +768,8 @@
         direct_skill = Path(os.environ["directSkillPath"]).read_text()
         direct_wrapper = Path(re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", direct_skill)[1])
         direct_manifest = json.loads(Path(re.search(r"--manifest (/nix/store/[^\s]+)", direct_wrapper.read_text())[1]).read_text())
+        assert direct_manifest["reviewPolicy"]["planCheck"] == {"requireRubric": True, "requireSize": True, "requiredReviewRoles": ["first-check"], "workerRoles": ["investigator", "mechanical", "writer"]}
+        assert direct_manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["frontier", "strong"]
         assert direct_manifest["effortLevels"] == manifest["effortLevels"]
         assert [(p["technique"], p["model"], p["family"], p["effort"], p["runtime"]) for p in direct_manifest["pickerEntries"]] == [("codex exec", "gpt-6.1-sol", "sol", "medium", "codex")]
         assert direct_manifest["pickerEntries"][0]["toolFree"] is True
@@ -2106,6 +2122,14 @@
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
+      # Fails if any runtime loses the two-gate rubric or regains consumer house rules.
+      && lib.all (runtime:
+        lib.hasInfix "1. **Review order.**" (readSkill result runtime)
+        && lib.hasInfix "14. **Human prose.**" (readSkill result runtime)
+        && lib.hasInfix "- **Checks.**" (readSkill result runtime)
+        && !(lib.hasInfix "**Temporary tools.**" (readSkill result runtime))
+        && !(lib.hasInfix "**No preview commands.**" (readSkill result runtime)))
+      runtimes
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "7. **Loop:**" (readSkill runtimeWorkflowStep "claude")
@@ -2123,6 +2147,64 @@
         remainder = builtins.elemAt (lib.splitString "CUSTOM WORKFLOW STEP" text) 1;
       in
         lib.hasInfix "Rubric" rubric && lib.hasInfix "Review" remainder)
+    );
+    "module-delegate-routing-${name}-workflow-step-phrase" = mkTest "delegate-routing-${name}-workflow-step-phrase" (let
+      custom = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".text = "Step {index}: {name} — {text}";
+      };
+      disabled = change {
+        ai.programs.delegate-routing.skill.phrases."Workflow step".enable = false;
+      };
+    in
+      lib.hasInfix "Step 1: Rubric —" (readSkill custom "claude")
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill custom "claude"))
+      && !(lib.hasInfix "1. **Rubric:**" (readSkill disabled "claude")));
+    # Rows compose on both backends; literal rendered output catches every row operation.
+    "module-delegate-routing-${name}-workflow-rows" = mkTest "delegate-routing-${name}-workflow-rows" (
+      let
+        guidance = result.config.ai.programs.delegate-routing;
+        rowEntrySort = import ../lib/resolve-entries.nix {inherit lib;};
+        rowRenderer = import ../lib/render-entries.nix {inherit lib;};
+        orderedRowNames = step: map (row: row.name) (rowEntrySort.sort "test.rows" step.rows);
+        defaultRows = import ./fixtures/workflow-rows/default-rows/input.nix;
+        expectedDefaultRows = import ./fixtures/workflow-rows/default-rows/expected.nix;
+        portableWorkflow = rowWorkflow.config.ai.programs.delegate-routing.workflows.Rows;
+        runtimeWorkflow =
+          rowWorkflow.config.ai.programs.delegate-routing.runtimes.claude.workflows.Rows;
+        resolvedPortable =
+          (rowEntrySort.resolveWorkflows {Rows = portableWorkflow;} {}).Rows;
+        renderedPortable = rowRenderer.workflows false {Rows = resolvedPortable;};
+        resolvedRuntime =
+          (
+            rowEntrySort.resolveWorkflows
+            {Rows = portableWorkflow;}
+            {Rows = runtimeWorkflow;}
+          ).Rows;
+        renderedRuntime = rowRenderer.workflows false {Rows = resolvedRuntime;};
+        expectedPortable = import ./fixtures/workflow-rows/portable-rows/expected.nix;
+        expectedRuntime = import ./fixtures/workflow-rows/runtime-rows/expected.nix;
+      in
+        orderedRowNames
+        guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.rubricStep}
+        == expectedDefaultRows.rubric
+        && orderedRowNames
+        guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.subtractiveStep}
+        == expectedDefaultRows.subtractive
+        && lib.all (
+          name:
+            guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.rubricStep}.rows.${name}.enable
+        )
+        expectedDefaultRows.rubric
+        && guidance.workflows.${defaultRows.workflow}.steps.${defaultRows.subtractiveStep}.rows.Checks.enable
+        && renderedPortable == expectedPortable
+        && resolvedRuntime.steps.Check.text == portableWorkflow.steps.Check.text
+        && renderedRuntime == expectedRuntime
+        && skillFails {
+          ai.programs.delegate-routing.workflows.${workflowName}.steps.Rubric.rows.Empty.text = "";
+        }
+        && skillFails {
+          ai.programs.delegate-routing.workflows.${workflowName}.steps.Empty.rows.One.text = "ROW WITHOUT TEMPLATE";
+        }
     );
     "module-delegate-routing-${name}-workflow-runtime" = mkTest "delegate-routing-${name}-workflow-runtime" (
       let

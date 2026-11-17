@@ -1,11 +1,23 @@
 {lib}: {
   resolveRouting = portable: runtime: portable // runtime;
+  # Overlay runtime workflows on portable defaults, merging rows and inheriting unset text.
   resolveWorkflows = portable: runtime:
     portable
     // lib.mapAttrs (name: workflow:
       workflow
       // {
-        steps = (portable.${name}.steps or {}) // workflow.steps;
+        steps =
+          (portable.${name}.steps or {})
+          // lib.mapAttrs (stepName: step:
+            step
+            // {
+              rows = (portable.${name}.steps.${stepName}.rows or {}) // step.rows;
+              text =
+                if step.text == ""
+                then portable.${name}.steps.${stepName}.text or ""
+                else step.text;
+            })
+          workflow.steps;
         # A runtime record that sets no header keeps the portable one.
         text =
           if workflow.text == ""
