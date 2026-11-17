@@ -497,6 +497,7 @@
     "fileCreated": "PostFileCreate",
     "fileDeleted": "PostFileDelete",
     "fileEdited": "PostFileSave",
+    "permissionRequest": "PermissionRequest",
     "postCompact": "PostCompact",
     "postTaskExecution": "PostTaskExec",
     "postToolUse": "PostToolUse",
@@ -511,6 +512,7 @@
   },
   "hookTriggers": [
     "Manual",
+    "PermissionRequest",
     "PostCompact",
     "PostFileCreate",
     "PostFileDelete",
@@ -643,6 +645,7 @@
     "chat.keybindings.cancelStream",
     "chat.keybindings.closeMenu",
     "chat.keybindings.kmuxPrefix",
+    "chat.keybindings.moveToBackground",
     "chat.keybindings.quit",
     "chat.keybindings.toggleInterruptBehavior",
     "chat.keybindings.toggleSessionDashboard",
