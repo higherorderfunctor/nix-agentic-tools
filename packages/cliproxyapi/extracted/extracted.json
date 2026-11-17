@@ -3496,12 +3496,6 @@
         },
         "description": "Sparse mixture-of-experts reasoning model with 23B active parameters for coding and agentic workflows",
         "family": "beam",
-        "go": {
-          "limited_regions": true,
-          "monthly_usage": null,
-          "training": false,
-          "zdr": false
-        },
         "id": "beam-free",
         "knowledge": "2026-06-30",
         "last_updated": "2026-10-16",
@@ -3570,12 +3564,6 @@
         },
         "description": "Fast Claude model for responsive assistance, classification, and lightweight agents",
         "family": "claude-haiku",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": false
-        },
         "id": "claude-haiku-5-5",
         "knowledge": "2026-06",
         "last_updated": "2026-10-07",
@@ -3656,12 +3644,6 @@
         },
         "description": "Flagship DeepSeek model for coding, reasoning, and agentic work",
         "family": "deepseek-thinking",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "deepseek-v4-pro",
         "knowledge": "2025-05",
         "last_updated": "2026-04-24",
@@ -3732,12 +3714,6 @@
         },
         "description": "October 17 update of DeepSeek V4.1 Flash with improved reasoning, coding, agentic tasks, and visual understanding",
         "family": "deepseek-flash",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 100, "go-plus": 200, "go-teams": 105 },
-          "training": false,
-          "zdr": true
-        },
         "id": "deepseek-v4.1-flash",
         "knowledge": "2025-05",
         "last_updated": "2026-10-17",
@@ -3802,12 +3778,6 @@
         },
         "description": "Google's flagship reasoning model for complex software engineering, deep math and science, and long-horizon autonomous agents",
         "family": "gemini",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 30, "go-plus": 120, "go-teams": 35 },
-          "training": false,
-          "zdr": true
-        },
         "id": "gemini-4-argon",
         "knowledge": "2026-03",
         "last_updated": "2026-10-13",
@@ -3884,12 +3854,6 @@
         },
         "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
         "family": "glm",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 180, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "glm-5.2",
         "last_updated": "2026-06-13",
         "limit": { "context": 1000000, "output": 131072 },
@@ -3932,12 +3896,6 @@
         },
         "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
         "family": "glm",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 120, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "glm-5.3",
         "last_updated": "2026-08-14",
         "limit": { "context": 1000000, "output": 131072 },
@@ -3980,12 +3938,6 @@
         },
         "description": "Native multimodal GLM model for efficient coding and long-horizon agent tasks",
         "family": "glm-flash",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 180, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "glm-5.3-flash",
         "last_updated": "2026-08-26",
         "limit": { "context": 1000000, "output": 131072 },
@@ -4063,12 +4015,6 @@
         },
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
         "family": "gpt-luna",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": false
-        },
         "id": "gpt-5.6-luna",
         "knowledge": "2026-02-16",
         "last_updated": "2026-07-09",
@@ -4150,12 +4096,6 @@
         },
         "description": "OpenAI's most efficient model for focused, high-volume tasks",
         "family": "gpt-luna",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": false
-        },
         "id": "gpt-6-luna",
         "knowledge": "2026-05-18",
         "last_updated": "2026-09-22",
@@ -4231,12 +4171,6 @@
         },
         "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
         "family": "grok",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": false
-        },
         "id": "grok-4.7",
         "knowledge": "2026-05",
         "last_updated": "2026-09-21",
@@ -4281,12 +4215,6 @@
         },
         "description": "Tencent Hy reasoning model for coding, instruction following, and agent tasks",
         "family": "Hy",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 240, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "hy3",
         "last_updated": "2026-07-06",
         "limit": { "context": 256000, "input": 192000, "output": 128000 },
@@ -4327,12 +4255,6 @@
         },
         "description": "A next-generation multimodal productivity model with significantly enhanced Agent and complex task execution capabilities.",
         "family": "Hy",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 240, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "hy4",
         "last_updated": "2026-11-04",
         "limit": { "context": 1048576, "input": 983010, "output": 65536 },
@@ -4382,12 +4304,6 @@
         },
         "description": "Tencent's lower-cost Hy4 tier for everyday agent and productivity tasks, with image understanding and a 1M-token context window.",
         "family": "Hy",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": null,
-          "training": false,
-          "zdr": true
-        },
         "id": "hy4-flash-free",
         "last_updated": "2026-11-16",
         "limit": { "context": 1048576, "input": 983040, "output": 65536 },
@@ -4437,12 +4353,6 @@
         },
         "description": "A next-generation productivity model with significantly enhanced Agent and complex task execution capabilities.",
         "family": "Hy",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 30, "go-plus": 120, "go-teams": 35 },
-          "training": false,
-          "zdr": true
-        },
         "id": "hy4-preview",
         "last_updated": "2026-08-28",
         "limit": { "context": 1024000, "output": 64000 },
@@ -4478,12 +4388,6 @@
           }
         },
         "description": "Stealth model, free for a limited time",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": null,
-          "training": true,
-          "zdr": false
-        },
         "id": "iceman-contributor-free",
         "last_updated": "2026-10-24",
         "limit": { "context": 262144, "output": 131072 },
@@ -4532,12 +4436,6 @@
         },
         "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
         "family": "kimi-k2",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 180, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "kimi-k2.7-code",
         "knowledge": "2025-01",
         "last_updated": "2026-06-12",
@@ -4608,12 +4506,6 @@
         },
         "description": "Multimodal Kimi model with 1M context and toggleable max-effort thinking for long-horizon agent work",
         "family": "kimi-k3",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "kimi-k3",
         "last_updated": "2026-07-16",
         "limit": { "context": 1048576, "output": 1048576 },
@@ -4687,12 +4579,6 @@
         },
         "description": "Multimodal Kimi model with a 1M-token context window and always-on reasoning, for coding, 3D creation and financial research",
         "family": "kimi-k3",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "kimi-k3.1-pro",
         "last_updated": "2026-10-23",
         "limit": { "context": 1048576, "output": 1048576 },
@@ -4755,12 +4641,6 @@
         },
         "description": "Meituan LongCat-2.0, a reasoning model with tool calling and a 1M-token context window",
         "family": "longcat",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 240, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "longcat-2.0",
         "last_updated": "2026-06-30",
         "limit": { "context": 1000000, "output": 131072 },
@@ -4802,12 +4682,6 @@
         },
         "description": "Meituan's multimodal reasoning model for long-horizon coding and agent tasks, with visual understanding and a 1M-token context window",
         "family": "longcat",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": null,
-          "training": false,
-          "zdr": true
-        },
         "id": "longcat-2.5-free",
         "last_updated": "2026-11-02",
         "limit": { "context": 1000000, "output": 262144 },
@@ -4851,12 +4725,6 @@
         },
         "description": "MiMo Flash model for multimodal coding agents and long-context automation",
         "family": "mimo",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 120, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "mimo-v2.6-flash",
         "last_updated": "2026-09-22",
         "limit": { "context": 1048576, "output": 131072 },
@@ -4919,12 +4787,6 @@
         },
         "description": "Stronger MiMo Pro tier for multimodal reasoning and coding-agent execution",
         "family": "mimo",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "mimo-v2.6-pro",
         "last_updated": "2026-09-22",
         "limit": { "context": 1048576, "output": 131072 },
@@ -4999,12 +4861,6 @@
         },
         "description": "MiniMax multimodal coding model for long-context reasoning and agent tasks",
         "family": "minimax-m3",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 180, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "minimax-m3",
         "knowledge": "2025-01",
         "last_updated": "2026-06-01",
@@ -5063,12 +4919,6 @@
         },
         "description": "Frontier multimodal coding model with 1M context window and tunable thinking depth",
         "family": "minimax",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 20, "go-plus": 80, "go-teams": 25 },
-          "training": false,
-          "zdr": true
-        },
         "id": "minimax-m3.1-flash",
         "last_updated": "2026-10-19",
         "limit": { "context": 1000000, "output": 512000 },
@@ -5126,12 +4976,6 @@
         },
         "description": "Muse Spark 1.2 is a coding-focused update to Muse Spark 1.1 with improvements in code generation, complex debugging, codebase understanding, and end-to-end developer workflows.",
         "family": "muse",
-        "go": {
-          "limited_regions": true,
-          "monthly_usage": { "go": 60, "go-plus": 120, "go-teams": 65 },
-          "training": true,
-          "zdr": false
-        },
         "id": "muse-spark-1.2-contributor",
         "last_updated": "2026-08-05",
         "limit": { "context": 1048576, "output": 131072 },
@@ -5189,12 +5033,6 @@
         },
         "description": "Muse Spark 1.3 is a multimodal reasoning model from Meta for coding and agentic workflows.",
         "family": "muse",
-        "go": {
-          "limited_regions": true,
-          "monthly_usage": { "go": 60, "go-plus": 120, "go-teams": 65 },
-          "training": true,
-          "zdr": false
-        },
         "id": "muse-spark-1.3-contributor",
         "last_updated": "2026-09-02",
         "limit": { "context": 1048576, "output": 131072 },
@@ -5269,12 +5107,6 @@
         },
         "description": "Multimodal reasoning model for visual analysis, planning, and tool use",
         "family": "qwen3.7-plus",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 60, "go-plus": 180, "go-teams": 65 },
-          "training": false,
-          "zdr": true
-        },
         "id": "qwen3.7-plus",
         "knowledge": "2025-04",
         "last_updated": "2026-06-02",
@@ -5344,12 +5176,6 @@
         },
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 30, "go-plus": 90, "go-teams": 35 },
-          "training": false,
-          "zdr": true
-        },
         "id": "qwen3.8-flash",
         "last_updated": "2026-08-26",
         "limit": { "context": 1000000, "output": 131072 },
@@ -5415,12 +5241,6 @@
         },
         "description": "2.4-trillion-parameter multimodal flagship for coding, professional work, and long-horizon agentic workflows",
         "family": "qwen3.8-max",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "qwen3.8-max",
         "last_updated": "2026-08-03",
         "limit": { "context": 1000000, "output": 131072 },
@@ -5490,12 +5310,6 @@
         },
         "description": "Flagship multimodal model for coding, office productivity, frontend design, and complex agentic tasks",
         "family": "qwen4-max",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "qwen4-max",
         "last_updated": "2026-11-16",
         "limit": { "context": 1000000, "output": 262144 },
@@ -5557,12 +5371,6 @@
           }
         },
         "description": "StepFun's next-generation flagship base model for coding and professional knowledge work, with native text, image, and video input and a 1M-token context window",
-        "go": {
-          "limited_regions": false,
-          "monthly_usage": { "go": 15, "go-plus": 60, "go-teams": 20 },
-          "training": false,
-          "zdr": true
-        },
         "id": "step-5-preview",
         "last_updated": "2026-09-20",
         "limit": { "context": 1000000, "input": 1000000, "output": 65536 },
@@ -5595,7 +5403,7 @@
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
         "glm-5.2": 60,
-        "glm-5.3": 15,
+        "glm-5.3": 200,
         "glm-5.3-flash": 60,
         "gpt-5.6-luna": 15,
         "gpt-6-luna": 15,
@@ -5629,7 +5437,7 @@
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
         "glm-5.2": 180,
-        "glm-5.3": 120,
+        "glm-5.3": 400,
         "glm-5.3-flash": 180,
         "gpt-5.6-luna": 60,
         "gpt-6-luna": 60,
@@ -5663,7 +5471,7 @@
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
         "glm-5.2": 65,
-        "glm-5.3": 20,
+        "glm-5.3": 205,
         "glm-5.3-flash": 65,
         "gpt-5.6-luna": 20,
         "gpt-6-luna": 20,
