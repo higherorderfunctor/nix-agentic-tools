@@ -1,0 +1,32 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "first": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d"
+          },
+          "second": {
+            "capacity": 20.0,
+            "models": ["canonical-a"],
+            "role": "gate",
+            "window": "7d"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {},
+    "routes": [
+      {
+        "id": "canonical-a",
+        "maker": null,
+        "model": "served-fable"
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "allowance": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {
+      "budget": {
+        "exit": 7,
+        "stderr": "private failure detail",
+        "stdout": "private unread payload"
+      }
+    },
+    "routes": [
+      {
+        "id": "canonical-a",
+        "maker": null,
+        "model": "served-fable"
+      }
+    ]
+  }
+}

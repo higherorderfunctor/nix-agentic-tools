@@ -1,0 +1,29 @@
+{
+  "asOf": 1794447300,
+  "pools": {
+    "budget": {
+      "limits": [
+        {
+          "capacity": 40.0,
+          "enforced": null,
+          "id": "allowance",
+          "models": ["canonical-a"],
+          "naturalResetAt": null,
+          "reason": "invalid-window: windowSeconds",
+          "remaining": 0.0,
+          "role": "gate",
+          "status": "invalid",
+          "windowSeconds": null
+        }
+      ],
+      "scopeResolved": true
+    }
+  },
+  "routes": [
+    {
+      "id": "canonical-a",
+      "maker": null,
+      "model": "served-fable"
+    }
+  ]
+}
