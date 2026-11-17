@@ -4,7 +4,8 @@
 //
 // Method (the repository ranks CodeQL > eval > AST > regex; see
 // dev/fragments/extracted/extraction-method.md): eval. The question is the
-// value of one exported object, not a code path, so CodeQL adds nothing. The
+// values of exported option and conflict tables, not a code path, so CodeQL
+// adds nothing. The
 // object is assembled from imports, spreads, helper calls and computed
 // defaults, so an AST or regex read would have to re-implement that evaluation.
 const fail = (message) => {
@@ -51,7 +52,7 @@ const encode = (value, path) => {
 };
 
 const extract = async (source) => {
-  const { mcpOptions } = await import(source);
+  const { CONFLICTING_ARGS, mcpOptions } = await import(source);
   if (!isPlainObject(mcpOptions)) fail("mcpOptions is not an object");
 
   const options = {};
@@ -71,7 +72,29 @@ const extract = async (source) => {
     );
   }
 
-  return { cli: { options: { mcp: options } } };
+  // ServerConfig refuses more than one active argument within each group.
+  // Preserve the groups verbatim; the settings renderer consumes this shape.
+  if (!Array.isArray(CONFLICTING_ARGS) || CONFLICTING_ARGS.length === 0)
+    fail("CONFLICTING_ARGS must be a non-empty array of groups");
+  for (const [index, group] of CONFLICTING_ARGS.entries()) {
+    if (!Array.isArray(group) || group.length < 2)
+      fail(`CONFLICTING_ARGS[${index}] must contain at least two options`);
+    for (const name of group) {
+      if (typeof name !== "string" || !Object.hasOwn(options, name))
+        fail(
+          `CONFLICTING_ARGS[${index}] names an unknown option ${String(name)}`,
+        );
+    }
+    if (new Set(group).size !== group.length)
+      fail(`CONFLICTING_ARGS[${index}] repeats an option`);
+  }
+
+  return {
+    cli: {
+      conflicts: { mcp: encode(CONFLICTING_ARGS, "CONFLICTING_ARGS") },
+      options: { mcp: options },
+    },
+  };
 };
 
 const [source] = process.argv.slice(2);

@@ -1,4 +1,9 @@
 {
+  "cli.conflicts.mcp": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "list"
+  },
   "cli.options.mcp.<name>": {
     "source": "static",
     "systems": ["x86_64-linux"],

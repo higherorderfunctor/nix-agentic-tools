@@ -35,6 +35,49 @@
     "--workspace=/run/examples/project"
     "--workspace=/run/examples/documents"
   ];
+  # Every row starts from independently rendered valid settings. Each addition
+  # changes one setting, covering every pair in upstream's multi-option groups.
+  conflictCases = let
+    case = valid: expected: additions: {inherit additions expected valid;};
+  in [
+    (case {
+        allowedUrlPattern = ["https://example.org/*"];
+        executablePath = "/run/examples/chrome";
+      }
+      ["--allowedUrlPattern=https://example.org/*" "--executablePath=/run/examples/chrome"]
+      [{blockedUrlPattern = ["https://example.net/*"];}])
+    (case {autoConnect = true;} ["--autoConnect=true"] [
+      {categoryPwa = true;}
+      {executablePath = "/run/examples/chrome";}
+      {isolated = true;}
+    ])
+    (case {browserUrl = "http://127.0.0.1:9222";} ["--browserUrl=http://127.0.0.1:9222"] [
+      {categoryPwa = true;}
+      {channel = "stable";}
+      {executablePath = "/run/examples/chrome";}
+      {userDataDir = "/run/examples/browser-data";}
+      {wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";}
+    ])
+    (case {executablePath = "/run/examples/chrome";} ["--executablePath=/run/examples/chrome"] [{channel = "stable";}])
+    (case {
+        executablePath = "/run/examples/chrome";
+        userDataDir = "/run/examples/browser-data";
+      }
+      ["--executablePath=/run/examples/chrome" "--userDataDir=/run/examples/browser-data"]
+      [{isolated = true;}])
+    (case {
+        executablePath = "/run/examples/chrome";
+        workspace = ["/run/examples/project"];
+      }
+      ["--executablePath=/run/examples/chrome" "--workspace=/run/examples/project"]
+      [{allowUnrestrictedPaths = true;}])
+    (case {wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";} ["--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/id"] [
+      {categoryPwa = true;}
+      {channel = "stable";}
+      {executablePath = "/run/examples/chrome";}
+      {userDataDir = "/run/examples/browser-data";}
+    ])
+  ];
   configured = factory {inherit settings;};
   rendered = mcpLib.renderServer pkgs "chrome-devtools-mcp" configured;
   throws = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
@@ -52,6 +95,72 @@
   bridgeProxyPrefix = lib.take 7 bridgeService.command;
 in {
   checks = {
+    factory-chrome-devtools-mcp-conflicts = mkTest "chrome-devtools-mcp-conflicts" (
+      lib.all (test:
+        (factory {settings = test.valid;}).args
+        == test.expected
+        && lib.all (addition: throws (factory {settings = test.valid // addition;}).args) test.additions)
+      conflictCases
+      # False and null do not participate, but explicit false still renders.
+      && lib.all (test:
+        (factory {
+          settings =
+            settings
+            // {
+              autoConnect = test.value;
+              isolated = test.value;
+            };
+        }).args
+        == test.expected) [
+        {
+          expected = [
+            "--autoConnect=false"
+            "--executablePath=/run/examples/chrome"
+            "--isolated=false"
+            "--performanceCrux=false"
+            "--redactNetworkHeaders=true"
+            "--screenshotFormat=jpeg"
+            "--screenshotMaxWidth=1280"
+            "--usageStatistics=false"
+            "--userDataDir=/run/examples/browser-data"
+            "--workspace=/run/examples/project"
+            "--workspace=/run/examples/documents"
+          ];
+          value = false;
+        }
+        {
+          expected = expectedArgs;
+          value = null;
+        }
+      ]
+      && throws
+      (evalHm {
+        services.mcp-servers.servers.chrome-devtools-mcp = {
+          enable = true;
+          settings = settings // {isolated = true;};
+        };
+      }).config.ai.services.mcp-chrome-devtools-mcp.command
+    );
+
+    # The package-backed entry the README documents: the module renders the
+    # same argv and carries the stdio timeout. Without a package there is
+    # nothing to run, so a settings-only entry is refused.
+    factory-chrome-devtools-mcp-package-entry = mkTest "chrome-devtools-mcp-package-entry" (
+      let
+        entry = mcpLib.renderServer pkgs "chrome-devtools-mcp" (mcpLib.mkStdioEntry {
+          package = pkgs.hello;
+          inherit settings;
+          timeout = 300000;
+        });
+      in
+        entry.type
+        == "stdio"
+        && entry.command == "${pkgs.hello}/bin/chrome-devtools-mcp"
+        && entry.args == expectedArgs
+        && entry.timeout == 300000
+        && throws (mcpLib.renderServer pkgs "chrome-devtools-mcp" {inherit settings;})
+    );
+
     factory-chrome-devtools-mcp-required-argv = mkTest "chrome-devtools-mcp-required-argv" (
       configured.type
       == "stdio"
