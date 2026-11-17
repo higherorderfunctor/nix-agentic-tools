@@ -32,6 +32,14 @@ class Entry(normalizer.Route):
     state: Literal["out", "ready"]
 
 
+class PoolLimits(NamedTuple):
+    """The limits one pool applies to one route, and whether that pool's scope is resolved."""
+
+    pool: str | None
+    resolved: bool
+    limits: list[normalizer.Observation]
+
+
 class Ranking(NamedTuple):
     """Retain the trusted snapshot alongside computed entries without revalidation."""
 
@@ -42,7 +50,11 @@ class Ranking(NamedTuple):
 def allowance(
     limits: list[normalizer.Observation], resolved: bool, now: int, idle_baseline: float
 ) -> tuple[float | None, bool]:
-    """Use normalized enforcement and validity; independent paced zero survives uncertainty."""
+    """Return a route's pace in one pool (the lowest of its pace limits) and whether it is ready.
+
+    Any limit at zero blocks the route, even when other evidence is unknown;
+    unknown evidence otherwise leaves the pace unknown and the route out.
+    """
     paces, blocked, uncertain = [], False, not resolved
     for limit in limits:
         valid = limit.status == "valid" and limit.enforced is True
@@ -82,10 +94,11 @@ def rank(snapshot: normalizer.Normalized, policy: RankingPolicy | None = None) -
     entries = []
     for offer in snapshot.routes:
         applicable = [
-            (pool, evidence.scopeResolved, [limit for limit in evidence.limits if offer.id in limit.models])
+            PoolLimits(pool, evidence.scopeResolved, [limit for limit in evidence.limits if offer.id in limit.models])
             for pool, evidence in sorted(snapshot.pools.items())
         ]
-        applicable = [item for item in applicable if item[2]] or [(None, False, [])]
+        # A route no pool limits still gets one entry, so callers see it as out.
+        applicable = [item for item in applicable if item.limits] or [PoolLimits(None, False, [])]
         for pool, resolved, limits in applicable:
             pace, ready = allowance(limits, resolved, snapshot.asOf, ranking_policy.idleBaseline)
             # Entry's finite score constraint refuses overflow of otherwise finite factors.
