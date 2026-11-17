@@ -5,9 +5,9 @@
   ...
 }: let
   inherit (pkgs) lib;
-  snapshotDate = "2026-11-16";
-  contentHash = "sha256-LEmirTJp8g6i0Z/12pYOOQ94C1YrSol518w9V2kAu/c=";
-  hash = "sha256-7L6XLHUb7jpP33u/6P+SebSFE6OvOi7sydK5JMRRErw=";
+  snapshotDate = "2026-11-17";
+  contentHash = "sha256-MxMe9+8MKfQ7GpTHBkxTaXIwRXvbIjLYnPA3Ixe/w2I=";
+  hash = "sha256-JLn+s0MiHSm9TQFHPh3gJwd2hraS9G7KuVw/D7HdcZ0=";
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
     name = "kimchi-docs";
