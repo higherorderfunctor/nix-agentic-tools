@@ -91,17 +91,17 @@ def typed_snapshot(pools: dict[str, dict[str, N.LimitSpec]], readers: dict[str, 
     )
 
 
-def captured_pool(limits: dict[str, N.LimitSpec], windows: dict[str, object]) -> tuple[dict[str, N.LimitSpec], object]:
-    """Pair configured limits with one saved successful Reader command result."""
+def captured_pool(windows: dict[str, object]) -> N.Capture:
+    """Build one saved successful Reader command result."""
     envelope = N.Envelope(pool="reader", windows=windows)
-    return limits, N.Capture(exit=0, stdout=envelope.model_dump_json())
+    return N.Capture(exit=0, stdout=envelope.model_dump_json())
 
 
 def ranked_entry(
     limits: dict[str, N.LimitSpec], windows: dict[str, object] | None
 ) -> P.Entry:
     """Normalize one budget capture, or its absence, and rank the sole route."""
-    capture = None if windows is None else captured_pool(limits, windows)[1]
+    capture = None if windows is None else captured_pool(windows)
     snapshot = typed_snapshot(
         {"budget": limits}, {"budget": capture} if capture else {}, [N.Route(id="canonical", maker=None, model="served")]
     )
@@ -163,19 +163,31 @@ class RankingCases(unittest.TestCase):
         )
         self.assertEqual((entry.pace, entry.score, entry.state), (None, 0.0, "out"))
 
-    @given(st.sampled_from([order[:2] for order in permutations((0.2, 0.5, 1.0))]))
-    def test_overlapping_paced_windows_use_the_smaller_rate(self, rates: tuple[float, float]) -> None:
-        """Wrong: the largest paced limit hides a smaller limit on the same route."""
-        windows = {
-            f"7d:{rate}": reader_window(remaining=50, duration=int(rate * 7200), reset_in=3600)
-            for rate in rates
-        }
-        limits = {
-            f"pace-{rate}": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window=f"7d:{rate}")
-            for rate in rates
-        }
+    @given(
+        rates=st.sampled_from([order[:2] for order in permutations((0.2, 0.5, 1.0))]),
+        capacities=st.tuples(st.integers(1, 200), st.integers(1, 200)).filter(
+            lambda values: 100 not in values
+        ),
+        shares=st.tuples(st.sampled_from([10, 20, 25, 50, 80]), st.sampled_from([10, 20, 25, 50, 80])),
+        resets=st.tuples(st.sampled_from([1800, 3600, 7200]), st.sampled_from([1800, 3600, 7200])),
+    )
+    def test_overlapping_paced_windows_use_actual_capacity_and_minimum(
+        self,
+        rates: tuple[float, float],
+        capacities: tuple[int, int],
+        shares: tuple[int, int],
+        resets: tuple[int, int],
+    ) -> None:
+        """Wrong: a fixed capacity divisor or the largest paced limit supplies the rate."""
+        windows, limits = {}, {}
+        for index, (rate, capacity, share, reset) in enumerate(zip(rates, capacities, shares, resets)):
+            window = f"window-{index}"
+            windows[window] = reader_window(share, int(rate * reset * 100 / share), reset)
+            limits[window] = N.LimitSpec(capacity=capacity, models=["canonical"], role="pace", window=window)
         entry = ranked_entry(limits, windows)
-        self.assertEqual((entry.pace, entry.score, entry.state), (min(rates), min(rates), "ready"))
+        self.assertAlmostEqual(entry.pace, min(rates))
+        self.assertAlmostEqual(entry.score, min(rates))
+        self.assertEqual(entry.state, "ready")
 
     @given(
         st.sampled_from([tuple(order) for order in permutations(("a", "b", "c"))]),
@@ -190,7 +202,7 @@ class RankingCases(unittest.TestCase):
         }
         limit = N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="7d")
         windows = {"7d": reader_window(50, 604800, 302400)}
-        capture = captured_pool({"allowance": limit}, windows)[1]
+        capture = captured_pool(windows)
         snapshot = typed_snapshot(
             {name: {"allowance": limit} for name in pools},
             {name: capture for name in pools if name != "a"},
