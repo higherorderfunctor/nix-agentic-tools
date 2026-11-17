@@ -20,7 +20,7 @@
       text = lib.concatMapStringsSep "\n" builtins.readFile ([../../scripts/usage-cpa.sh] ++ parts);
     };
   usageScripts = {
-    claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq] [../../scripts/claude-usage.sh];
+    claude-usage = mkUsageScript "claude-usage" [pkgs.coreutils pkgs.curl pkgs.jq] [../../scripts/claude-usage.sh];
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/codex-usage.sh];
     opencode-usage = mkUsageScript "opencode-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/opencode-usage.sh];
     proxy-accounted-usage = mkUsageScript "proxy-accounted-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/proxy-accounted-usage.sh];
