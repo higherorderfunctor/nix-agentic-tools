@@ -43,6 +43,22 @@ snapshots:
 '''
 
 
+# Copied from oxc 7c39be07f2. The workspace block is that file's last key; the
+# lock block sits between packageExtensionsChecksum and importers.
+UPSTREAM_WORKSPACE_BLOCK = """
+patchedDependencies:
+  # Babel 8 removed the internal traversal context scope used by FBT 1.0.0.
+  babel-plugin-fbt@1.0.0: patches/babel-plugin-fbt@1.0.0.patch
+"""
+UPSTREAM_LOCK_CHECKSUM = "packageExtensionsChecksum: sha256-WlkiKBAt7r2UlrZsFUO1bnxo4IcnuMc2XFz6stV9WiY="
+UPSTREAM_LOCK_ENTRY = "  babel-plugin-fbt@1.0.0: e748e7f8d950e1106d80d5b4a4440f76e6465c570a8178450017d12ccd53a491\n"
+UPSTREAM_LOCK_BLOCK = "patchedDependencies:\n" + UPSTREAM_LOCK_ENTRY + "\n"
+
+
+def upstream_lock(block):
+    return lock("3.10.4").replace("importers:", f"\n{UPSTREAM_LOCK_CHECKSUM}\n\n{block}importers:")
+
+
 class PatchMetadata(unittest.TestCase):
     def run_meta(self, target, *, is_lock=False):
         with tempfile.TemporaryDirectory() as directory:
@@ -84,12 +100,40 @@ class PatchMetadata(unittest.TestCase):
         self.assertIn("'@napi-rs/cli@3.11.0(patch_hash=abcdef0123456789)':", result.stdout)
         self.assertEqual(result.stdout.count("(patch_hash=abcdef0123456789)"), 4)
 
-    def test_existing_patch_metadata(self):
-        for is_lock in [False, True]:
-            target = lock("3.10.4") if is_lock else workspace("3.10.4")
-            result = self.run_meta(target + "patchedDependencies:\n  other: patch\n", is_lock=is_lock)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("already declares", result.stderr)
+    # A second top-level key, a dropped babel-plugin-fbt entry, or a lock left
+    # without our entry each fails the hand-written output below.
+    def test_merges_upstream_patch_metadata(self):
+        source = workspace("3.10.4") + UPSTREAM_WORKSPACE_BLOCK
+        result = self.run_meta(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, source + '  "@napi-rs/cli": patches/napi.patch\n')
+        result = self.run_meta(upstream_lock(UPSTREAM_LOCK_BLOCK), is_lock=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"""
+{UPSTREAM_LOCK_CHECKSUM}
+
+patchedDependencies:
+  babel-plugin-fbt@1.0.0: e748e7f8d950e1106d80d5b4a4440f76e6465c570a8178450017d12ccd53a491
+  '@napi-rs/cli': abcdef0123456789
+
+importers:
+""", result.stdout)
+        self.assertEqual(result.stdout.count("patchedDependencies:"), 1)
+        self.assertEqual(result.stdout.count("(patch_hash=abcdef0123456789)"), 4)
+
+    def test_refuses_upstream_metadata_it_cannot_merge(self):
+        cases = [
+            ("already names", "patchedDependencies:\n" + UPSTREAM_LOCK_ENTRY + "  '@napi-rs/cli': 0123\n\n"),
+            ("already names", "patchedDependencies:\n  '@napi-rs/cli@3.10.4': 0123\n\n"),
+            ("cannot parse", "patchedDependencies:\n  babel-plugin-fbt@1.0.0:\n    hash: 0123\n\n"),
+            ("not a block mapping", "patchedDependencies: {}\n\n"),
+            ("declares patchedDependencies 2 times", UPSTREAM_LOCK_BLOCK * 2),
+        ]
+        for message, block in cases:
+            with self.subTest(block=block):
+                result = self.run_meta(upstream_lock(block), is_lock=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(message, result.stderr)
 
     def test_transitive_references(self):
         parents = """  parent@1.0.0:

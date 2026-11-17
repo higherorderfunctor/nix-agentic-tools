@@ -1,4 +1,6 @@
-# Add a name-only pnpm patch entry and tag every resolved peer variant.
+# cspell:ignore getline gsub
+# Add a name-only pnpm patch entry, joining upstream's patchedDependencies block
+# when one exists, and tag every resolved peer variant.
 # Package versions come from upstream's lock; only context application decides
 # whether the committed patch remains compatible. pnpm 11 rejects patch failures.
 # Required variables: pkg, val (path/hash), q (key quote), tag (non-empty for
@@ -8,6 +10,25 @@ BEGIN {
     depKey = q pkg q ":"
     snapPfx = q pkg "@"
     token = "(patch_hash=" ph ")"
+    # Whether upstream already owns a top-level patchedDependencies decides,
+    # before the first line prints, between joining that block and inserting
+    # our own after `overrides:`. A second top-level key would either fail YAML
+    # parsing or win over upstream's and drop one side's entries silently.
+    while ((getline line < ARGV[1]) > 0) {
+        if (line !~ /^patchedDependencies:/) continue
+        if (line !~ /^patchedDependencies:[ \t]*$/)
+            fail(ARGV[1] " has a patchedDependencies value that is not a block mapping: " line)
+        nUpstream++
+    }
+    close(ARGV[1])
+    if (nUpstream > 1)
+        fail(ARGV[1] " declares patchedDependencies " nUpstream " times")
+}
+
+function fail(msg) {
+    print "oxlint: " msg > "/dev/stderr"
+    failed = 1
+    exit 1
 }
 
 function trim(s) {
@@ -21,27 +42,54 @@ function stampReference(s) {
     return s
 }
 
+# Our entry goes after upstream's last entry, ahead of the blank lines that
+# separate the block from the next top-level key.
+function closeBlock() {
+    print "  " q pkg q ": " val
+    for (; nBlank > 0; nBlank--) print ""
+    inBlock = 0
+    nBlock++
+}
+
+{ t = trim($0) }
+
+inBlock && /^[^ \t#]/ { closeBlock() }
+
+# Inside upstream's block, accept only the shape pnpm writes: two-space
+# `key: value` entries, comments and blank lines. Upstream naming our package
+# itself, at any version, means its patch and ours would compete.
+inBlock {
+    if (t == "") { nBlank++; next }
+    for (; nBlank > 0; nBlank--) print ""
+    if (t !~ /^#/) {
+        if ($0 !~ /^  [^ \t]/ || t !~ /: [^ \t]/)
+            fail("cannot parse patchedDependencies entry: " $0)
+        key = t
+        gsub(/["']/, "", key)
+        if (index(key, pkg ":") == 1 || index(key, pkg "@") == 1)
+            fail("upstream's patchedDependencies already names " pkg ": " $0)
+    }
+    print
+    next
+}
+
+/^patchedDependencies:/ {
+    inBlock = 1
+    section = $0
+    print
+    next
+}
+
 /^overrides:[ \t]*$/ {
     seenOverrides = 1
     print
     next
 }
 
-# Upstream taking ownership of patchedDependencies is the case this must not
-# paper over. Emitting a second top-level key of the same name either fails
-# YAML parsing or, worse, loses to the last one — which drops our entry and
-# ships an UNPATCHED dependency with no error anywhere. Must precede the insert
-# rule below so that key is counted rather than treated as the anchor.
-/^patchedDependencies:[ \t]*$/ {
-    nExisting++
-    print
-    next
-}
-
-# pnpm writes the block immediately before the first top-level key following
-# `overrides:`. Anchoring there reproduces its own placement without caring
-# which key that happens to be.
-seenOverrides && nBlock == 0 && /^[A-Za-z]/ {
+# Without an upstream block, pnpm writes one immediately before the first
+# top-level key following `overrides:`. Anchoring there reproduces its own
+# placement without caring which key that happens to be.
+!nUpstream && seenOverrides && nBlock == 0 && /^[A-Za-z]/ {
     print "patchedDependencies:"
     print "  " q pkg q ": " val
     print ""
@@ -50,8 +98,6 @@ seenOverrides && nBlock == 0 && /^[A-Za-z]/ {
     print
     next
 }
-
-{ t = trim($0) }
 
 # A catalog also names the package, but only importers carry resolved versions.
 /^[A-Za-z][A-Za-z]*:[ \t]*$/ { section = $0 }
@@ -102,11 +148,10 @@ tag != "" && section == "snapshots:" && index(t, snapPfx) == 1 {
 { print }
 
 END {
-    if (nExisting > 0) {
-        print "oxlint: FILE already declares a top-level patchedDependencies — upstream took ownership of it. Merge our entry into theirs by hand; a second key would be dropped silently." > "/dev/stderr"
-        exit 1
-    }
-    if (!seenOverrides) {
+    if (failed) exit 1
+    # Upstream's block can be the file's last key.
+    if (inBlock) closeBlock()
+    if (!nUpstream && !seenOverrides) {
         print "oxlint: no top-level `overrides:` key — nothing to anchor patchedDependencies against" > "/dev/stderr"
         exit 1
     }
