@@ -1,16 +1,19 @@
 # pnpm — shared builder for the JAVASCRIPT-DISTRIBUTED majors of
-# `pkgs.ai.generic.pnpm_<N>`. Called once per major from the thin
-# `pnpm_10/package.nix` / `pnpm_11/package.nix` recipes, which exist so each major keeps
-# its own path for `--override-filename` in the owner registry.nix and
-# its own sidecar beside it. Everything except the major itself is here:
-# two files that differ only in a version number are a smell.
+# `pkgs.ai.generic.pnpm_<N>`. Called from the thin `pnpm_10/package.nix` /
+# `pnpm_11/package.nix` recipes, which exist so each major keeps its own path
+# for `--override-filename` in the owner registry.nix and its own sidecar
+# beside it, and once more by pnpm_12/package.nix for the frozen pnpm 11 that
+# builds its bootstrap (`sidecar`/`sources` point at sources-12-bootstrap.json,
+# `updateScript = false`). Two files that differ only in a version number are
+# a smell, so everything else is here.
 #
-# pnpm_12 uses nixpkgs' separate Rust expression through .override, with
-# our source/cargo pins and locked compiler. The JavaScript builder here
-# remains shared by 10 and 11; see ../packages/ai/generic/pnpm_12/package.nix.
+# pnpm_12 itself uses nixpkgs' separate Rust expression through .override,
+# with our source/cargo pins and locked compiler; see
+# ../packages/ai/generic/pnpm_12/package.nix.
 #
-# A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation:
-# `version`, `src` and `passthru.updateScript` move.
+# A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation: `version`
+# and `src` move, and `passthru.updateScript` is replaced by ours, or removed
+# when `updateScript = false`.
 # Every other build input, phase and hook stays whatever nixpkgs ships.
 #
 # NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
