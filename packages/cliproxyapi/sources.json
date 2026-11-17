@@ -1,9 +1,9 @@
 {
-  "version": "8.0.73",
+  "version": "8.0.76",
   "src": {
-    "url": "https://github.com/router-for-me/CLIProxyAPI/archive/v8.0.73.tar.gz",
-    "hash": "sha256-/Elx8qXcy39oYOIPO2Gh4CRwC7WyFVvwI4D4OwVj13o="
+    "url": "https://github.com/router-for-me/CLIProxyAPI/archive/v8.0.76.tar.gz",
+    "hash": "sha256-gQclqhFrw82upufHQ48+nHSPeA6N9gBwcsp1BlGC308="
   },
   "goFloor": "1.26.10",
-  "vendorHash": "sha256-80mI9hXcDVaCmnbpq9PgfTUmLw/xZ8sWNpPJo5f1YJc="
+  "vendorHash": "sha256-89DZv8uj0rD5fgbfLZk6TuoYw2SfX1vhV88T4degwg8="
 }

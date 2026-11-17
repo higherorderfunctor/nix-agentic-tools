@@ -141,10 +141,10 @@ index cc0e2da..10c7a69 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_types.go b/internal/config/config_types.go
-index 48dc6d2..b2fa069 100644
+index 8899d80..a4508df 100644
 --- a/internal/config/config_types.go
 +++ b/internal/config/config_types.go
-@@ -730,6 +730,9 @@ type CloakConfig struct {
+@@ -757,6 +757,9 @@ type CloakConfig struct {
  // ClaudeKey represents the configuration for a Claude API key,
  // including the API key itself and an optional base URL for the API endpoint.
  type ClaudeKey struct {
@@ -154,7 +154,7 @@ index 48dc6d2..b2fa069 100644
  	// APIKey is the authentication key for accessing Claude API services.
  	APIKey string `yaml:"api-key" json:"api-key"`
  
-@@ -1072,6 +1075,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
+@@ -1099,6 +1102,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
  // OpenAICompatibility represents the configuration for OpenAI API compatibility
  // with external providers, allowing model aliases to be routed through OpenAI API format.
  type OpenAICompatibility struct {
@@ -223,10 +223,10 @@ index d2975a7..d251b0f 100644
  		return nil, errValidate
  	}
 diff --git a/internal/runtime/executor/claude_executor_execute.go b/internal/runtime/executor/claude_executor_execute.go
-index f0eb97c..3a8e11a 100644
+index 5bd2e31..0b073b3 100644
 --- a/internal/runtime/executor/claude_executor_execute.go
 +++ b/internal/runtime/executor/claude_executor_execute.go
-@@ -213,7 +213,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -212,7 +212,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -496,10 +496,10 @@ index 0000000..5edd0f7
 +	}
 +}
 diff --git a/internal/runtime/executor/claude_executor_stream.go b/internal/runtime/executor/claude_executor_stream.go
-index d8c2417..1f005e9 100644
+index 4de4be9..d6ae1a7 100644
 --- a/internal/runtime/executor/claude_executor_stream.go
 +++ b/internal/runtime/executor/claude_executor_stream.go
-@@ -210,7 +210,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -209,7 +209,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -547,7 +547,7 @@ index d8c2417..1f005e9 100644
  	}()
  	result := &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}
 diff --git a/internal/runtime/executor/claude_executor_tokens.go b/internal/runtime/executor/claude_executor_tokens.go
-index 5419796..b57a043 100644
+index 9a872bc..a139fcd 100644
 --- a/internal/runtime/executor/claude_executor_tokens.go
 +++ b/internal/runtime/executor/claude_executor_tokens.go
 @@ -70,6 +70,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
@@ -563,10 +563,10 @@ index 5419796..b57a043 100644
  	helps.NormalizeClaudeToolPropertyNamesDoc(doc)
  	sanitizeClaudeMessagesForClaudeUpstreamWithDebugDoc(ctx, doc, baseModel, helps.APIKeyModelIsCompat(req))
  	applyClaudePreservedThinkingBindingDoc(doc)
-@@ -230,7 +236,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
- 	extraBetas, _ := extractAndRemoveBetasDoc(doc)
- 	// Claude Code 2.1.220's beta.messages.countTokens() always appends this beta.
- 	extraBetas = append(extraBetas, claudeTokenCountingBeta)
+@@ -226,7 +232,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
+ 		normalizeCacheControlTTLDoc(doc)
+ 	}
+ 
 -	if fp.MCPAlias && cloaked {
 +	if claudeAPIKeyToolAliasesEnabled(auth, apiKey) {
 +		doc, _, err = prepareClaudeAPIKeyToolNamesDoc(doc, auth)
@@ -578,7 +578,7 @@ index 5419796..b57a043 100644
  		prepareClaudeOAuthToolNamesForUpstreamDoc(doc, mcpAliases)
  	}
 diff --git a/internal/runtime/executor/openai_compat_executor.go b/internal/runtime/executor/openai_compat_executor.go
-index c4ac7e0..53700dc 100644
+index 1c72c5e..3d9c154 100644
 --- a/internal/runtime/executor/openai_compat_executor.go
 +++ b/internal/runtime/executor/openai_compat_executor.go
 @@ -22,6 +22,7 @@ import (

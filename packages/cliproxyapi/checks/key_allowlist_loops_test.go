@@ -26,7 +26,7 @@ var keyAllowlistLoopExemptions = map[string]string{
 	"Manager.List":                                     "returns copies of the pool; a caller that selects from them is outside this check",
 	"Manager.LookupSessionAffinity":                    "observes a binding for the plugin host's affinity callback; the instance module refuses plugins beside the allowlist",
 	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.0.38 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (scheduler.go:426,487,494); re-check on bump",
-	"Manager.RegisterExecutor":                         "reschedules refreshes for an executor's credentials",
+	"Manager.RegisterExecutorWithRevision":             "reschedules refreshes for an executor's credentials",
 	"Manager.clearDisabledCooldownStates":              "clears cooldown state on config reload",
 	"Manager.cooldownStateRecordsSnapshot":             "snapshots cooldown state for persistence",
 	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.0.62 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (scheduler.go:414,501); re-check on bump",
