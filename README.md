@@ -209,7 +209,7 @@ git-branchless, git-absorb, and git-revise.
 | Server | Description | Credentials |
 |--------|-------------|-------------|
 | `aihubmix-mcp` | AIHubMix image and video generation | Required |
-| `chrome-devtools-mcp` | Chrome DevTools browser automation (stdio) | None |
+| `chrome-devtools-mcp` | Chrome DevTools browser automation (stdio/bridge) | None |
 | `context7-mcp` | Library documentation lookup | None |
 | `effect-mcp` | Effect-TS documentation | None |
 | `git-intel-mcp` | Git repository analytics | None |

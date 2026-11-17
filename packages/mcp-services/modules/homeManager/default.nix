@@ -37,6 +37,7 @@
   # modules/mcp-server.nix files. The name is the package directory
   # name under packages/.
   serverNames = [
+    "chrome-devtools-mcp"
     "context7-mcp"
     "effect-mcp"
     "git-intel-mcp"

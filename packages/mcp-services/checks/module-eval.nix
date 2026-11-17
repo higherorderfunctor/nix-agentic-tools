@@ -136,7 +136,9 @@ in {
           result = evalHm {};
           inherit (result.config.services.mcp-servers) servers;
         in
-          !(servers.context7-mcp.enable or true)
+          # Presence does not prove the owner chose a disabled default.
+          !(servers.chrome-devtools-mcp.enable or true)
+          && !(servers.context7-mcp.enable or true)
           && !(servers.github-mcp.enable or true)
           && !(servers.kagi-mcp.enable or true)
       );
@@ -177,7 +179,8 @@ in {
           result = evalHm {};
           inherit (result.config.services.mcp-servers) servers;
         in
-          servers ? context7-mcp
+          servers ? chrome-devtools-mcp
+          && servers ? context7-mcp
           && servers ? effect-mcp
           && servers ? git-intel-mcp
           && servers ? github-mcp

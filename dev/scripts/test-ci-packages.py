@@ -68,7 +68,8 @@ class ExtractedSelectionTest(unittest.TestCase):
     def test_only_extraction_producers_are_scheduled(self):
         owners = self.evaluate("ciExtractedFacts.x86_64-linux", "builtins.attrNames")
         self.assertEqual(owners, [
-            "chatgpt-codex", "claude-code", "cliproxyapi", "cpa-manager-plus",
+            "chatgpt-codex", "chrome-devtools-mcp", "claude-code", "cliproxyapi",
+            "cpa-manager-plus",
             "git-absorb", "git-branchless", "git-revise", "glab", "kimchi",
             "kiro-cli", "semble", "slack-mcp",
         ])
