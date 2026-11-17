@@ -60,7 +60,14 @@ enabled runtime on both backends except github.com Copilot, whose MCP servers
 are a repository setting on github.com, and per-CLI `.mcpServers` adds or
 overrides servers for one runtime. Claude reads them from the Home Manager
 personal plugin's `~/.claude/skills/home-manager/.mcp.json`, or from the project
-`.mcp.json` under devenv; both are Nix-owned read-only files.
+`.mcp.json` under devenv; both are Nix-owned read-only files. Shared `timeout`
+is positive integer milliseconds; null omits it. Stdio uses Claude/Kiro
+`timeout`, Kimchi `requestTimeoutMs`, and Codex fractional `tool_timeout_sec`;
+native `codex.toolTimeoutSec` wins without changing startup timeout. Claude
+below 1000 ms, Kiro above 600000 ms and Kimchi above 2147483647 ms warn and
+omit; Copilot warns for the whole surface. Client timer/reset semantics apply,
+not a universal hard deadline. See the MCP secrets owner fragment for native
+sources and timer behavior.
 
 **Permissions** -- there is no portable pool; each runtime has its own option.
 Claude uses `ai.claude.native.settings.permissions`, written into

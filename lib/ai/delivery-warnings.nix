@@ -129,7 +129,7 @@
     ignored =
       if http
       then ["args" "command" "env" "package" "settings"]
-      else ["headers" "timeout"] ++ lib.optionals raw ["settings"];
+      else ["headers"] ++ lib.optionals raw ["settings"];
   in
     lib.concatMap (field:
       fieldWarning entry field

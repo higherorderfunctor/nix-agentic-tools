@@ -555,7 +555,15 @@ non-empty list for `fileMatch` content.
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
   renderer for package mode arguments, settings-derived environment, and runtime
-  credential wrappers, then removes the JSON-only `type` discriminator.
+  credential wrappers, then removes the JSON-only `type` discriminator. Shared
+  `timeout` is a positive integer in milliseconds for stdio and HTTP; null omits
+  it. For stdio Codex emits fractional `tool_timeout_sec` (1501 ms becomes 1.501
+  seconds); native `codex.toolTimeoutSec` wins. `codex.startupTimeoutSec`
+  remains independent. Claude and Kiro emit `timeout`, Kimchi
+  `requestTimeoutMs`, all in milliseconds. Claude values below 1000, Kimchi
+  values above 2147483647 and Kiro values above 600000 warn and are omitted.
+  Copilot's whole MCP surface remains excluded with a warning. Native
+  request/tool timer behavior applies; this is not a portable hard deadline.
   Codex-only authentication, readiness, timeout, environment-name, and tool
   approval fields live under each server's `codex` block and lower from camel
   case to native snake case. Literal `httpHeaders` are store-visible;

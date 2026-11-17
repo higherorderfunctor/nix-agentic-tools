@@ -11,6 +11,18 @@
   pkgs,
   ...
 }: let
+  # docs/plans/kiro-v3-research-raw/phase2/f14-frontmatter.md: timeout is milliseconds, capped at 600000.
+  supportsStdioTimeout = server:
+    (server.url or null)
+    != null
+    || (server.timeout or null) == null
+    || server.timeout <= 600000;
+  renderTimeoutServer = name: server:
+    lib.ai.renderServer pkgs name (
+      if supportsStdioTimeout server
+      then server
+      else removeAttrs server ["timeout"]
+    );
   # Launcher/chat wrapper: idempotent flag injection plus the HM env bake.
   # Lifted out of this file so it has a seam a check can drive directly.
   # See packages/kiro-cli/lib/wrapPackage.nix.
@@ -990,7 +1002,7 @@
   # credential urls already a `${VAR}` envsubst sentinel (mcpSecrets.nix).
   mcpJsonText = kiroServers:
     builtins.toJSON {
-      mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroServers;
+      mcpServers = lib.mapAttrs renderTimeoutServer kiroServers;
     };
 
   # Render settings/mcp.json to stdout at activation (HM) / shell entry
@@ -1157,6 +1169,12 @@ in
       };
       jail = {};
       mcpServers.gaps = [
+        {
+          each = true;
+          path = ["timeout"];
+          when = {value, ...}: !supportsStdioTimeout value;
+          reason = _: "Kiro caps per-server timeouts at 600000 ms; larger values are omitted.";
+        }
         {
           each = true;
           path = ["toolPolicy"];

@@ -495,6 +495,33 @@ the declaration. Home Manager always owns the user-global file (an empty server
 map when nothing is declared); devenv writes the project file only when a server
 is declared.
 
+### Per-server client timeout
+
+`timeout` is a positive integer in milliseconds for package-backed, raw-command
+and HTTP entries; null keeps the client default. Direct lib constructors and
+both module backends preserve it. Stdio native spellings and limits:
+
+- Claude: `timeout`; values below 1000 warn and are omitted. The
+  [MCP docs](https://code.claude.com/docs/en/mcp) describe a hard tool-call
+  deadline unaffected by progress, separately from startup. The pinned 2.1.325
+  binary also declares this per-server schema and ignores values below 1000.
+- Codex: `tool_timeout_sec`, including fractional seconds; native
+  `codex.toolTimeoutSec` overrides the shared fallback, while
+  `codex.startupTimeoutSec` stays independent. See
+  [the native types](https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/mcp_types.rs).
+- Copilot: the github.com backend excludes the entire MCP surface and warns.
+- Kimchi: `requestTimeoutMs` in
+  [pi-mcp-adapter 5.3.1](https://www.npmjs.com/package/pi-mcp-adapter/v/5.3.1).
+  Values above 2147483647 ms warn and are omitted because the adapter clamps
+  tool timers to that bound. Tool progress restarts the adapter timer.
+- Kiro: `timeout`; values above 600000 warn and are omitted rather than clamped.
+  See the MCP wire-field audit in
+  `docs/plans/kiro-v3-research-raw/phase2/f14-frontmatter.md`. Current binary
+  timer/reset semantics remain unverified.
+
+These are client request/tool-call limits, not a portable wall-clock or
+startup-only guarantee. Existing HTTP rendering is unchanged.
+
 ### Per-tool policy rides the client entry, not the proxy
 
 `toolPolicy` (commonSchema, keyed by the tool name the server reports, values

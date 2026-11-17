@@ -128,6 +128,30 @@
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
+    # Exercise every runtime's unrepresentable stdio timeout on both backends.
+    ++ map (case: {
+      inherit (case) runtime;
+      surface = "mcpServers";
+      gapPath = ["timeout"];
+      path = ["ai" "mcpServers" "probe"];
+      value = {
+        command = "probe";
+        inherit (case) timeout;
+      };
+    }) [
+      {
+        runtime = "claude";
+        timeout = 999;
+      }
+      {
+        runtime = "kimchi";
+        timeout = 2147483648;
+      }
+      {
+        runtime = "kiro";
+        timeout = 600001;
+      }
+    ]
     # A tool policy value with no surface on the runtime or backend. Kiro
     # delivers it as Home Manager permissions.yaml rules, so its Home Manager
     # case asserts silence instead.
@@ -536,7 +560,7 @@
   (lib.filter (row: row.surface == "agents") policy.rows);
   deliveryWarnings = import ../../lib/ai/delivery-warnings.nix {inherit lib;};
   mcp = import ../../lib/mcp.nix {inherit lib;};
-  # These four input combinations exercise the warning interface directly;
+  # These three input combinations exercise the warning interface directly;
   # args, package, and settings retain their module-backed cases above.
   mcpFieldCases = [
     {
@@ -558,13 +582,6 @@
       fixture = {
         command = "probe";
         headers.Authorization = "";
-      };
-    }
-    {
-      field = "timeout";
-      fixture = {
-        command = "probe";
-        timeout = 1;
       };
     }
   ];

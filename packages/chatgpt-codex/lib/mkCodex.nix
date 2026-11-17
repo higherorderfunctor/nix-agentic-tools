@@ -623,7 +623,16 @@
     prompt = "prompt";
   };
   renderCodexServer = name: server: let
-    rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
+    # https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/mcp_types.rs
+    # tool_timeout_sec accepts fractional seconds; startup remains independent.
+    stdio = (server.url or null) == null;
+    rendered = removeAttrs (lib.ai.renderServer pkgs name server) (["type"] ++ lib.optional stdio "timeout");
+    toolTimeout =
+      native.toolTimeoutSec or (
+        if stdio && (server.timeout or null) != null
+        then server.timeout / 1000.0
+        else null
+      );
     native = aiCommon.filterNulls (server.codex or {});
     policy = aiCommon.mcpToolPolicy {${name} = server;};
     disabledTools = lib.unique ((native.disabledTools or []) ++ map (row: row.tool) policy.disabled);
@@ -646,7 +655,7 @@
       // lib.optionalAttrs ((native.required or null) != null) {inherit (native) required;}
       // lib.optionalAttrs ((native.scopes or []) != []) {inherit (native) scopes;}
       // lib.optionalAttrs ((native.startupTimeoutSec or null) != null) {startup_timeout_sec = native.startupTimeoutSec;}
-      // lib.optionalAttrs ((native.toolTimeoutSec or null) != null) {tool_timeout_sec = native.toolTimeoutSec;}
+      // lib.optionalAttrs (toolTimeout != null) {tool_timeout_sec = toolTimeout;}
       // lib.optionalAttrs (tools != {}) {inherit tools;};
   in
     removeAttrs native [

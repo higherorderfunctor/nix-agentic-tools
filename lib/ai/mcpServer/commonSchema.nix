@@ -4,7 +4,7 @@
 # Three supported shapes (discriminated by which fields are set):
 #
 #   (A) Typed-via-package — most servers
-#       { package = <drv>; settings = {...}; env = {...}; args = [...]; }
+#       { package = <drv>; settings = {...}; env = {...}; args = [...]; timeout = <ms>; }
 #       Requires a server module at packages/<name>/modules/mcp-server.nix
 #       (provides typed settings schema, mode strings, credentialVars).
 #       Each ecosystem's renderServer translates to its native target,
@@ -12,7 +12,7 @@
 #       includes redact references.
 #
 #   (B) Raw command — escape hatch for ad-hoc wrappers
-#       { type = "stdio"; command = "<abs-path>"; args = [...]; env = {...}; }
+#       { type = "stdio"; command = "<abs-path>"; args = [...]; env = {...}; timeout = <ms>; }
 #       Pass-through. Useful when the user hand-rolls a wrapper script
 #       that doesn't need the server-module machinery (no credential
 #       injection, no settings translation).
@@ -410,7 +410,16 @@ in {
     timeout = lib.mkOption {
       type = lib.types.nullOr lib.types.ints.positive;
       default = null;
-      description = "Request timeout in milliseconds for shape (C) http servers.";
+      description = ''
+        Per-server client request/tool-call timeout in milliseconds.
+        Null omits the field and keeps the client default. Native timer and
+        progress-reset behavior applies; this is not a portable hard deadline
+        or a startup timeout. For stdio, Claude accepts at least 1000 ms,
+        Kiro at most 600000 ms and Kimchi at most 2147483647 ms; unsupported
+        values warn and are omitted.
+        Codex uses tool_timeout_sec (codex.toolTimeoutSec wins), Kimchi
+        requestTimeoutMs, and Claude/Kiro timeout. Copilot excludes MCP.
+      '';
     };
     toolPolicy = lib.mkOption {
       type = lib.types.attrsOf (lib.types.enum ["auto" "disabled" "prompt"]);
