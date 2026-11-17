@@ -1,0 +1,60 @@
+{
+  "entries": [
+    {
+      "id": "absent",
+      "maker": null,
+      "model": "absent-served",
+      "pace": 2.5,
+      "pool": "budget",
+      "score": 2.5,
+      "state": "ready"
+    },
+    {
+      "id": "past",
+      "maker": null,
+      "model": "past-served",
+      "pace": 2.5,
+      "pool": "budget",
+      "score": 2.5,
+      "state": "ready"
+    }
+  ],
+  "snapshot": {
+    "asOf": 1794447300,
+    "pools": {
+      "budget": {
+        "limits": [
+          {
+            "capacity": 40.0,
+            "enforced": true,
+            "id": "absent-reset",
+            "models": ["absent"],
+            "naturalResetAt": null,
+            "reason": null,
+            "remaining": 40.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 18000
+          },
+          {
+            "capacity": 40.0,
+            "enforced": true,
+            "id": "past-reset",
+            "models": ["past"],
+            "naturalResetAt": 1794360900,
+            "reason": null,
+            "remaining": 40.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 18000
+          }
+        ],
+        "scopeResolved": true
+      }
+    },
+    "routes": [
+      { "id": "absent", "maker": null, "model": "absent-served" },
+      { "id": "past", "maker": null, "model": "past-served" }
+    ]
+  }
+}

@@ -1,179 +1,217 @@
-"""Check ranking from typed Reader inputs through normalization to weighted entries.
+"""Check ranking from saved Reader captures through normalization.
 
-The owner check runs generated properties against independent rational arithmetic.
-Literal cases pin the allowance contract; synthetic collection covers failure
-without credentials, live Readers or an inspection command.
+The Nix check loads handwritten cases from ranking-cases and runs three
+properties in memory. Synthetic captures use the Reader envelope's JSON shape;
+cases translate the vendor-owned status by setting ``enforced`` explicitly.
 """
 
-import copy
+from __future__ import annotations
+
 import datetime as dt
-from pathlib import Path
+from itertools import permutations
 import runpy
-import subprocess
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from pathlib import Path
+from typing import Any
 
 from hypothesis import given, settings, strategies as st
-from pydantic import ValidationError
+from pydantic import BaseModel, JsonValue, RootModel
 
-# The owner check supplies its packaged scripts; no package installation is needed.
-SCRIPTS = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2] / "scripts"
+SCRIPTS = Path(sys.argv[1])
+CASES = Path(sys.argv[2])
 P = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "pacing.py")))
 N = P.normalizer
-C = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "usage-collect.py")))
-REFERENCE = runpy.run_path(str(Path(__file__).with_name("reference.py")))["score"]
-settings.register_profile("ranking", database=None, deadline=None, max_examples=60)
-settings.load_profile("ranking")
-NOW = "2026-11-12T01:35:00Z"
-EPOCH = 1794447300
+NOW = 1794447300
 
 
-def iso(seconds):
-    """Render synthetic Reader timestamps in the producer's offset-bearing format."""
-    return dt.datetime.fromtimestamp(seconds, dt.timezone.utc).isoformat()
+class RankingCase(BaseModel):
+    """Parse one external case at the file boundary, including ranking policy."""
+
+    now: int
+    policy: P.RankingPolicy | None = None
+    snapshot: dict[str, Any]
 
 
-def snapshot(rows):
-    """Build typed registrations and captures from role, share, duration and time left."""
-    limits, windows = {}, {}
-    for i, (role, share, duration, left) in enumerate(rows):
-        key = str(i)
-        limits[key] = N.LimitSpec(capacity=100, models=["canonical"], role=role,
-                                 unit="percentagePoint", window=key)
-        windows[key] = N.Window(remainingPercent=share, usedPercent=100 - share,
-                               windowSeconds=duration, resetsAt=iso(EPOCH + left), status="active").model_dump(mode="json")
-    envelope = N.Envelope(account=N.Account(auth_index=None, name=None, plan=None), pool="reader", windows=windows)
-    return N.Snapshot(pools={"budget": N.Registration(readerPool="reader", limits=limits)},
-                      readers={"budget": N.Capture(exit=0, finishedAt=NOW, data=envelope.model_dump(mode="json", exclude_unset=True))},
-                      routes=[N.Route(id="canonical", maker=None, model="served")], runtime="offline").model_dump(mode="json", exclude_unset=True)
+class RefusedRanking(BaseModel):
+    """Name the ranking boundary error a handwritten case expects."""
+
+    rankingError: str
 
 
-def ranked(raw, weights=None):
-    """Parse the external snapshot and weights once before calling the typed engine."""
-    return P.rank(N.normalize(raw, NOW), P.Weights.model_validate(weights or {}))
+class ExpectedOutput(RootModel[JsonValue]):
+    """Keep the expected ranking literally, including missing fields."""
 
 
-@st.composite
-def paced_rows(draw):
-    """Generate valid paced limits across shares, native durations and future resets."""
-    duration = draw(st.integers(1, 2678400))
-    return ("pace", draw(st.integers(1, 100)), duration, draw(st.integers(1, duration)))
+def read_expected(path: Path) -> ExpectedOutput | RefusedRanking:
+    """Parse exactly one expected file, separating normal and refused outcomes."""
+    output_path = path / "expected.json"
+    error_path = path / "expected-error.json"
+    if output_path.exists() == error_path.exists():
+        raise ValueError(f"{path.name}: requires exactly one expected file")
+    if error_path.exists():
+        return RefusedRanking.model_validate_json(error_path.read_text())
+    return ExpectedOutput.model_validate_json(output_path.read_text())
 
 
-class AllowanceTests(unittest.TestCase):
-    def test_literal_arithmetic(self):
-        """Reject clipped, weekly-assumed or elapsed-fraction arithmetic."""
-        cases = [
-            ([("pace", 50, 604800, 302400)], 1.0),
-            ([("pace", 50, 604800, 302400), ("gate", 1, 18000, 9000)], 1.0),
-            ([("pace", 100, 604800, 302400)], 2.0),
-            ([("pace", 50, 604800, 3600)], 84.0),
-            ([("pace", 10, 2678400, 1339200)], 0.2),
-        ]
-        for rows, expected in cases:
-            with self.subTest(rows=rows):
-                entry = ranked(snapshot(rows)).entries[0]
-                self.assertEqual((entry.pace, entry.score, entry.state), (expected, expected, "ready"))
+def load_cases() -> list[tuple[str, RankingCase, ExpectedOutput | RefusedRanking]]:
+    """Parse each handwritten input and outcome once in stable directory order."""
+    paths = sorted(path for path in CASES.iterdir() if path.is_dir())
+    return [(path.name, RankingCase.model_validate_json((path / "input.json").read_text()), read_expected(path)) for path in paths]
 
-    @given(st.lists(paced_rows(), min_size=1, max_size=6), st.integers(0, 100))
-    def test_weighted_pace_matches_independent_rational_oracle(self, rows, weight):
-        """Reject averaging limits, clipping rates and conditional preference weights."""
-        entry = ranked(snapshot(rows), {"budget": weight}).entries[0]
-        oracle_rows = [(role, 100, share, duration, left) for role, share, duration, left in rows]
-        self.assertAlmostEqual(entry.pace, float(REFERENCE(oracle_rows)))
-        self.assertAlmostEqual(entry.score, float(REFERENCE(oracle_rows, weight)))
-        self.assertEqual(entry.state, "ready")
 
-    @given(paced_rows(), st.integers(1, 100))
-    def test_open_gate_never_supplies_or_changes_pace(self, row, share):
-        """Reject treating a gate's positive allowance as a rate, including gate-only offers."""
-        gate = ("gate", share, 18000, 9000)
-        alone = ranked(snapshot([gate])).entries[0]
-        self.assertEqual((alone.pace, alone.score, alone.state), (None, 0, "out"))
-        raw = snapshot([row, gate])
-        raw["readers"]["budget"]["data"]["windows"]["1"]["resetsAt"] = None
-        self.assertEqual(ranked(raw).entries[0], ranked(snapshot([row])).entries[0])
+def serialized(ranking: P.Ranking) -> dict[str, Any]:
+    """Render the NamedTuple result with the same JSON shape its entries use."""
+    return {
+        "entries": [entry.model_dump(mode="json") for entry in ranking.entries],
+        "snapshot": ranking.snapshot.model_dump(mode="json"),
+    }
 
-    @given(st.sampled_from(["pace", "gate"]), st.sampled_from([None, "private-invalid", iso(EPOCH), iso(EPOCH + 1)]))
-    def test_exhaustion_blocks_even_with_invalid_timing(self, role, reset):
-        """Reject loss of independent paced zero or readiness through any closed gate."""
-        raw = snapshot([("pace", 50, 604800, 302400), (role, 0, 100, 1)])
-        raw["readers"]["budget"]["data"]["windows"]["1"]["resetsAt"] = reset
-        entry = ranked(raw).entries[0]
-        self.assertEqual((entry.state, entry.score), ("out", 0))
-        if role == "pace":
-            self.assertEqual(entry.pace, 0)
 
-    @given(st.sampled_from(["missing", "stale", "invalid", "enforcement", "scope", "idle"]))
-    def test_incomplete_evidence_cannot_establish_positive_pace(self, failure):
-        """Reject positive pace from unknown scope, enforcement, missing resets or bad captures."""
-        raw = snapshot([("pace", 50, 604800, 302400)])
-        capture = raw["readers"]["budget"]
-        window = capture["data"]["windows"]["0"]
-        if failure == "missing":
-            capture["data"]["windows"].clear()
-        elif failure == "stale":
-            window["resetsAt"] = iso(EPOCH)
+def reader_window(remaining: int, duration: int, reset_in: int | None, *, enforced: bool = True) -> dict[str, Any]:
+    """Build one complete Reader window, including its used share."""
+    reset = None if reset_in is None else dt.datetime.fromtimestamp(NOW + reset_in, dt.timezone.utc).isoformat()
+    return {
+        "enforced": enforced,
+        "remainingPercent": float(remaining),
+        "resetsAt": reset,
+        "status": "ok" if enforced else "vendor-disabled",
+        "usedPercent": float(100 - remaining),
+        "windowSeconds": duration,
+    }
+
+
+def typed_snapshot(pools: dict[str, dict[str, N.LimitSpec]], readers: dict[str, object], routes: list[N.Route]) -> N.Snapshot:
+    """Assemble already typed test data without revalidating individual windows."""
+    return N.Snapshot(
+        pools={name: N.Registration(limits=limits, readerPool="reader") for name, limits in pools.items()},
+        readers=readers,
+        routes=routes,
+    )
+
+
+def captured_pool(limits: dict[str, N.LimitSpec], windows: dict[str, object]) -> tuple[dict[str, N.LimitSpec], object]:
+    """Pair configured limits with one saved successful Reader command result."""
+    envelope = N.Envelope(pool="reader", windows=windows)
+    return limits, N.Capture(exit=0, stdout=envelope.model_dump_json())
+
+
+def ranked_entry(
+    limits: dict[str, N.LimitSpec], windows: dict[str, object] | None
+) -> P.Entry:
+    """Normalize one budget capture, or its absence, and rank the sole route."""
+    capture = None if windows is None else captured_pool(limits, windows)[1]
+    snapshot = typed_snapshot(
+        {"budget": limits}, {"budget": capture} if capture else {}, [N.Route(id="canonical", maker=None, model="served")]
+    )
+    return P.rank(N.normalize(snapshot, NOW)).entries[0]
+
+
+class RankingCases(unittest.TestCase):
+    """Run literal saved-capture cases and generated ranking properties."""
+
+    def test_handwritten_cases_match_the_whole_ranking_result(self) -> None:
+        """Wrong: any changed output field, retained snapshot field, or dropped route passes."""
+        cases = load_cases()
+        self.assertTrue(cases, "ranking case directory is empty")
+        for name, case, expected in cases:
+            with self.subTest(case=name):
+                if isinstance(expected, RefusedRanking):
+                    with self.assertRaises(ValueError) as failure:
+                        P.rank(N.normalize(N.Snapshot.model_validate(case.snapshot), case.now), case.policy)
+                    self.assertEqual(str(failure.exception), expected.rankingError)
+                    continue
+                ranking = P.rank(N.normalize(N.Snapshot.model_validate(case.snapshot), case.now), case.policy)
+                self.assertEqual(serialized(ranking), expected.root)
+
+    @given(st.sampled_from(["malformed-reset", "numeric-reset", "text-duration", "null-duration"]))
+    def test_exhausted_pace_survives_invalid_timing(self, breakage: str) -> None:
+        """Wrong: an invalid timer turns a proven zero into unknown non-exhaustion."""
+        zero = reader_window(0, 604800, 604800)
+        zero["resetsAt"] = "not-a-timestamp"
+        if breakage == "numeric-reset":
+            zero["resetsAt"] = NOW + 604800
+        elif breakage == "text-duration":
+            zero["windowSeconds"] = "one-week"
+        elif breakage == "null-duration":
+            zero["windowSeconds"] = None
+        entry = ranked_entry(
+            {"exhausted": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="zero")},
+            {"zero": zero},
+        )
+        self.assertEqual((entry.pace, entry.score, entry.state), (0.0, 0.0, "out"))
+
+    @given(st.sampled_from(["missing", "invalid", "stale", "unresolved-scope", "unknown-enforcement", "not-enforced"]))
+    def test_positive_unknown_evidence_never_ranks_ready(self, failure: str) -> None:
+        """Wrong: missing, stale, unresolved, or unenforced evidence supplies positive pace."""
+        windows = {"7d": reader_window(50, 604800, 302400)}
+        if failure == "unknown-enforcement":
+            windows["7d"].pop("enforced")
+            windows["7d"]["status"] = None
+        elif failure == "not-enforced":
+            windows["7d"] = reader_window(50, 604800, 302400, enforced=False)
         elif failure == "invalid":
-            window["windowSeconds"] = "private-duration"
-        elif failure == "enforcement":
-            window["status"] = "private-status"
-        elif failure == "scope":
-            capture["data"]["windows"]["private-scope"] = {}
-        else:
-            window.update(remainingPercent=100, usedPercent=0, resetsAt=None)
-        entry = ranked(raw).entries[0]
-        self.assertEqual((entry.pace, entry.score, entry.state), (None, 0, "out"))
+            windows["7d"]["resetsAt"] = "not-a-timestamp"
+        elif failure == "stale":
+            windows["7d"]["resetsAt"] = "2026-11-11T01:35:00Z"
+        elif failure == "unresolved-scope":
+            windows["private"] = reader_window(100, 604800, None)
+        entry = ranked_entry(
+            {"allowance": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="7d")},
+            None if failure == "missing" else windows,
+        )
+        self.assertEqual((entry.pace, entry.score, entry.state), (None, 0.0, "out"))
 
-    def test_flat_weights_validate_shape_and_refuse_overflow(self):
-        """Reject malformed weights, unknown pools and scores that are not finite."""
-        raw = snapshot([("pace", 50, 604800, 302400)])
-        self.assertEqual(ranked(snapshot([("pace", 100, 604800, 302400)]), {"budget": 1.5}).entries[0].score, 3)
-        for bad in [True, -1, float("inf"), float("nan"), "1", {}, {"weight": 1}]:
-            with self.subTest(bad=bad), self.assertRaises(ValidationError):
-                P.Weights.model_validate({"budget": bad})
-        with self.assertRaises(ValueError):
-            ranked(raw, {"absent": 1})
-        raw = snapshot([("pace", 50, 604800, 3600)])
-        with self.assertRaises(ValidationError):
-            ranked(raw, {"budget": 1e308})
+    @given(st.sampled_from([order[:2] for order in permutations((0.2, 0.5, 1.0))]))
+    def test_overlapping_paced_windows_use_the_smaller_rate(self, rates: tuple[float, float]) -> None:
+        """Wrong: the largest paced limit hides a smaller limit on the same route."""
+        windows = {
+            f"7d:{rate}": reader_window(remaining=50, duration=int(rate * 7200), reset_in=3600)
+            for rate in rates
+        }
+        limits = {
+            f"pace-{rate}": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window=f"7d:{rate}")
+            for rate in rates
+        }
+        entry = ranked_entry(limits, windows)
+        self.assertEqual((entry.pace, entry.score, entry.state), (min(rates), min(rates), "ready"))
 
-    @given(st.permutations(["a", "b", "c"]), st.permutations([0, 1, 2]))
-    def test_overlap_scope_and_weighted_order_ignore_input_permutations(self, pools, routes):
-        """Reject first-credential attribution, unstable ties, scope expansion and dropped routes."""
-        raw = snapshot([("pace", 50, 604800, 302400)])
-        raw["pools"] = {key: copy.deepcopy(raw["pools"]["budget"]) for key in pools}
-        capture = raw["readers"]["budget"]
-        raw["readers"] = {key: copy.deepcopy(capture) for key in pools}
-        raw["readers"]["a"]["exit"] = 9
-        offers = [dict(id="canonical", model="served", maker=maker) for maker in [None, "maker"]]
-        offers.append(dict(id="uncovered", model="uncovered", maker=None))
-        raw["routes"] = [offers[i] for i in routes]
-        result = ranked(raw, {"b": 0, "c": 2})
-        self.assertEqual([(e.pool, e.maker, e.score, e.state) for e in result.entries], [
-            ("c", None, 2, "ready"), ("c", "maker", 2, "ready"),
-            ("b", None, 0, "ready"), ("b", "maker", 0, "ready"),
-            (None, None, 0, "out"), ("a", None, 0, "out"), ("a", "maker", 0, "out"),
-        ])
-        self.assertEqual([r.model_dump() for r in result.snapshot.routes], raw["routes"])
-
-    def test_failed_collection_retains_routes_and_safe_diagnostics_through_ranking(self):
-        """Reject route loss or leaked process output across collection, normalization and ranking."""
-        raw = snapshot([("pace", 50, 604800, 302400)])
-        raw["pools"]["budget"]["command"] = "synthetic-reader"
-        manifest = C.Manifest.model_validate({**raw, "readers": {}})
-        def fail(argv, **kwargs):
-            return subprocess.CompletedProcess(argv, 9, "private-stdout", "private-stderr")
-        with patch.object(C.planner.collect.__globals__["time"], "sleep"):
-            captured = C.collect(manifest, NOW, "/synthetic/bash", run=fail,
-                                 clock=lambda: dt.datetime.fromisoformat(NOW))
-        observed = C.normalizer.normalize(captured, NOW)
-        result = P.rank(observed)
-        self.assertIs(result.snapshot, observed)
-        self.assertEqual(observed.diagnostics.count({"pool": "budget", "reason": "exit-nonzero", "exitStatus": 9}), 1)
+    @given(
+        st.sampled_from([tuple(order) for order in permutations(("a", "b", "c"))]),
+        st.sampled_from([tuple(order) for order in permutations(("covered", "vendor-covered", "uncovered"))]),
+    )
+    def test_pool_and_route_permutations_keep_whole_entry_order(self, pools: list[str], routes: list[str]) -> None:
+        """Wrong: input order changes weighted alternatives, uncovered routes, or ties."""
+        route_values = {
+            "covered": N.Route(id="canonical", maker=None, model="served"),
+            "vendor-covered": N.Route(id="canonical", maker="vendor", model="served"),
+            "uncovered": N.Route(id="uncovered", maker=None, model="other"),
+        }
+        limit = N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="7d")
+        windows = {"7d": reader_window(50, 604800, 302400)}
+        capture = captured_pool({"allowance": limit}, windows)[1]
+        snapshot = typed_snapshot(
+            {name: {"allowance": limit} for name in pools},
+            {name: capture for name in pools if name != "a"},
+            [route_values[name] for name in routes],
+        )
+        result = P.rank(N.normalize(snapshot, NOW), P.RankingPolicy(weights={"b": 0, "c": 2}))
+        self.assertEqual(
+            [(entry.pool, entry.maker, entry.score, entry.state) for entry in result.entries],
+            [
+                ("c", None, 2.0, "ready"),
+                ("c", "vendor", 2.0, "ready"),
+                ("b", None, 0.0, "ready"),
+                ("b", "vendor", 0.0, "ready"),
+                (None, None, 0.0, "out"),
+                ("a", None, 0.0, "out"),
+                ("a", "vendor", 0.0, "out"),
+            ],
+        )
 
 
 if __name__ == "__main__":
-    unittest.main()
+    settings.register_profile("ranking", database=None, deadline=None, max_examples=60)
+    settings.load_profile("ranking")
+    unittest.main(argv=[sys.argv[0]], verbosity=2)

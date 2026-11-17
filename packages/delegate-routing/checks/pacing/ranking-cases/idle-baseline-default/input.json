@@ -1,0 +1,42 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "absent-reset": {
+            "capacity": 40.0,
+            "models": ["absent"],
+            "role": "pace",
+            "window": "5h"
+          },
+          "elapsed-reset": {
+            "capacity": 40.0,
+            "models": ["elapsed"],
+            "role": "pace",
+            "window": "5h:elapsed"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {
+      "budget": {
+        "exit": 0,
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"synthetic\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"5h\":{\"enforced\":true,\"remainingPercent\":100.0,\"resetsAt\":null,\"status\":\"ok\",\"usedPercent\":0.0,\"windowSeconds\":18000},\"5h:elapsed\":{\"enforced\":true,\"remainingPercent\":100.0,\"resetsAt\":\"2026-11-12T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":0.0,\"windowSeconds\":18000}}}"
+      }
+    },
+    "routes": [
+      {
+        "id": "absent",
+        "maker": null,
+        "model": "absent-served"
+      },
+      {
+        "id": "elapsed",
+        "maker": null,
+        "model": "elapsed-served"
+      }
+    ]
+  }
+}
