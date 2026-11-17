@@ -2,8 +2,8 @@
 # cspell:ignore isinfinite isnan
 # Reads a monthly budget that CPA Manager+ accounts for one upstream
 # credential; usage-cpa.sh is prepended by mkUsageScript and supplies
-# usage_cpa_error. Every response body stays in memory: failures print fixed
-# messages only.
+# usage_cpa_error. Responses stay in memory. Failures print safe messages;
+# unpriced models also emit a count diagnostic for delegate-routing-plan.
 # Environment: MANAGER_URL (Manager+ base URL) and MANAGER_KEY_FILE (admin key
 # file; read in process, sent as Authorization: Bearer through curl --config
 # on stdin, never argv).
@@ -170,11 +170,26 @@ proxy_usage_current=$(jq -r '.now_ms' <<<"$proxy_usage_window")
   usage_cpa_error 'invalid time zone or clock'
 if ((proxy_usage_from < proxy_usage_current)); then
   proxy_usage_analytics=$(proxy_usage_request POST /v0/management/monitoring/analytics "$proxy_usage_payload") || exit 1
-  # Exactly one JSON document with a finite non-negative cost and well-typed
-  # coverage reaches the projection; jq diagnostics never surface. model_stats
-  # may be empty only when the summary reports no calls: without rows, coverage
-  # cannot be judged.
-  jq -se 'length == 1 and (.[0] | type == "object"
+  # Classify once at the analytics boundary: malformed data wins over an
+  # unpriced diagnostic, which wins over incomplete but well-typed coverage.
+  # Manager+ prices a stat through its billing or pricing model, so coverage is
+  # judged from the analytics rows themselves, not a price book: a row that
+  # consumed tokens and costs zero is one Manager+ could not price, which must
+  # not read as accounted spend. Calls without tokens (failed before use) cost
+  # nothing legitimately. A display model that merges a priced and an unpriced
+  # billing model shows a positive total and passes; that is the limit of the
+  # estimate. The count of unpriced models is reported, never names.
+  # Manager+ 1.14.10 monitoring/service.go emits coverage only for deleted
+  # raw-event warnings (Response omitempty; analytics coverageWarningRequired).
+  # This compact request has no comparison or drill-down: omitted coverage
+  # supports zero deleted raw events, not complete accounting or zero spend.
+  # Retain the independently validated cost as estimated; unobserved spend is
+  # unknown. Present null/partial coverage does not have that source contract.
+  # Hourly pricing roll-ups carry no credential key, so deleted raw events or
+  # degraded-summary limitations can lower this credential's total.
+  proxy_usage_classification=$(jq -sr '
+    def valid_analytics_response:
+      length == 1 and (.[0] | type == "object"
            and (.summary | type == "object")
            and (.summary.total_cost | type == "number")
            and (.summary.total_cost >= 0)
@@ -193,29 +208,30 @@ if ((proxy_usage_from < proxy_usage_current)); then
            and (.coverage | (type == "object" or type == "null"))
            and (.coverage.raw_deleted_event_count | (type == "number" or type == "null"))
            and ((.coverage.raw_deleted_event_count // 0) >= 0)
-           and (.coverage.fidelity_limitations | (type == "array" or type == "null")))' \
-    <<<"$proxy_usage_analytics" >/dev/null 2>&1 || usage_cpa_error 'invalid analytics response'
-  # Hourly pricing roll-ups carry no credential key, so any deleted raw event or
-  # degraded-summary limitation can lower this credential's total.
-  if jq -e '.coverage // {} | ((.raw_deleted_event_count // 0) > 0
-             or any(.fidelity_limitations[]?;
-                    . == "core_metrics_require_raw_events"
-                    or . == "extended_summary_metrics_require_raw_events"))' \
-    <<<"$proxy_usage_analytics" >/dev/null 2>&1; then
-    usage_cpa_error 'cost coverage incomplete'
-  fi
-  # Manager+ prices a stat through its billing or pricing model, so coverage is
-  # judged from the analytics rows themselves, not a price book: a row that
-  # consumed tokens and costs zero is one Manager+ could not price, which must
-  # not read as accounted spend. Calls without tokens (failed before use) cost
-  # nothing legitimately. A display model that merges a priced and an unpriced
-  # billing model shows a positive total and passes; that is the limit of the
-  # estimate. The count of unpriced models is reported, never names.
-  proxy_usage_unpriced=$(jq -r '[.model_stats[]?
-                                 | select(.total_tokens > 0 and .cost == 0)] | length' \
-    <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
-  [[ $proxy_usage_unpriced == 0 ]] ||
-    usage_cpa_error "analytics contain $proxy_usage_unpriced unpriced models"
+           and (.coverage.fidelity_limitations | (type == "array" or type == "null"))
+           and (all(.coverage.fidelity_limitations[]?; type == "string")));
+    if valid_analytics_response | not then "invalid"
+    else .[0] |
+      ([.model_stats[]? | select(.total_tokens > 0 and .cost == 0)] | length) as $unpriced |
+      if $unpriced > 0 then $unpriced
+      elif has("coverage") and
+           (.coverage | .raw_deleted_event_count != 0
+            or .fidelity_limitations == null
+            or any(.fidelity_limitations[]?;
+                   . == "core_metrics_require_raw_events"
+                   or . == "extended_summary_metrics_require_raw_events"))
+      then "incomplete"
+      else "healthy" end
+    end' <<<"$proxy_usage_analytics" 2>/dev/null) || usage_cpa_error 'invalid analytics response'
+  case $proxy_usage_classification in
+  healthy) ;;
+  incomplete) usage_cpa_error 'cost coverage incomplete' ;;
+  invalid) usage_cpa_error 'invalid analytics response' ;;
+  *)
+    jq -cn --argjson count "$proxy_usage_classification" '{count: $count, reason: "unpriced-models"}'
+    usage_cpa_error "$proxy_usage_classification models have no price in CPA Manager"
+    ;;
+  esac
 else
   # The reset instant itself: an empty range, which Manager+ rejects, and
   # nothing has been spent in the new window yet.

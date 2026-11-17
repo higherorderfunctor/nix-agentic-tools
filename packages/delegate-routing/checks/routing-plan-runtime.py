@@ -20,6 +20,9 @@ import time
 import unittest
 from unittest.mock import call, patch
 
+from hypothesis import example, given, settings, strategies as st
+
+
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
@@ -1390,6 +1393,33 @@ class Routing(unittest.TestCase):
         warnings = [w for w in result["warnings"] if w.startswith("WARNING:") and not w.startswith(helper.PICKER_WARNING)]
         self.assertEqual(warnings, ["WARNING: outside: window 5h\\nFORGED\\x1b pace dropped: invalid windowSeconds. Report this failure to the user."])
         self.assertEqual(len(warnings[0].splitlines()), 1)
+
+    def reader_diagnostic(self, stdout):
+        readers = [{"command": "reader", "name": "outside"}]
+        failure = subprocess.CompletedProcess("secret-command", 7, stdout, "secret-stderr")
+        with patch("time.sleep"):
+            pools = helper.collect(readers, NOW, SHELL, run=lambda *args, **kwargs: failure)
+        return pools["outside"], helper.pool_diagnostics(readers, pools)
+
+    @settings(database=None, deadline=None, max_examples=30)
+    @given(st.one_of(st.none(), st.booleans(), st.integers(), st.floats(), st.text()))
+    @example(True)
+    @example(2)
+    def test_reader_diagnostic_accepts_only_positive_integer_counts(self, count):
+        # Wrong: a lax count such as true, 2.0, "2" or 0 reaches the shared warning.
+        pool, warnings = self.reader_diagnostic(json.dumps({"count": count, "reason": "unpriced-models"}))
+        if type(count) is int and count > 0:
+            self.assertEqual(pool, {"count": count, "reason": "unpriced-models", "status": "unreachable"})
+            self.assertEqual(warnings, [f"WARNING: Reader for outside failed: {count} models have no price in CPA Manager. Report this failure to the user."])
+        else:
+            self.assertEqual(pool, {"reason": "Reader exited 7", "status": "unreachable"})
+
+    def test_reader_diagnostic_rejects_other_stdout(self):
+        # Wrong: extra fields or another reason pass, or bad or deep JSON escapes the parse guard.
+        for stdout in ['{"count":2,"reason":"unpriced-models","model":"secret-model"}',
+                       '{"count":2,"reason":"secret-reason"}', "secret-stdout", "[" * 100000]:
+            with self.subTest(stdout=stdout[:80]):
+                self.assertEqual(self.reader_diagnostic(stdout)[0], {"reason": "Reader exited 7", "status": "unreachable"})
 
     def test_reader_failures_never_supply_fit_only_routes(self):
         # Wrong: failed Readers become fit-only choices, including HTTP 429.
