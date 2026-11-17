@@ -1,4 +1,11 @@
 {
+  "builder": {
+    "src": {
+      "hash": "sha256-5UsH5WNLe/Q1IVPgyMJbzvKTCinj0b3EKp6vL/1ENt8=",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.9.tgz"
+    },
+    "version": "11.28.9"
+  },
   "cargoHash": "sha256-tvxkHVpr364Tst6mIOlBpOMZSuH+E4wqYv27p6OShGI=",
   "pnpmDepsHash": "sha256-czRBBG1H0JGZtmcy4Bpt4ErPYvbNy+yanCr1moyW4tY=",
   "rustToolchainChannel": "1.97.0",

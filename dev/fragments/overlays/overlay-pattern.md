@@ -1,8 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-11-06 — kiro-cli owns its payload derivation and its
-> Linux FHS env; pnpm_12 bootstrap has no hash fixers; a hand hash edit needs a
-> reason.
+> **Last verified:** 2026-11-17 — kiro-cli owns its payload derivation and its
+> Linux FHS env; pnpm_12 bootstrap has no hash fixers and builds with its own
+> frozen JavaScript pnpm 11 pin; a hand hash edit needs a reason.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -625,7 +625,8 @@ build.
 to any versioned attribute family:
 
 - For the JavaScript majors 10 and 11, one shared builder
-  (`packages/pnpm/lib/mkMajor.nix`) takes the major as an argument; the
+  (`packages/pnpm/lib/mkMajor.nix`) takes the major as an argument, with
+  optional `sidecar`, `sources` and `updateScript` for a frozen pin; the
   per-major files are two-line delegations. They exist because each major needs
   its own path for `--override-filename` in owner `registry.nix` and its own
   sidecar beside it — not because the logic differs.
@@ -662,23 +663,28 @@ to any versioned attribute family:
   inherited Cargo phase. Its `fetchPnpmDeps` and `pnpmConfigHook` use the same
   frozen Rust pnpm 12.15.0 bootstrap and `@pnpm/esm-loader` workspace selection.
   The bootstrap uses the same recipe with
-  `packages/pnpm/sources-12-bootstrap.json` and JavaScript pnpm_11; the main
-  release uses `packages/pnpm/sources-12.json`. pnpm 12.16+ includes catalogs
-  and policies from `.config/pnpm/*.yaml`, which requires pnpm >= 12.15.0;
-  nixpkgs' pnpm_12 is older. The private bootstrap is reachable through the main
-  `pnpmDeps.nativeBuildInputs`; its dependency FOD has a distinct name from the
-  main release's FOD. The bootstrap exposes no hash fixers, update script or
-  registry entry. The bootstrap is bumped deliberately. Both stages check their
-  installed version against their own sidecar. Both installs disable the global
-  virtual store: otherwise upstream's `virtualStoreType: global` puts package
-  files under the dependency fetcher's store, and nixpkgs' JSON normalization
-  tries to parse non-JSON fixtures. The configure hook installs dependencies
-  offline with lifecycle scripts disabled; the explicit bundle step performs the
-  required preparation afterward. Both installs pass `--no-runtime` so
-  upstream's platform-specific Node runtime entries stay in the frozen lockfile
-  but are not downloaded or linked; the bundler uses Nix's build Node. Without
-  it, a dependency store fetched on Linux contains only Linux's managed Node and
-  offline Darwin configuration tries to download its own runtime.
+  `packages/pnpm/sources-12-bootstrap.json` and a JavaScript pnpm 11 built by
+  `mkMajor.nix` from that sidecar's `builder` pin, with no update script, never
+  the shipped pnpm_11: pnpm 11.28.12 applies version-selector `overrides` to
+  `catalog:` dependencies, which fails 12.15.0's frozen install on `socks`, and
+  a frozen stage needs a frozen builder. Passthru is outside the derivation, so
+  the builder shares its store path with a shipped pnpm_11 at the same pin; the
+  main release uses `packages/pnpm/sources-12.json`. pnpm 12.16+ includes
+  catalogs and policies from `.config/pnpm/*.yaml`, which requires pnpm >=
+  12.15.0; nixpkgs' pnpm_12 is older. The private bootstrap is reachable through
+  the main `pnpmDeps.nativeBuildInputs`; its dependency FOD has a distinct name
+  from the main release's FOD. The bootstrap exposes no hash fixers, update
+  script or registry entry. The bootstrap is bumped deliberately. Both stages
+  check their installed version against their own sidecar. Both installs disable
+  the global virtual store: otherwise upstream's `virtualStoreType: global` puts
+  package files under the dependency fetcher's store, and nixpkgs' JSON
+  normalization tries to parse non-JSON fixtures. The configure hook installs
+  dependencies offline with lifecycle scripts disabled; the explicit bundle step
+  performs the required preparation afterward. Both installs pass `--no-runtime`
+  so upstream's platform-specific Node runtime entries stay in the frozen
+  lockfile but are not downloaded or linked; the bundler uses Nix's build Node.
+  Without it, a dependency store fetched on Linux contains only Linux's managed
+  Node and offline Darwin configuration tries to download its own runtime.
 - pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
   sidecar, with `mkUpdateScript`'s cheap no-op exit. The main `pnpmDeps` keeps
   its name and pinned hash, so at the current pin its output path equals the one

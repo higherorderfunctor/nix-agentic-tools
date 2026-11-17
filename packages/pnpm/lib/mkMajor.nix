@@ -44,6 +44,12 @@
 # `overrideAttrs` (byte-identical store path before and after), and it is
 # deprecated in favour of the top-level `pnpmConfigHook` anyway.
 #
+# FROZEN BUILDERS. The pnpm_12 bootstrap builds with JavaScript pnpm 11 from
+# the `builder` pin in its own sidecar, so a pnpm_11 bump neither rebuilds
+# nor breaks it. That caller passes `sidecar`, `sources` and
+# `updateScript = false`; passthru is outside the derivation, so the store
+# path equals the shipped pnpm_11's at the same version.
+#
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
 {
@@ -51,14 +57,16 @@
   packageLib,
   repoPath,
   major,
+  sidecar ? ../. + "/sources-${major}.json",
+  sources ? builtins.fromJSON (builtins.readFile sidecar),
+  updateScript ? true,
   ...
 }: let
-  inherit (pkgs) fetchurl;
+  inherit (pkgs) fetchurl lib;
   vu = packageLib;
 
   attr = "pnpm_${major}";
-  sourcesFile = repoPath (../. + "/sources-${major}.json");
-  sources = builtins.fromJSON (builtins.readFile (../. + "/sources-${major}.json"));
+  sourcesFile = repoPath sidecar;
 
   majorMatch = builtins.match "([0-9]+)\\..*" sources.version;
   sidecarMajor =
@@ -77,10 +85,11 @@
 
     # Merge, never replace: nixpkgs hangs `configHook`, `fetchDeps`,
     # `majorVersion`, `nodejs-slim` and `tests` here and replacing the
-    # set drops all of them. See the nix-standards fragment.
+    # set drops all of them. See the nix-standards fragment. Only nixpkgs'
+    # own `updateScript` goes, so a frozen builder carries none.
     passthru =
-      (prev.passthru or {})
-      // {
+      (builtins.removeAttrs (prev.passthru or {}) ["updateScript"])
+      // lib.optionalAttrs updateScript {
         updateScript = vu.mkUpdateScript {
           inherit pkgs;
           pname = attr;

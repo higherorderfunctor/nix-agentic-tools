@@ -153,12 +153,22 @@
   # Fetch and configure both need pnpm >= 12.15.0 to read those includes;
   # nixpkgs' pnpm_12 is older. Build a frozen Rust stage with JavaScript pnpm 11,
   # then use that stage for both fetchPnpmDeps and pnpmConfigHook.
-  # On a cache miss, bootstrap pnpmDeps hash drift (e.g. a pnpm_11 or nixpkgs
-  # fetcher change) can feed the main fixer; the next build fails on the main mismatch.
+  # The JavaScript pnpm 11 is the sidecar's frozen `builder` pin, not the
+  # shipped pnpm_11: pnpm 11.28.12 applies version-selector overrides to
+  # `catalog:` dependencies, which fails the 12.15.0 frozen install on `socks`.
+  # On a cache miss, bootstrap pnpmDeps hash drift (e.g. a nixpkgs fetcher
+  # change) can feed the main fixer; the next build fails on the main mismatch.
+  bootstrapSidecar = ../../../../sources-12-bootstrap.json;
   bootstrapPnpm = mkPnpm {
     bootstrap = true;
-    pnpm = pkgs.ai.generic.pnpm_11;
-    sidecar = ../../../../sources-12-bootstrap.json;
+    pnpm = import ../../../../lib/mkMajor.nix {
+      inherit packageLib pkgs repoPath;
+      major = "11";
+      sidecar = bootstrapSidecar;
+      sources = (lib.importJSON bootstrapSidecar).builder;
+      updateScript = false;
+    };
+    sidecar = bootstrapSidecar;
   };
 in
   mkPnpm {
