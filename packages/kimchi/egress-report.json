@@ -192,7 +192,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:211",
+        "src/models.ts:218",
         "src/utils/http.ts:90"
       ],
       "consumerOverridable": true,
@@ -282,8 +282,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-Vv4ochuzu/O51DcNQ/lDJvGRUXKBEqqF1CkxsbFa5cQ=",
-      "kimchiVersion": "1.34.3",
+      "kimchiSourceHash": "sha256-rqGQVpoo87i0FGtGzLslqAWZPuRq+tWkp5jOLgC0UIo=",
+      "kimchiVersion": "1.35.1",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -301,8 +301,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-Vv4ochuzu/O51DcNQ/lDJvGRUXKBEqqF1CkxsbFa5cQ=",
-      "kimchiVersion": "1.34.3",
+      "kimchiSourceHash": "sha256-rqGQVpoo87i0FGtGzLslqAWZPuRq+tWkp5jOLgC0UIo=",
+      "kimchiVersion": "1.35.1",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -888,7 +888,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:211",
+        "src/models.ts:218",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -899,7 +899,7 @@
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
         "src/extensions/memory/backend.ts:119",
-        "src/models.ts:211",
+        "src/models.ts:218",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -2955,13 +2955,13 @@
       "bundledModule": null,
       "file": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
       "library": "fetch",
-      "line": 1021,
+      "line": 1031,
       "readBy": "pi",
       "targets": [
         {
           "host": null,
           "kind": "dynamic",
-          "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:1021",
+          "origin": "@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js:1031",
           "value": "`https: ... sion)}`"
         }
       ]
@@ -3462,7 +3462,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:882",
+          "origin": "src/config.ts:891",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3489,7 +3489,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:882",
+          "origin": "src/config.ts:891",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3531,7 +3531,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:882",
+          "origin": "src/config.ts:891",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3618,7 +3618,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:965",
+          "origin": "src/config.ts:974",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3660,7 +3660,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:965",
+          "origin": "src/config.ts:974",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3696,13 +3696,13 @@
       "bundledModule": null,
       "file": "src/extensions/session-name.ts",
       "library": "fetch",
-      "line": 189,
+      "line": 190,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/session-name.ts:189",
+          "origin": "src/extensions/session-name.ts:190",
           "value": "url"
         }
       ]
@@ -3747,7 +3747,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:965",
+          "origin": "src/config.ts:974",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3813,13 +3813,13 @@
       "bundledModule": null,
       "file": "src/models.ts",
       "library": "fetch",
-      "line": 211,
+      "line": 218,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:882",
+          "origin": "src/config.ts:891",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3900,7 +3900,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:965",
+          "origin": "src/config.ts:974",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3912,43 +3912,43 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1227",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1228",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1241",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1242",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:545",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:546",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:585",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:586",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:635",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:636",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:685",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:686",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:728",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:729",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -4071,13 +4071,13 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:882",
+          "origin": "src/config.ts:891",
           "value": "KIMCHI_BASE_URL"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:965",
+          "origin": "src/config.ts:974",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -5116,13 +5116,13 @@
             "column": 14,
             "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
             "library": "fetch",
-            "line": 1021
+            "line": 1031
           },
           "conditionOutcome": false,
           "guardSite": {
             "column": 9,
             "file": "kimchi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js",
-            "line": 1015
+            "line": 1025
           },
           "key": "PI_OFFLINE",
           "outcome": "falsy",
@@ -5131,7 +5131,7 @@
         }
       ],
       "library": "fetch",
-      "line": 1021,
+      "line": 1031,
       "readBy": "pi",
       "status": "necessary local conditions at the listed call columns; not sufficient for execution"
     },
@@ -5518,7 +5518,7 @@
       "file": "src/extensions/session-name.ts",
       "guards": [],
       "library": "fetch",
-      "line": 189,
+      "line": 190,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5563,7 +5563,7 @@
       "file": "src/models.ts",
       "guards": [],
       "library": "fetch",
-      "line": 211,
+      "line": 218,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5815,6 +5815,12 @@
       "callee": "execFileSync",
       "category": "spawn",
       "file": "kimchi/resources/skills/kimchi-tmux/scripts/harness-live.mjs",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
+      "file": "kimchi/scripts/check-acp-wire.mjs",
       "target": "\"git\""
     },
     {
