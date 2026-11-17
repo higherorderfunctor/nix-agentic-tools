@@ -18,7 +18,8 @@ def extract(claude, overview, quick_start):
     models = []
     # Catalog sections classify the tables before their rows are validated:
     # one changed chat reference must not silently remove a non-tier model.
-    chat_sections = {"Featured Models", "Text Models"}
+    # A model id listed twice, in one chat section or across two, is refused.
+    chat_sections = {"Featured Models", "Language Models", "Text Models"}
     excluded_sections = {"Agents", "Built-in Tools", "Image Generation Models"}
     section = None
     heading = False
