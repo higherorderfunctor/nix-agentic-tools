@@ -39,10 +39,14 @@ Tier = Literal["frontier", "strong", "mid", "small"]
 
 
 class PolicyModel(BaseModel):
+    """Strict base model for records parsed from the manifest review policy."""
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class PlanCheckPolicy(PolicyModel):
+    """Typed plan-check settings consumed when validating a saved launch plan."""
+
     requireRubric: bool = True
     requireSize: bool = True
     requiredReviewRoles: list[Role] = Field(default_factory=lambda: ["first-check"])
@@ -50,20 +54,28 @@ class PlanCheckPolicy(PolicyModel):
 
     @model_validator(mode="after")
     def disjoint_worker_and_review_roles(self):
+        """Reject role lists that would make one launch both worker and reviewer."""
+
         if set(self.workerRoles) & set(self.requiredReviewRoles):
             raise ValueError("workerRoles and requiredReviewRoles must not overlap")
         return self
 
 
 class RolePolicy(PolicyModel):
+    """Typed tier-floor override for one configured review or worker role."""
+
     tiers: list[Tier]
 
 
 class ReviewPolicy(PolicyModel):
+    """Parsed manifest policy used for route filtering and saved-plan checks."""
+
     planCheck: PlanCheckPolicy = Field(default_factory=PlanCheckPolicy)
     roles: dict[Role, RolePolicy] = Field(default_factory=dict)
 
     def tiers_for(self, role):
+        """Return the configured tier floor for a role, or its package default."""
+
         return self.roles[role].tiers if role in self.roles else ROLE_TIERS[role]
 
 
@@ -820,6 +832,11 @@ def request_errors(manifest, context, roles):
 
 
 def plan(manifest, context, roles, now, shell, run=run_reader, check=None):
+    """Validate the request, read current pools, and return ranked launches per role.
+
+    A saved check artifact, when supplied, is validated against this fresh result.
+    """
+
     errors = request_errors(manifest, context, roles)
     try:
         policy = ReviewPolicy.model_validate(manifest.get("reviewPolicy", {}) if isinstance(manifest, dict) else {})

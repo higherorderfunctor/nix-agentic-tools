@@ -7,10 +7,13 @@
     then {enable = true;} // (import ./entries.nix {inherit lib;}).skill.phrases."Workflow step"
     else stepPhrase;
   entries = import ./resolve-entries.nix {inherit lib;};
+  # Return text with continuation lines indented to the width of marker.
   indentAfter = marker: text:
     marker + lib.replaceStrings ["\n"] ["\n${lib.concatStrings (lib.replicate (builtins.stringLength marker) " ")}"] (lib.removeSuffix "\n" text);
+  # Expand a resolved step template with its enabled rows in final order.
   stepText = scope: step: let
     rows = entries.sort "${scope}.rows" (step.rows or {});
+    # Return sorted row texts as marker-prefixed lines with aligned continuations.
     renderRows = marker: lib.concatStringsSep "\n" (lib.imap0 (index: row: indentAfter (marker index) row.value.text) rows);
   in
     if step.text == ""
@@ -34,6 +37,7 @@ in {
     }:
       heading name value.text)
     (builtins.filter (entry: entry.value.always == always) (entries.sort "delegate-routing.routing" routing));
+  # Return enabled workflows for one delivery destination as Markdown sections.
   workflows = always: workflows:
     lib.concatMapStringsSep "\n" ({
       name,

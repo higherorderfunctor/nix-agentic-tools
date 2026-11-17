@@ -1,5 +1,6 @@
 {lib}: {
   resolveRouting = portable: runtime: portable // runtime;
+  # Overlay runtime workflows on portable defaults, merging rows and inheriting unset text.
   resolveWorkflows = portable: runtime:
     portable
     // lib.mapAttrs (name: workflow:
