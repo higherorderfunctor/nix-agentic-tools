@@ -3464,7 +3464,7 @@
               "tools": {
                 "choice": ["auto", "none", "required", "tool"],
                 "strict": true,
-                "updates": false
+                "updates": []
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -3517,7 +3517,7 @@
                 "choice": ["auto", "none", "required", "tool"],
                 "search": true,
                 "strict": true,
-                "updates": true
+                "updates": ["add", "remove", "replace"]
               }
             },
             "sdk": {
@@ -3593,7 +3593,7 @@
             "capabilities": {
               "tools": {
                 "choice": ["auto", "none", "required", "tool"],
-                "updates": false
+                "updates": []
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -3663,7 +3663,7 @@
             "capabilities": {
               "tools": {
                 "choice": ["auto", "none", "required", "tool"],
-                "updates": false
+                "updates": []
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -3742,7 +3742,7 @@
             "capabilities": {
               "tools": {
                 "choice": ["auto", "none", "required", "tool"],
-                "updates": false
+                "updates": []
               }
             },
             "sdk": {
@@ -3827,9 +3827,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": {
-              "tools": { "choice": ["auto"], "updates": false }
-            },
+            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -3871,9 +3869,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": {
-              "tools": { "choice": ["auto"], "updates": false }
-            },
+            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -3915,9 +3911,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": {
-              "tools": { "choice": ["auto"], "updates": false }
-            },
+            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -3975,7 +3969,7 @@
                 "freeform": ["text", "lark", "regex"],
                 "search": true,
                 "strict": true,
-                "updates": true
+                "updates": ["add", "remove", "replace"]
               }
             },
             "sdk": {
@@ -4053,7 +4047,7 @@
                 "freeform": ["text", "lark", "regex"],
                 "search": true,
                 "strict": true,
-                "updates": true
+                "updates": ["add", "remove", "replace"]
               }
             },
             "sdk": {
@@ -4131,7 +4125,7 @@
             "capabilities": {
               "tools": {
                 "choice": ["auto", "none", "required", "tool"],
-                "updates": false
+                "updates": []
               }
             },
             "sdk": {
@@ -4196,7 +4190,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
               "opencodeai": "@opencode/ai/providers/openai-compatible"
@@ -4236,7 +4230,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
               "opencodeai": "@opencode/ai/providers/openai-compatible"
@@ -4281,11 +4275,60 @@
         "release_date": "2026-11-04",
         "type": "chat"
       },
+      "hy4-flash-free": {
+        "api": {
+          "chat-completions": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "capabilities": { "tools": { "updates": [] } },
+            "sdk": {
+              "aisdk": "@ai-sdk/openai-compatible",
+              "opencodeai": "@opencode/ai/providers/openai-compatible"
+            }
+          }
+        },
+        "canonical_id": "tencent/hy4-flash",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "effort": ["none", "high"], "supported": true },
+          "system_updates": false,
+          "temperature": true,
+          "tools": { "supported": true },
+          "top_k": true,
+          "top_p": true
+        },
+        "cost": {
+          "text": {
+            "input": { "cache": { "read": 0 }, "price": 0 },
+            "output": { "price": 0 }
+          }
+        },
+        "description": "Tencent's lower-cost Hy4 tier for everyday agent and productivity tasks, with image understanding and a 1M-token context window.",
+        "family": "Hy",
+        "id": "hy4-flash-free",
+        "last_updated": "2026-11-16",
+        "limit": { "context": 1048576, "input": 983040, "output": 65536 },
+        "modalities": {
+          "input": [
+            "text",
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif"
+          ],
+          "output": ["text"]
+        },
+        "name": "Hy4 flash Free",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "release_date": "2026-11-16",
+        "type": "chat"
+      },
       "hy4-preview": {
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
               "opencodeai": "@opencode/ai/providers/openai-compatible"
@@ -4325,7 +4368,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
               "opencodeai": "@opencode/ai/providers/openai-compatible"
@@ -4364,7 +4407,7 @@
               "tools": {
                 "choice": ["auto", "none"],
                 "strict": true,
-                "updates": false
+                "updates": []
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -4434,7 +4477,7 @@
               "tools": {
                 "choice": ["auto", "none", "required"],
                 "strict": true,
-                "updates": true
+                "updates": ["add"]
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -4503,7 +4546,7 @@
               "tools": {
                 "choice": ["auto", "none", "required"],
                 "strict": true,
-                "updates": false
+                "updates": []
               }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
@@ -4572,7 +4615,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -4613,7 +4656,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -4655,7 +4698,7 @@
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
             "capabilities": {
-              "tools": { "choice": ["auto"], "strict": true, "updates": false }
+              "tools": { "choice": ["auto"], "strict": true, "updates": [] }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
@@ -4717,7 +4760,7 @@
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
             "capabilities": {
-              "tools": { "choice": ["auto"], "strict": true, "updates": false }
+              "tools": { "choice": ["auto"], "strict": true, "updates": [] }
             },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
@@ -4778,9 +4821,7 @@
         "api": {
           "messages": {
             "base_url": "https://opencode.ai/inference/go/anthropic/v1",
-            "capabilities": {
-              "tools": { "choice": ["auto"], "updates": false }
-            },
+            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/anthropic",
               "opencodeai": "@opencode/ai/providers/anthropic"
@@ -4849,9 +4890,7 @@
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": {
-              "tools": { "choice": ["auto"], "updates": false }
-            },
+            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -4908,7 +4947,7 @@
         "api": {
           "responses": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai",
               "opencodeai": "@opencode/ai/providers/openai/responses"
@@ -4965,7 +5004,7 @@
         "api": {
           "responses": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "sdk": {
               "aisdk": "@ai-sdk/openai",
               "opencodeai": "@opencode/ai/providers/openai/responses"
@@ -5023,7 +5062,7 @@
           "messages": {
             "base_url": "https://opencode.ai/inference/go/anthropic/v1",
             "capabilities": {
-              "tools": { "choice": ["auto", "none", "tool"], "updates": false }
+              "tools": { "choice": ["auto", "none", "tool"], "updates": [] }
             },
             "sdk": {
               "aisdk": "@ai-sdk/anthropic",
@@ -5102,7 +5141,7 @@
           "messages": {
             "base_url": "https://opencode.ai/inference/go/anthropic/v1",
             "capabilities": {
-              "tools": { "choice": ["auto", "none", "tool"], "updates": false }
+              "tools": { "choice": ["auto", "none", "tool"], "updates": [] }
             },
             "sdk": {
               "aisdk": "@ai-sdk/anthropic",
@@ -5170,7 +5209,7 @@
           "messages": {
             "base_url": "https://opencode.ai/inference/go/anthropic/v1",
             "capabilities": {
-              "tools": { "choice": ["auto", "none", "tool"], "updates": false }
+              "tools": { "choice": ["auto", "none", "tool"], "updates": [] }
             },
             "sdk": {
               "aisdk": "@ai-sdk/anthropic",
@@ -5230,11 +5269,80 @@
         "release_date": "2026-08-03",
         "type": "chat"
       },
+      "qwen4-max": {
+        "api": {
+          "messages": {
+            "base_url": "https://opencode.ai/inference/go/anthropic/v1",
+            "capabilities": {
+              "tools": { "choice": ["auto", "none", "tool"], "updates": [] }
+            },
+            "sdk": {
+              "aisdk": "@ai-sdk/anthropic",
+              "opencodeai": "@opencode/ai/providers/anthropic"
+            }
+          }
+        },
+        "canonical_id": "alibaba/qwen4-max",
+        "capabilities": {
+          "cache": { "explicit": { "ttl": ["5m", "1h"] }, "implicit": true },
+          "effort_updates": false,
+          "reasoning": {
+            "budget": { "max": 262144 },
+            "effort": ["low", "high", "xhigh"],
+            "supported": true,
+            "toggle": true
+          },
+          "structured_output": true,
+          "system_updates": true,
+          "temperature": true,
+          "tools": { "supported": true },
+          "top_k": true,
+          "top_p": true
+        },
+        "cost": {
+          "text": {
+            "input": {
+              "cache": { "read": 0.075, "write": { "1h": 3, "5m": 1.875 } },
+              "price": 1.5
+            },
+            "output": { "price": 4.5 }
+          }
+        },
+        "description": "Flagship multimodal model for coding, office productivity, frontend design, and complex agentic tasks",
+        "family": "qwen4-max",
+        "id": "qwen4-max",
+        "last_updated": "2026-11-16",
+        "limit": { "context": 1000000, "output": 262144 },
+        "modalities": {
+          "input": [
+            "text",
+            "image/bmp",
+            "image/jpeg",
+            "image/png",
+            "image/tiff",
+            "image/webp",
+            "image/heic",
+            "video/mp4",
+            "video/x-msvideo",
+            "video/x-matroska",
+            "video/quicktime",
+            "video/x-flv",
+            "video/x-ms-wmv"
+          ],
+          "output": ["text"]
+        },
+        "name": "Qwen4 Max",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "release_date": "2026-11-16",
+        "type": "chat"
+      },
       "step-5-preview": {
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": false } },
+            "capabilities": { "tools": { "updates": [] } },
             "compatibility": { "reasoning_field": "reasoning_content" },
             "sdk": {
               "aisdk": "@ai-sdk/openai-compatible",
@@ -5295,13 +5403,14 @@
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
         "glm-5.2": 60,
-        "glm-5.3": 15,
+        "glm-5.3": 200,
         "glm-5.3-flash": 60,
         "gpt-5.6-luna": 15,
         "gpt-6-luna": 15,
         "grok-4.7": 15,
         "hy3": 60,
         "hy4": 60,
+        "hy4-flash-free": "unlimited",
         "hy4-preview": 30,
         "iceman-contributor-free": "unlimited",
         "kimi-k2.7-code": 60,
@@ -5318,6 +5427,7 @@
         "qwen3.7-plus": 60,
         "qwen3.8-flash": 30,
         "qwen3.8-max": 15,
+        "qwen4-max": 15,
         "step-5-preview": 15
       },
       "go-plus": {
@@ -5327,13 +5437,14 @@
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
         "glm-5.2": 180,
-        "glm-5.3": 120,
+        "glm-5.3": 400,
         "glm-5.3-flash": 180,
         "gpt-5.6-luna": 60,
         "gpt-6-luna": 60,
         "grok-4.7": 60,
         "hy3": 240,
         "hy4": 240,
+        "hy4-flash-free": "unlimited",
         "hy4-preview": 120,
         "iceman-contributor-free": "unlimited",
         "kimi-k2.7-code": 180,
@@ -5350,6 +5461,7 @@
         "qwen3.7-plus": 180,
         "qwen3.8-flash": 90,
         "qwen3.8-max": 60,
+        "qwen4-max": 60,
         "step-5-preview": 60
       },
       "go-teams": {
@@ -5359,13 +5471,14 @@
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
         "glm-5.2": 65,
-        "glm-5.3": 20,
+        "glm-5.3": 205,
         "glm-5.3-flash": 65,
         "gpt-5.6-luna": 20,
         "gpt-6-luna": 20,
         "grok-4.7": 20,
         "hy3": 65,
         "hy4": 65,
+        "hy4-flash-free": "unlimited",
         "hy4-preview": 35,
         "iceman-contributor-free": "unlimited",
         "kimi-k2.7-code": 65,
@@ -5382,6 +5495,7 @@
         "qwen3.7-plus": 65,
         "qwen3.8-flash": 35,
         "qwen3.8-max": 20,
+        "qwen4-max": 20,
         "step-5-preview": 20
       }
     }

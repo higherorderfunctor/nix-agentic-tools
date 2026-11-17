@@ -30,24 +30,18 @@ three tiers must be present, so a changed or unclassified tier fails. These
 facts do not alter harness environment variables.
 
 `packages/docs/cliproxyapi-opencode-go-docs/package.nix` pins OpenCode Go's
-public model catalog (`models.json`) and its Go page (`go.md`) in one snapshot,
-so one update PR carries a change to either. The catalog stamps every model's
-`created` with the fetch time, so the source's `normalize` filter (jq: drop
-`created`, sort models by id and keys) runs before content hashing; a raw pin
-would change on every sweep. `normalize` is the only mkSnapshot addition:
-per-source, stdin to stdout, in both the build and the updater. The page is
-fetched with the snapshot's Markdown `Accept` header and arrives as MDX source,
-not HTML. `extract/opencode-go.py` copies each catalog entry without `created`
-into `opencodeGo.models` and reads `opencodeGo.monthlyLimits.<plan>.<id>`
-(dollars, or `"unlimited"`) from the `go-pricing` plan tabs. Those tab slots are
-HTML blocks whose indented tables CommonMark reads as code, so each slot body is
-parsed again as Markdown and the tags go through `html.parser`. Rows map to IDs
-through the page's own endpoint table (catalog `name`s differ from the page's
-display names); a trailing qualifier such as a token band or peak window is
-stripped, and a model's rows must agree. An unclassified tab group, a row with
-no ID, a catalog model missing from a plan, or a documented model the catalog
-lacks fails, except the dated `DOCUMENTED_ONLY` set, which fails once stale.
-`checks/opencode-go.py` holds the refusal fixtures.
+public model catalog (`models.json`). The catalog stamps every model's `created`
+with the fetch time, so the source's `normalize` filter (jq: drop `created`,
+sort models by id and keys) runs before content hashing; a raw pin would change
+on every sweep. `normalize` is the only mkSnapshot addition: per-source, stdin
+to stdout, in both the build and the updater. `extract/opencode-go.py` copies
+each catalog entry without `created` and `go` into `opencodeGo.models` and reads
+`opencodeGo.monthlyLimits.<plan>.<id>` (dollars, or `"unlimited"`) from the
+entry's `go.monthly_usage`, which a free model sets to null. The Go docs page
+carries no per-model limits, so it is not pinned. A model with no
+`go.monthly_usage`, a plan set other than `go`, `go-plus` and `go-teams`, or a
+limit that is not a number fails. `checks/opencode-go.py` holds the refusal
+fixtures.
 
 To regenerate facts from the current pins, run
 `nix run .#checks.x86_64-linux.cliproxyapi-extracted.passthru.regenerate`.

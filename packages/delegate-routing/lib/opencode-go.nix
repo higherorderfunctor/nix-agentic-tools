@@ -108,6 +108,14 @@
       tier = "mid";
       useFor = "provisional: bounded coding and long-horizon agent steps with review; chart and image analysis with checks";
     };
+    go-hy4-flash-free = {
+      avoidFor = "sole judging; complex software engineering and long autonomous runs (vendor reserves those for Hy4); terminal-heavy work; time-critical work that depends on free capacity";
+      defaultEffort = "high";
+      effort = "none or high; high used in vendor benchmarks, no clear gain over default in one independent coding test; none for mechanical work (untested)";
+      match = "hy4-flash-free";
+      tier = "small";
+      useFor = "provisional: search, extraction, summaries and simple tool tasks with checks; image-assisted reading while free capacity lasts";
+    };
     go-hy4-preview = {
       avoidFor = "hardest autonomous terminal work; latency-sensitive tasks; sole judging";
       defaultEffort = "high";
@@ -228,6 +236,14 @@
       match = "qwen3.8-max";
       tier = "mid";
       useFor = "provisional: bounded repair candidates with executable validation";
+    };
+    go-qwen4-max = {
+      avoidFor = "sole judging; terminal-heavy autonomous runs; whole-program replication; chart-heavy document reading; video input (untested); latency-sensitive work at xhigh";
+      defaultEffort = "high";
+      effort = "low, high or xhigh plus a thinking switch; high is the vendor default and passed one independent coding test; published benchmark scores are at xhigh, so move up only after a measured gain";
+      match = "qwen4-max";
+      tier = "mid";
+      useFor = "provisional: implementation and code repair with executable checks; finance and professional-services agent tasks with checks";
     };
     go-step-5-preview = {
       avoidFor = "hardest proof work; sole judging; long autonomous runs without tests";
