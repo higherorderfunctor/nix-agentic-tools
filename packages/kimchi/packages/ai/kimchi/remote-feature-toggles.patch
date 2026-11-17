@@ -5,10 +5,10 @@ remote-run resource, so every caller gated on it (ferment and permissions
 "run in cloud" choices) goes quiet when the resource is off.
 
 diff --git i/src/cli.ts w/src/cli.ts
-index 43f2bce..72ec5c2 100644
+index 8c23489..6d14d97 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -907,8 +907,10 @@ try {
+@@ -1042,8 +1042,10 @@ async function cliMain(): Promise<void> {
  				inputHistoryExtension,
  				bugReportDestinationExtension,
  				tagsExtension,
@@ -22,7 +22,7 @@ index 43f2bce..72ec5c2 100644
  				sessionMetadataExtension(),
  				surveysExtension(),
 diff --git i/src/extensions/remote-run/runner.ts w/src/extensions/remote-run/runner.ts
-index 0e1930c..54da171 100644
+index d8ebe4e..d569dc1 100644
 --- i/src/extensions/remote-run/runner.ts
 +++ w/src/extensions/remote-run/runner.ts
 @@ -7,6 +7,7 @@
@@ -43,10 +43,10 @@ index 0e1930c..54da171 100644
  	if (value === undefined || value === "") return true
  	return !DISABLE_VALUES.has(value)
 diff --git i/src/resources/definitions.ts w/src/resources/definitions.ts
-index ceb5cc4..9d28df8 100644
+index 5937101..4e4ccfd 100644
 --- i/src/resources/definitions.ts
 +++ w/src/resources/definitions.ts
-@@ -104,6 +104,22 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
+@@ -167,6 +167,22 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
  		defaultEnabled: false,
  		restartRequired: true,
  	},

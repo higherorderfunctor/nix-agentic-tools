@@ -6,9 +6,11 @@ Ollama augmentation now copies every role, so it also stops dropping a
 configured compactor.
 Exercise settings resolution through the naming request and work attribution.
 
+diff --git a/src/extensions/orchestration/model-roles-command.ts b/src/extensions/orchestration/model-roles-command.ts
+index 58ef3d6..b990fdf 100644
 --- a/src/extensions/orchestration/model-roles-command.ts
 +++ b/src/extensions/orchestration/model-roles-command.ts
-@@ -70,7 +70,7 @@
+@@ -70,7 +70,7 @@ export function modelRefTags(
  	return []
  }
  
@@ -17,7 +19,7 @@ Exercise settings resolution through the naming request and work attribution.
  	orchestrator: { label: "Orchestrator", description: "main model, delegates work" },
  	planner: { label: "Planner", description: "designs the approach, writes specs" },
  	builder: { label: "Builder", description: "code implementation" },
-@@ -82,11 +82,11 @@
+@@ -82,11 +82,11 @@ const ROLE_LABELS: Record<keyof ModelRoles, { label: string; description: string
  	compactor: { label: "Compactor", description: "summarizes ferment stage-boundary handoffs" },
  }
  
@@ -33,7 +35,7 @@ Exercise settings resolution through the naming request and work attribution.
  	"planner",
  	"builder",
  	"reviewer",
-@@ -95,7 +95,7 @@
+@@ -95,7 +95,7 @@ const DELEGABLE_KEYS: (keyof Omit<ModelRoles, "orchestrator" | "compactor">)[] =
  	"judge",
  ]
  
@@ -42,7 +44,7 @@ Exercise settings resolution through the naming request and work attribution.
  
  /**
   * Whether `collectModelMetadata()` produced something worth persisting.
-@@ -119,7 +119,10 @@
+@@ -119,7 +119,10 @@ export function isEqualAssignment(a: RoleModelAssignment, b: RoleModelAssignment
  	return arrA.length === arrB.length && arrA.every((v, i) => v === arrB[i])
  }
  
@@ -54,7 +56,7 @@ Exercise settings resolution through the naming request and work attribution.
  	const info = ROLE_LABELS[role]
  	const models = normalizeRoleModels(value)
  	const isDefault = isEqualAssignment(value, DEFAULT_MODEL_ROLES[role])
-@@ -133,7 +136,10 @@
+@@ -133,7 +136,10 @@ export function formatRoleSummaryBlock(role: keyof Omit<ModelRoles, "compactor">
  	return `${info.label}:\n${modelLines.join("\n")}`
  }
  
@@ -66,7 +68,7 @@ Exercise settings resolution through the naming request and work attribution.
  	const info = ROLE_LABELS[role]
  	const isDefault = isEqualAssignment(value, DEFAULT_MODEL_ROLES[role])
  	const suffix = isDefault ? " (default)" : ""
-@@ -458,7 +464,9 @@
+@@ -458,7 +464,9 @@ export function registerModelRolesCommand(pi: ExtensionAPI): void {
  				await showMainMenu()
  			}
  
@@ -77,7 +79,7 @@ Exercise settings resolution through the naming request and work attribution.
  				const info = ROLE_LABELS[roleKey]
  				const currentModels = normalizeRoleModels(roles[roleKey])
  
-@@ -501,7 +509,9 @@
+@@ -501,7 +509,9 @@ export function registerModelRolesCommand(pi: ExtensionAPI): void {
  				}
  			}
  
@@ -88,9 +90,11 @@ Exercise settings resolution through the naming request and work attribution.
  				const info = ROLE_LABELS[roleKey]
  				const selected = new Set(normalizeRoleModels(roles[roleKey]))
  
+diff --git a/src/extensions/orchestration/model-roles.test.ts b/src/extensions/orchestration/model-roles.test.ts
+index bfbc7ef..e629548 100644
 --- a/src/extensions/orchestration/model-roles.test.ts
 +++ b/src/extensions/orchestration/model-roles.test.ts
-@@ -598,6 +598,23 @@
+@@ -598,6 +598,23 @@ describe("getAllowedMultiModelRefs", () => {
  	})
  })
  
@@ -114,6 +118,8 @@ Exercise settings resolution through the naming request and work attribution.
  describe("compactor role", () => {
  	it("defaults to deepseek-v4-flash-0731", () => {
  		expect(DEFAULT_MODEL_ROLES.compactor).toBe(DEFAULT_COMPACTOR_MODEL)
+diff --git a/src/extensions/orchestration/model-roles.ts b/src/extensions/orchestration/model-roles.ts
+index 0ec082a..bc4e796 100644
 --- a/src/extensions/orchestration/model-roles.ts
 +++ b/src/extensions/orchestration/model-roles.ts
 @@ -9,6 +9,7 @@
@@ -134,7 +140,7 @@ Exercise settings resolution through the naming request and work attribution.
   *
   * Example settings.json:
   * ```json
-@@ -75,12 +77,14 @@
+@@ -75,12 +77,14 @@ export interface ModelRoles {
  	judge: RoleModelAssignment
  	/** Context summarization model. */
  	compactor?: string
@@ -152,7 +158,7 @@ Exercise settings resolution through the naming request and work attribution.
  	"planner",
  	"builder",
  	"reviewer",
-@@ -88,7 +92,10 @@
+@@ -88,7 +92,10 @@ const DELEGABLE_ROLE_KEYS: readonly (keyof Omit<ModelRoles, "orchestrator" | "co
  	"researcher",
  	"judge",
  ]
@@ -164,7 +170,7 @@ Exercise settings resolution through the naming request and work attribution.
  
  /** Hardcoded default model-to-role assignment. Users override via /multi-model. */
  export const DEFAULT_MODEL_ROLES: Readonly<ModelRoles> = {
-@@ -183,6 +190,21 @@
+@@ -183,6 +190,21 @@ export function parseModelRoles(obj: ModelRoles | Record<string, unknown> | unde
  		}
  	}
  
@@ -186,7 +192,7 @@ Exercise settings resolution through the naming request and work attribution.
  	return { roles, warnings }
  }
  
-@@ -214,6 +236,9 @@
+@@ -214,6 +236,9 @@ export function saveModelRoles(roles: ModelRoles): void {
  	if (roles.compactor !== undefined && roles.compactor !== DEFAULT_MODEL_ROLES.compactor) {
  		rolesObj.compactor = roles.compactor
  	}
@@ -196,7 +202,7 @@ Exercise settings resolution through the naming request and work attribution.
  
  	if (Object.keys(rolesObj).length === 0) {
  		rolesObj = undefined
-@@ -343,9 +368,8 @@
+@@ -343,9 +368,8 @@ function isEqualModelRoles(a: ModelRoles, b: ModelRoles): boolean {
  	for (const key of ROLE_KEYS) {
  		if (!isEqualRoleValue(a[key], b[key])) return false
  	}
@@ -208,9 +214,11 @@ Exercise settings resolution through the naming request and work attribution.
  }
  
  /**
+diff --git a/src/extensions/session-name.test.ts b/src/extensions/session-name.test.ts
+index 03d05f0..6a54c3b 100644
 --- a/src/extensions/session-name.test.ts
 +++ b/src/extensions/session-name.test.ts
-@@ -53,6 +53,14 @@
+@@ -53,6 +53,14 @@ vi.mock("../config.js", () => ({
  	loadConfig: mockLoadConfig,
  }))
  
@@ -225,7 +233,7 @@ Exercise settings resolution through the naming request and work attribution.
  vi.mock("node:path", async () => {
  	const actual = await vi.importActual<typeof import("node:path")>("node:path")
  	return { ...actual, basename: () => "my-project" }
-@@ -61,6 +69,7 @@
+@@ -61,6 +69,7 @@ vi.mock("node:path", async () => {
  let attributionDir: string
  beforeEach(() => {
  	attributionDir = mkdtempSync(join(tmpdir(), "name-attribution-"))
@@ -233,7 +241,7 @@ Exercise settings resolution through the naming request and work attribution.
  	vi.stubEnv("PI_CODING_AGENT_DIR", attributionDir)
  	// Isolate from the ambient Kimchi agent dir: keyless configs now fall back
  	// to $KIMCHI_CODING_AGENT_DIR/auth.json, and a developer shell's real login
-@@ -202,6 +211,83 @@
+@@ -202,6 +211,83 @@ describe("extractFirstUserMessage", () => {
  })
  
  describe("suggestSessionName", () => {
@@ -317,17 +325,19 @@ Exercise settings resolution through the naming request and work attribution.
  	it("persists each naming retry before dispatch and pins original work and session", async () => {
  		vi.useFakeTimers()
  		mockLoadConfig.mockReturnValue({ apiKey: "test-key", llmEndpoint: "https://llm.test/openai/v1" })
+diff --git a/src/extensions/session-name.ts b/src/extensions/session-name.ts
+index d25a518..dd38be0 100644
 --- a/src/extensions/session-name.ts
 +++ b/src/extensions/session-name.ts
-@@ -16,6 +16,7 @@
- import { gatewayAuthHeaders, resolveGatewayCredentials } from "../auth/gateway-credentials.js"
+@@ -17,6 +17,7 @@ import { gatewayAuthHeaders, resolveGatewayCredentials } from "../auth/gateway-c
  import { loadConfig, RETRY_DEFAULTS } from "../config.js"
  import { fetchWithRetry } from "../utils/http.js"
+ import { notifyUser } from "../utils/notify-user.js"
 +import { resolveModelRoles } from "./orchestration/model-roles.js"
  import { createNativeUsageCapture } from "./work-attribution/native-usage.js"
  import { getWorkId, pinWorkContext, recordProviderRequest, warnWorkAttribution } from "./work-attribution.js"
  
-@@ -141,7 +142,13 @@
+@@ -142,7 +143,13 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  		warnWorkAttribution(ctx, error)
  	}
  
@@ -342,7 +352,7 @@ Exercise settings resolution through the naming request and work attribution.
  	let usage: ReturnType<typeof createNativeUsageCapture> | undefined
  	try {
  		const maxRetries = getSessionNameMaxRetries(ctx.cwd)
-@@ -154,7 +161,7 @@
+@@ -155,7 +162,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  					...gatewayAuthHeaders(credentials),
  				},
  				body: JSON.stringify({
@@ -351,7 +361,7 @@ Exercise settings resolution through the naming request and work attribution.
  					messages: [
  						{ role: "system", content: SESSION_NAME_SYSTEM_PROMPT },
  						{
-@@ -175,11 +182,7 @@
+@@ -176,11 +183,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  					const headers = new Headers(init?.headers)
  					if (workId) {
  						try {
@@ -364,9 +374,11 @@ Exercise settings resolution through the naming request and work attribution.
  							headers.set("X-Request-Id", request.requestId)
  							usage.bind(request.requestId)
  						} catch (error) {
+diff --git a/src/ollama.test.ts b/src/ollama.test.ts
+index 9820eba..c23f9fe 100644
 --- a/src/ollama.test.ts
 +++ b/src/ollama.test.ts
-@@ -916,6 +916,11 @@
+@@ -916,6 +916,11 @@ describe("augmentModelRolesWithOllama — role pool augmentation", () => {
  		expect(result.researcher).toBe("anthropic/claude-sonnet-4")
  	})
  
@@ -378,9 +390,11 @@ Exercise settings resolution through the naming request and work attribution.
  	it("does not mutate the input roles object", () => {
  		const original = JSON.parse(JSON.stringify(baseRoles))
  		augmentModelRolesWithOllama(baseRoles, ollamaModels)
+diff --git a/src/ollama.ts b/src/ollama.ts
+index dda0a90..02d6098 100644
 --- a/src/ollama.ts
 +++ b/src/ollama.ts
-@@ -474,15 +474,7 @@
+@@ -474,15 +474,7 @@ export function augmentModelRolesWithOllama(
  ): ModelRoles {
  	if (models.length === 0) return roles
  
