@@ -52,8 +52,9 @@ def allowance(
 ) -> tuple[float | None, bool]:
     """Return a route's pace in one pool (the lowest of its pace limits) and whether it is ready.
 
-    Any limit at zero blocks the route, even when other evidence is unknown;
-    unknown evidence otherwise leaves the pace unknown and the route out.
+    Any limit at zero blocks the route. A pace limit at zero also makes the pace
+    zero, even when other evidence is unknown; otherwise unknown evidence leaves
+    the pace unknown and the route out.
     """
     paces, blocked, uncertain = [], False, not resolved
     for limit in limits:
@@ -97,7 +98,7 @@ def rank(snapshot: normalizer.Normalized, policy: RankingPolicy | None = None) -
             PoolLimits(pool, evidence.scopeResolved, [limit for limit in evidence.limits if offer.id in limit.models])
             for pool, evidence in sorted(snapshot.pools.items())
         ]
-        # A route no pool limits still gets one entry, so callers see it as out.
+        # A route that no pool's limits cover still gets one entry, so callers see it as out.
         applicable = [item for item in applicable if item.limits] or [PoolLimits(None, False, [])]
         for pool, resolved, limits in applicable:
             pace, ready = allowance(limits, resolved, snapshot.asOf, ranking_policy.idleBaseline)
