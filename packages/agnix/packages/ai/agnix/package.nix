@@ -44,6 +44,13 @@ in
       inherit rev;
     };
     inherit src;
+    # Upstream added Kiro rule KR-SET-013 without a reach fixture, so
+    # `kiro_rule_reachability` fails. The patch adds one with an out-of-range
+    # `compaction.autoCompactionThreshold` and lists it in
+    # `kiro_fixture_inventory`, as upstream did for KR-SET-012. Drop it once
+    # upstream ships its own `tests/fixtures/kiro-reach/kr-set-013/` fixture.
+    patches = [../../../patches/kr-set-013-reach-fixture.patch];
+    inherit (vu) patchFlags;
     cargoHash = "sha256-ae7NxA0SsCKt0/paxgw5qjsNJxBIviZSStE21X8Eq7U=";
 
     nativeBuildInputs = [pkgs.pkg-config];
