@@ -1,3 +1,4 @@
+# Portable routing options and delivery shared by Home Manager and devenv.
 {backend}: {
   config,
   lib,
@@ -149,7 +150,7 @@
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles servedModels;
-      inherit (portable) families pools;
+      inherit (portable) families opencodeGo pools;
       inherit (portable) reviewPolicy;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
@@ -292,16 +293,19 @@ in {
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
       };
-      opencodeGo.plan = lib.mkOption {
-        type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
-        default = null;
-        example = "go-plus";
-        description = "Your OpenCode Go plan. The opencode-go preset families then show that plan's documented monthly limit per model; null shows none.";
-      };
-      opencodeGo.pool = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
+      opencodeGo = {
+        plan = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum opencodeGo.plans);
+          default = null;
+          example = "go-plus";
+          description = "Your OpenCode Go plan. The opencode-go preset families then show that plan's documented monthly limit per model; null shows none.";
+        };
+        pool = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Registered budget pool bound to every OpenCode Go preset on runtimes selecting that vendor. Setting opencodeGo.plan alone only supplies pool text; it does not bind a pool. When a plan is set, the module requires this option to name a registered pool and refuses evaluation otherwise.";
+        };
+        presetScope.excludeModelPrefixes = opencodeGo.scopeOption;
       };
       pools = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {

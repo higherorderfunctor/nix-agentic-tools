@@ -1,3 +1,4 @@
+# Build routing skills and helpers from the same defaults as module consumers.
 {
   fragmentsLib,
   generatedLib,
@@ -33,6 +34,7 @@
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
   entryTypes = import ../../lib/entry-type.nix {inherit lib;};
+  opencodeGoPresets = import ../../lib/opencode-go.nix {inherit lib;};
   # Caller techniques for mkSkill get the same option defaults as the shipped set.
   normalizeTechniques = techniques:
     (lib.evalModules {
@@ -91,7 +93,30 @@
         sessionPool = null;
       }
       // args);
+  # Keep only exclusions still active after named entries merge by key.
+  activePrefixes = presetScope:
+    lib.attrValues
+    (lib.filterAttrs (_: prefix: prefix != null) presetScope.excludeModelPrefixes);
+  # A direct mkSkill caller enters through the same option type as modules.
+  activeExclusionPrefixesForScope = presetScope:
+    activePrefixes
+    (
+      lib.evalModules {
+        modules = [
+          {
+            options.excludeModelPrefixes = opencodeGoPresets.scopeOption;
+            config.excludeModelPrefixes = presetScope.excludeModelPrefixes or {};
+          }
+        ];
+      }
+    ).config;
   buildSkill = args: let
+    opencodeGoCoverageFailures =
+      (import ../../lib/opencode-go.nix {
+        activeExclusionPrefixes = activeExclusionPrefixesForScope (args.opencodeGo.presetScope or {});
+        guidance = args.families;
+        inherit lib;
+      }).drift;
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
@@ -122,27 +147,28 @@
       else args.sessionPool
     }. Run `${helperCommand} --role <role> --launch-context <json-path>` before choosing a route. The command collects registered Readers and prints JSON and canonical routing specifications; it never launches delegates. Load the skill for launch-context guidance.";
   in
-    generated.mkTree {
-      name = "delegate-routing-${args.runtime}-skill";
-      files."SKILL.md" = {
-        type = "markdown";
-        text = frontmatter.render {
-          data = skillData;
-          # Prose trimming can discard context; retain the advertised helper
-          # as a dependency of the delivered file, including its manifest.
-          body =
-            builtins.appendContext
-            (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
-            (builtins.getContext helperInstruction);
+    assert opencodeGoCoverageFailures == [] || throw "delegate-routing opencode-go presets drift: ${lib.concatStringsSep "; " opencodeGoCoverageFailures}";
+      generated.mkTree {
+        name = "delegate-routing-${args.runtime}-skill";
+        files."SKILL.md" = {
+          type = "markdown";
+          text = frontmatter.render {
+            data = skillData;
+            # Prose trimming can discard context; retain the advertised helper
+            # as a dependency of the delivered file, including its manifest.
+            body =
+              builtins.appendContext
+              (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["opencodeGo" "picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
+              (builtins.getContext helperInstruction);
+          };
         };
+        guards.parseCompare = true;
+        passthru = {
+          text = render args;
+        };
+        inherit (args) runtime;
+        inherit treefmt;
       };
-      guards.parseCompare = true;
-      passthru = {
-        text = render args;
-      };
-      inherit (args) runtime;
-      inherit treefmt;
-    };
   skills = lib.genAttrs (builtins.attrNames (lib.filterAttrs (_: models: models != []) defaults.models)) (runtime: mkSkill {inherit runtime;});
 in
   pkgs.runCommand "delegate-routing-content" {
