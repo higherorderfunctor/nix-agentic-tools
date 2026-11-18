@@ -4,9 +4,9 @@
   vendors = import ../lib/vendors {inherit lib;};
 in {
   options.ai.cliproxyapi.servedModels = lib.mkOption {
-    type = lib.types.attrsOf (lib.types.attrsOf (lib.types.nonEmptyListOf lib.types.nonEmptyStr));
+    type = lib.types.attrsOf (lib.types.attrsOf (lib.types.listOf lib.types.nonEmptyStr));
     default = {};
-    description = "Vendor-owned canonical model ids mapped to exact served spellings; consumers can extend or override each model mapping.";
+    description = "Vendor-owned canonical model ids mapped to exact served spellings; consumers can extend each mapping or clear it with an empty list.";
   };
   config = {
     ai.catalog = lib.mkMerge (map (lib.mapAttrsRecursive (_: lib.mkDefault)) vendors.catalogs);

@@ -124,6 +124,17 @@
           };
         }
       ]);
+      # Empty spelling overrides clear owner aliases while constructors keep each canonical id.
+      clearedAliasesResult = evaluate [
+        fixture
+        {
+          ai.cliproxyapi.servedModels = {
+            opencode-go.beam-free = [];
+            zhipuai.${chosenZhipuai} = [];
+          };
+        }
+      ];
+      clearedAliases = render clearedAliasesResult;
       # An explicit Go API override renders every listed model, whatever its maker or spelling.
       overrideResult = evaluate [
         fixture
@@ -345,6 +356,12 @@
           "custom Zhipuai identity loses id fallback" = offers customZhipuai "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: ["fixture-zhipuai-custom"]);
           "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zhipuai.models);
           "empty exclusions change rendered defaults" = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = [];}]) == settings;
+          "empty served spellings lost aliases or canonical fallback" =
+            clearedAliasesResult.config.ai.cliproxyapi.servedModels.opencode-go.beam-free
+            == []
+            && clearedAliasesResult.config.ai.cliproxyapi.servedModels.zhipuai.${chosenZhipuai} == []
+            && offers clearedAliases "opencode-go" == offers settings "opencode-go"
+            && offers clearedAliases "zhipuai" == offers settings "zhipuai";
           "excluded explicit aliases survive or unknown makers disappear" = offers explicitSettings "filtered" == {chat = sorted expectedExplicit;};
           "excluded models remain in inference registry" =
             explicitResult.config.ai.internal.inferenceInstances.main.clients.main.credentials
