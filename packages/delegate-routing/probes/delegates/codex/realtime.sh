@@ -23,7 +23,7 @@ mkdir -p "$CODEX_WORK/rt-home/PROBE-HOME-7703"
 CODEX_PKG="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 export CODEX_PKG
 if [[ ! -f $CODEX_WORK/models_cache.json ]]; then
-  python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$CODEX_WORK/models_cache.json"
+	python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$CODEX_WORK/models_cache.json"
 fi
 python3 "$D/rtws.py" "$RTPORT" "$rt" &
 ws=$!

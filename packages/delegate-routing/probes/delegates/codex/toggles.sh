@@ -14,13 +14,13 @@ CODEX_PKG="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 export CODEX_WORK CODEX_PKG
 port=19110
 while IFS='|' read -r name model extra; do
-  P="$CODEX_WORK/probes/toggles-$name"
-  mkdir -p "$P"
-  sed "s|^model = .*|model = \"$model\"|" "$D/base.toml" >"$P/config.toml"
-  printf '%b\n' "$extra" >>"$P/config.toml"
-  echo '{"*": [{"msg": "X"}]}' >"$P/scenario.json"
-  echo '{"thread": {}, "turn": "GO", "timeout": 15, "settle": 0}' >"$P/probe.json"
-  port=$((port + 1))
-  PROBE_DIR="$P" timeout 120 "$D/run.sh" "toggles-$name" "$port" </dev/null >/dev/null 2>&1 || echo "run failed: $name"
+	P="$CODEX_WORK/probes/toggles-$name"
+	mkdir -p "$P"
+	sed "s|^model = .*|model = \"$model\"|" "$D/base.toml" >"$P/config.toml"
+	printf '%b\n' "$extra" >>"$P/config.toml"
+	echo '{"*": [{"msg": "X"}]}' >"$P/scenario.json"
+	echo '{"thread": {}, "turn": "GO", "timeout": 15, "settle": 0}' >"$P/probe.json"
+	port=$((port + 1))
+	PROBE_DIR="$P" timeout 120 "$D/run.sh" "toggles-$name" "$port" </dev/null >/dev/null 2>&1 || echo "run failed: $name"
 done <"$variants"
 python3 "$D/toggles_report.py" "$variants" "$CODEX_WORK/results"

@@ -43,45 +43,45 @@ RESET=$'\033[0m'
 # update test matrix keeps running before Nix is installed. Returns 2 when
 # `nix` cannot answer. A call inside `$(...)` memoizes only in that subshell.
 nat_system() {
-  if [ -z "${NAT_SYSTEM:-}" ]; then
-    NAT_SYSTEM=$(nix eval --impure --raw --expr 'builtins.currentSystem') || return 2
-  fi
-  printf '%s' "$NAT_SYSTEM"
+	if [ -z "${NAT_SYSTEM:-}" ]; then
+		NAT_SYSTEM=$(nix eval --impure --raw --expr 'builtins.currentSystem') || return 2
+	fi
+	printf '%s' "$NAT_SYSTEM"
 }
 
 # The flake attribute of package $1 in the internal unfree-enabled set
 # (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
 # every pipeline read of a package by name goes through here.
 nat_attr() {
-  local system
-  system=$(nat_system) || return 2
-  printf 'ciPackages.%s.%s' "$system" "$1"
+	local system
+	system=$(nat_system) || return 2
+	printf 'ciPackages.%s.%s' "$system" "$1"
 }
 
 # GitHub token for nix-update rate limits
 if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
-  GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
-  [ -n "${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
+	GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
+	[ -n "${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
 fi
 
 # ── Output helpers ────────────────────────────────────────────────────────────
 
 log_header() {
-  echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
-  echo "${BOLD}${CYAN}  $1${RESET}"
-  echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
+	echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
+	echo "${BOLD}${CYAN}  $1${RESET}"
+	echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
 }
 
 log_success() {
-  echo "${GREEN}  ✓ $1${RESET}"
+	echo "${GREEN}  ✓ $1${RESET}"
 }
 
 log_failure() {
-  echo "${RED}  ✗ $1${RESET}" >&2
+	echo "${RED}  ✗ $1${RESET}" >&2
 }
 
 log_info() {
-  echo "${YELLOW}  … $1${RESET}"
+	echo "${YELLOW}  … $1${RESET}"
 }
 
 # ── Git status helpers ───────────────────────────────────────────────────────
@@ -122,15 +122,15 @@ log_info() {
 # error exit into the one report line every target owes; called from a
 # target's MAIN shell it would exit with no report entry at all.
 git_diff_quiet() {
-  local rc=0
-  git "$@" --quiet || rc=$?
-  case "$rc" in
-  0 | 1) return "$rc" ;;
-  *)
-    log_failure "git $* --quiet failed (exit $rc) — refusing to read a git error as a diff answer"
-    exit "$rc"
-    ;;
-  esac
+	local rc=0
+	git "$@" --quiet || rc=$?
+	case "$rc" in
+	0 | 1) return "$rc" ;;
+	*)
+		log_failure "git $* --quiet failed (exit $rc) — refusing to read a git error as a diff answer"
+		exit "$rc"
+		;;
+	esac
 }
 
 # ── Target subshell shape ────────────────────────────────────────────────────
@@ -179,31 +179,31 @@ git_diff_quiet() {
 # After the script completes, the CI workflow pushes the branch
 # and opens a PR (one PR per dependency, Renovate-style).
 setup_worktree() {
-  local name="$1"
-  local wt="$WORKTREES_DIR/update-$name"
-  local wt_branch="update/$name"
+	local name="$1"
+	local wt="$WORKTREES_DIR/update-$name"
+	local wt_branch="update/$name"
 
-  if [ -d "$wt" ]; then
-    # Clean any stuck git state from prior crashed runs
-    git -C "$wt" cherry-pick --abort 2>/dev/null || true
-    git -C "$wt" rebase --abort 2>/dev/null || true
-    git -C "$wt" merge --abort 2>/dev/null || true
-    # Discard modified tracked files (e.g. devenv.lock/flake.lock left
-    # dirty from a prior crashed run) before the checkout — otherwise
-    # `checkout -B` fails with "local changes would be overwritten".
-    git -C "$wt" reset --hard HEAD >&2
-    git -C "$wt" checkout -B "$wt_branch" "$BRANCH" >&2
-    git -C "$wt" clean -fd >&2
-  else
-    mkdir -p "$WORKTREES_DIR"
-    git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
-  fi
+	if [ -d "$wt" ]; then
+		# Clean any stuck git state from prior crashed runs
+		git -C "$wt" cherry-pick --abort 2>/dev/null || true
+		git -C "$wt" rebase --abort 2>/dev/null || true
+		git -C "$wt" merge --abort 2>/dev/null || true
+		# Discard modified tracked files (e.g. devenv.lock/flake.lock left
+		# dirty from a prior crashed run) before the checkout — otherwise
+		# `checkout -B` fails with "local changes would be overwritten".
+		git -C "$wt" reset --hard HEAD >&2
+		git -C "$wt" checkout -B "$wt_branch" "$BRANCH" >&2
+		git -C "$wt" clean -fd >&2
+	else
+		mkdir -p "$WORKTREES_DIR"
+		git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
+	fi
 
-  # Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
-  # Tools are nix store paths baked into the config, so no devenv activation needed.
-  ln -sf "$PWD/.pre-commit-config.yaml" "$wt/.pre-commit-config.yaml"
+	# Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
+	# Tools are nix store paths baked into the config, so no devenv activation needed.
+	ln -sf "$PWD/.pre-commit-config.yaml" "$wt/.pre-commit-config.yaml"
 
-  echo "$wt"
+	echo "$wt"
 }
 
 # Tear down an ephemeral worktree. Idempotent, and guarded to run only in
@@ -214,11 +214,11 @@ setup_worktree() {
 # the worktree never loses the update. Any registration stranded by a
 # crash or wiped temp is reaped by `git worktree prune` at the next init.
 teardown_worktree() {
-  [ "$BASHPID" = "$$" ] || return 0
-  local wt="${1:-}"
-  [ -n "$wt" ] || return 0
-  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
-  return 0
+	[ "$BASHPID" = "$$" ] || return 0
+	local wt="${1:-}"
+	[ -n "$wt" ] || return 0
+	git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
+	return 0
 }
 
 # Core count, resolved once; the evaluator bound below is expressed against it.
@@ -248,40 +248,40 @@ NAT_UPDATE_CORES=$(nproc 2>/dev/null) || NAT_UPDATE_CORES=0
 #     `(RAM*0.6)/workers`, and workers are reduced until each gets at least
 #     1 GiB before the target is refused
 nfb_eval_flags() {
-  local workers="$NAT_UPDATE_CORES" max_memory_workers mem_mib mem_per_worker
+	local workers="$NAT_UPDATE_CORES" max_memory_workers mem_mib mem_per_worker
 
-  [ "$workers" -ge 1 ] || workers=1
-  # Isolated CI targets can lower evaluator concurrency without constraining
-  # compiler cores. Overrides only reduce the existing safe resource bounds.
-  if [ -n "${NAT_UPDATE_EVAL_WORKERS:-}" ]; then
-    [[ $NAT_UPDATE_EVAL_WORKERS =~ ^[1-9][0-9]*$ ]] || return 1
-    [ "$workers" -le "$NAT_UPDATE_EVAL_WORKERS" ] || workers="$NAT_UPDATE_EVAL_WORKERS"
-  fi
+	[ "$workers" -ge 1 ] || workers=1
+	# Isolated CI targets can lower evaluator concurrency without constraining
+	# compiler cores. Overrides only reduce the existing safe resource bounds.
+	if [ -n "${NAT_UPDATE_EVAL_WORKERS:-}" ]; then
+		[[ $NAT_UPDATE_EVAL_WORKERS =~ ^[1-9][0-9]*$ ]] || return 1
+		[ "$workers" -le "$NAT_UPDATE_EVAL_WORKERS" ] || workers="$NAT_UPDATE_EVAL_WORKERS"
+	fi
 
-  # /proc/meminfo is Linux-only. The update job runs on ubuntu-latest,
-  # but these scripts are runnable by hand on darwin, so degrade to
-  # nix-fast-build's own default rather than emit a bogus ceiling.
-  mem_mib=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024; exit}' /proc/meminfo 2>/dev/null) || mem_mib=0
-  if [ "${mem_mib:-0}" -gt 0 ]; then
-    max_memory_workers=$(((mem_mib * 60 / 100) / 1024))
-    [ "$max_memory_workers" -ge 1 ] || {
-      echo "Evaluator budget is below 1024 MiB per worker." >&2
-      return 1
-    }
-    [ "$workers" -le "$max_memory_workers" ] || workers="$max_memory_workers"
-    # Below ~1 GiB a worker thrashes on restart; the worker cap above
-    # guarantees each one at least that much.
-    mem_per_worker=$(((mem_mib * 60 / 100) / workers))
-    if [ -n "${NAT_UPDATE_EVAL_MAX_MEMORY:-}" ]; then
-      [[ $NAT_UPDATE_EVAL_MAX_MEMORY =~ ^[1-9][0-9]*$ ]] || return 1
-      [ "$NAT_UPDATE_EVAL_MAX_MEMORY" -ge 1024 ] || return 1
-      [ "$mem_per_worker" -le "$NAT_UPDATE_EVAL_MAX_MEMORY" ] || mem_per_worker="$NAT_UPDATE_EVAL_MAX_MEMORY"
-    fi
-  fi
-  printf -- '--eval-workers %s' "$workers"
-  if [ "${mem_per_worker:-0}" -gt 0 ]; then
-    printf -- ' --eval-max-memory-size %s' "$mem_per_worker"
-  fi
+	# /proc/meminfo is Linux-only. The update job runs on ubuntu-latest,
+	# but these scripts are runnable by hand on darwin, so degrade to
+	# nix-fast-build's own default rather than emit a bogus ceiling.
+	mem_mib=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024; exit}' /proc/meminfo 2>/dev/null) || mem_mib=0
+	if [ "${mem_mib:-0}" -gt 0 ]; then
+		max_memory_workers=$(((mem_mib * 60 / 100) / 1024))
+		[ "$max_memory_workers" -ge 1 ] || {
+			echo "Evaluator budget is below 1024 MiB per worker." >&2
+			return 1
+		}
+		[ "$workers" -le "$max_memory_workers" ] || workers="$max_memory_workers"
+		# Below ~1 GiB a worker thrashes on restart; the worker cap above
+		# guarantees each one at least that much.
+		mem_per_worker=$(((mem_mib * 60 / 100) / workers))
+		if [ -n "${NAT_UPDATE_EVAL_MAX_MEMORY:-}" ]; then
+			[[ $NAT_UPDATE_EVAL_MAX_MEMORY =~ ^[1-9][0-9]*$ ]] || return 1
+			[ "$NAT_UPDATE_EVAL_MAX_MEMORY" -ge 1024 ] || return 1
+			[ "$mem_per_worker" -le "$NAT_UPDATE_EVAL_MAX_MEMORY" ] || mem_per_worker="$NAT_UPDATE_EVAL_MAX_MEMORY"
+		fi
+	fi
+	printf -- '--eval-workers %s' "$workers"
+	if [ "${mem_per_worker:-0}" -gt 0 ]; then
+		printf -- ' --eval-max-memory-size %s' "$mem_per_worker"
+	fi
 }
 
 # nix-fast-build wrapper that gates on independent completion and failure
@@ -316,154 +316,154 @@ nfb_eval_flags() {
 #
 # Usage: run_nfb_build expected-packages.json nix run --inputs-from . nix-fast-build -- ...
 run_nfb_build() {
-  local expected_packages=$1 rf stderr_log exit_code=0 failed=0 incomplete=0 unresolved_hash=0
-  shift
-  # Global on purpose: the caller reads it after a red verification to name
-  # the failed attributes (record_verify_failure). Reset per call so a retry
-  # reports only its own failures.
-  # shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
-  NAT_VERIFY_FAILED_ATTRS=""
-  # Return 2 when verification could not start and 3 when Nix reports a
-  # fixed-output mismatch. Return 4 when the verifier ran but its result does
-  # not cover the pre-enumerated package universe. Callers must distinguish all
-  # three from return 1, which means a completed verifier found an ordinary red
-  # package set.
-  local -a eval_flags
-  local eval_options
-  if ! eval_options=$(nfb_eval_flags); then
-    log_failure "Invalid evaluator resource limits"
-    return 2
-  fi
-  read -r -a eval_flags <<<"$eval_options"
+	local expected_packages=$1 rf stderr_log exit_code=0 failed=0 incomplete=0 unresolved_hash=0
+	shift
+	# Global on purpose: the caller reads it after a red verification to name
+	# the failed attributes (record_verify_failure). Reset per call so a retry
+	# reports only its own failures.
+	# shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
+	NAT_VERIFY_FAILED_ATTRS=""
+	# Return 2 when verification could not start and 3 when Nix reports a
+	# fixed-output mismatch. Return 4 when the verifier ran but its result does
+	# not cover the pre-enumerated package universe. Callers must distinguish all
+	# three from return 1, which means a completed verifier found an ordinary red
+	# package set.
+	local -a eval_flags
+	local eval_options
+	if ! eval_options=$(nfb_eval_flags); then
+		log_failure "Invalid evaluator resource limits"
+		return 2
+	fi
+	read -r -a eval_flags <<<"$eval_options"
 
-  mkdir -p "$UPDATE_LOGS_DIR" || return 2
-  rf=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-result-XXXXXX) || return 2
-  stderr_log=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.log nfb-stderr-XXXXXX) || {
-    rm -f "$rf"
-    return 2
-  }
+	mkdir -p "$UPDATE_LOGS_DIR" || return 2
+	rf=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-result-XXXXXX) || return 2
+	stderr_log=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.log nfb-stderr-XXXXXX) || {
+		rm -f "$rf"
+		return 2
+	}
 
-  # Buffered stderr capture (not `2> >(tee ...)`): bash process
-  # substitution offers no synchronization with the parent shell, so the
-  # tee writer may still be flushing when gate 3 greps the file. The
-  # buffered form `2> file` then `cat file >&2` is deterministic — we
-  # only lose real-time stderr streaming, which the per-input target already
-  # tees into its own update log anyway.
-  #
-  # `|| exit_code=$?` localizes errexit suppression to this single call
-  # (NOT a blanket `set +e`) — we want to inspect the exit code AND
-  # continue to the JSON/stderr gates regardless.
-  # nfb_eval_flags bounds the evaluator fan-out, which would otherwise
-  # overcommit memory and kill the runner.
-  # Word-splitting is intended and safe: the function emits only flag
-  # names and integers it computed itself.
-  "$@" "${eval_flags[@]}" --result-file "$rf" --result-format json \
-    2>"$stderr_log" || exit_code=$?
-  cat "$stderr_log" >&2
+	# Buffered stderr capture (not `2> >(tee ...)`): bash process
+	# substitution offers no synchronization with the parent shell, so the
+	# tee writer may still be flushing when gate 3 greps the file. The
+	# buffered form `2> file` then `cat file >&2` is deterministic — we
+	# only lose real-time stderr streaming, which the per-input target already
+	# tees into its own update log anyway.
+	#
+	# `|| exit_code=$?` localizes errexit suppression to this single call
+	# (NOT a blanket `set +e`) — we want to inspect the exit code AND
+	# continue to the JSON/stderr gates regardless.
+	# nfb_eval_flags bounds the evaluator fan-out, which would otherwise
+	# overcommit memory and kill the runner.
+	# Word-splitting is intended and safe: the function emits only flag
+	# names and integers it computed itself.
+	"$@" "${eval_flags[@]}" --result-file "$rf" --result-format json \
+		2>"$stderr_log" || exit_code=$?
+	cat "$stderr_log" >&2
 
-  # Gate 1: nix-fast-build's own exit code.
-  if [ "$exit_code" -ne 0 ]; then
-    log_failure "nix-fast-build exited non-zero ($exit_code)"
-    failed=1
-  fi
+	# Gate 1: nix-fast-build's own exit code.
+	if [ "$exit_code" -ne 0 ]; then
+		log_failure "nix-fast-build exited non-zero ($exit_code)"
+		failed=1
+	fi
 
-  # Gate 2: JSON coverage. Enumeration happened before the producer started,
-  # so an empty or partial result cannot masquerade as a completed red build.
-  # Successful evaluations need cached/local evidence or a BUILD row; aliases
-  # may share one BUILD row through their common drvPath.
-  if [ ! -s "$rf" ]; then
-    log_failure "nix-fast-build wrote no result file (expected $rf)"
-    incomplete=1
-  elif ! python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
-    update-verify "$expected_packages" "$rf"; then
-    log_failure "nix-fast-build result coverage is incomplete"
-    incomplete=1
-  fi
+	# Gate 2: JSON coverage. Enumeration happened before the producer started,
+	# so an empty or partial result cannot masquerade as a completed red build.
+	# Successful evaluations need cached/local evidence or a BUILD row; aliases
+	# may share one BUILD row through their common drvPath.
+	if [ ! -s "$rf" ]; then
+		log_failure "nix-fast-build wrote no result file (expected $rf)"
+		incomplete=1
+	elif ! python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
+		update-verify "$expected_packages" "$rf"; then
+		log_failure "nix-fast-build result coverage is incomplete"
+		incomplete=1
+	fi
 
-  # Gate 3: completed result rows may still report an ordinary build or eval
-  # failure. Those remain publishable-red after the caller's repair pass.
-  if [ -s "$rf" ] && ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
-    log_failure "nix-fast-build result file shows per-build failures:"
-    jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
-      "$rf" >&2 || true
-    failed=1
-  fi
+	# Gate 3: completed result rows may still report an ordinary build or eval
+	# failure. Those remain publishable-red after the caller's repair pass.
+	if [ -s "$rf" ] && ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
+		log_failure "nix-fast-build result file shows per-build failures:"
+		jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
+			"$rf" >&2 || true
+		failed=1
+	fi
 
-  # Gate 4: stderr fallback. Observed in CI run 26473689694 — the JSON
-  # gate missed a copilot-cli build failure but this stderr line was
-  # present. nix-fast-build emits it consistently when builds fail, even
-  # when its own exit code and JSON output are misleading.
-  if grep -qE "ERROR:nix_fast_build:BUILD: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
-    log_failure "nix-fast-build stderr reports build failures:"
-    grep -E "BUILD: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
-    failed=1
-  fi
+	# Gate 4: stderr fallback. Observed in CI run 26473689694 — the JSON
+	# gate missed a copilot-cli build failure but this stderr line was
+	# present. nix-fast-build emits it consistently when builds fail, even
+	# when its own exit code and JSON output are misleading.
+	if grep -qE "ERROR:nix_fast_build:BUILD: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
+		log_failure "nix-fast-build stderr reports build failures:"
+		grep -E "BUILD: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
+		failed=1
+	fi
 
-  # Gate 5: evaluation failures. nix-fast-build reports eval-time errors on a
-  # separate line from build failures. An attribute that throws during
-  # evaluation (e.g. an input bump that breaks a package's eval) never becomes
-  # a build, so it produces no `success: false` result entry (gate 2) and does
-  # not increment the BUILD failure count (gate 3): it is invisible to gates
-  # 1-3. nix-fast-build emits a distinct line for it:
-  #   ERROR:nix_fast_build:EVAL: N successes, M failures
-  # Observed when a nixpkgs bump broke effect-mcp's fetchPnpmDeps eval, yet the
-  # nixpkgs update still shipped as UPDATED instead of HELD BACK.
-  if grep -qE "ERROR:nix_fast_build:EVAL: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
-    log_failure "nix-fast-build stderr reports evaluation failures:"
-    grep -E "EVAL: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
-    failed=1
-  fi
+	# Gate 5: evaluation failures. nix-fast-build reports eval-time errors on a
+	# separate line from build failures. An attribute that throws during
+	# evaluation (e.g. an input bump that breaks a package's eval) never becomes
+	# a build, so it produces no `success: false` result entry (gate 2) and does
+	# not increment the BUILD failure count (gate 3): it is invisible to gates
+	# 1-3. nix-fast-build emits a distinct line for it:
+	#   ERROR:nix_fast_build:EVAL: N successes, M failures
+	# Observed when a nixpkgs bump broke effect-mcp's fetchPnpmDeps eval, yet the
+	# nixpkgs update still shipped as UPDATED instead of HELD BACK.
+	if grep -qE "ERROR:nix_fast_build:EVAL: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
+		log_failure "nix-fast-build stderr reports evaluation failures:"
+		grep -E "EVAL: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
+		failed=1
+	fi
 
-  # A fixed-output mismatch is a distinct preparation result. It is the Nix
-  # producer's direct statement that a recorded hash is stale, including the
-  # cargoDeps/pnpmDeps gap whose packages expose no automatic fixer. For BUILD
-  # failures, pinned nix-fast-build's JSON says only "build exited with N";
-  # its renderer forwards the detailed Nix message to the captured stderr, so
-  # that grep is load-bearing. The JSON arm covers detailed EVAL errors.
-  # Preserve the ordinary failure status for compiler and test failures, but
-  # return 3 when verifier evidence proves required update content is missing.
-  if grep -q "hash mismatch in fixed-output derivation" "$stderr_log" ||
-    { [ -s "$rf" ] && jq -e '
+	# A fixed-output mismatch is a distinct preparation result. It is the Nix
+	# producer's direct statement that a recorded hash is stale, including the
+	# cargoDeps/pnpmDeps gap whose packages expose no automatic fixer. For BUILD
+	# failures, pinned nix-fast-build's JSON says only "build exited with N";
+	# its renderer forwards the detailed Nix message to the captured stderr, so
+	# that grep is load-bearing. The JSON arm covers detailed EVAL errors.
+	# Preserve the ordinary failure status for compiler and test failures, but
+	# return 3 when verifier evidence proves required update content is missing.
+	if grep -q "hash mismatch in fixed-output derivation" "$stderr_log" ||
+		{ [ -s "$rf" ] && jq -e '
         [.results[]? | (.error // "")
          | select(test("hash mismatch in fixed-output derivation"; "i"))]
         | length > 0
       ' "$rf" >/dev/null 2>&1; }; then
-    log_failure "Package verification found an unresolved fixed-output hash"
-    unresolved_hash=1
-    failed=1
-  fi
+		log_failure "Package verification found an unresolved fixed-output hash"
+		unresolved_hash=1
+		failed=1
+	fi
 
-  if [ "$failed" -eq 1 ] || [ "$incomplete" -eq 1 ]; then
-    # Failed attribute names. Pinned nix-fast-build records EVAL failures in
-    # the result JSON too (workers.py puts a ResultType.EVAL row with
-    # success=false and the eval error for every throwing attribute), so the
-    # JSON rows name every failure whenever the file was written. The stderr
-    # "Failed attributes:" line is only a fallback for a run that died before
-    # writing the file or produced no failed rows. It spells each attribute as
-    # "<flake>#<fragment>.<attr>" (fragment = ciPackages.<system>), so strip
-    # that prefix to match the JSON spelling. Best effort: an empty list is
-    # reported as unknown, never read as "nothing failed" -- the return status
-    # below decides that.
-    # shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
-    NAT_VERIFY_FAILED_ATTRS=$(
-      names=""
-      if [ -s "$rf" ]; then
-        names=$(jq -r '.results[]? | select(.success | not) | .attr' "$rf" 2>/dev/null || :)
-      fi
-      if [ -z "$names" ]; then
-        names=$(grep -oP 'Failed attributes: \K.*' "$stderr_log" | tr -s ' ,' '\n' |
-          sed 's/^[^#]*#[^.]*\.[^.]*\.//' || :)
-      fi
-      printf '%s\n' "$names" | sed '/^$/d' | sort -u
-    ) || NAT_VERIFY_FAILED_ATTRS=""
-    log_failure "(forensic data preserved: $rf, $stderr_log)"
-    [ "$incomplete" -eq 0 ] || return 4
-    [ "$unresolved_hash" -eq 0 ] || return 3
-    return 1
-  fi
+	if [ "$failed" -eq 1 ] || [ "$incomplete" -eq 1 ]; then
+		# Failed attribute names. Pinned nix-fast-build records EVAL failures in
+		# the result JSON too (workers.py puts a ResultType.EVAL row with
+		# success=false and the eval error for every throwing attribute), so the
+		# JSON rows name every failure whenever the file was written. The stderr
+		# "Failed attributes:" line is only a fallback for a run that died before
+		# writing the file or produced no failed rows. It spells each attribute as
+		# "<flake>#<fragment>.<attr>" (fragment = ciPackages.<system>), so strip
+		# that prefix to match the JSON spelling. Best effort: an empty list is
+		# reported as unknown, never read as "nothing failed" -- the return status
+		# below decides that.
+		# shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
+		NAT_VERIFY_FAILED_ATTRS=$(
+			names=""
+			if [ -s "$rf" ]; then
+				names=$(jq -r '.results[]? | select(.success | not) | .attr' "$rf" 2>/dev/null || :)
+			fi
+			if [ -z "$names" ]; then
+				names=$(grep -oP 'Failed attributes: \K.*' "$stderr_log" | tr -s ' ,' '\n' |
+					sed 's/^[^#]*#[^.]*\.[^.]*\.//' || :)
+			fi
+			printf '%s\n' "$names" | sed '/^$/d' | sort -u
+		) || NAT_VERIFY_FAILED_ATTRS=""
+		log_failure "(forensic data preserved: $rf, $stderr_log)"
+		[ "$incomplete" -eq 0 ] || return 4
+		[ "$unresolved_hash" -eq 0 ] || return 3
+		return 1
+	fi
 
-  rm -f "$rf" "$stderr_log"
-  return 0
+	rm -f "$rf" "$stderr_log"
+	return 0
 }
 
 # The pipeline's whole-package-set build verification. Defined once because
@@ -475,23 +475,23 @@ run_nfb_build() {
 # check, and an engine absent from every substituter would be fetched from
 # upstream on every input bump.
 verify_all_packages() {
-  local all_packages expected_packages select system verify_rc=0
-  system=$(nat_system) || return 2
-  mkdir -p "$UPDATE_LOGS_DIR" || return 2
-  all_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-all-packages-XXXXXX) || return 2
-  expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
-  if ! nix eval --json ".#ciPackages.$system" --apply builtins.attrNames >"$all_packages" ||
-    ! select=$(python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
-      update-plan "$all_packages" "$expected_packages"); then
-    log_failure "Could not enumerate packages before verification"
-    return 2
-  fi
-  rm -f "$all_packages"
-  run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
-    --skip-cached --no-nom --no-link \
-    --flake ".#ciPackages.$system" --select "$select" || verify_rc=$?
-  [ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
-  return "$verify_rc"
+	local all_packages expected_packages select system verify_rc=0
+	system=$(nat_system) || return 2
+	mkdir -p "$UPDATE_LOGS_DIR" || return 2
+	all_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-all-packages-XXXXXX) || return 2
+	expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
+	if ! nix eval --json ".#ciPackages.$system" --apply builtins.attrNames >"$all_packages" ||
+		! select=$(python3 "$(dirname "${BASH_SOURCE[0]}")/ci-packages.py" \
+			update-plan "$all_packages" "$expected_packages"); then
+		log_failure "Could not enumerate packages before verification"
+		return 2
+	fi
+	rm -f "$all_packages"
+	run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
+		--skip-cached --no-nom --no-link \
+		--flake ".#ciPackages.$system" --select "$select" || verify_rc=$?
+	[ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
+	return "$verify_rc"
 }
 
 # Re-derive every sidecar-recorded fixed-output hash whose package
@@ -531,43 +531,43 @@ verify_all_packages() {
 # saw a fixed-output mismatch. See the note on `fodHashFixFn` in
 # lib/packaging.nix.
 fix_sidecar_hashes() {
-  local expr paths p rc=0
+	local expr paths p rc=0
 
-  # ── KNOWN GAP: this roster is narrower than the fixers that exist ─────
-  #
-  # IF A NIXPKGS BUMP BREAKS A HASH, this is why the automated repair may
-  # leave it unresolved. The retry now recognizes Nix's fixed-output mismatch
-  # and holds the input back, so a known stale hash no longer opens a PR.
-  # Tracked as GitHub issue #1570. Grep `fixCargoHash` or `fixSrcHash` to
-  # find every place the missing-fixer gap is written down.
-  #
-  # Two separate shortfalls, and only the first is about missing fixers:
-  #
-  #   1. Cargo packages without rustUpdateExtract and pnpm packages without
-  #      a declared fixer still lack automatic repair. Kimchi declares
-  #      fixPnpmDepsHash; other pnpm owners must opt into the same seam. The build then
-  #      fails with every available hash-derivation step reporting success;
-  #      the retry's fixed-output mismatch classification holds it back.
-  #
-  #   2. A FIXER EXISTS BUT IS NOT DISCOVERED. The expression below
-  #      collects dependency fixers only, so glab's
-  #      `passthru.fixSrcHash` has no caller at all — see the note on
-  #      `mkGoUpdateExtract` in lib/packaging.nix, which also explains why
-  #      that case presents as a CONFUSING `fixVendorHash` failure
-  #      ("goModules build failed without a '-go-modules' hash
-  #      mismatch") rather than as a src problem.
-  #
-  # Shortfall 1 remains a missing automatic repair, not a publication gap:
-  # adding a fixer means per-package `extraExtract` plumbing and is still
-  # deferred, while the input branch waits for a later sweep or human repair.
-  #
-  # Shortfall 2 is a one-line addition to the list below and is only
-  # unfixed because nobody has verified glab's fixer against a live
-  # fetcher change.
-  #
-  # `builtins.getAttr` keeps the expression free of brace-substitution
-  # sequences, so bash never tries to expand any part of it.
-  expr='let
+	# ── KNOWN GAP: this roster is narrower than the fixers that exist ─────
+	#
+	# IF A NIXPKGS BUMP BREAKS A HASH, this is why the automated repair may
+	# leave it unresolved. The retry now recognizes Nix's fixed-output mismatch
+	# and holds the input back, so a known stale hash no longer opens a PR.
+	# Tracked as GitHub issue #1570. Grep `fixCargoHash` or `fixSrcHash` to
+	# find every place the missing-fixer gap is written down.
+	#
+	# Two separate shortfalls, and only the first is about missing fixers:
+	#
+	#   1. Cargo packages without rustUpdateExtract and pnpm packages without
+	#      a declared fixer still lack automatic repair. Kimchi declares
+	#      fixPnpmDepsHash; other pnpm owners must opt into the same seam. The build then
+	#      fails with every available hash-derivation step reporting success;
+	#      the retry's fixed-output mismatch classification holds it back.
+	#
+	#   2. A FIXER EXISTS BUT IS NOT DISCOVERED. The expression below
+	#      collects dependency fixers only, so glab's
+	#      `passthru.fixSrcHash` has no caller at all — see the note on
+	#      `mkGoUpdateExtract` in lib/packaging.nix, which also explains why
+	#      that case presents as a CONFUSING `fixVendorHash` failure
+	#      ("goModules build failed without a '-go-modules' hash
+	#      mismatch") rather than as a src problem.
+	#
+	# Shortfall 1 remains a missing automatic repair, not a publication gap:
+	# adding a fixer means per-package `extraExtract` plumbing and is still
+	# deferred, while the input branch waits for a later sweep or human repair.
+	#
+	# Shortfall 2 is a one-line addition to the list below and is only
+	# unfixed because nobody has verified glab's fixer against a live
+	# fetcher change.
+	#
+	# `builtins.getAttr` keeps the expression free of brace-substitution
+	# sequences, so bash never tries to expand any part of it.
+	expr='let
       flake = builtins.getFlake (toString ./.);
       ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
       fixersOf = n:
@@ -580,62 +580,62 @@ fix_sidecar_hashes() {
         ];
     in builtins.concatMap fixersOf (builtins.attrNames ps)'
 
-  # stderr is deliberately NOT merged into this capture. `nix build`
-  # writes diagnostics there even when it SUCCEEDS — measured on a dirty
-  # worktree: `warning: Nix search path entry ... ignoring`, and on a cold
-  # store also `these N derivations will be built:`, the indented `.drv`
-  # lines under it, and `building '...'`. Merged, every one of those is
-  # read back below as if it were a store path and EXECUTED, so a repair
-  # in which every fixer succeeded still reports failure. Letting stderr
-  # flow to the inherited stream keeps it visible in real time: CI's prepare
-  # step already tees the whole target through
-  # `2>&1 | tee .update-logs/prepare.log`.
-  if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr"); then
-    log_failure "could not resolve sidecar hash fixers (nix error above)"
-    return 1
-  fi
+	# stderr is deliberately NOT merged into this capture. `nix build`
+	# writes diagnostics there even when it SUCCEEDS — measured on a dirty
+	# worktree: `warning: Nix search path entry ... ignoring`, and on a cold
+	# store also `these N derivations will be built:`, the indented `.drv`
+	# lines under it, and `building '...'`. Merged, every one of those is
+	# read back below as if it were a store path and EXECUTED, so a repair
+	# in which every fixer succeeded still reports failure. Letting stderr
+	# flow to the inherited stream keeps it visible in real time: CI's prepare
+	# step already tees the whole target through
+	# `2>&1 | tee .update-logs/prepare.log`.
+	if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr"); then
+		log_failure "could not resolve sidecar hash fixers (nix error above)"
+		return 1
+	fi
 
-  while IFS= read -r p; do
-    # Belt and braces on top of the stream split: only ever execute
-    # something that is actually an executable store path, so a stray
-    # diagnostic line can never be run as a command.
-    case "$p" in
-    /nix/store/*) ;;
-    *) continue ;;
-    esac
-    [ -x "$p" ] || continue
-    # Collect rather than abort: one package genuinely broken by the
-    # bump must not stop the others self-healing. The retry build is the
-    # authority on whether the tree is good.
-    "$p" || rc=1
-  done <<<"$paths"
+	while IFS= read -r p; do
+		# Belt and braces on top of the stream split: only ever execute
+		# something that is actually an executable store path, so a stray
+		# diagnostic line can never be run as a command.
+		case "$p" in
+		/nix/store/*) ;;
+		*) continue ;;
+		esac
+		[ -x "$p" ] || continue
+		# Collect rather than abort: one package genuinely broken by the
+		# bump must not stop the others self-healing. The retry build is the
+		# authority on whether the tree is good.
+		"$p" || rc=1
+	done <<<"$paths"
 
-  return "$rc"
+	return "$rc"
 }
 
 # Refresh source-derived toolchain metadata before dependency derivations are
 # evaluated. Go release packages own their order in mkGoUpdateExtract; Rust
 # release packages own theirs in mkRustReleaseUpdate.
 refresh_package_source_version() {
-  local name="$1" fixer_attr="$2" label="$3" has_fixer fixer
-  if ! has_fixer=$(nix eval --raw ".#$(nat_attr "$name")" --apply "p: builtins.toJSON (p ? $fixer_attr)"); then
-    log_failure "could not evaluate $name for a $label fixer (nix error above)"
-    return 1
-  fi
-  [ "$has_fixer" = true ] || return 0
-  if ! fixer=$(nix build --no-link --print-out-paths ".#$(nat_attr "$name").$fixer_attr"); then
-    log_failure "could not build $name $label fixer (nix error above)"
-    return 1
-  fi
-  "$fixer"
+	local name="$1" fixer_attr="$2" label="$3" has_fixer fixer
+	if ! has_fixer=$(nix eval --raw ".#$(nat_attr "$name")" --apply "p: builtins.toJSON (p ? $fixer_attr)"); then
+		log_failure "could not evaluate $name for a $label fixer (nix error above)"
+		return 1
+	fi
+	[ "$has_fixer" = true ] || return 0
+	if ! fixer=$(nix build --no-link --print-out-paths ".#$(nat_attr "$name").$fixer_attr"); then
+		log_failure "could not build $name $label fixer (nix error above)"
+		return 1
+	fi
+	"$fixer"
 }
 
 # git-branchless moves with its flake input; refresh its Rust recipe literal
 # before input verification evaluates the newly pinned source.
 refresh_input_rust_toolchains() {
-  local name="$1" packages package roster
-  # tryEval skips a ciPackages entry whose passthru throws at evaluation, so one broken package cannot hide git-branchless's refresher; input verification reports the broken one.
-  roster='let
+	local name="$1" packages package roster
+	# tryEval skips a ciPackages entry whose passthru throws at evaluation, so one broken package cannot hide git-branchless's refresher; input verification reports the broken one.
+	roster='let
   flake = builtins.getFlake (toString ./.);
   name = builtins.getEnv "NAT_UPDATE_NAME";
   ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
@@ -647,16 +647,16 @@ refresh_input_rust_toolchains() {
     in r.success && r.value;
   names = builtins.filter selected (builtins.attrNames ps);
 in builtins.concatStringsSep "\n" names'
-  if ! packages=$(NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
-    log_failure "could not discover Rust toolchain refreshers for input $name"
-    return 1
-  fi
-  while IFS= read -r package; do
-    [ -n "$package" ] || continue
-    if ! refresh_package_source_version "$package" fixRustToolchain Rust-toolchain; then
-      return 1
-    fi
-  done <<<"$packages"
+	if ! packages=$(NAT_UPDATE_NAME="$name" nix eval --impure --raw --expr "$roster"); then
+		log_failure "could not discover Rust toolchain refreshers for input $name"
+		return 1
+	fi
+	while IFS= read -r package; do
+		[ -n "$package" ] || continue
+		if ! refresh_package_source_version "$package" fixRustToolchain Rust-toolchain; then
+			return 1
+		fi
+	done <<<"$packages"
 }
 
 # Record that target $1 failed build verification while its PR still ships.
@@ -666,33 +666,33 @@ in builtins.concatStringsSep "\n" names'
 # or refreshed and the sweep still goes red. Returns non-zero when the record
 # cannot be written, so the caller can refuse to ship a failure nobody would see.
 record_verify_failure() {
-  local name=$1 attrs=${2:-}
-  [ -n "$attrs" ] || attrs="<failed attributes not reported>"
-  mkdir -p "$UPDATE_LOGS_DIR" || return 1
-  printf '%s\n' "$attrs" >"$UPDATE_LOGS_DIR/verify-failed-$name.txt" || return 1
-  log_failure "$name: build verification failed ($(paste -sd' ' <<<"$attrs")) -- the PR still opens; the CI lane fails after publishing it"
+	local name=$1 attrs=${2:-}
+	[ -n "$attrs" ] || attrs="<failed attributes not reported>"
+	mkdir -p "$UPDATE_LOGS_DIR" || return 1
+	printf '%s\n' "$attrs" >"$UPDATE_LOGS_DIR/verify-failed-$name.txt" || return 1
+	log_failure "$name: build verification failed ($(paste -sd' ' <<<"$attrs")) -- the PR still opens; the CI lane fails after publishing it"
 }
 
 # ── Version parsing ───────────────────────────────────────────────────────────
 
 # Parse nix-update output for "Update X -> Y" lines
 parse_pkg_version() {
-  local version_file="$1"
-  if [ -f "$version_file" ]; then
-    grep -oP 'Update \K\S+ -> \S+' "$version_file" | paste -sd', ' || true
-  fi
+	local version_file="$1"
+	if [ -f "$version_file" ]; then
+		grep -oP 'Update \K\S+ -> \S+' "$version_file" | paste -sd', ' || true
+	fi
 }
 
 # Parse nix flake update output for "Updated input 'name'" lines
 # Extracts the date portion: (YYYY-MM-DD) → (YYYY-MM-DD)
 parse_input_version() {
-  local version_file="$1"
-  local name="$2"
-  if [ -f "$version_file" ]; then
-    grep "Updated input '$name'" "$version_file" |
-      grep -oP '\(\K[0-9-]+(?=\))' |
-      paste -sd' → ' || true
-  fi
+	local version_file="$1"
+	local name="$2"
+	if [ -f "$version_file" ]; then
+		grep "Updated input '$name'" "$version_file" |
+			grep -oP '\(\K[0-9-]+(?=\))' |
+			paste -sd' → ' || true
+	fi
 }
 
 # ── Report helpers ────────────────────────────────────────────────────────────
@@ -700,26 +700,26 @@ parse_input_version() {
 # Format: STATUS: name [| version_detail] [(reason)]
 
 report_updated() {
-  local name="$1"
-  local detail="${2:-}"
-  local line="UPDATED: $name"
-  [ -n "$detail" ] && line="$line | $detail"
-  echo "$line" >>"$REPORT_FILE"
-  log_success "$line"
+	local name="$1"
+	local detail="${2:-}"
+	local line="UPDATED: $name"
+	[ -n "$detail" ] && line="$line | $detail"
+	echo "$line" >>"$REPORT_FILE"
+	log_success "$line"
 }
 
 report_unchanged() {
-  local name="$1"
-  echo "NO UPDATES: $name" >>"$REPORT_FILE"
-  log_info "NO UPDATES: $name"
+	local name="$1"
+	echo "NO UPDATES: $name" >>"$REPORT_FILE"
+	log_info "NO UPDATES: $name"
 }
 
 report_held_back() {
-  local name="$1"
-  local reason="$2"
-  local detail="${3:-}"
-  local line="HELD BACK: $name ($reason)"
-  [ -n "$detail" ] && line="HELD BACK: $name | $detail ($reason)"
-  echo "$line" >>"$REPORT_FILE"
-  log_failure "$line"
+	local name="$1"
+	local reason="$2"
+	local detail="${3:-}"
+	local line="HELD BACK: $name ($reason)"
+	[ -n "$detail" ] && line="HELD BACK: $name | $detail ($reason)"
+	echo "$line" >>"$REPORT_FILE"
+	log_failure "$line"
 }

@@ -37,49 +37,49 @@ GUARD
 # marker and are untouched. Strip any previous marker block before injecting
 # the current one, so migrations and repeated runs are idempotent.
 for hook in "$hooks_dir"/*; do
-  [ -f "$hook" ] || continue
-  grep -q 'prek' "$hook" || continue
-  grep -q -- '--config=' "$hook" || continue
+	[ -f "$hook" ] || continue
+	grep -q 'prek' "$hook" || continue
+	grep -q -- '--config=' "$hook" || continue
 
-  tmp="$(mktemp "$hooks_dir/.devenv-hook.XXXXXX")"
-  trap 'rm -f "$tmp"' EXIT
-  # shellcheck disable=SC2016 # $_devenv_config is literal hook-time shell.
-  sed 's#--config="[^"]*"#--config="$_devenv_config"#' "$hook" |
-    {
-      in_guard=""
-      injected=""
-      while IFS= read -r line || [ -n "$line" ]; do
-        if [ -n "$in_guard" ]; then
-          if [ "$line" = "$guard_end" ]; then
-            in_guard=""
-          fi
-          continue
-        fi
-        if [ "$line" = "$guard_begin" ]; then
-          in_guard=1
-          continue
-        fi
-        case "$line" in
-        'exec '*)
-          if [ -z "$injected" ]; then
-            printf '%s\n%s%s\n' "$guard_begin" "$guard_body" "$guard_end"
-            injected=1
-          fi
-          ;;
-        *) ;;
-        esac
-        printf '%s\n' "$line"
-      done
-    } >"$tmp"
+	tmp="$(mktemp "$hooks_dir/.devenv-hook.XXXXXX")"
+	trap 'rm -f "$tmp"' EXIT
+	# shellcheck disable=SC2016 # $_devenv_config is literal hook-time shell.
+	sed 's#--config="[^"]*"#--config="$_devenv_config"#' "$hook" |
+		{
+			in_guard=""
+			injected=""
+			while IFS= read -r line || [ -n "$line" ]; do
+				if [ -n "$in_guard" ]; then
+					if [ "$line" = "$guard_end" ]; then
+						in_guard=""
+					fi
+					continue
+				fi
+				if [ "$line" = "$guard_begin" ]; then
+					in_guard=1
+					continue
+				fi
+				case "$line" in
+				'exec '*)
+					if [ -z "$injected" ]; then
+						printf '%s\n%s%s\n' "$guard_begin" "$guard_body" "$guard_end"
+						injected=1
+					fi
+					;;
+				*) ;;
+				esac
+				printf '%s\n' "$line"
+			done
+		} >"$tmp"
 
-  # If prek changes its emitted shape, fail instead of publishing a hook that
-  # silently resolves some other config. An unterminated old block also lands
-  # here because stripping it consumes the exec line.
-  grep -qF -- "$guard_begin" "$tmp" || {
-    echo "hooks:isolate-config: refusing to install $hook without the bootstrap guard; it has no single-line 'exec', or an unterminated guard block swallowed it" >&2
-    exit 1
-  }
-  chmod --reference="$hook" "$tmp"
-  mv -f "$tmp" "$hook"
-  trap - EXIT
+	# If prek changes its emitted shape, fail instead of publishing a hook that
+	# silently resolves some other config. An unterminated old block also lands
+	# here because stripping it consumes the exec line.
+	grep -qF -- "$guard_begin" "$tmp" || {
+		echo "hooks:isolate-config: refusing to install $hook without the bootstrap guard; it has no single-line 'exec', or an unterminated guard block swallowed it" >&2
+		exit 1
+	}
+	chmod --reference="$hook" "$tmp"
+	mv -f "$tmp" "$hook"
+	trap - EXIT
 done

@@ -12,7 +12,7 @@ delegate_cloudflare_day=$(jq -cn 'now | floor / 86400 | floor | . * 86400')
 
 # shellcheck disable=SC2329 # usage_cpa calls it by name.
 cloudflare_request() {
-  jq -c --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" --argjson day "$delegate_cloudflare_day" '
+	jq -c --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" --argjson day "$delegate_cloudflare_day" '
     {auth_index: .auth_index, method: "POST",
      url: "https://api.cloudflare.com/client/v4/graphql",
      header: {Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"},
@@ -23,9 +23,9 @@ cloudflare_request() {
 
 # shellcheck disable=SC2329 # usage_cpa calls it by name.
 cloudflare_project() {
-  local normalized
-  normalized=$(jq -ce --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" \
-    --arg limit "$CLOUDFLARE_DAILY_NEURONS_LIMIT" --argjson day "$delegate_cloudflare_day" '
+	local normalized
+	normalized=$(jq -ce --rawfile account "$CLOUDFLARE_ACCOUNT_ID_FILE" \
+		--arg limit "$CLOUDFLARE_DAILY_NEURONS_LIMIT" --argjson day "$delegate_cloudflare_day" '
     if (.errors // [] | length) != 0 then error("GraphQL errors") else . end
     | .data.viewer.accounts
     | if length != 1 or .[0].accountTag != ($account | rtrimstr("\n")) then error("account") else .[0] end
@@ -35,7 +35,7 @@ cloudflare_project() {
     | if type != "number" or (isfinite | not) or . < 0 then error("neurons") else . end
     | {percent: (. / ($limit | tonumber) * 100), reset: ($day + 86400)}
   ' 2>/dev/null) || return 1
-  usage_project "$@" <<<"$normalized"
+	usage_project "$@" <<<"$normalized"
 }
 
 usage_cpa cloudflare "$1" cloudflare_request cloudflare_project "${CLOUDFLARE_AUTH_INDEX:-}" && exit 0

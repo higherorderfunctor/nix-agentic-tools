@@ -42,35 +42,35 @@ cat >"$payload_file" <<'PAYLOAD'
 PAYLOAD
 
 log_path() {
-  printf '%s/probe.log\n' "$KIRO_PROBE_STATE"
+	printf '%s/probe.log\n' "$KIRO_PROBE_STATE"
 }
 
 ok() {
-  printf 'ok   %s\n' "$1"
-  passed=$((passed + 1))
+	printf 'ok   %s\n' "$1"
+	passed=$((passed + 1))
 }
 
 bad() {
-  printf 'not ok - %s\n' "$1"
-  failed=$((failed + 1))
+	printf 'not ok - %s\n' "$1"
+	failed=$((failed + 1))
 }
 
 check() {
-  local label="$1" expected="$2" actual="$3"
-  if [ "$expected" = "$actual" ]; then
-    ok "$label"
-  else
-    bad "${label} (expected '${expected}', got '${actual}')"
-  fi
+	local label="$1" expected="$2" actual="$3"
+	if [ "$expected" = "$actual" ]; then
+		ok "$label"
+	else
+		bad "${label} (expected '${expected}', got '${actual}')"
+	fi
 }
 
 # Run one probe against the payload, capturing all three observables.
 run_probe() {
-  local script="$1" marker="$2" rc=0
-  probe_out="$work/out"
-  probe_err="$work/err"
-  "$bin_dir/$script" "$marker" <"$payload_file" >"$probe_out" 2>"$probe_err" || rc=$?
-  probe_rc="$rc"
+	local script="$1" marker="$2" rc=0
+	probe_out="$work/out"
+	probe_err="$work/err"
+	"$bin_dir/$script" "$marker" <"$payload_file" >"$probe_out" 2>"$probe_err" || rc=$?
+	probe_rc="$rc"
 }
 
 echo '--- probe-inject.sh (SessionStart / UserPromptSubmit shape) -----------'
@@ -79,9 +79,9 @@ run_probe probe-inject.sh inject-case
 check 'inject exits 0' 0 "$probe_rc"
 check 'inject writes NOTHING to stderr' 0 "$(wc -c <"$probe_err")"
 if grep -q '^PROBE inject-case fired' "$probe_out"; then
-  ok 'inject writes a marker line to stdout (the injected text)'
+	ok 'inject writes a marker line to stdout (the injected text)'
 else
-  bad "inject stdout is not the marker line: $(cat "$probe_out")"
+	bad "inject stdout is not the marker line: $(cat "$probe_out")"
 fi
 
 echo
@@ -90,10 +90,10 @@ echo '--- the payload is read to EOF, not one line -------------------------'
 # control that fails loudly if a probe ever regresses to `read -r line`.
 missing=0
 while IFS= read -r line; do
-  if ! grep -Fqx "$line" "$(log_path)"; then
-    missing=$((missing + 1))
-    printf '        missing payload line: %s\n' "$line"
-  fi
+	if ! grep -Fqx "$line" "$(log_path)"; then
+		missing=$((missing + 1))
+		printf '        missing payload line: %s\n' "$line"
+	fi
 done <"$payload_file"
 check 'every payload line reached the log' 0 "$missing"
 check 'exactly one record was written' 1 "$(grep -c '^=== ' "$(log_path)")"
@@ -114,14 +114,14 @@ run_probe probe-stop-loop.sh stop-case
 # Exit 1 is the whole point: it is the only code that continues the graph.
 check 'first call exits 1' 1 "$probe_rc"
 if grep -q 'PROBE stop-case injected' "$probe_err"; then
-  ok 'first call puts its reason on STDERR (stderr is read first)'
+	ok 'first call puts its reason on STDERR (stderr is read first)'
 else
-  bad "first call stderr is not the reason: $(cat "$probe_err")"
+	bad "first call stderr is not the reason: $(cat "$probe_err")"
 fi
 if grep -q "claim-stop-case" "$probe_err"; then
-  ok 'the injected text names the sentinel path, so re-arming is self-documenting'
+	ok 'the injected text names the sentinel path, so re-arming is self-documenting'
 else
-  bad 'the injected text does not name the sentinel path'
+	bad 'the injected text does not name the sentinel path'
 fi
 check 'first call writes nothing to stdout' 0 "$(wc -c <"$probe_out")"
 check 'the sentinel exists' 1 "$([ -d "$KIRO_PROBE_STATE/claim-stop-case" ] && echo 1 || echo 0)"
@@ -166,14 +166,14 @@ rm -rf "$KIRO_PROBE_STATE"
 "$mutated/probe-inject.sh" control-case <"$payload_file" >"$work/out" 2>"$work/err"
 control_missing=0
 while IFS= read -r line; do
-  if ! grep -Fqx "$line" "$(log_path)"; then
-    control_missing=$((control_missing + 1))
-  fi
+	if ! grep -Fqx "$line" "$(log_path)"; then
+		control_missing=$((control_missing + 1))
+	fi
 done <"$payload_file"
 if [ "$control_missing" -gt 0 ]; then
-  ok "the check rejects a line-oriented read (${control_missing} payload line(s) lost)"
+	ok "the check rejects a line-oriented read (${control_missing} payload line(s) lost)"
 else
-  bad 'a line-oriented read passed the payload check - the check proves nothing'
+	bad 'a line-oriented read passed the payload check - the check proves nothing'
 fi
 
 echo
@@ -185,11 +185,11 @@ printf 'assertions failed: %d\n' "$failed"
 # stopped early or a branch was silently not taken.
 expected=21
 if [ "$((passed + failed))" -ne "$expected" ]; then
-  printf 'FAIL: ran %d assertions, expected %d\n' "$((passed + failed))" "$expected" >&2
-  exit 1
+	printf 'FAIL: ran %d assertions, expected %d\n' "$((passed + failed))" "$expected" >&2
+	exit 1
 fi
 if [ "$failed" -ne 0 ]; then
-  printf 'FAIL: %d assertion(s) did not hold\n' "$failed" >&2
-  exit 1
+	printf 'FAIL: %d assertion(s) did not hold\n' "$failed" >&2
+	exit 1
 fi
 echo 'PASS'

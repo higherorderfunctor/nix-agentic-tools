@@ -19,22 +19,22 @@ base="$(mktemp -d "$work/run-$label-XXXX")"
 mkdir -p "$base"/{home,project,tmp,cache,config,data,runtime,state}
 chmod 700 "$base"/runtime
 if [[ -n ${HARNESS_SETTINGS:-} ]]; then
-  mkdir -p "$base/home/.config/kimchi/harness"
-  cp "$HARNESS_SETTINGS" "$base/home/.config/kimchi/harness/settings.json"
+	mkdir -p "$base/home/.config/kimchi/harness"
+	cp "$HARNESS_SETTINGS" "$base/home/.config/kimchi/harness/settings.json"
 fi
 if [[ -n ${WORKFLOWS:-} ]]; then
-  mkdir -p "$base/home/.config/kimchi/harness/packages"
-  ln -s "${KIMCHI_WORKFLOWS_PKG:-$(probe_pkg kimchi-workflows)}" "$base/home/.config/kimchi/harness/packages/workflows"
+	mkdir -p "$base/home/.config/kimchi/harness/packages"
+	ln -s "${KIMCHI_WORKFLOWS_PKG:-$(probe_pkg kimchi-workflows)}" "$base/home/.config/kimchi/harness/packages/workflows"
 fi
 read -r -a extra_env <<<"${EXTRA_ENV:-}"
 read -r -a prompt_args <<<"${PROMPT_ARGS--p hello}"
 stdin_file="$(realpath "${STDIN_FILE:-/dev/null}")"
 cd "$base/project"
 env -i HOME="$base/home" PATH="$PATH" TMPDIR="$base/tmp" XDG_CACHE_HOME="$base/cache" XDG_CONFIG_HOME="$base/config" \
-  XDG_DATA_HOME="$base/data" XDG_RUNTIME_DIR="$base/runtime" XDG_STATE_HOME="$base/state" \
-  KIMCHI_TELEMETRY_ENABLED=0 "${extra_env[@]}" \
-  timeout 60 "$kimchi" --mode "${MODE:-json}" --no-session -e "$here/observer.ts" "$@" "${prompt_args[@]}" \
-  <"$stdin_file" >"$base/stdout" 2>"$base/stderr" || echo "exit=$?" >>"$base/stderr"
+	XDG_DATA_HOME="$base/data" XDG_RUNTIME_DIR="$base/runtime" XDG_STATE_HOME="$base/state" \
+	KIMCHI_TELEMETRY_ENABLED=0 "${extra_env[@]}" \
+	timeout 60 "$kimchi" --mode "${MODE:-json}" --no-session -e "$here/observer.ts" "$@" "${prompt_args[@]}" \
+	<"$stdin_file" >"$base/stdout" 2>"$base/stderr" || echo "exit=$?" >>"$base/stderr"
 grep '^INV_TOOLS ' "$base/stderr" | sed 's/^INV_TOOLS //' | python3 -m json.tool >"$work/$label.tools.json"
 grep '^INV_COMMANDS ' "$base/stderr" | sed 's/^INV_COMMANDS //' | python3 -m json.tool >"$work/$label.commands.json"
 printf 'tools: %s\n' "$work/$label.tools.json"

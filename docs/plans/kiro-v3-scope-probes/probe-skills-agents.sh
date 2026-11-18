@@ -17,8 +17,8 @@ echo '{}' >"$R/home/.kiro/settings/cli.json"
 git -C "$R/work" init -q
 
 mkskill() { # $1=dir $2=name
-  mkdir -p "$1"
-  printf -- '---\nname: %s\ndescription: PROBE %s.\n---\nBody.\n' "$2" "$2" >"$1/SKILL.md"
+	mkdir -p "$1"
+	printf -- '---\nname: %s\ndescription: PROBE %s.\n---\nBody.\n' "$2" "$2" >"$1/SKILL.md"
 }
 mkskill "$R/work/.kiro/skills/real-skill" real-skill # real dir + real file (control)
 mkdir -p "$R/work/.kiro/skills/symfile-skill"        # real dir + SYMLINKED SKILL.md
@@ -34,19 +34,19 @@ ln -s "$R/src/symfile-agent.json" "$R/work/.kiro/agents/symfile-agent.json"
 # --- probe ---
 tmux kill-session -t "$S" 2>/dev/null || true
 tmux new-session -d -s "$S" -x 220 -y 60 -c "$R/work" \
-  env KIRO_HOME="$R/home/.kiro" kiro-cli chat --model gpt-5.6-luna
+	env KIRO_HOME="$R/home/.kiro" kiro-cli chat --model gpt-5.6-luna
 
 ready=0
 for _ in $(seq 1 50); do
-  sleep 1
-  pane="$(tmux capture-pane -p -S -200 -t "$S" 2>/dev/null || true)"
-  if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
-    ready=1
-    break
-  fi
-  if grep -qiE 'trust' <<<"$pane"; then
-    tmux send-keys -t "$S" Enter || true
-  fi
+	sleep 1
+	pane="$(tmux capture-pane -p -S -200 -t "$S" 2>/dev/null || true)"
+	if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
+		ready=1
+		break
+	fi
+	if grep -qiE 'trust' <<<"$pane"; then
+		tmux send-keys -t "$S" Enter || true
+	fi
 done
 echo "[probe] ready=$ready"
 

@@ -10,7 +10,7 @@ source="$(jq -r '.source // "startup"' <<<"$input")"
 
 # Emit context only on a fresh startup; on resume/clear/compact stay silent to demo matcher-awareness.
 if [ "$source" = "startup" ]; then
-  jq -nc '{
+	jq -nc '{
     hookSpecificOutput: {
       hookEventName: "SessionStart",
       additionalContext: "Repo uses bun test. Active branch context injected by hook.",

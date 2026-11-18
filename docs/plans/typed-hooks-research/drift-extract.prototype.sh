@@ -18,7 +18,7 @@ kver="$(python3 -c 'import json;print(json.load(open("'"$repo"'/overlays/kiro-cl
 
 # --- Claude: extract the event enum from the binary (RELIABLE anchor) ---
 mapfile -t claude_events < <(grep -aoE '"PreToolUse"(,"[A-Za-z]+")+' "$claude" |
-  grep -aoE '"[A-Za-z]+"' | tr -d '"' | sort -u)
+	grep -aoE '"[A-Za-z]+"' | tr -d '"' | sort -u)
 # Curated subset we would type first (classic load-bearing 9).
 claude_typed=(PreToolUse PostToolUse UserPromptSubmit Notification Stop SubagentStop PreCompact SessionStart SessionEnd)
 
@@ -30,9 +30,9 @@ echo "## CLAUDE claude-code $cver — binary embeds ${#claude_events[@]} events"
 # advisory: events in binary but NOT in our curated typed set
 missing_from_typed=()
 for e in "${claude_events[@]}"; do
-  hit=0
-  for t in "${claude_typed[@]}"; do [ "$e" = "$t" ] && hit=1 && break; done
-  [ "$hit" -eq 0 ] && missing_from_typed+=("$e")
+	hit=0
+	for t in "${claude_typed[@]}"; do [ "$e" = "$t" ] && hit=1 && break; done
+	[ "$hit" -eq 0 ] && missing_from_typed+=("$e")
 done
 echo "  [advisory] ${#missing_from_typed[@]} binary events NOT in the curated typed set (freeform tail):"
 printf '    %s\n' "${missing_from_typed[@]}" | paste -sd' ' -
@@ -40,18 +40,18 @@ printf '    %s\n' "${missing_from_typed[@]}" | paste -sd' ' -
 echo "  [blocking] typed events absent from binary (would be a bug):"
 bug=0
 for t in "${claude_typed[@]}"; do
-  grep -aqoF "\"$t\"" "$claude" || {
-    echo "    MISSING: $t"
-    bug=1
-  }
+	grep -aqoF "\"$t\"" "$claude" || {
+		echo "    MISSING: $t"
+		bug=1
+	}
 done
 [ "$bug" -eq 0 ] && echo "    none — all curated typed events present"
 
 echo "## KIRO kiro-cli $kver — documented-v3 triggers vs binary presence"
 for t in "${kiro_documented[@]}"; do
-  n="$(grep -acF "$t" "$kiro" 2>/dev/null || true)"
-  [ "$n" -gt 0 ] && st="present" || st="ABSENT(doc-ahead?)"
-  printf '    %-18s %-18s (%s literal hits)\n' "$t" "$st" "$n"
+	n="$(grep -acF "$t" "$kiro" 2>/dev/null || true)"
+	[ "$n" -gt 0 ] && st="present" || st="ABSENT(doc-ahead?)"
+	printf '    %-18s %-18s (%s literal hits)\n' "$t" "$st" "$n"
 done
 
 # --- Emit draft sidecars (the SSOT + provenance store) ---

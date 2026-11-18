@@ -14,8 +14,8 @@ command="$(jq -r '.tool_input.command // ""' <<<"$input")"
 [ -n "$command" ] || exit 0
 
 if [[ $command =~ ^grep\  ]]; then
-  echo "Use 'rg' (ripgrep) instead of 'grep'" >&2
-  exit 2 # exit 2 => block + stderr to Claude
+	echo "Use 'rg' (ripgrep) instead of 'grep'" >&2
+	exit 2 # exit 2 => block + stderr to Claude
 fi
 
 exit 0

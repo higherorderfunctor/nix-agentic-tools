@@ -14,7 +14,7 @@ export HOME="$out/home"
 "$U/kiro-cli" --version >"$out/version.txt"
 "$U/kiro-cli" --help >"$out/root.txt"
 for command in chat acp settings agent crew mcp serve; do
-  "$U/kiro-cli" "$command" --help >"$out/$command.txt" 2>&1
+	"$U/kiro-cli" "$command" --help >"$out/$command.txt" 2>&1
 done
 sha256sum "$U/.kiro-cli-wrapped" >"$out/binary.sha256"
 printf 'help: %s\n' "$out"

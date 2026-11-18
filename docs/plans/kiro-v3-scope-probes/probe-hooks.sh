@@ -22,22 +22,22 @@ tmux kill-session -t "$S" 2>/dev/null || true
 : >"$CAP.hooks"
 
 tmux new-session -d -s "$S" -x 220 -y 60 -c "$RIG/work" \
-  env KIRO_HOME="$RIG/home/.kiro" kiro-cli chat --model gpt-5.6-luna
+	env KIRO_HOME="$RIG/home/.kiro" kiro-cli chat --model gpt-5.6-luna
 
 ready=0
 for _ in $(seq 1 45); do
-  sleep 1
-  # Capture then match with a here-string, as the three sibling probes do.
-  # Piping capture-pane straight into `grep -qiE` breaks under this script's
-  # `set -euETo pipefail`: the readiness banner repeats throughout 400 lines
-  # of scrollback, so grep matches and exits long before tmux finishes
-  # writing, tmux dies with SIGPIPE (141), and the poisoned pipeline status
-  # makes the poll report "not ready" forever.
-  pane="$(tmux capture-pane -p -S -400 -t "$S" 2>/dev/null || true)"
-  if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
-    ready=1
-    break
-  fi
+	sleep 1
+	# Capture then match with a here-string, as the three sibling probes do.
+	# Piping capture-pane straight into `grep -qiE` breaks under this script's
+	# `set -euETo pipefail`: the readiness banner repeats throughout 400 lines
+	# of scrollback, so grep matches and exits long before tmux finishes
+	# writing, tmux dies with SIGPIPE (141), and the poisoned pipeline status
+	# makes the poll report "not ready" forever.
+	pane="$(tmux capture-pane -p -S -400 -t "$S" 2>/dev/null || true)"
+	if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
+		ready=1
+		break
+	fi
 done
 echo "[probe] ready=$ready"
 
@@ -45,11 +45,11 @@ echo "[probe] ready=$ready"
 tmux send-keys -t "$S" 'Reply with only the token DONEZO and nothing else.' Enter || true
 turn=0
 for _ in $(seq 1 45); do
-  sleep 1
-  if grep -q 'Stop' "$RIG/fired.log" 2>/dev/null; then
-    turn=1
-    break
-  fi
+	sleep 1
+	if grep -q 'Stop' "$RIG/fired.log" 2>/dev/null; then
+		turn=1
+		break
+	fi
 done
 sleep 3
 echo "[probe] turn-stop-detected=$turn"
@@ -68,9 +68,9 @@ tmux kill-session -t "$S" 2>/dev/null || true
 echo
 echo "=== fired.log (GROUND TRUTH — what v3 actually FIRED) ==="
 if [ -s "$RIG/fired.log" ]; then
-  sort -u "$RIG/fired.log" | sed 's/^/  fired: /'
+	sort -u "$RIG/fired.log" | sed 's/^/  fired: /'
 else
-  echo "  (nothing fired)"
+	echo "  (nothing fired)"
 fi
 echo
 echo "=== /hooks enumeration (what v3 LOADED for this workspace) ==="

@@ -27,8 +27,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 sessions_root="${1:-$HOME/.kiro/sessions}"
 
 if [ ! -d "$sessions_root" ]; then
-  echo "no sessions root at ${sessions_root} — nothing to verify against" >&2
-  exit 1
+	echo "no sessions root at ${sessions_root} — nothing to verify against" >&2
+	exit 1
 fi
 
 ok=0
@@ -38,68 +38,68 @@ v2_skipped=0
 
 shopt -s nullglob
 for bucket_dir in "$sessions_root"/*/; do
-  bucket="$(basename "${bucket_dir%/}")"
+	bucket="$(basename "${bucket_dir%/}")"
 
-  # The legacy v2 store is a sibling bucket literally named `cli`, with a flat
-  # per-conversation layout. It also contains sess_<uuid>.history files, so a
-  # `sess_` prefix alone does not mean v3 — exclude it by name.
-  if [ "$bucket" = "cli" ]; then
-    v2_skipped=$((v2_skipped + 1))
-    continue
-  fi
-  if ! [[ $bucket =~ ^[0-9a-f]{16}$ ]]; then
-    echo "SKIP  non-hex bucket: ${bucket}" >&2
-    skipped=$((skipped + 1))
-    continue
-  fi
+	# The legacy v2 store is a sibling bucket literally named `cli`, with a flat
+	# per-conversation layout. It also contains sess_<uuid>.history files, so a
+	# `sess_` prefix alone does not mean v3 — exclude it by name.
+	if [ "$bucket" = "cli" ]; then
+		v2_skipped=$((v2_skipped + 1))
+		continue
+	fi
+	if ! [[ $bucket =~ ^[0-9a-f]{16}$ ]]; then
+		echo "SKIP  non-hex bucket: ${bucket}" >&2
+		skipped=$((skipped + 1))
+		continue
+	fi
 
-  # Any one session in the bucket suffices: every session in a bucket shares
-  # the workspace path set that produced the bucket name.
-  metadata=""
-  for candidate in "$bucket_dir"*/session.json; do
-    metadata="$candidate"
-    break
-  done
-  if [ -z "$metadata" ]; then
-    skipped=$((skipped + 1))
-    continue
-  fi
+	# Any one session in the bucket suffices: every session in a bucket shares
+	# the workspace path set that produced the bucket name.
+	metadata=""
+	for candidate in "$bucket_dir"*/session.json; do
+		metadata="$candidate"
+		break
+	done
+	if [ -z "$metadata" ]; then
+		skipped=$((skipped + 1))
+		continue
+	fi
 
-  # Read workspacePaths one per line, then PROVE the read was lossless by
-  # comparing the element count against jq's own array length.
-  #
-  # A NUL-separated read is the textbook answer here, but emitting a NUL from
-  # jq means either a literal NUL byte in this file — which makes git classify
-  # the whole script as binary and costs every reviewable diff on it — or an
-  # escape sequence that is easy to mangle in transit. Both have already bitten
-  # in this directory. A line-oriented read plus a count check is escape-free,
-  # and it turns the single failure mode it has (a path containing a newline)
-  # into an explicit refusal rather than a silent mis-join. kiro_bucket still
-  # NUL-joins internally, via a printf escape rather than a literal byte.
-  mapfile -t paths < <(jq -r '.workspacePaths[]' "$metadata")
-  declared="$(jq -r '.workspacePaths | length' "$metadata")"
-  if [ "${#paths[@]}" -ne "$declared" ]; then
-    printf 'REFUSE %s: read %d path(s) but %d declared - a path contains a newline\n' \
-      "$bucket" "${#paths[@]}" "$declared" >&2
-    bad=$((bad + 1))
-    continue
-  fi
+	# Read workspacePaths one per line, then PROVE the read was lossless by
+	# comparing the element count against jq's own array length.
+	#
+	# A NUL-separated read is the textbook answer here, but emitting a NUL from
+	# jq means either a literal NUL byte in this file — which makes git classify
+	# the whole script as binary and costs every reviewable diff on it — or an
+	# escape sequence that is easy to mangle in transit. Both have already bitten
+	# in this directory. A line-oriented read plus a count check is escape-free,
+	# and it turns the single failure mode it has (a path containing a newline)
+	# into an explicit refusal rather than a silent mis-join. kiro_bucket still
+	# NUL-joins internally, via a printf escape rather than a literal byte.
+	mapfile -t paths < <(jq -r '.workspacePaths[]' "$metadata")
+	declared="$(jq -r '.workspacePaths | length' "$metadata")"
+	if [ "${#paths[@]}" -ne "$declared" ]; then
+		printf 'REFUSE %s: read %d path(s) but %d declared - a path contains a newline\n' \
+			"$bucket" "${#paths[@]}" "$declared" >&2
+		bad=$((bad + 1))
+		continue
+	fi
 
-  computed="$(kiro_bucket "${paths[@]}")"
-  if [ "$computed" = "$bucket" ]; then
-    ok=$((ok + 1))
-  else
-    bad=$((bad + 1))
-    printf 'MISMATCH bucket=%s computed=%s paths=%s\n' \
-      "$bucket" "$computed" "$(jq -c '.workspacePaths' "$metadata")" >&2
-  fi
+	computed="$(kiro_bucket "${paths[@]}")"
+	if [ "$computed" = "$bucket" ]; then
+		ok=$((ok + 1))
+	else
+		bad=$((bad + 1))
+		printf 'MISMATCH bucket=%s computed=%s paths=%s\n' \
+			"$bucket" "$computed" "$(jq -c '.workspacePaths' "$metadata")" >&2
+	fi
 done
 
 # The empty-set case is a separate code path (a literal, not a hash).
 global="$(kiro_bucket)"
 if [ "$global" != "_global" ]; then
-  printf 'MISMATCH empty path set produced %s, expected _global\n' "$global" >&2
-  bad=$((bad + 1))
+	printf 'MISMATCH empty path set produced %s, expected _global\n' "$global" >&2
+	bad=$((bad + 1))
 fi
 
 # Positive control for the separation logic. A path carrying a trailing space
@@ -110,8 +110,8 @@ fi
 spacey="$(kiro_bucket '/tmp/x ')"
 clean="$(kiro_bucket '/tmp/x')"
 if [ "$spacey" = "$clean" ]; then
-  echo 'MISMATCH trailing-space control collapsed - the reader is splitting on whitespace' >&2
-  bad=$((bad + 1))
+	echo 'MISMATCH trailing-space control collapsed - the reader is splitting on whitespace' >&2
+	bad=$((bad + 1))
 fi
 
 # Positive control for the joiner: two paths must not hash to the same value as
@@ -119,8 +119,8 @@ fi
 two="$(kiro_bucket '/tmp/a' '/tmp/b')"
 concat="$(kiro_bucket '/tmp/a/tmp/b')"
 if [ "$two" = "$concat" ]; then
-  echo 'MISMATCH join control collapsed - the separator is not being emitted' >&2
-  bad=$((bad + 1))
+	echo 'MISMATCH join control collapsed - the separator is not being emitted' >&2
+	bad=$((bad + 1))
 fi
 
 printf 'buckets reproduced: %d\n' "$ok"
@@ -132,11 +132,11 @@ printf 'v2 buckets skipped: %d\n' "$v2_skipped"
 # no bucket was examined, and that is exactly how a broken enumeration would
 # present.
 if [ "$ok" -eq 0 ]; then
-  echo 'FAIL: no buckets were examined - the enumeration found nothing to verify' >&2
-  exit 1
+	echo 'FAIL: no buckets were examined - the enumeration found nothing to verify' >&2
+	exit 1
 fi
 if [ "$bad" -ne 0 ]; then
-  printf 'FAIL: %d check(s) did not reproduce\n' "$bad" >&2
-  exit 1
+	printf 'FAIL: %d check(s) did not reproduce\n' "$bad" >&2
+	exit 1
 fi
 echo 'PASS'

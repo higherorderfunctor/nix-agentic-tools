@@ -121,13 +121,13 @@ readonly STEP_EFFORT_LEVEL="low"
 # ---------------------------------------------------------------------------
 
 if ! [[ $K =~ ^[0-9]+$ ]]; then
-  echo "refusing: DRAIN_BRANCHES must be a decimal integer (got '${K}')" >&2
-  exit 1
+	echo "refusing: DRAIN_BRANCHES must be a decimal integer (got '${K}')" >&2
+	exit 1
 fi
 
 if [ "$K" -lt 1 ]; then
-  echo "refusing: K=${K} — a drain needs at least one branch" >&2
-  exit 1
+	echo "refusing: K=${K} — a drain needs at least one branch" >&2
+	exit 1
 fi
 
 # The ceiling is DEFAULT_MAX_STEP_NODES = 20, and it binds directly: each branch
@@ -135,8 +135,8 @@ fi
 # node, independent of iterations or branch runtime), so K step nodes is the
 # whole budget. K=21 is not a slow workflow, it is a rejected one.
 if [ "$K" -gt 20 ]; then
-  echo "refusing: K=${K} exceeds maxStepNodes=20 — each branch spends one step node" >&2
-  exit 1
+	echo "refusing: K=${K} exceeds maxStepNodes=20 — each branch spends one step node" >&2
+	exit 1
 fi
 
 # ---------------------------------------------------------------------------
@@ -149,11 +149,11 @@ fi
 # ---------------------------------------------------------------------------
 
 emit() {
-  local name="$1"
-  shift
-  local out="$here/${name}.workflow.json"
-  jq "$@" >"$out"
-  printf 'wrote %s\n' "$out"
+	local name="$1"
+	shift
+	local out="$here/${name}.workflow.json"
+	jq "$@" >"$out"
+	printf 'wrote %s\n' "$out"
 }
 
 # --- smoke -----------------------------------------------------------------
@@ -176,10 +176,10 @@ emit() {
 # the workspace file and the agent's message stream after the run. Those are
 # observations; this was a control-flow directive wearing an assertion's name.
 emit smoke -n \
-  --arg agent "$WORKFLOW_AGENT" \
-  --arg model "$STEP_MODEL_ID" \
-  --arg effort "$STEP_EFFORT_LEVEL" \
-  --arg state_root "$STATE_ROOT" '
+	--arg agent "$WORKFLOW_AGENT" \
+	--arg model "$STEP_MODEL_ID" \
+	--arg effort "$STEP_EFFORT_LEVEL" \
+	--arg state_root "$STATE_ROOT" '
   {
     name: "mode-f-smoke",
     description: (
@@ -243,12 +243,12 @@ emit smoke -n \
 #     as success. That is the one failure mode a drain harness must not have.
 
 emit drain -n \
-  --argjson k "$K" \
-  --argjson iters "$MAX_ITERATIONS_PER_BRANCH" \
-  --arg agent "$WORKFLOW_AGENT" \
-  --arg model "$STEP_MODEL_ID" \
-  --arg effort "$STEP_EFFORT_LEVEL" \
-  --arg state_root "$STATE_ROOT" '
+	--argjson k "$K" \
+	--argjson iters "$MAX_ITERATIONS_PER_BRANCH" \
+	--arg agent "$WORKFLOW_AGENT" \
+	--arg model "$STEP_MODEL_ID" \
+	--arg effort "$STEP_EFFORT_LEVEL" \
+	--arg state_root "$STATE_ROOT" '
   # Two digits is always enough: K <= 20 is asserted by the generator. Fixed
   # width keeps shard ids sorting lexically the way they sort numerically.
   def shard_label: if . < 10 then "0" + tostring else tostring end;
@@ -362,12 +362,12 @@ emit drain -n \
 # header: a path still holding a template marker after substitution skips
 # containment validation entirely.
 emit drain-queue -n \
-  --argjson k "$K" \
-  --argjson iters "$MAX_ITERATIONS_PER_BRANCH" \
-  --arg agent "$WORKFLOW_AGENT" \
-  --arg model "$STEP_MODEL_ID" \
-  --arg effort "$STEP_EFFORT_LEVEL" \
-  --arg queue_root "$QUEUE_ROOT" '
+	--argjson k "$K" \
+	--argjson iters "$MAX_ITERATIONS_PER_BRANCH" \
+	--arg agent "$WORKFLOW_AGENT" \
+	--arg model "$STEP_MODEL_ID" \
+	--arg effort "$STEP_EFFORT_LEVEL" \
+	--arg queue_root "$QUEUE_ROOT" '
   def shard_label: if . < 10 then "0" + tostring else tostring end;
 
   {
@@ -443,7 +443,7 @@ emit drain-queue -n \
 # cannot supply because it contains neither.
 
 emit coverage -n \
-  --arg agent "$WORKFLOW_AGENT" '
+	--arg agent "$WORKFLOW_AGENT" '
   {
     name: "mode-f-contract-coverage",
     description: (

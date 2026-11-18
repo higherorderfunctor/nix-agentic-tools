@@ -17,9 +17,9 @@ S=kiroreal
 TMPCWD="$(mktemp -d /var/tmp/nat-realhome.XXXXXX)"
 
 cleanup() {
-  rm -f "$PROBE"
-  tmux kill-session -t "$S" 2>/dev/null || true
-  rm -rf "${TMPCWD:?}"
+	rm -f "$PROBE"
+	tmux kill-session -t "$S" 2>/dev/null || true
+	rm -rf "${TMPCWD:?}"
 }
 trap cleanup EXIT
 
@@ -44,23 +44,23 @@ tmux new-session -d -s "$S" -x 220 -y 60 -c "$TMPCWD" kiro-cli chat --model gpt-
 
 ready=0
 for _ in $(seq 1 60); do
-  sleep 1
-  pane="$(tmux capture-pane -p -S -400 -t "$S" 2>/dev/null || true)"
-  if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
-    ready=1
-    break
-  fi
-  # A fresh dir may raise a folder-trust prompt; nudge the default.
-  if grep -qiE 'trust' <<<"$pane"; then
-    tmux send-keys -t "$S" Enter || true
-  fi
+	sleep 1
+	pane="$(tmux capture-pane -p -S -400 -t "$S" 2>/dev/null || true)"
+	if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
+		ready=1
+		break
+	fi
+	# A fresh dir may raise a folder-trust prompt; nudge the default.
+	if grep -qiE 'trust' <<<"$pane"; then
+		tmux send-keys -t "$S" Enter || true
+	fi
 done
 echo "[probe] ready=$ready"
 
 tmux send-keys -t "$S" 'Reply with only the token DONEZO and nothing else.' Enter || true
 for _ in $(seq 1 60); do
-  sleep 1
-  if grep -q 'Stop' "$LOG" 2>/dev/null; then break; fi
+	sleep 1
+	if grep -q 'Stop' "$LOG" 2>/dev/null; then break; fi
 done
 sleep 3
 
@@ -84,10 +84,10 @@ grep -iE 'probeRealglobal|kiro-memory|no hooks' "$CAP.hooks" 2>/dev/null | sort 
 echo
 echo "=== ~/.kiro-memory changed? (a live symlinked autoMemory Stop would add an entry) ==="
 if [ "$mem_before" = "$mem_after" ]; then
-  echo "  UNCHANGED -> a symlinked global autoMemory hook did NOT fire"
+	echo "  UNCHANGED -> a symlinked global autoMemory hook did NOT fire"
 else
-  echo "  CHANGED:"
-  comm -13 <(printf '%s\n' "$mem_before") <(printf '%s\n' "$mem_after") | sed 's/^/    +/' || true
+	echo "  CHANGED:"
+	comm -13 <(printf '%s\n' "$mem_before") <(printf '%s\n' "$mem_after") | sed 's/^/    +/' || true
 fi
 echo
 echo "Settled reading: REALGLOBAL-* fires -> v3 DOES honor real-file global hooks in ~/.kiro/hooks;"

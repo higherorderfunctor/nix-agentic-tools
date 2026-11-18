@@ -13,10 +13,10 @@ printf '%s\n' '## binary' >"$out/pinned-cli.txt"
 "$binary" --version >>"$out/pinned-cli.txt"
 sha256sum "$binary" >>"$out/pinned-cli.txt"
 for pair in 'root --help' 'mcp mcp --help' 'mcp-serve mcp serve --help' 'agents agents --help' 'attach attach --help' 'stop stop --help' 'logs logs --help' 'rm rm --help'; do
-  name="${pair%% *}"
-  args="${pair#* }"
-  # Intentional word splitting converts the fixed command labels above to argv.
-  # shellcheck disable=SC2086
-  "$binary" $args >"$out/$name.txt"
+	name="${pair%% *}"
+	args="${pair#* }"
+	# Intentional word splitting converts the fixed command labels above to argv.
+	# shellcheck disable=SC2086
+	"$binary" $args >"$out/$name.txt"
 done
 printf 'captures: %s\n' "$out"

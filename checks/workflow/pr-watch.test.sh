@@ -18,8 +18,8 @@ trap 'rm -rf "$work"' EXIT
 
 mkdir "$work/bin"
 {
-  command -v bash | sed 's|^|#!|'
-  cat <<'STUB'
+	command -v bash | sed 's|^|#!|'
+	cat <<'STUB'
 set -euETo pipefail
 kind=meta pr=
 for arg; do
@@ -54,7 +54,7 @@ RUNS=https://github.com/o/r/actions/runs
 
 # Fixture builders; each takes an optional jq update applied to the default.
 meta() {
-  jq -nc --arg h "$H1" "{state: \"OPEN\", isDraft: false, headRefOid: \$h, baseRefName: \"main\",
+	jq -nc --arg h "$H1" "{state: \"OPEN\", isDraft: false, headRefOid: \$h, baseRefName: \"main\",
     mergeStateStatus: \"BLOCKED\", autoMergeRequest: null, reviews: {nodes: []}} | ${1:-.} |
     {data: {repository: {pullRequest: .}}}"
 }
@@ -63,35 +63,35 @@ threads() { jq -nc "[${1:-}] | {data: {repository: {pullRequest: {reviewThreads:
 checks() { jq -nc "[${1:-}] | {data: {repository: {object: {statusCheckRollup:
   {contexts: {pageInfo: {hasNextPage: false, endCursor: null}, nodes: .}}}}}}"; }
 check() { # check NAME STATUS CONCLUSION RUN JOB
-  printf '{"__typename":"CheckRun","name":"%s","status":"%s","conclusion":%s,"detailsUrl":"%s/%s/job/%s","checkSuite":{"workflowRun":{"databaseId":%s}}}' \
-    "$1" "$2" "$3" "$RUNS" "$4" "$5" "$4"
+	printf '{"__typename":"CheckRun","name":"%s","status":"%s","conclusion":%s,"detailsUrl":"%s/%s/job/%s","checkSuite":{"workflowRun":{"databaseId":%s}}}' \
+		"$1" "$2" "$3" "$RUNS" "$4" "$5" "$4"
 }
 runs() { jq -nc --arg h "$H1" "[${1:-}] | map(. + {head_sha: \$h}) | {workflow_runs: .}"; }
 
 # put PR POLL KIND JSON
 put() { mkdir -p "$FIX/$1/$2" && printf '%s' "$4" >"$FIX/$1/$2/$3.json"; }
 fresh() {
-  FIX=$(mktemp -d "$work/fix.XXXX")
-  export FIX
-  put 1 1 meta "$(meta)"
-  put 1 1 threads "$(threads)"
-  put 1 1 checks "$(checks)"
+	FIX=$(mktemp -d "$work/fix.XXXX")
+	export FIX
+	put 1 1 meta "$(meta)"
+	put 1 1 threads "$(threads)"
+	put 1 1 checks "$(checks)"
 }
 
 pass=0 fail=0
 # expect NAME EXIT EXPECTED-STDOUT [PRS...]
 expect() {
-  local name=$1 want_rc=$2 want=$3 got rc=0
-  shift 3
-  got=$(timeout 60 bash "$script" --repo o/r --interval 0 --settle 0 --timeout 10 "${@:-1}" 2>"$work/err") || rc=$?
-  if [ "$rc" = "$want_rc" ] && [ "$got" = "$want" ]; then
-    echo "ok   - $name"
-    pass=$((pass + 1))
-  else
-    printf 'FAIL - %s: exit %s (want %s)\n  got:  %s\n  want: %s\n  err:  %s\n' \
-      "$name" "$rc" "$want_rc" "$got" "$want" "$(cat "$work/err")" >&2
-    fail=$((fail + 1))
-  fi
+	local name=$1 want_rc=$2 want=$3 got rc=0
+	shift 3
+	got=$(timeout 60 bash "$script" --repo o/r --interval 0 --settle 0 --timeout 10 "${@:-1}" 2>"$work/err") || rc=$?
+	if [ "$rc" = "$want_rc" ] && [ "$got" = "$want" ]; then
+		echo "ok   - $name"
+		pass=$((pass + 1))
+	else
+		printf 'FAIL - %s: exit %s (want %s)\n  got:  %s\n  want: %s\n  err:  %s\n' \
+			"$name" "$rc" "$want_rc" "$got" "$want" "$(cat "$work/err")" >&2
+		fail=$((fail + 1))
+	fi
 }
 polls() { grep -qx "$1" "$FIX/.poll.${2:-1}" || { echo "FAIL - expected $1 polls" >&2 && fail=$((fail + 1)); }; }
 
@@ -216,7 +216,7 @@ put 1 2 meta "$(meta ".reviews.nodes = [{id: \"R1\", author: {login: \"copilot-p
 expect "review with a quota refusal" 0 "#1 review copilot-pull-request-reviewer COMMENTED on 5788f8d5: $quota"
 
 review() { # review ID LOGIN OID BODY
-  printf '{id: "%s", author: {login: "%s"}, state: "COMMENTED", commit: {oid: "%s"}, body: "%s"}' "$@"
+	printf '{id: "%s", author: {login: "%s"}, state: "COMMENTED", commit: {oid: "%s"}, body: "%s"}' "$@"
 }
 fresh
 put 1 2 meta "$(meta ".reviews.nodes = [$(review OLD bot "$H2" "old commit")]")"

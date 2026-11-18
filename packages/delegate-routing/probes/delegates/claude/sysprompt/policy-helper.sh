@@ -15,8 +15,8 @@ source "$here/../../common/pin.sh"
 work="$(probe_workdir claude-policy-helper)"
 export CLAUDE_BIN="${CLAUDE_BIN:-$(probe_pkg claude-code)/bin/claude}"
 bwrap --dev-bind / / --overlay-src /etc --tmp-overlay /etc --ro-bind "$here/etc-claude-code" /etc/claude-code \
-  "$here/run.sh" "$work" policy-helper - -- -p --model haiku \
-  --append-system-prompt-file "$here/append.md" --append-system-prompt "Inline append sentinel: APPINLINE-1313." hi
+	"$here/run.sh" "$work" policy-helper - -- -p --model haiku \
+	--append-system-prompt-file "$here/append.md" --append-system-prompt "Inline append sentinel: APPINLINE-1313." hi
 python3 -I - "$work/policy-helper" <<'PY'
 import json, pathlib, re, sys
 case = pathlib.Path(sys.argv[1])

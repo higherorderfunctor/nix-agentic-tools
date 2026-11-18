@@ -15,28 +15,28 @@ source "$here/resolve-recipe-file.sh"
 pass=0
 fail=0
 ok() {
-  echo "  ok   - $1"
-  pass=$((pass + 1))
+	echo "  ok   - $1"
+	pass=$((pass + 1))
 }
 ko() {
-  echo "  FAIL - $1" >&2
-  fail=$((fail + 1))
+	echo "  FAIL - $1" >&2
+	fail=$((fail + 1))
 }
 # assert_base <expected-basename> <path> <label>
 assert_base() {
-  if [ "$(basename "$2")" = "$1" ]; then
-    ok "$3"
-  else
-    ko "$3 (got $2)"
-  fi
+	if [ "$(basename "$2")" = "$1" ]; then
+		ok "$3"
+	else
+		ko "$3 (got $2)"
+	fi
 }
 
 # The old, buggy resolution — kept here only to demonstrate the
 # regression it caused on the fixture below.
 old_resolve() {
-  local git_url="$1" root="$2" repo_name
-  repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
-  grep -rl "$repo_name" "$root" --include='*.nix' | head -1
+	local git_url="$1" root="$2" repo_name
+	repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
+	grep -rl "$repo_name" "$root" --include='*.nix' | head -1
 }
 
 # ── Fixture: the exact shape that triggered the bug ────────────────────
@@ -113,17 +113,17 @@ assert_base "kiro-gateway.nix" "$got" "kiro-gateway -> kiro-gateway.nix"
 
 echo "test: missing mapping fails loudly (0 matches -> non-zero)"
 if resolve_recipe_file "https://github.com/nobody/does-not-exist.git" "$fixture" >/dev/null 2>&1; then
-  ko "missing mapping should have failed"
+	ko "missing mapping should have failed"
 else
-  ok "missing mapping returns non-zero"
+	ok "missing mapping returns non-zero"
 fi
 
 echo "test: ambiguous mapping fails loudly (>1 match -> non-zero)"
 cp "$fixture/mcp-servers/context7-mcp.nix" "$fixture/mcp-servers/context7-dup.nix"
 if resolve_recipe_file "https://github.com/upstash/context7.git" "$fixture" >/dev/null 2>&1; then
-  ko "ambiguous mapping should have failed"
+	ko "ambiguous mapping should have failed"
 else
-  ok "ambiguous mapping returns non-zero"
+	ok "ambiguous mapping returns non-zero"
 fi
 rm -f "$fixture/mcp-servers/context7-dup.nix"
 

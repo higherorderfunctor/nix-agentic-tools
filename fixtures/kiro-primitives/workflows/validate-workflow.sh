@@ -39,57 +39,57 @@ strict=0
 declare -a files=()
 
 usage() {
-  echo "usage: $(basename "$0") [--json] [--strict] <file.workflow.json>..." >&2
+	echo "usage: $(basename "$0") [--json] [--strict] <file.workflow.json>..." >&2
 }
 
 while [ "$#" -gt 0 ]; do
-  case "$1" in
-  --json)
-    emit_json=1
-    shift
-    ;;
-  --strict)
-    strict=1
-    shift
-    ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  --)
-    shift
-    files+=("$@")
-    break
-    ;;
-  -*)
-    echo "unknown option: $1" >&2
-    usage
-    exit 2
-    ;;
-  *)
-    files+=("$1")
-    shift
-    ;;
-  esac
+	case "$1" in
+	--json)
+		emit_json=1
+		shift
+		;;
+	--strict)
+		strict=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	--)
+		shift
+		files+=("$@")
+		break
+		;;
+	-*)
+		echo "unknown option: $1" >&2
+		usage
+		exit 2
+		;;
+	*)
+		files+=("$1")
+		shift
+		;;
+	esac
 done
 
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "no input files" >&2
-  usage
-  exit 2
+	echo "no input files" >&2
+	usage
+	exit 2
 fi
 
 if [ ! -f "$contract" ]; then
-  echo "contract program missing at ${contract}" >&2
-  exit 2
+	echo "contract program missing at ${contract}" >&2
+	exit 2
 fi
 
 # A file that does not parse never reaches jq's filter, so this one diagnostic
 # is synthesized here rather than in contract.jq. It is shaped identically to
 # the ones the filter emits so consumers need no special case.
 parse_error_diagnostic() {
-  local detail="$1"
-  jq -n --arg detail "$detail" '
+	local detail="$1"
+	jq -n --arg detail "$detail" '
     [{
       severity: "error",
       code: "E-JSON-PARSE",
@@ -115,8 +115,8 @@ parse_error_diagnostic() {
 # oblige a second registry entry and a second negative case for a difference no
 # consumer acts on.
 missing_file_diagnostic() {
-  local detail="$1"
-  jq -n --arg detail "$detail" '
+	local detail="$1"
+	jq -n --arg detail "$detail" '
     [{
       severity: "error",
       code: "E-FILE-MISSING",
@@ -129,70 +129,70 @@ missing_file_diagnostic() {
 overall=0
 
 for file in "${files[@]}"; do
-  # A missing file emits a DIAGNOSTIC rather than a bare stderr line. `--json`
-  # promises one object per input file and a consumer maps its arguments onto
-  # that stream positionally; skipping the emission broke that promise silently.
-  # The run still failed, but the file that caused it was absent from the
-  # output, so every later object was attributed to the wrong argument -- a
-  # worse outcome than the missing file itself, and invisible.
-  if [ ! -f "$file" ]; then
-    if [ -e "$file" ]; then
-      diagnostics="$(missing_file_diagnostic "exists but is not a regular file")"
-    else
-      diagnostics="$(missing_file_diagnostic "no such file")"
-    fi
-  else
-    # `jq empty` is the parse gate: it reads the document and produces nothing, so
-    # a failure here is a syntax failure and its stderr is the diagnostic detail.
-    parse_stderr=""
-    if ! parse_stderr="$(jq empty "$file" 2>&1)"; then
-      diagnostics="$(parse_error_diagnostic "$(printf '%s' "$parse_stderr" | tr '\n' ' ')")"
-    else
-      diagnostics="$(jq -f "$contract" "$file")"
-    fi
-  fi
+	# A missing file emits a DIAGNOSTIC rather than a bare stderr line. `--json`
+	# promises one object per input file and a consumer maps its arguments onto
+	# that stream positionally; skipping the emission broke that promise silently.
+	# The run still failed, but the file that caused it was absent from the
+	# output, so every later object was attributed to the wrong argument -- a
+	# worse outcome than the missing file itself, and invisible.
+	if [ ! -f "$file" ]; then
+		if [ -e "$file" ]; then
+			diagnostics="$(missing_file_diagnostic "exists but is not a regular file")"
+		else
+			diagnostics="$(missing_file_diagnostic "no such file")"
+		fi
+	else
+		# `jq empty` is the parse gate: it reads the document and produces nothing, so
+		# a failure here is a syntax failure and its stderr is the diagnostic detail.
+		parse_stderr=""
+		if ! parse_stderr="$(jq empty "$file" 2>&1)"; then
+			diagnostics="$(parse_error_diagnostic "$(printf '%s' "$parse_stderr" | tr '\n' ' ')")"
+		else
+			diagnostics="$(jq -f "$contract" "$file")"
+		fi
+	fi
 
-  errors="$(printf '%s' "$diagnostics" | jq '[.[] | select(.severity == "error")] | length')"
-  warnings="$(printf '%s' "$diagnostics" | jq '[.[] | select(.severity == "warn")] | length')"
+	errors="$(printf '%s' "$diagnostics" | jq '[.[] | select(.severity == "error")] | length')"
+	warnings="$(printf '%s' "$diagnostics" | jq '[.[] | select(.severity == "warn")] | length')"
 
-  if [ "$emit_json" -eq 1 ]; then
-    printf '%s' "$diagnostics" |
-      jq -c --arg file "$file" '{file: $file, diagnostics: .}'
-  else
-    if [ "$errors" -eq 0 ] && [ "$warnings" -eq 0 ]; then
-      printf '%s: PASS (0 errors, 0 warnings)\n' "$file"
-    else
-      # The verdict must be computed from the SAME condition as the exit code
-      # below, `--strict` included. Reading only `errors` printed
-      # "PASS with warnings" on a strict run that then exited non-zero: a human
-      # reading the output believed PASS, a script reading `$?` believed
-      # failure, and one run emitted both. That also contradicted this
-      # directory's own claim that `--strict` is what proves the warning channel
-      # reaches the exit code rather than being decorative.
-      if [ "$errors" -ne 0 ]; then
-        verdict=FAIL
-      elif [ "$strict" -eq 1 ]; then
-        verdict='FAIL (warnings are errors under --strict)'
-      else
-        verdict='PASS with warnings'
-      fi
-      printf '%s: %s\n' "$file" "$verdict"
-      # `basis` is printed because it changes what the author should do: an
-      # `engine` rejection will happen to them anyway, a `policy` one is this
-      # harness being stricter than the engine on purpose (see contract.jq).
-      printf '%s' "$diagnostics" |
-        jq -r '.[] | "  " + (if .severity == "error" then "ERROR" else "WARN " end)
+	if [ "$emit_json" -eq 1 ]; then
+		printf '%s' "$diagnostics" |
+			jq -c --arg file "$file" '{file: $file, diagnostics: .}'
+	else
+		if [ "$errors" -eq 0 ] && [ "$warnings" -eq 0 ]; then
+			printf '%s: PASS (0 errors, 0 warnings)\n' "$file"
+		else
+			# The verdict must be computed from the SAME condition as the exit code
+			# below, `--strict` included. Reading only `errors` printed
+			# "PASS with warnings" on a strict run that then exited non-zero: a human
+			# reading the output believed PASS, a script reading `$?` believed
+			# failure, and one run emitted both. That also contradicted this
+			# directory's own claim that `--strict` is what proves the warning channel
+			# reaches the exit code rather than being decorative.
+			if [ "$errors" -ne 0 ]; then
+				verdict=FAIL
+			elif [ "$strict" -eq 1 ]; then
+				verdict='FAIL (warnings are errors under --strict)'
+			else
+				verdict='PASS with warnings'
+			fi
+			printf '%s: %s\n' "$file" "$verdict"
+			# `basis` is printed because it changes what the author should do: an
+			# `engine` rejection will happen to them anyway, a `policy` one is this
+			# harness being stricter than the engine on purpose (see contract.jq).
+			printf '%s' "$diagnostics" |
+				jq -r '.[] | "  " + (if .severity == "error" then "ERROR" else "WARN " end)
                    + " [" + .basis + "] " + .code + "  " + .where
                    + "\n      " + .message'
-      printf '%s: %d error(s), %d warning(s)\n' "$file" "$errors" "$warnings"
-    fi
-  fi
+			printf '%s: %d error(s), %d warning(s)\n' "$file" "$errors" "$warnings"
+		fi
+	fi
 
-  if [ "$errors" -ne 0 ]; then
-    overall=1
-  elif [ "$strict" -eq 1 ] && [ "$warnings" -ne 0 ]; then
-    overall=1
-  fi
+	if [ "$errors" -ne 0 ]; then
+		overall=1
+	elif [ "$strict" -eq 1 ] && [ "$warnings" -ne 0 ]; then
+		overall=1
+	fi
 done
 
 exit "$overall"

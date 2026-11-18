@@ -14,8 +14,8 @@ cwd="$(jq -r '.cwd // ""' <<<"$input")"
 
 # Metadata-only contract: prove the hook can locate its own state from cwd (no prompt/response on stdin).
 if [ -n "$cwd" ] && [ -f "$cwd/.needs-tests" ]; then
-  jq -nc '{decision: "block", reason: "You have not run the tests yet."}'
-  exit 0
+	jq -nc '{decision: "block", reason: "You have not run the tests yet."}'
+	exit 0
 fi
 
 exit 0 # allow stop

@@ -31,9 +31,9 @@ bucket_dir="$KIRO_FIXTURE_HOME/.kiro/sessions/$bucket"
 session_dir="$bucket_dir/$session_id"
 
 fail() {
-  printf 'FAIL  %s\n' "$1" >&2
-  printf '      diagnosis: %s\n' "$2" >&2
-  exit 1
+	printf 'FAIL  %s\n' "$1" >&2
+	printf '      diagnosis: %s\n' "$2" >&2
+	exit 1
 }
 pass() { printf 'ok    %s\n' "$1"; }
 
@@ -42,14 +42,14 @@ pass() { printf 'ok    %s\n' "$1"; }
 # the only trustworthy confirmation; inferring it from the environment is what
 # the two-root confusion punishes.
 log="$(kiro_newest_log "$KIRO_FIXTURE_HOME")" || fail \
-  "no engine log under the scratch HOME" \
-  "the engine never started with this HOME, or it wrote its log elsewhere - so the redirect did NOT take"
+	"no engine log under the scratch HOME" \
+	"the engine never started with this HOME, or it wrote its log elsewhere - so the redirect did NOT take"
 
 logged_root="$(kiro_logged_session_root "$log")"
 expected_root="$KIRO_FIXTURE_HOME/.kiro/sessions"
 if [ "$logged_root" != "$expected_root" ]; then
-  fail "session root is '${logged_root}', expected '${expected_root}'" \
-    "the HOME redirect did not reach the engine. If this names the real home, the launcher resolved os.homedir() from something other than the HOME we set"
+	fail "session root is '${logged_root}', expected '${expected_root}'" \
+		"the HOME redirect did not reach the engine. If this names the real home, the launcher resolved os.homedir() from something other than the HOME we set"
 fi
 pass "HOME redirect took - engine initialized persistence at the scratch root"
 
@@ -57,8 +57,8 @@ pass "HOME redirect took - engine initialized persistence at the scratch root"
 # The presence of this marker is definitive: it is logged exactly when a load
 # targets an id that does not exist on disk.
 if grep -qF 'session.load.create_uncreated' "$log"; then
-  fail "'session.load.create_uncreated' is present in the log" \
-    "the seed was NOT found, so a fresh session was created with workflows OFF. Almost always a bucket mismatch: the bucket comes from the request cwd, so re-check that the launch cwd is exactly the workspace whose hash names the bucket"
+	fail "'session.load.create_uncreated' is present in the log" \
+		"the seed was NOT found, so a fresh session was created with workflows OFF. Almost always a bucket mismatch: the bucket comes from the request cwd, so re-check that the launch cwd is exactly the workspace whose hash names the bucket"
 fi
 pass "no create_uncreated marker - the load did not fall back to creating"
 
@@ -69,14 +69,14 @@ pass "no create_uncreated marker - the load did not fall back to creating"
 # paths, so they cannot disagree. One or zero means the seed was not picked up.
 loaded_count="$(grep -cF "Loaded session ${session_id}" "$log" || true)"
 if [ "$loaded_count" -eq 0 ]; then
-  fail "no 'Loaded session ${session_id}' line in the log" \
-    "the engine never loaded this id. Check the id passed to --resume-id against the seeded id"
+	fail "no 'Loaded session ${session_id}' line in the log" \
+		"the engine never loaded this id. Check the id passed to --resume-id against the seeded id"
 fi
 if [ "$loaded_count" -ne 2 ]; then
-  printf 'warn  expected 2 "Loaded session" lines, saw %d\n' "$loaded_count" >&2
-  printf '      not fatal, but the two-read invariant changed - re-read the load path before trusting other assertions\n' >&2
+	printf 'warn  expected 2 "Loaded session" lines, saw %d\n' "$loaded_count" >&2
+	printf '      not fatal, but the two-read invariant changed - re-read the load path before trusting other assertions\n' >&2
 else
-  pass "two 'Loaded session' lines - persistence and message store both read the seed"
+	pass "two 'Loaded session' lines - persistence and message store both read the seed"
 fi
 
 # --- 4. no rival session was created in the bucket -------------------------
@@ -86,16 +86,16 @@ fi
 shopt -s nullglob
 present=("$bucket_dir"/*/)
 if [ "${#present[@]}" -eq 0 ]; then
-  fail "the bucket ${bucket} contains no session directories at all" \
-    "the seed is gone, or the bucket was computed differently here than when seeding"
+	fail "the bucket ${bucket} contains no session directories at all" \
+		"the seed is gone, or the bucket was computed differently here than when seeding"
 fi
 if [ "${#present[@]}" -ne 1 ]; then
-  printf 'FAIL  bucket %s holds %d session directories, expected exactly 1\n' \
-    "$bucket" "${#present[@]}" >&2
-  printf '      diagnosis: a rival session was created alongside the seed, which is the on-disk footprint of the silent create-uncreated path\n' >&2
-  printf '      present:\n' >&2
-  printf '        %s\n' "${present[@]}" >&2
-  exit 1
+	printf 'FAIL  bucket %s holds %d session directories, expected exactly 1\n' \
+		"$bucket" "${#present[@]}" >&2
+	printf '      diagnosis: a rival session was created alongside the seed, which is the on-disk footprint of the silent create-uncreated path\n' >&2
+	printf '      present:\n' >&2
+	printf '        %s\n' "${present[@]}" >&2
+	exit 1
 fi
 pass "exactly one session directory in the bucket - nothing rival was created"
 
@@ -105,13 +105,13 @@ pass "exactly one session directory in the bucket - nothing rival was created"
 # the gate resolved false and persisted that — which means the seed was not the
 # thing that was read.
 if [ ! -f "$session_dir/session.json" ]; then
-  fail "no session.json at ${session_dir}" \
-    "the seeded session directory is gone"
+	fail "no session.json at ${session_dir}" \
+		"the seeded session directory is gone"
 fi
 flag="$(jq -r '.workflowsEnabled // "absent"' "$session_dir/session.json")"
 if [ "$flag" != "true" ]; then
-  fail "workflowsEnabled is '${flag}' after the run" \
-    "the gate resolved false and persisted it. The seed was present but not honored - re-check that the flag was at the TOP level of the file, since a nested key is silently stripped"
+	fail "workflowsEnabled is '${flag}' after the run" \
+		"the gate resolved false and persisted it. The seed was present but not honored - re-check that the flag was at the TOP level of the file, since a nested key is silently stripped"
 fi
 pass "workflowsEnabled is still true after the run"
 
@@ -121,11 +121,11 @@ pass "workflowsEnabled is still true after the run"
 # debug-only. One hit settles it; zero means fall back to info-level and
 # transcript assertions.
 if grep -q '"level":"debug"' "$log"; then
-  pass "debug-level logging reached the engine - adapter/hook diagnostics available"
+	pass "debug-level logging reached the engine - adapter/hook diagnostics available"
 else
-  printf 'note  no debug lines in the log: KIRO_LOG_LEVEL did not reach the engine\n'
-  printf '      fall back to info-level lines and transcript events; adapter selection and\n'
-  printf '      untrusted-workspace hook suppression will not be observable this run\n'
+	printf 'note  no debug lines in the log: KIRO_LOG_LEVEL did not reach the engine\n'
+	printf '      fall back to info-level lines and transcript events; adapter selection and\n'
+	printf '      untrusted-workspace hook suppression will not be observable this run\n'
 fi
 
 printf '\nPASS  the seed was loaded and the workflow gate saw it\n'

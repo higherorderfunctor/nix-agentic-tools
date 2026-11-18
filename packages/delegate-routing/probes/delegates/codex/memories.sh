@@ -19,7 +19,7 @@ work="$(probe_workdir "codex-$name")"
 pkg="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 export CODEX_BIN="$pkg/bin/codex"
 if [[ ! -f $work/models_cache.json ]]; then
-  python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
+	python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
 fi
 H="$work/home"
 rm -rf "$H" "$work/wire" "$work/asA" "$work/asB"
@@ -30,7 +30,7 @@ cp -rL "$P/extra/." "$H/"
 # jobs <label>: memory job rows after a session. A failed job is not retried in-session; it waits
 # for retry_at (retry_remaining counts down from 3).
 jobs() {
-  python3 - "$H" "$1" <<'EOF'
+	python3 - "$H" "$1" <<'EOF'
 import glob, sqlite3, sys, time
 dbs = glob.glob(f"{sys.argv[1]}/memories_*.sqlite")
 rows = sqlite3.connect(dbs[0]).execute("SELECT kind, status, retry_remaining, retry_at, last_error FROM jobs ORDER BY kind").fetchall() if dbs else []

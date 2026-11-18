@@ -34,21 +34,21 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # client parses ids too, so the real `sess_<uuid4>` shape is used to stay
 # indistinguishable to it.
 mint_uuid() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import uuid; print(uuid.uuid4())'
-  elif [ -r /proc/sys/kernel/random/uuid ]; then
-    cat /proc/sys/kernel/random/uuid
-  else
-    echo "no way to mint a uuid (need python3 or /proc/sys/kernel/random/uuid)" >&2
-    return 1
-  fi
+	if command -v python3 >/dev/null 2>&1; then
+		python3 -c 'import uuid; print(uuid.uuid4())'
+	elif [ -r /proc/sys/kernel/random/uuid ]; then
+		cat /proc/sys/kernel/random/uuid
+	else
+		echo "no way to mint a uuid (need python3 or /proc/sys/kernel/random/uuid)" >&2
+		return 1
+	fi
 }
 
 session_id="${1:-sess_$(mint_uuid)}"
 
 if ! [[ $session_id =~ ^[A-Za-z0-9_-]{1,128}$ ]]; then
-  echo "refusing: session id '${session_id}' fails the engine's own charset check" >&2
-  exit 1
+	echo "refusing: session id '${session_id}' fails the engine's own charset check" >&2
+	exit 1
 fi
 
 workspace="$KIRO_FIXTURE_WORKSPACE"
@@ -111,8 +111,8 @@ EOF
 # Fail loudly here rather than at load: a malformed seed is the one failure mode
 # that IS loud, so there is no reason to discover it later.
 if ! jq -e . "$session_dir/session.json" >/dev/null; then
-  echo "refusing: the seed is not valid JSON" >&2
-  exit 1
+	echo "refusing: the seed is not valid JSON" >&2
+	exit 1
 fi
 
 # The id must equal the directory basename. Load derives the path from the
@@ -120,16 +120,16 @@ fi
 # loads correctly once and then writes the session's subsequent state into a
 # different directory.
 if [ "$(jq -r '.id' "$session_dir/session.json")" != "$(basename "$session_dir")" ]; then
-  echo "refusing: metadata.id does not equal the session directory name" >&2
-  exit 1
+	echo "refusing: metadata.id does not equal the session directory name" >&2
+	exit 1
 fi
 
 # The stored workspacePaths must match the launch cwd, not merely hash into the
 # same bucket: a cwd-scoped listing compares the stored array against the
 # requested paths and skips a session whose primary path is absent.
 if [ "$(jq -r '.workspacePaths[0]' "$session_dir/session.json")" != "$workspace" ]; then
-  echo "refusing: workspacePaths[0] does not equal the scratch workspace" >&2
-  exit 1
+	echo "refusing: workspacePaths[0] does not equal the scratch workspace" >&2
+	exit 1
 fi
 
 printf 'session_id=%s\n' "$session_id"

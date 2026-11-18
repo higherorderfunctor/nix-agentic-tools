@@ -23,18 +23,18 @@ U="${KIRO_PKG:-$(probe_pkg kiro-cli.unwrapped)}/bin"
 C="$S/cases/$name"
 R="$(probe_workdir kiro)/$name/run"
 if [[ ${KEEP:-} != 1 || ! -d $R/home ]]; then
-  rm -rf "$R"
-  mkdir -p "$R/ws/p" "$R/ws/.kiro/agents"
-  if [[ -n ${KIRO_BASE_HOME:-} ]]; then
-    cp -r "$KIRO_BASE_HOME" "$R/home"
-  else
-    python3 "$S/fixture_home.py" "$R/home" >/dev/null
-  fi
-  chmod -R u+w "$R/home"
-  cp -r "$S/home-overlay/." "$R/home/"
-  if [[ -d $C/home-overlay ]]; then cp -r "$C/home-overlay/." "$R/home/"; fi
-  cp -r "$S/ws/." "$R/ws/"
-  if [[ -d $C/ws ]]; then cp -r "$C/ws/." "$R/ws/"; fi
+	rm -rf "$R"
+	mkdir -p "$R/ws/p" "$R/ws/.kiro/agents"
+	if [[ -n ${KIRO_BASE_HOME:-} ]]; then
+		cp -r "$KIRO_BASE_HOME" "$R/home"
+	else
+		python3 "$S/fixture_home.py" "$R/home" >/dev/null
+	fi
+	chmod -R u+w "$R/home"
+	cp -r "$S/home-overlay/." "$R/home/"
+	if [[ -d $C/home-overlay ]]; then cp -r "$C/home-overlay/." "$R/home/"; fi
+	cp -r "$S/ws/." "$R/ws/"
+	if [[ -d $C/ws ]]; then cp -r "$C/ws/." "$R/ws/"; fi
 fi
 rules="$S/cases/x.rules.json"
 if [[ -f $C/rules.json ]]; then rules="$C/rules.json"; fi

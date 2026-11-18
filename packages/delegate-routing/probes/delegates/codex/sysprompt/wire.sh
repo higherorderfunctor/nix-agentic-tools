@@ -18,14 +18,14 @@ wireC) spawns=spawnsC.json ;;
 wireBase) spawns=spawnsBase.json ;;
 wireL1 | wireL2) spawns=spawnsR.json ;;
 *)
-  printf 'unknown case: %s\n' "$name" >&2
-  exit 2
-  ;;
+	printf 'unknown case: %s\n' "$name" >&2
+	exit 2
+	;;
 esac
 work="$(probe_workdir codex-sysprompt)"
 pkg="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 if [[ ! -f $work/models_cache.json ]]; then
-  python3 "$D/../mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
+	python3 "$D/../mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
 fi
 out="$work/$name"
 home="$work/home-$name"

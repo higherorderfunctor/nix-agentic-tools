@@ -56,7 +56,7 @@ set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 warn_guard() {
-  printf 'WARNING: ai.claude.memoryCollisionGuard.enable: %s; continuing without the guard\n' "$1" >&2
+	printf 'WARNING: ai.claude.memoryCollisionGuard.enable: %s; continuing without the guard\n' "$1" >&2
 }
 
 # Baked at nix eval time by memoryCollisionGuard.nix; defaults keep the script
@@ -68,8 +68,8 @@ extra_dirs="${MEMORY_GUARD_EXTRA_DIRS:-}"
 
 envelope="$(cat)"
 if ! jq -e 'type == "object"' <<<"$envelope" >/dev/null 2>&1; then
-  warn_guard "invalid hook envelope"
-  exit 0
+	warn_guard "invalid hook envelope"
+	exit 0
 fi
 
 # jq must never be able to break a write. Every parse degrades to "not guarded".
@@ -77,7 +77,7 @@ file_path="$(jq -r '.tool_input.file_path // empty' <<<"$envelope" 2>/dev/null |
 session_id="$(jq -r '.session_id // empty' <<<"$envelope" 2>/dev/null || :)"
 
 if [ -z "$file_path" ]; then
-  exit 0
+	exit 0
 fi
 
 # `realpath -m` normalizes without requiring existence — a Write creates the file,
@@ -96,21 +96,21 @@ case "$resolved" in
 esac
 
 if [ "$guarded" -eq 0 ] && [ -n "$extra_dirs" ]; then
-  while IFS= read -r extra_dir; do
-    if [ -n "$extra_dir" ]; then
-      case "$resolved" in
-      "$extra_dir"/*)
-        guarded=1
-        break
-        ;;
-      *) : ;;
-      esac
-    fi
-  done <<<"$extra_dirs"
+	while IFS= read -r extra_dir; do
+		if [ -n "$extra_dir" ]; then
+			case "$resolved" in
+			"$extra_dir"/*)
+				guarded=1
+				break
+				;;
+			*) : ;;
+			esac
+		fi
+	done <<<"$extra_dirs"
 fi
 
 if [ "$guarded" -eq 0 ]; then
-  exit 0
+	exit 0
 fi
 
 marker_dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-memory-collision-guard"
@@ -119,7 +119,7 @@ marker_dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-memory-collision-guard"
 # separate collision risk, so each earns one pause. Keying by session alone would
 # guard the first write of a session and wave through every later one.
 if [ -z "$session_id" ]; then
-  session_id=nosession
+	session_id=nosession
 fi
 session_id="${session_id//[^A-Za-z0-9._-]/_}"
 # Hash rather than a sanitized path: memory paths run long enough to threaten the
@@ -128,26 +128,26 @@ path_key="$(printf '%s' "$resolved" | sha256sum | cut -c1-16)"
 marker="$marker_dir/${session_id}-${path_key}"
 
 if [ -e "$marker" ]; then
-  exit 0
+	exit 0
 fi
 
 # Record BEFORE denying. If the marker cannot be written the guard must stand down
 # entirely — see the fail-open note in the header. This is the one ordering in the
 # script that is not merely defensive.
 if mkdir -p "$marker_dir" 2>/dev/null; then
-  chmod 700 "$marker_dir" 2>/dev/null || :
-  # XDG_RUNTIME_DIR is tmpfs and clears on logout; the /tmp fallback accumulates.
-  find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
+	chmod 700 "$marker_dir" 2>/dev/null || :
+	# XDG_RUNTIME_DIR is tmpfs and clears on logout; the /tmp fallback accumulates.
+	find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
 else
-  warn_guard "cannot create marker directory"
-  exit 0
+	warn_guard "cannot create marker directory"
+	exit 0
 fi
 
 if touch "$marker" 2>/dev/null; then
-  :
+	:
 else
-  warn_guard "cannot write session marker"
-  exit 0
+	warn_guard "cannot write session marker"
+	exit 0
 fi
 
 memory_dir="$(dirname -- "$resolved")"
@@ -159,30 +159,30 @@ cutoff="$((now - window_minutes * 60))"
 listing=""
 recent_count=0
 while IFS=$'\t' read -r epoch neighbour; do
-  if [ -z "$neighbour" ]; then
-    continue
-  fi
-  epoch_int="${epoch%.*}"
-  stamp="$(date -d "@$epoch_int" '+%Y-%m-%d %H:%M' 2>/dev/null || printf 'unknown')"
-  description="$(sed -n '1,20{/^description:/{s/^description:[[:space:]]*//;p;q;};}' -- "$neighbour" 2>/dev/null || :)"
-  flag=""
-  if [ "$epoch_int" -ge "$cutoff" ]; then
-    flag="   <-- written in the last ${window_minutes}m"
-    recent_count="$((recent_count + 1))"
-  fi
-  listing="${listing}  ${stamp}  $(basename -- "$neighbour")${flag}"$'\n'
-  if [ -n "$description" ]; then
-    listing="${listing}            ${description}"$'\n'
-  fi
+	if [ -z "$neighbour" ]; then
+		continue
+	fi
+	epoch_int="${epoch%.*}"
+	stamp="$(date -d "@$epoch_int" '+%Y-%m-%d %H:%M' 2>/dev/null || printf 'unknown')"
+	description="$(sed -n '1,20{/^description:/{s/^description:[[:space:]]*//;p;q;};}' -- "$neighbour" 2>/dev/null || :)"
+	flag=""
+	if [ "$epoch_int" -ge "$cutoff" ]; then
+		flag="   <-- written in the last ${window_minutes}m"
+		recent_count="$((recent_count + 1))"
+	fi
+	listing="${listing}  ${stamp}  $(basename -- "$neighbour")${flag}"$'\n'
+	if [ -n "$description" ]; then
+		listing="${listing}            ${description}"$'\n'
+	fi
 done < <(find "$memory_dir" -maxdepth 1 -type f -name '*.md' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n "$list_count")
 
 if [ -z "$listing" ]; then
-  listing="  (no existing memory files found in $memory_dir)"$'\n'
+	listing="  (no existing memory files found in $memory_dir)"$'\n'
 fi
 
 concurrency_note="No memory file here was written in the last ${window_minutes} minutes."
 if [ "$recent_count" -gt 0 ]; then
-  concurrency_note="${recent_count} file(s) below were written in the last ${window_minutes} minutes. That is a CONCURRENT SESSION signal — it did not see your write and you did not see its."
+	concurrency_note="${recent_count} file(s) below were written in the last ${window_minutes} minutes. That is a CONCURRENT SESSION signal — it did not see your write and you did not see its."
 fi
 
 reason="Memory-collision guard: paused once before your first write to $(basename -- "$resolved") this session.

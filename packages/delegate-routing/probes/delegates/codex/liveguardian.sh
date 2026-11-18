@@ -19,26 +19,26 @@ pkg="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 src="$(probe_pkg chatgpt-codex.src)"
 auth="$HOME/.codex/auth.json"
 [[ -f $auth ]] || {
-  printf 'no %s: log in with codex login first\n' "$auth" >&2
-  false
+	printf 'no %s: log in with codex login first\n' "$auth" >&2
+	false
 }
 # CHATGPT_ACCESS_TOKEN_REFRESH_WINDOW_MINUTES = 5 (login/src/auth/manager.rs); keep a margin.
 exp="$(jq -r '.tokens.access_token | split(".")[1] | gsub("-";"+") | gsub("_";"/") | . + ("=" * ((4 - length % 4) % 4)) | @base64d | fromjson | .exp' "$auth")"
 if ((exp < $(date +%s) + 3600)); then
-  printf 'access token expires within the hour; run any codex command once so ~/.codex refreshes it, then retry\n' >&2
-  false
+	printf 'access token expires within the hour; run any codex command once so ~/.codex refreshes it, then retry\n' >&2
+	false
 fi
 S="$(mktemp -d -t codex-liveguardian.XXXXXX)"
 proxy=""
 cleanup() {
-  if [[ -n $proxy ]]; then kill "$proxy" 2>/dev/null || :; fi
-  rm -rf "$S"
+	if [[ -n $proxy ]]; then kill "$proxy" 2>/dev/null || :; fi
+	rm -rf "$S"
 }
 trap cleanup EXIT
 mkdir -p "$S/home" "$S/plain" "$S/wire"
 (
-  umask 077
-  cp "$auth" "$S/home/auth.json"
+	umask 077
+	cp "$auth" "$S/home/auth.json"
 )
 cat >"$S/home/config.toml" <<EOF
 model = "$model"
@@ -67,7 +67,7 @@ proxy=$!
 sleep 0.5
 CODEX_BIN="$pkg/bin/codex" python3 "$D/asclient.py" "$S/home" "$S/as" "$S/plain" "$S/probe.json"
 if ! cmp -s "$auth" "$S/home/auth.json"; then
-  printf 'WARNING: the scratch auth.json changed (token refreshed); copy it back to %s before using codex again\n' "$auth" >&2
+	printf 'WARNING: the scratch auth.json changed (token refreshed); copy it back to %s before using codex again\n' "$auth" >&2
 fi
 python3 - "$S/wire" "$src/codex-rs/models-manager/models.json" "$S/as/as.jsonl" "${PROBE_OUT:-}" <<'EOF'
 import hashlib, json, os, pathlib, sys

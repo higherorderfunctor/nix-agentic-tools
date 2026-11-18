@@ -14,10 +14,10 @@ codex="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}/bin/codex"
 export CODEX_HOME="$work/home"
 mkdir -p "$work/help" "$CODEX_HOME"
 for sub in root exec exec_resume exec_fork exec_review review agents queue app-server app-server_daemon \
-  remote-control cloud cloud_exec exec-server mcp resume fork; do
-  args=()
-  if [[ $sub != root ]]; then IFS=_ read -r -a args <<<"$sub"; fi
-  "$codex" --no-daemon "${args[@]}" --help >"$work/help/$sub.txt" 2>&1 || printf 'exit %s\n' "$?" >>"$work/help/$sub.txt"
+	remote-control cloud cloud_exec exec-server mcp resume fork; do
+	args=()
+	if [[ $sub != root ]]; then IFS=_ read -r -a args <<<"$sub"; fi
+	"$codex" --no-daemon "${args[@]}" --help >"$work/help/$sub.txt" 2>&1 || printf 'exit %s\n' "$?" >>"$work/help/$sub.txt"
 done
 "$codex" --no-daemon features list >"$work/help/features.txt" 2>&1
 "$codex" --no-daemon app-server generate-json-schema --out "$work/schema"
