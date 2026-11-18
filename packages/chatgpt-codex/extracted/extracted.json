@@ -1394,6 +1394,14 @@
     },
     {
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6.2-astra"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6.2-sol"
+    },
+    {
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
       "slug": "gpt-daybreak-blue-latest"
     },
     {
