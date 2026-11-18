@@ -96,10 +96,12 @@ their transport defaults. A maker-wide offer is refused at the credential's
 offered list and changes rendered credential defaults.
 `ai.cliproxyapi.servedModels.<vendor>.<canonical-id>` maps each identity to
 exact served spellings, supplied by the vendor owner and extensible by
-consumers. The selected spellings must identify known extracted transport
-metadata; an unknown mapping is refused with its vendor and model. The full
-extracted Go catalog supplies credential defaults; explicit API and model
-overrides select what a consumer serves.
+consumers. OpenCode Go matches the declared id or a served spelling to an
+extracted model's id or canonical id, and refuses a declared model with no
+extracted transport entry. Zhipuai serves the first spelling that appears in its
+extracted catalog, or the declared id for a custom identity. The full extracted
+Go catalog supplies credential defaults; explicit API and model overrides select
+what a consumer serves.
 
 Set `excludeMakers` on an individual API-key credential to keep it off models
 served by other subscriptions, while retaining the vendor's evolving defaults:

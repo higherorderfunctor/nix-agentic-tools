@@ -99,7 +99,8 @@
     };
     cliproxyapi.servedModels = {
       other.test-beta-1 = ["short"];
-      zhipuai.test-alpha-1 = ["short"];
+      zhipuai.test-alpha-1 = ["short" "solo"];
+      zhipuai.test-alpha-2 = ["test-alpha-1"];
     };
     programs.delegate-routing = {
       enable = true;
@@ -147,12 +148,16 @@
       inherit credential;
       api = "chat";
     }) ["first" "second"]);
-    selection = import ../lib/select-families.nix {inherit lib;};
+    selection = import ../lib/select-families.nix {
+      inherit lib;
+      servedModels = config.ai.cliproxyapi.servedModels;
+    };
     validate = selection.validateId catalog;
     content = config.ai.internal.roots.delegate-routing-content;
     args = {
       inherit catalog;
       cpaRoutes = routes;
+      inherit (config.ai.cliproxyapi) servedModels;
       inherit (config.ai.programs.delegate-routing) families skill;
       models = lib.mapAttrs (_: settings: settings.models) config.ai.programs.delegate-routing.runtimes;
       runtime = "claude";
@@ -189,6 +194,22 @@
           (view {
             catalog = catalog // {models = catalog.models // {test-alpha-1 = catalog.models.test-alpha-1 // {maker = null;};};};
           }).routes;
+        "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
+        "native alias spelling rewritten" = let
+          aliasRoutes =
+            (view {
+              cpaRoutes = {};
+              resolvedAgentFiles.alpha = {
+                family = args.families.fixture.alpha;
+                id = "solo";
+              };
+            }).routes;
+        in
+          lib.any (
+            route:
+              lib.any (technique: technique.model.value == "solo") route.techniques
+          )
+          aliasRoutes;
         "explicit agent pin escapes selected client" =
           refuses
           (view {
@@ -250,7 +271,6 @@
             }).routes).pool
           == "configured"
           && lib.length overlapping.claude == 3;
-        "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
         "native launch skips identity validation" = refuses (validate null "missing");
         "null-maker concrete launch succeeds" = refuses (validate routes.claude "test-unknown-1");
         "outside-client concrete launch succeeds" = refuses (validate routes.claude "test-beta-1");
@@ -258,7 +278,8 @@
         "singular credential replaces family pool" = (lib.head (view {}).routes).pool == null;
         "unknown offers disappear" = (lib.last routes.claude).maker == null;
         "unoffered alias borrows another vendor identity" = refuses (validate (oauth "wide") "short");
-        "native launch accepts noncanonical transport spelling" = refuses (validate null "short");
+        "ambiguous native alias chooses first identity" = refuses (validate null "short");
+        "native launch drops noncanonical spelling" = validate null "solo" == "solo";
         "vendor alias borrows another vendor" =
           validate
           (clientRoutes [

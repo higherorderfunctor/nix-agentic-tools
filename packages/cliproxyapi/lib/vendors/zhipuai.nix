@@ -21,12 +21,9 @@ in {
     // {
       codexShellArgCleanup = true;
       models = map (id: let
-        spellings = servedModels.${id} or [];
-        upstream = lib.findFirst (name: lib.elem name extracted.models) null spellings;
+        spellings = [id] ++ (servedModels.${id} or []);
       in
-        if upstream == null
-        then throw "cliproxyapi zhipuai: catalog model `${id}` has unknown served ids ${builtins.toJSON spellings}; no extracted transport metadata."
-        else upstream)
+        lib.findFirst (name: lib.elem name extracted.models) id spellings)
       merged.vendors.zhipuai.models;
       toolAliases.ToolSearch = "ToolSearch_";
     };

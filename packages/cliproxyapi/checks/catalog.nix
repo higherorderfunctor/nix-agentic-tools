@@ -257,18 +257,19 @@
         (builtins.tryEval (builtins.deepSeq
           (evaluate [fixture {ai.catalog.vendors.${vendor}.models = ["fixture-missing-identity"];}]).config.ai.cliproxyapi.instances.main.credentials.${vendor}
           true)).success;
-      # A selected identity cannot silently render an unmeasured owner spelling.
-      acceptsUnknownServed = vendor: id:
+      # Go transport metadata is measured; a declared identity with no match still refuses.
+      acceptsUnmeasuredGoServed =
         (builtins.tryEval (builtins.deepSeq
           (evaluate [
             fixture
             {
-              ai.catalog.vendors.${vendor}.models = [id];
-              ai.cliproxyapi.servedModels.${vendor}.${id} = ["fixture-unmeasured"];
+              ai.catalog = {
+                models.fixture-go-custom.source = ["configured custom Go model"];
+                vendors.opencode-go.models = ["fixture-go-custom"];
+              };
+              ai.cliproxyapi.servedModels.opencode-go.fixture-go-custom = ["fixture-go-unmeasured"];
             }
-          ]).config.ai.cliproxyapi.instances.main.credentials.${
-            vendor
-          }
+          ]).config.ai.cliproxyapi.instances.main.credentials.opencode-go
           true)).success;
       # Repeated owner declarations describe one offer, including equal-priority module merges.
       repeated = vendor: id:
@@ -309,6 +310,22 @@
       ];
       constructed = import ../lib/providers.nix {inherit lib catalog;};
       expectedZhipuai = lib.genAttrs (builtins.attrNames zhipuai.apis) (_: sorted zhipuai.models);
+      unmeasuredGoAlias = render (evaluate [
+        fixture
+        {
+          ai.catalog.vendors.opencode-go.models = [chosen];
+          ai.cliproxyapi.servedModels.opencode-go.${chosen} = ["fixture-unmeasured"];
+        }
+      ]);
+      customZhipuai = render (evaluate [
+        fixture
+        {
+          ai.catalog = {
+            models.fixture-zhipuai-custom.source = ["configured custom Zhipuai model"];
+            vendors.zhipuai.models = ["fixture-zhipuai-custom"];
+          };
+        }
+      ]);
       expectedNarrowGo = {${nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}} = [chosen];};
       cases =
         catalogShapes
@@ -325,6 +342,7 @@
             && !(builtins.tryEval (builtins.deepSeq ambiguousExclusion.config.ai.cliproxyapi.instances.main.credentials true)).success;
           "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
           "configured vendor-scoped served spellings ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
+          "custom Zhipuai identity loses id fallback" = offers customZhipuai "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: ["fixture-zhipuai-custom"]);
           "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zhipuai.models);
           "empty exclusions change rendered defaults" = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = [];}]) == settings;
           "excluded explicit aliases survive or unknown makers disappear" = offers explicitSettings "filtered" == {chat = sorted expectedExplicit;};
@@ -385,7 +403,8 @@
           "session header missing from API block" = lib.all (api: (block result.config.ai.cliproxyapi.instances.main.settings families.${api} "opencode-go").headers.x-opencode-session == manual.literalHeader pkgs "$CPA-SESSION-ID") (builtins.attrNames expectedGo);
           "standalone constructor diverges from module defaults" = manual.vendors == constructed.vendors;
           "unknown identity reaches vendor transport defaults" = lib.all (vendor: !(acceptsUnknownIdentity vendor)) ["opencode-go" "zhipuai"];
-          "unknown served id reaches vendor transport defaults" = !(acceptsUnknownServed "opencode-go" chosen) && !(acceptsUnknownServed "zhipuai" chosenZhipuai);
+          "unmeasured Go alias drops canonical id fallback" = offers unmeasuredGoAlias "opencode-go" == expectedNarrowGo;
+          "declared unmatched Go identity reaches vendor transport defaults" = !acceptsUnmeasuredGoServed;
           "unknown maker exclusion accepted before rendering" =
             !(acceptsExclusions {
               excludeMakers = ["fixture-typo"];

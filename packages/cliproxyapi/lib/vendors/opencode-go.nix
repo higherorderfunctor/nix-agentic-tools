@@ -93,7 +93,7 @@ in {
   # Merged identities select vendor metadata; no transport facts leave this owner.
   construct = servedModels: merged:
     opencodeGo (lib.listToAttrs (map (id: let
-      spellings = servedModels.${id} or [];
+      spellings = [id] ++ (servedModels.${id} or []);
       upstream = lib.findFirst (name: lib.elem name spellings || lib.elem (extracted.${name}.canonical_id or null) spellings) null (builtins.attrNames extracted);
     in
       if upstream == null

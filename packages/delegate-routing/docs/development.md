@@ -54,7 +54,9 @@ Delegate-routing reads those identities to validate concrete launch pins: an
 undeclared identity or a null maker is refused. Pattern-only native launches
 still use runtime introspection. The content package assembles its default
 catalog with the existing catalog type module and Claude, Codex and CPA owner
-modules; a manual `mkSkill` caller can supply a merged `catalog` instead.
+modules; a manual `mkSkill` caller can supply a merged `catalog` instead. When
+that override moves custom CPA aliases, pass the merged
+`ai.cliproxyapi.servedModels` mapping as `servedModels` too.
 
 `lib/cpa-routes.nix` reads each selected client's computed credentials from
 `ai.internal.inferenceInstances`. CPA owns API selection and credential
@@ -63,7 +65,9 @@ undeclared client. OAuth offers expand catalog identities of the vendor's maker;
 finite vendor lists do not define OAuth reach. A missing OAuth vendor is
 refused. Canonical identities resolve through CPA's vendor-scoped
 `ai.cliproxyapi.servedModels` mapping while launches retain the served spelling.
-Without CPA reach, native launch pins name canonical catalog ids.
+Without CPA reach, a native launch pin keeps its served spelling; CPA’s
+served-model mapping resolves a unique alias to one catalog identity and refuses
+ambiguity.
 
 The projection feeds agent-file selection and `lib/routing-view.nix`.
 Unknown-maker offers remain inspectable in the projection but cannot become a
@@ -73,12 +77,12 @@ names do not supply budget attribution. Native launches and external URLs retain
 the existing fallback selection. Inherited picker entries outside a selected
 client's reach are dropped; explicit entries are refused.
 
-Module and manual builders pass the same `catalog`, `cpaRoutes` and resolved
-agent data to prose and manifest rendering. Manual callers projecting CPA routes
-supply evaluated instance options, inference-instance exports and runtime
-selections. The `delegate-routing-cpa-routes` check uses synthetic identities,
-checks projection and launch validation once, and checks module wiring on both
-Home Manager and devenv.
+Module and manual builders pass the same `catalog`, `servedModels`, `cpaRoutes`
+and resolved agent data to prose and manifest rendering. Manual callers
+projecting CPA routes supply evaluated instance options, inference-instance
+exports and runtime selections. The `delegate-routing-cpa-routes` check uses
+synthetic identities, checks projection and launch validation once, and checks
+module wiring on both Home Manager and devenv.
 
 ## Named guidance
 

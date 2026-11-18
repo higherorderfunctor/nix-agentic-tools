@@ -14,7 +14,10 @@
   inherit (vocabulary) delegateKinds;
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
-  familyFunctions = import ../lib/select-families.nix {inherit lib;};
+  familyFunctions = import ../lib/select-families.nix {
+    inherit lib;
+    servedModels = config.ai.cliproxyapi.servedModels;
+  };
   opencodeGo = import ../lib/opencode-go.nix {inherit lib;};
   inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
@@ -119,6 +122,7 @@
   };
   # Owner contributions supply identity validation for all concrete launch pins.
   catalog = config.ai.catalog;
+  servedModels = config.ai.cliproxyapi.servedModels;
   # One projection supplies both generated agents and the skill/manifest builder.
   cpaRoutes = import ../lib/cpa-routes.nix {
     inherit lib catalog;
@@ -144,7 +148,7 @@
       (select portable.families models.claude));
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
-      inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles;
+      inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles servedModels;
       inherit (portable) families pools;
       inherit (portable) reviewPolicy;
       inherit (resolved runtime) routing skill workflows;
@@ -188,7 +192,7 @@
         default =
           map (lib.getAttrs ["effort" "model" "technique"])
           (import ../lib/routing-view.nix {
-            inherit lib catalog cpaRoutes runtime models techniques resolvedAgentFiles;
+            inherit lib catalog cpaRoutes runtime models techniques resolvedAgentFiles servedModels;
             inherit (portable) families pools;
             inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
           }).pickerEntries;
