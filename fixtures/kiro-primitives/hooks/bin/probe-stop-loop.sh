@@ -30,9 +30,9 @@ payload="$(probe_slurp)"
 probe_record "$marker" "$payload"
 
 if probe_claim_once "$marker"; then
-  printf 'PROBE %s injected this text and restarted the graph. Reply with the single line STOP-PROBE-ACK and then end your turn. This probe is one-shot; remove %s to re-arm it.\n' \
-    "$marker" "$(probe_state_dir)/claim-$marker" >&2
-  exit 1
+	printf 'PROBE %s injected this text and restarted the graph. Reply with the single line STOP-PROBE-ACK and then end your turn. This probe is one-shot; remove %s to re-arm it.\n' \
+		"$marker" "$(probe_state_dir)/claim-$marker" >&2
+	exit 1
 fi
 
 # Second and later calls: exit 0 with empty stdout. Exit 0 routes to the

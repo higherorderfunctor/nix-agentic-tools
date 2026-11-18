@@ -16,15 +16,15 @@ command="$(jq -r '.tool_input.command // ""' <<<"$input")"
 [ "$tool_name" = "Bash" ] || exit 0 # matcher is Bash; belt-and-suspenders in-script check
 
 if [[ $command == *"rm -rf"* ]]; then
-  # Block via hookSpecificOutput.permissionDecision:"deny" — NOT a top-level decision:"block".
-  jq -nc '{
+	# Block via hookSpecificOutput.permissionDecision:"deny" — NOT a top-level decision:"block".
+	jq -nc '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
       permissionDecisionReason: "rm -rf is blocked by policy"
     }
   }'
-  exit 0
+	exit 0
 fi
 
 exit 0 # no decision => normal permission flow (allow)

@@ -8,7 +8,7 @@ url = "$delegate_usage_claude_url"
 header = "Authorization: Bearer $delegate_usage_token"
 header = "anthropic-beta: $delegate_usage_claude_beta"
 EOF_USAGE
-  printf '%s\n' 'usage: invalid claude usage response' >&2
-  exit 1
+	printf '%s\n' 'usage: invalid claude usage response' >&2
+	exit 1
 }
 unset delegate_usage_token

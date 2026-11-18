@@ -21,7 +21,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 keep_logs=0
 if [ "${1:-}" = "--keep-logs" ]; then
-  keep_logs=1
+	keep_logs=1
 fi
 
 scratch_root="$KIRO_FIXTURE_SCRATCH"
@@ -32,8 +32,8 @@ scratch_root="$KIRO_FIXTURE_SCRATCH"
 kiro_assert_under_scratch "$scratch_root" "$scratch_root"
 
 if [ ! -d "$scratch_root" ]; then
-  printf 'nothing to do: %s does not exist\n' "$scratch_root"
-  exit 0
+	printf 'nothing to do: %s does not exist\n' "$scratch_root"
+	exit 0
 fi
 
 # Belt and braces: the real ~/.kiro must not be reachable from the target. This
@@ -41,33 +41,33 @@ fi
 # home, which is exactly the mistake worth being paranoid about.
 case "$HOME/.kiro" in
 "$scratch_root"/*)
-  echo "refusing: the real ${HOME}/.kiro lies under the scratch root" >&2
-  exit 1
-  ;;
+	echo "refusing: the real ${HOME}/.kiro lies under the scratch root" >&2
+	exit 1
+	;;
 *) ;;
 esac
 
 if [ "$keep_logs" -eq 1 ]; then
-  log_stash="${scratch_root%/}.logs-kept"
-  if [ -d "$scratch_root/home/.kiro/logs" ]; then
-    mkdir -p "$log_stash"
-    cp -a "$scratch_root/home/.kiro/logs/." "$log_stash/"
-    printf 'logs preserved at %s\n' "$log_stash"
-  else
-    printf 'no logs to preserve\n'
-  fi
+	log_stash="${scratch_root%/}.logs-kept"
+	if [ -d "$scratch_root/home/.kiro/logs" ]; then
+		mkdir -p "$log_stash"
+		cp -a "$scratch_root/home/.kiro/logs/." "$log_stash/"
+		printf 'logs preserved at %s\n' "$log_stash"
+	else
+		printf 'no logs to preserve\n'
+	fi
 fi
 
 # Report what is being removed before removing it. A teardown that prints
 # nothing is a teardown nobody can audit after the fact.
 printf 'removing scratch root: %s\n' "$scratch_root"
 if [ -d "$scratch_root/home/.kiro/sessions" ]; then
-  shopt -s nullglob
-  for bucket_dir in "$scratch_root/home/.kiro/sessions"/*/; do
-    for session_dir in "$bucket_dir"*/; do
-      printf '  session: %s\n' "$(basename "${session_dir%/}")"
-    done
-  done
+	shopt -s nullglob
+	for bucket_dir in "$scratch_root/home/.kiro/sessions"/*/; do
+		for session_dir in "$bucket_dir"*/; do
+			printf '  session: %s\n' "$(basename "${session_dir%/}")"
+		done
+	done
 fi
 
 rm -rf "$scratch_root"

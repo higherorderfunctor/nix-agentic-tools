@@ -21,44 +21,44 @@ version_file="$wt/.update-version"
 target_rc=0
 set +e
 (
-  set -euETo pipefail
-  shopt -s inherit_errexit 2>/dev/null || :
+	set -euETo pipefail
+	shopt -s inherit_errexit 2>/dev/null || :
 
-  cd "$wt"
+	cd "$wt"
 
-  if ! nix flake update --flake "./$flake_dir" 2>&1 | tee "$version_file"; then
-    pipe=("${PIPESTATUS[@]}")
-    log_failure "nix flake update failed (nix=${pipe[0]} tee=${pipe[1]})"
-    exit 1
-  fi
-  if ! git add -- "$flake_dir/flake.lock"; then
-    log_failure "git add failed"
-    exit 1
-  fi
-  if git_diff_quiet diff --staged; then
-    exit 0
-  fi
-  if ! git commit -m "chore: update lock $name"; then
-    log_failure "git commit failed"
-    exit 1
-  fi
+	if ! nix flake update --flake "./$flake_dir" 2>&1 | tee "$version_file"; then
+		pipe=("${PIPESTATUS[@]}")
+		log_failure "nix flake update failed (nix=${pipe[0]} tee=${pipe[1]})"
+		exit 1
+	fi
+	if ! git add -- "$flake_dir/flake.lock"; then
+		log_failure "git add failed"
+		exit 1
+	fi
+	if git_diff_quiet diff --staged; then
+		exit 0
+	fi
+	if ! git commit -m "chore: update lock $name"; then
+		log_failure "git commit failed"
+		exit 1
+	fi
 )
 target_rc=$?
 set -e
 
 version_detail=""
 if [ -f "$version_file" ]; then
-  version_detail=$(grep -oP "Updated input '\K[^']+" "$version_file" | paste -sd',' || true)
+	version_detail=$(grep -oP "Updated input '\K[^']+" "$version_file" | paste -sd',' || true)
 fi
 
 if [ "$target_rc" -ne 0 ]; then
-  report_held_back "$name" "lock update failed" "$version_detail"
-  exit 0
+	report_held_back "$name" "lock update failed" "$version_detail"
+	exit 0
 fi
 
 if [ "$(git -C "$wt" rev-parse HEAD)" = "$(git rev-parse "$BRANCH")" ]; then
-  report_unchanged "$name"
-  exit 0
+	report_unchanged "$name"
+	exit 0
 fi
 
 log_success "$name: branch update/$name ready for PR"

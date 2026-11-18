@@ -15,7 +15,7 @@ work="${CODEX_WORK:-$(probe_workdir codex)}"
 pkg="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 export CODEX_BIN="$pkg/bin/codex"
 if [[ ! -f $work/models_cache.json ]]; then
-  python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
+	python3 "$D/mkcache.py" "$(probe_pkg chatgpt-codex.src)" "$work/models_cache.json"
 fi
 P="${PROBE_DIR:-$D/probes/$name}"
 R="$work/results/$name"
@@ -36,13 +36,13 @@ sleep 0.5
 # unprivileged bwrap namespace: tmp-overlay over /etc, no root, the host /etc is untouched.
 etc=()
 if [[ -d $P/etc-codex ]]; then
-  etc=(bwrap --dev-bind / / --overlay-src /etc --tmp-overlay /etc --ro-bind "$P/etc-codex" /etc/codex)
+	etc=(bwrap --dev-bind / / --overlay-src /etc --tmp-overlay /etc --ro-bind "$P/etc-codex" /etc/codex)
 fi
 "${etc[@]}" python3 "$D/asclient.py" "$H" "$R/as" "$work/plain" "$P/probe.json"
 # probe2.json: a second app-server process on the same home and fake provider after the first exits
 # (restart probes; its "resume": "as/thread_id" picks up the first process's root thread).
 if [[ -f $P/probe2.json ]]; then
-  "${etc[@]}" python3 "$D/asclient.py" "$H" "$R/as2" "$work/plain" "$P/probe2.json"
+	"${etc[@]}" python3 "$D/asclient.py" "$H" "$R/as2" "$work/plain" "$P/probe2.json"
 fi
 rm -rf "$H/.tmp" "$H/skills" # bulky plugin/skill caches the app-server writes; not evidence
 printf 'results: %s\n' "$R"

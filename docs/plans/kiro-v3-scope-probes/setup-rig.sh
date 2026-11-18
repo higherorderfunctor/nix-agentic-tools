@@ -19,7 +19,7 @@ git -C "$RIG/work" init -q
 # Emit a {version,hooks:[SessionStart,Stop]} envelope whose actions append
 # "<marker>-<trigger>" to fired.log. $1 = hook-name prefix, $2 = marker prefix.
 envelope() {
-  cat <<JSON
+	cat <<JSON
 {
   "version": "v1",
   "hooks": [

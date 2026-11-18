@@ -7,15 +7,15 @@ readonly delegate_usage_zai_url='https://api.z.ai/api/monitor/usage/quota/limit'
 # API-key vendors: the upstream hostname and base-URL path prefix that identify
 # their key among CPA's configured credentials, whatever transport carries it.
 declare -rA delegate_usage_api_keys=(
-  [cloudflare]='api.cloudflare.com /client/v4'
-  [opencode]='opencode.ai /inference/go'
-  [zai]='api.z.ai'
+	[cloudflare]='api.cloudflare.com /client/v4'
+	[opencode]='opencode.ai /inference/go'
+	[zai]='api.z.ai'
 )
 
 # All usage techniques and the runtime fixtures read this common schema.
 # shellcheck disable=SC2329 # usage_cpa can also call it by name as its projector.
 usage_project() {
-  jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
+	jq -ce --arg vendor "$1" --argjson account "${2:-null}" --argjson resets "${3:-null}" '
     def utc:
       if type == "number" then floor | todateiso8601 else
         (capture("^(?<date>.{19})(?:\\.[0-9]+)?(?<zone>Z|[+-][0-9]{2}:[0-9]{2})$") // error("usage timestamp"))
@@ -121,72 +121,72 @@ usage_project() {
 }
 
 usage_cpa_error() {
-  printf '%s\n' "usage: proxy $1" >&2
-  exit 1
+	printf '%s\n' "usage: proxy $1" >&2
+	exit 1
 }
 
 usage_cpa_request() {
-  local method=$1 endpoint=$2 payload=${3-} response status
-  local prefix=${4:-v0/management}
-  if ! delegate_usage_cpa_key=$(<"$delegate_usage_cpa_key_file"); then
-    usage_cpa_error 'cannot read management key file'
-  fi
-  if [[ -z $delegate_usage_cpa_key || $delegate_usage_cpa_key == *$'\n'* || $delegate_usage_cpa_key == *$'\r'* ]]; then
-    usage_cpa_error 'management key must be a nonempty single line'
-  fi
-  delegate_usage_cpa_key=${delegate_usage_cpa_key//\\/\\\\}
-  delegate_usage_cpa_key=${delegate_usage_cpa_key//\"/\\\"}
-  if ! response=$(
-    curl -q --noproxy '*' --silent --max-time 75 --request "$method" \
-      --url "${delegate_usage_cpa_url%/}/$prefix/$endpoint" \
-      --header 'Content-Type: application/json' --data @/dev/fd/3 \
-      --write-out $'\n%{http_code}' --config - 3<<<"$payload" 2>/dev/null <<EOF_CPA
+	local method=$1 endpoint=$2 payload=${3-} response status
+	local prefix=${4:-v0/management}
+	if ! delegate_usage_cpa_key=$(<"$delegate_usage_cpa_key_file"); then
+		usage_cpa_error 'cannot read management key file'
+	fi
+	if [[ -z $delegate_usage_cpa_key || $delegate_usage_cpa_key == *$'\n'* || $delegate_usage_cpa_key == *$'\r'* ]]; then
+		usage_cpa_error 'management key must be a nonempty single line'
+	fi
+	delegate_usage_cpa_key=${delegate_usage_cpa_key//\\/\\\\}
+	delegate_usage_cpa_key=${delegate_usage_cpa_key//\"/\\\"}
+	if ! response=$(
+		curl -q --noproxy '*' --silent --max-time 75 --request "$method" \
+			--url "${delegate_usage_cpa_url%/}/$prefix/$endpoint" \
+			--header 'Content-Type: application/json' --data @/dev/fd/3 \
+			--write-out $'\n%{http_code}' --config - 3<<<"$payload" 2>/dev/null <<EOF_CPA
 header = "Authorization: Bearer $delegate_usage_cpa_key"
 EOF_CPA
-  ); then
-    usage_cpa_error 'management request failed'
-  fi
-  unset delegate_usage_cpa_key
-  status=${response##*$'\n'}
-  # An omitted config API collection is a missing path, not an empty array.
-  if [[ $status == 404 && $prefix == v8/management ]]; then
-    printf '[]'
-    return
-  fi
-  [[ $status == 2?? ]] || usage_cpa_error "management HTTP $status"
-  printf '%s' "${response%$'\n'*}"
+	); then
+		usage_cpa_error 'management request failed'
+	fi
+	unset delegate_usage_cpa_key
+	status=${response##*$'\n'}
+	# An omitted config API collection is a missing path, not an empty array.
+	if [[ $status == 404 && $prefix == v8/management ]]; then
+		printf '[]'
+		return
+	fi
+	[[ $status == 2?? ]] || usage_cpa_error "management HTTP $status"
+	printf '%s' "${response%$'\n'*}"
 }
 
 # Shared by the packaged usage helpers; returns 1 only for direct-login fallback.
 # Optional arguments: request builder (account JSON on stdin), projector (same
 # arguments as usage_project), and an explicit CPA auth index to skip discovery.
 usage_cpa() {
-  local vendor=$1 files accounts account request envelope vendor_status body result resets reset_request
-  local delegate_usage_cpa_url delegate_usage_cpa_key_file url_variable key_variable
-  local route=${2:-$vendor} request_builder=${3:-} projector=${4:-usage_project}
-  url_variable="DELEGATE_USAGE_CPA_${route^^}_URL"
-  key_variable="DELEGATE_USAGE_CPA_${route^^}_MANAGEMENT_KEY_FILE"
-  delegate_usage_cpa_url=${!url_variable-}
-  delegate_usage_cpa_key_file=${!key_variable-}
-  if [[ -z $delegate_usage_cpa_url && -z $delegate_usage_cpa_key_file ]]; then
-    return 1
-  fi
-  if [[ -z $delegate_usage_cpa_url || -z $delegate_usage_cpa_key_file ]]; then
-    usage_cpa_error 'requires both URL and management-key file in the matching runtime pair'
-  fi
-  if [[ -n ${5:-} ]]; then
-    accounts=$(jq -cn --arg index "$5" '[{auth_index: $index}]')
-  elif [[ -n ${delegate_usage_api_keys[$vendor]-} ]]; then
-    # These responses contain upstream keys. Project them in memory only.
-    local configs='' surface host prefix
-    local -a surfaces=(claude codex openai-compatibility)
-    if [[ $vendor == cloudflare ]]; then surfaces+=(passthrough); fi
-    read -r host prefix <<<"${delegate_usage_api_keys[$vendor]}"
-    for surface in "${surfaces[@]}"; do
-      configs+=$(usage_cpa_request GET "config/api-keys/$surface" "" v8/management) || exit 1
-      configs+=$'\n'
-    done
-    accounts=$(printf '%s' "$configs" | python3 -c '
+	local vendor=$1 files accounts account request envelope vendor_status body result resets reset_request
+	local delegate_usage_cpa_url delegate_usage_cpa_key_file url_variable key_variable
+	local route=${2:-$vendor} request_builder=${3:-} projector=${4:-usage_project}
+	url_variable="DELEGATE_USAGE_CPA_${route^^}_URL"
+	key_variable="DELEGATE_USAGE_CPA_${route^^}_MANAGEMENT_KEY_FILE"
+	delegate_usage_cpa_url=${!url_variable-}
+	delegate_usage_cpa_key_file=${!key_variable-}
+	if [[ -z $delegate_usage_cpa_url && -z $delegate_usage_cpa_key_file ]]; then
+		return 1
+	fi
+	if [[ -z $delegate_usage_cpa_url || -z $delegate_usage_cpa_key_file ]]; then
+		usage_cpa_error 'requires both URL and management-key file in the matching runtime pair'
+	fi
+	if [[ -n ${5:-} ]]; then
+		accounts=$(jq -cn --arg index "$5" '[{auth_index: $index}]')
+	elif [[ -n ${delegate_usage_api_keys[$vendor]-} ]]; then
+		# These responses contain upstream keys. Project them in memory only.
+		local configs='' surface host prefix
+		local -a surfaces=(claude codex openai-compatibility)
+		if [[ $vendor == cloudflare ]]; then surfaces+=(passthrough); fi
+		read -r host prefix <<<"${delegate_usage_api_keys[$vendor]}"
+		for surface in "${surfaces[@]}"; do
+			configs+=$(usage_cpa_request GET "config/api-keys/$surface" "" v8/management) || exit 1
+			configs+=$'\n'
+		done
+		accounts=$(printf '%s' "$configs" | python3 -c '
 import json, sys
 from urllib.parse import urlsplit
 host, prefix = sys.argv[1:3]
@@ -213,23 +213,23 @@ try:
 except (AttributeError, TypeError, ValueError):
     sys.exit(3)
 ' "$host" "$prefix") ||
-      usage_cpa_error "$vendor requires exactly one distinct key with an auth index on $host$prefix"
-    unset configs
-  else
-    files=$(usage_cpa_request GET auth-files) || exit 1
-    accounts=$(jq -ce --arg vendor "$vendor" '
+			usage_cpa_error "$vendor requires exactly one distinct key with an auth index on $host$prefix"
+		unset configs
+	else
+		files=$(usage_cpa_request GET auth-files) || exit 1
+		accounts=$(jq -ce --arg vendor "$vendor" '
       .files | if type != "array" then error("files") else
         map(select(.provider == $vendor and .account_type == "oauth" and .disabled != true)) end
     ' <<<"$files" 2>/dev/null) || usage_cpa_error 'invalid auth-files response'
-    [[ $accounts != '[]' ]] || usage_cpa_error "has no enabled $vendor login"
-  fi
-  while IFS= read -r account; do
-    if [[ -n $request_builder ]]; then
-      request=$("$request_builder" <<<"$account") || usage_cpa_error 'invalid vendor request'
-    else
-      request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
-        --arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
-        --arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
+		[[ $accounts != '[]' ]] || usage_cpa_error "has no enabled $vendor login"
+	fi
+	while IFS= read -r account; do
+		if [[ -n $request_builder ]]; then
+			request=$("$request_builder" <<<"$account") || usage_cpa_error 'invalid vendor request'
+		else
+			request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
+				--arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
+				--arg opencode_url "$delegate_usage_opencode_url" --arg zai_url "$delegate_usage_zai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
       url: (if $vendor == "claude" then $claude_url
@@ -244,30 +244,30 @@ except (AttributeError, TypeError, ValueError):
           if ($account.id_token.chatgpt_account_id // "") != ""
           then {"Chatgpt-Account-Id": $account.id_token.chatgpt_account_id} else {} end end)
     }' 2>/dev/null) || usage_cpa_error 'invalid account metadata'
-    fi
-    envelope=$(usage_cpa_request POST api-call "$request") || exit 1
-    if ! jq -e '(.status_code | type == "number") and (.body | type == "string")' <<<"$envelope" >/dev/null 2>&1; then
-      usage_cpa_error 'invalid api-call response'
-    fi
-    vendor_status=$(jq -r '.status_code' <<<"$envelope")
-    if ! jq -e '.status_code >= 200 and .status_code < 300' <<<"$envelope" >/dev/null; then
-      usage_cpa_error "vendor HTTP $vendor_status"
-    fi
-    body=$(jq -r '.body' <<<"$envelope")
-    resets=null
-    if [[ $vendor == codex ]]; then
-      reset_request=$(jq -c '.url = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"' <<<"$request")
-      # Expiry details are optional; the usage response still supplies the count.
-      if envelope=$(usage_cpa_request POST api-call "$reset_request" 2>/dev/null); then
-        resets=$(jq -ce '
+		fi
+		envelope=$(usage_cpa_request POST api-call "$request") || exit 1
+		if ! jq -e '(.status_code | type == "number") and (.body | type == "string")' <<<"$envelope" >/dev/null 2>&1; then
+			usage_cpa_error 'invalid api-call response'
+		fi
+		vendor_status=$(jq -r '.status_code' <<<"$envelope")
+		if ! jq -e '.status_code >= 200 and .status_code < 300' <<<"$envelope" >/dev/null; then
+			usage_cpa_error "vendor HTTP $vendor_status"
+		fi
+		body=$(jq -r '.body' <<<"$envelope")
+		resets=null
+		if [[ $vendor == codex ]]; then
+			reset_request=$(jq -c '.url = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"' <<<"$request")
+			# Expiry details are optional; the usage response still supplies the count.
+			if envelope=$(usage_cpa_request POST api-call "$reset_request" 2>/dev/null); then
+				resets=$(jq -ce '
           select(.status_code >= 200 and .status_code < 300) | .body | fromjson
           | select(.credits | type == "array")
         ' <<<"$envelope" 2>/dev/null) || resets=null
-      fi
-    fi
-    if ! result=$("$projector" "$vendor" "$account" "$resets" <<<"$body"); then
-      usage_cpa_error 'invalid vendor usage response'
-    fi
-    jq . <<<"$result"
-  done < <(jq -c '.[]' <<<"$accounts")
+			fi
+		fi
+		if ! result=$("$projector" "$vendor" "$account" "$resets" <<<"$body"); then
+			usage_cpa_error 'invalid vendor usage response'
+		fi
+		jq . <<<"$result"
+	done < <(jq -c '.[]' <<<"$accounts")
 }

@@ -35,50 +35,50 @@ shopt -s inherit_errexit 2>/dev/null || :
 # and require exactly one match, so an ambiguous/missing mapping fails
 # loudly (HELD BACK) instead of silently corrupting a sibling recipe.
 resolve_recipe_file() {
-  local git_url="$1"
-  shift
+	local git_url="$1"
+	shift
 
-  # Parse github.com/<owner>/<repo> from the matrix git URL (always the
-  # https form: https://github.com/<owner>/<repo>.git).
-  local path owner repo
-  path=${git_url#https://github.com/}
-  path=${path#http://github.com/}
-  path=${path%.git}
-  path=${path%/}
-  owner=${path%%/*}
-  repo=${path#*/}
-  if [ -z "$owner" ] || [ -z "$repo" ] || [ "$owner" = "$path" ] || [[ $repo == */* ]]; then
-    echo "resolve_recipe_file: cannot parse owner/repo from '$git_url'" >&2
-    return 1
-  fi
+	# Parse github.com/<owner>/<repo> from the matrix git URL (always the
+	# https form: https://github.com/<owner>/<repo>.git).
+	local path owner repo
+	path=${git_url#https://github.com/}
+	path=${path#http://github.com/}
+	path=${path%.git}
+	path=${path%/}
+	owner=${path%%/*}
+	repo=${path#*/}
+	if [ -z "$owner" ] || [ -z "$repo" ] || [ "$owner" = "$path" ] || [[ $repo == */* ]]; then
+		echo "resolve_recipe_file: cannot parse owner/repo from '$git_url'" >&2
+		return 1
+	fi
 
-  # Recipes are treefmt/alejandra-formatted, so attribute spacing is
-  # canonical (`owner = "X";`). Match fixed strings to avoid regex
-  # metacharacter surprises in owner/repo (dots, etc.).
-  #
-  # The scan spans owner directories. Require an inline revision below so
-  # registry metadata and consumer modules cannot become source candidates.
-  # The legacy sidecar suffix remains excluded for standalone resolver callers.
-  local f
-  local -a matches=()
-  while IFS= read -r f; do
-    # Metadata and modules may mention an upstream URL, but only a source
-    # recipe with an inline revision can be a rev-bump target.
-    if ! grep -qE '^[[:space:]]*rev = "[a-f0-9]{40}";' "$f"; then
-      continue
-    fi
-    if { grep -qF "owner = \"${owner}\"" "$f" &&
-      grep -qF "repo = \"${repo}\"" "$f"; } ||
-      grep -qF "github.com/${owner}/${repo}" "$f"; then
-      matches+=("$f")
-    fi
-  done < <(find "$@" -type f -name '*.nix' ! -name '*.update.nix' | sort)
+	# Recipes are treefmt/alejandra-formatted, so attribute spacing is
+	# canonical (`owner = "X";`). Match fixed strings to avoid regex
+	# metacharacter surprises in owner/repo (dots, etc.).
+	#
+	# The scan spans owner directories. Require an inline revision below so
+	# registry metadata and consumer modules cannot become source candidates.
+	# The legacy sidecar suffix remains excluded for standalone resolver callers.
+	local f
+	local -a matches=()
+	while IFS= read -r f; do
+		# Metadata and modules may mention an upstream URL, but only a source
+		# recipe with an inline revision can be a rev-bump target.
+		if ! grep -qE '^[[:space:]]*rev = "[a-f0-9]{40}";' "$f"; then
+			continue
+		fi
+		if { grep -qF "owner = \"${owner}\"" "$f" &&
+			grep -qF "repo = \"${repo}\"" "$f"; } ||
+			grep -qF "github.com/${owner}/${repo}" "$f"; then
+			matches+=("$f")
+		fi
+	done < <(find "$@" -type f -name '*.nix' ! -name '*.update.nix' | sort)
 
-  if [ "${#matches[@]}" -eq 1 ]; then
-    printf '%s\n' "${matches[0]}"
-    return 0
-  fi
+	if [ "${#matches[@]}" -eq 1 ]; then
+		printf '%s\n' "${matches[0]}"
+		return 0
+	fi
 
-  echo "resolve_recipe_file: expected exactly 1 recipe pinning ${owner}/${repo}, found ${#matches[@]}: ${matches[*]:-<none>}" >&2
-  return 1
+	echo "resolve_recipe_file: expected exactly 1 recipe pinning ${owner}/${repo}, found ${#matches[@]}: ${matches[*]:-<none>}" >&2
+	return 1
 }

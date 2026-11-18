@@ -11,5 +11,5 @@ source "$here/../../common/pin.sh"
 root="$(probe_repo_root)"
 export CLAUDE_BIN="${CLAUDE_BIN:-$(probe_pkg claude-code)/bin/claude}"
 python="$(nix build --no-link --print-out-paths --impure --expr \
-  "let p = (builtins.getFlake \"$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}; in p.python3.withPackages (ps: [ ps.claude-agent-sdk ])")/bin/python3"
+	"let p = (builtins.getFlake \"$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}; in p.python3.withPackages (ps: [ ps.claude-agent-sdk ])")/bin/python3"
 exec "$python" -I "$here/sdk-py.py" "$@"

@@ -14,8 +14,8 @@ shift
 git_url=""
 args=("$@")
 if [ ${#args[@]} -gt 0 ] && [[ ${args[-1]} == *.git ]]; then
-  git_url="${args[-1]}"
-  unset 'args[-1]'
+	git_url="${args[-1]}"
+	unset 'args[-1]'
 fi
 extra_flags="${args[*]:-}"
 
@@ -29,22 +29,22 @@ version_file="$wt/.update-version"
 base_head=$(git rev-parse "$BRANCH")
 
 commit_pending_update() {
-  if git_diff_quiet -C "$wt" diff && git_diff_quiet -C "$wt" diff --staged; then
-    return 0
-  fi
-  if ! git -C "$wt" add -A; then
-    log_failure "git add failed"
-    return 1
-  fi
-  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
-    if ! git -C "$wt" commit --amend --no-edit; then
-      log_failure "git commit --amend failed"
-      return 1
-    fi
-  elif ! git -C "$wt" commit -m "chore(packages): update $name"; then
-    log_failure "git commit failed"
-    return 1
-  fi
+	if git_diff_quiet -C "$wt" diff && git_diff_quiet -C "$wt" diff --staged; then
+		return 0
+	fi
+	if ! git -C "$wt" add -A; then
+		log_failure "git add failed"
+		return 1
+	fi
+	if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
+		if ! git -C "$wt" commit --amend --no-edit; then
+			log_failure "git commit --amend failed"
+			return 1
+		fi
+	elif ! git -C "$wt" commit -m "chore(packages): update $name"; then
+		log_failure "git commit failed"
+		return 1
+	fi
 }
 
 # ── Source prefetch ──────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ commit_pending_update() {
 #
 # Prints {mode, url, name, args, unsupported} as JSON.
 source_fetch_spec() {
-  nix eval --json ".#$(nat_attr "$1").src" --apply '
+	nix eval --json ".#$(nat_attr "$1").src" --apply '
     src: let
       a = src.drvAttrs or {};
       # fetchgit leaves an unused attr null, false, "" or [] (structured attrs).
@@ -102,135 +102,135 @@ source_fetch_spec() {
 # fetch when a shallow one fails, and a hang must hold the target back rather
 # than stall the sweep.
 prefetch_source() {
-  local spec="$1" git_url="$2" rev="$3" limit="${NAT_UPDATE_PREFETCH_TIMEOUT:-600}"
-  local repo="${git_url%.git}"
-  local -a args
-  case "$(jq -r .mode <<<"$spec")" in
-  archive)
-    timeout "$limit" nix flake prefetch --json \
-      "github:${repo#*github.com/}/$rev" |
-      jq '{hash, storePath}'
-    ;;
-  git)
-    mapfile -d '' -t args < <(jq -j '.args[] | (., "\u0000")' <<<"$spec")
-    timeout "$limit" nix run --inputs-from . nixpkgs#nix-prefetch-git -- --quiet \
-      --url "$(jq -r .url <<<"$spec")" --rev "$rev" --name "$(jq -r .name <<<"$spec")" \
-      "${args[@]}" |
-      jq '{hash, storePath: .path}'
-    ;;
-  *) return 1 ;;
-  esac
+	local spec="$1" git_url="$2" rev="$3" limit="${NAT_UPDATE_PREFETCH_TIMEOUT:-600}"
+	local repo="${git_url%.git}"
+	local -a args
+	case "$(jq -r .mode <<<"$spec")" in
+	archive)
+		timeout "$limit" nix flake prefetch --json \
+			"github:${repo#*github.com/}/$rev" |
+			jq '{hash, storePath}'
+		;;
+	git)
+		mapfile -d '' -t args < <(jq -j '.args[] | (., "\u0000")' <<<"$spec")
+		timeout "$limit" nix run --inputs-from . nixpkgs#nix-prefetch-git -- --quiet \
+			--url "$(jq -r .url <<<"$spec")" --rev "$rev" --name "$(jq -r .name <<<"$spec")" \
+			"${args[@]}" |
+			jq '{hash, storePath: .path}'
+		;;
+	*) return 1 ;;
+	esac
 }
 
 # Phase 0: Bump rev to latest default branch commit (main-tracking packages)
 if [ -n "$git_url" ]; then
-  log_info "Fetching latest rev from $git_url..."
-  new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
-  if [ -n "$new_rev" ]; then
-    # Deterministic recipe resolution + exactly-one-match guard.
-    # Replaces the old `grep -rl "$repo_name" | head -1`, which matched any
-    # file merely naming the repo basename (e.g. effect-mcp.nix's "Mirrors
-    # context7-mcp.nix." comment) and raced on head -1's early pipe close,
-    # silently rewriting the wrong overlay — context7's HEAD rev landed in
-    # effect-mcp's fetch block → nonexistent commit → source 404 → red CI.
-    # See dev/scripts/resolve-recipe-file.sh.
-    # config.update.targets is the single source of truth (config/update-matrix
-    # .nix was dissolved): read the declared recipe file for this package via
-    # `nix eval --raw .#.updateTargets.<name>.file` (owner registry.nix
-    # contributions plus workspace policy). Every
-    # main-tracking package declares one, so resolve_recipe_file below is a
-    # retained safety-net fallback. Only `file` is consumed here; `flags`/`git`
-    # arrive positionally from the same registry via update-matrix.py.
-    # checks.update-targets-parity asserts the declared `file` is byte-identical
-    # to resolve_recipe_file's output, so the two paths agree.
-    # cwd is still the main tree here (before Phase 1 changes directories), so
-    # the absolute root selector below reads metadata without package lookup.
-    declared_file=$(nix eval --raw ".#.updateTargets.${name}.file" 2>/dev/null || true)
-    if [ -n "$declared_file" ]; then
-      target_file="$wt/$declared_file"
-      log_info "Target from config.update.targets: $declared_file"
-    elif ! target_file=$(resolve_recipe_file "$git_url" "$wt/packages"); then
-      report_held_back "$name" "could not uniquely resolve recipe file"
-      exit 0
-    fi
-    if [ -n "$target_file" ]; then
-      old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
-      if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
-        # Read how the package fetches its source before changing source pins:
-        # the record is rev-independent, and a package it cannot describe is
-        # held back with the tree untouched.
-        if ! fetch_spec=$(source_fetch_spec "$name"); then
-          report_held_back "$name" "could not inspect source fetcher"
-          exit 0
-        fi
-        if ! jq -e '(.mode == "archive") or (.mode == "git" and (.unsupported | length) == 0)' \
-          <<<"$fetch_spec" >/dev/null; then
-          report_held_back "$name" "source fetcher cannot be prefetched" \
-            "$(jq -c '{mode, unsupported}' <<<"$fetch_spec")"
-          exit 0
-        fi
-        sed -i "s|$old_rev|$new_rev|g" "$target_file"
-        # Prefetch new source hash + storePath (used below for upstream
-        # version re-derivation; one prefetch, two uses)
-        old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
-        storePath=""
-        if [ -n "$old_hash" ]; then
-          prefetch_rc=0
-          prefetch_json=$(prefetch_source "$fetch_spec" "$git_url" "$new_rev") || prefetch_rc=$?
-          if [ "$prefetch_rc" -ne 0 ] ||
-            ! jq -e 'type == "object" and (.hash | type == "string" and test("^sha256-[A-Za-z0-9+/]{43}=$"))' \
-              <<<"$prefetch_json" >/dev/null 2>&1; then
-            git -C "$wt" reset --hard "$base_head"
-            report_held_back "$name" "source prefetch did not produce a valid hash"
-            exit 0
-          fi
-          new_hash=$(jq -r .hash <<<"$prefetch_json")
-          storePath=$(jq -r '.storePath // empty' <<<"$prefetch_json")
-          if grep -qE '^[[:space:]]*# upstream: ' "$target_file" &&
-            { [ -z "$storePath" ] || [ ! -d "$storePath" ]; }; then
-            git -C "$wt" reset --hard "$base_head"
-            report_held_back "$name" "source prefetch did not produce the marker source tree"
-            exit 0
-          fi
-          sed -i "s|$old_hash|$new_hash|" "$target_file"
-          log_info "Hash updated in $(basename "$target_file")"
-        fi
-        log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
+	log_info "Fetching latest rev from $git_url..."
+	new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
+	if [ -n "$new_rev" ]; then
+		# Deterministic recipe resolution + exactly-one-match guard.
+		# Replaces the old `grep -rl "$repo_name" | head -1`, which matched any
+		# file merely naming the repo basename (e.g. effect-mcp.nix's "Mirrors
+		# context7-mcp.nix." comment) and raced on head -1's early pipe close,
+		# silently rewriting the wrong overlay — context7's HEAD rev landed in
+		# effect-mcp's fetch block → nonexistent commit → source 404 → red CI.
+		# See dev/scripts/resolve-recipe-file.sh.
+		# config.update.targets is the single source of truth (config/update-matrix
+		# .nix was dissolved): read the declared recipe file for this package via
+		# `nix eval --raw .#.updateTargets.<name>.file` (owner registry.nix
+		# contributions plus workspace policy). Every
+		# main-tracking package declares one, so resolve_recipe_file below is a
+		# retained safety-net fallback. Only `file` is consumed here; `flags`/`git`
+		# arrive positionally from the same registry via update-matrix.py.
+		# checks.update-targets-parity asserts the declared `file` is byte-identical
+		# to resolve_recipe_file's output, so the two paths agree.
+		# cwd is still the main tree here (before Phase 1 changes directories), so
+		# the absolute root selector below reads metadata without package lookup.
+		declared_file=$(nix eval --raw ".#.updateTargets.${name}.file" 2>/dev/null || true)
+		if [ -n "$declared_file" ]; then
+			target_file="$wt/$declared_file"
+			log_info "Target from config.update.targets: $declared_file"
+		elif ! target_file=$(resolve_recipe_file "$git_url" "$wt/packages"); then
+			report_held_back "$name" "could not uniquely resolve recipe file"
+			exit 0
+		fi
+		if [ -n "$target_file" ]; then
+			old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
+			if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
+				# Read how the package fetches its source before changing source pins:
+				# the record is rev-independent, and a package it cannot describe is
+				# held back with the tree untouched.
+				if ! fetch_spec=$(source_fetch_spec "$name"); then
+					report_held_back "$name" "could not inspect source fetcher"
+					exit 0
+				fi
+				if ! jq -e '(.mode == "archive") or (.mode == "git" and (.unsupported | length) == 0)' \
+					<<<"$fetch_spec" >/dev/null; then
+					report_held_back "$name" "source fetcher cannot be prefetched" \
+						"$(jq -c '{mode, unsupported}' <<<"$fetch_spec")"
+					exit 0
+				fi
+				sed -i "s|$old_rev|$new_rev|g" "$target_file"
+				# Prefetch new source hash + storePath (used below for upstream
+				# version re-derivation; one prefetch, two uses)
+				old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
+				storePath=""
+				if [ -n "$old_hash" ]; then
+					prefetch_rc=0
+					prefetch_json=$(prefetch_source "$fetch_spec" "$git_url" "$new_rev") || prefetch_rc=$?
+					if [ "$prefetch_rc" -ne 0 ] ||
+						! jq -e 'type == "object" and (.hash | type == "string" and test("^sha256-[A-Za-z0-9+/]{43}=$"))' \
+							<<<"$prefetch_json" >/dev/null 2>&1; then
+						git -C "$wt" reset --hard "$base_head"
+						report_held_back "$name" "source prefetch did not produce a valid hash"
+						exit 0
+					fi
+					new_hash=$(jq -r .hash <<<"$prefetch_json")
+					storePath=$(jq -r '.storePath // empty' <<<"$prefetch_json")
+					if grep -qE '^[[:space:]]*# upstream: ' "$target_file" &&
+						{ [ -z "$storePath" ] || [ ! -d "$storePath" ]; }; then
+						git -C "$wt" reset --hard "$base_head"
+						report_held_back "$name" "source prefetch did not produce the marker source tree"
+						exit 0
+					fi
+					sed -i "s|$old_hash|$new_hash|" "$target_file"
+					log_info "Hash updated in $(basename "$target_file")"
+				fi
+				log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
 
-        # Re-derive upstream version literals from the fresh src.
-        # The overlay carries a magic comment on the line preceding
-        # each `upstream = "..."` literal, naming which vu.read* helper
-        # to invoke and the manifest path relative to src:
-        #
-        #   # upstream: readPackageJsonVersion @ packages/foo/package.json
-        #   upstream = "1.2.3";
-        #
-        # This eliminates eval-time IFD — overlays no longer call
-        # vu.read* at eval time (which forced realization of the
-        # platform-tagged src drv and broke cross-platform eval on
-        # PR CI). See .claude/rules/overlays.md § IFD Patterns.
-        #
-        # One file can carry multiple markers (a monorepo recipe can
-        # pin several sub-packages, two of which may share the same
-        # manifest path). The Python filter indexes by LINE NUMBER so
-        # each marker drives its own replacement.
-        if [ -n "$storePath" ] && grep -qE '^[[:space:]]*# upstream: ' "$target_file"; then
-          # One pass classifies every line that ATTEMPTS a marker.
-          #
-          # "Attempts" is anchored to the start of the comment, so prose
-          # that merely mentions the convention mid-sentence (e.g. a
-          # doc comment saying "see # upstream: comments") is not
-          # mistaken for a marker — an unanchored
-          # match there would hold back a package over a doc comment.
-          #
-          # A line that attempts a marker but does not parse is
-          # MALFORMED: a missing `@`, a non-alphabetic helper name, a
-          # mangled path. Classifying per line rather than all-or-
-          # nothing matters because a file can carry several markers
-          # and one broken marker among several good ones
-          # would otherwise pass unnoticed — silently freezing exactly
-          # one sub-package's version.
-          classified=$(awk '
+				# Re-derive upstream version literals from the fresh src.
+				# The overlay carries a magic comment on the line preceding
+				# each `upstream = "..."` literal, naming which vu.read* helper
+				# to invoke and the manifest path relative to src:
+				#
+				#   # upstream: readPackageJsonVersion @ packages/foo/package.json
+				#   upstream = "1.2.3";
+				#
+				# This eliminates eval-time IFD — overlays no longer call
+				# vu.read* at eval time (which forced realization of the
+				# platform-tagged src drv and broke cross-platform eval on
+				# PR CI). See .claude/rules/overlays.md § IFD Patterns.
+				#
+				# One file can carry multiple markers (a monorepo recipe can
+				# pin several sub-packages, two of which may share the same
+				# manifest path). The Python filter indexes by LINE NUMBER so
+				# each marker drives its own replacement.
+				if [ -n "$storePath" ] && grep -qE '^[[:space:]]*# upstream: ' "$target_file"; then
+					# One pass classifies every line that ATTEMPTS a marker.
+					#
+					# "Attempts" is anchored to the start of the comment, so prose
+					# that merely mentions the convention mid-sentence (e.g. a
+					# doc comment saying "see # upstream: comments") is not
+					# mistaken for a marker — an unanchored
+					# match there would hold back a package over a doc comment.
+					#
+					# A line that attempts a marker but does not parse is
+					# MALFORMED: a missing `@`, a non-alphabetic helper name, a
+					# mangled path. Classifying per line rather than all-or-
+					# nothing matters because a file can carry several markers
+					# and one broken marker among several good ones
+					# would otherwise pass unnoticed — silently freezing exactly
+					# one sub-package's version.
+					classified=$(awk '
             /^[[:space:]]*# upstream: / {
               if (match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) && arr[1] != "" && arr[2] != "")
                 print "OK|" NR "|" arr[1] "|" arr[2];
@@ -238,62 +238,62 @@ if [ -n "$git_url" ]; then
                 print "BAD|" NR;
             }
           ' "$target_file")
-          # Prefix each line number with L and join with ", " (e.g.
-          # "L12, L15") so a multi-marker list does not read as the
-          # ambiguous "L12,15".
-          malformed=$(printf '%s\n' "$classified" | awk -F'|' '
+					# Prefix each line number with L and join with ", " (e.g.
+					# "L12, L15") so a multi-marker list does not read as the
+					# ambiguous "L12,15".
+					malformed=$(printf '%s\n' "$classified" | awk -F'|' '
             $1 == "BAD" { out = out (out == "" ? "" : ", ") "L" $2 }
             END { print out }
           ')
-          if [ -n "$malformed" ]; then
-            # Falling through here would bump rev + src.hash while
-            # leaving `upstream = "..."` at the previous value, so the
-            # package would ship claiming one version and building
-            # another. That is the failure mode this guard exists for.
-            git -C "$wt" reset --hard "$base_head"
-            report_held_back "$name" "malformed upstream marker" \
-              "$(basename "$target_file") $malformed: expected '# upstream: <helper> @ <path>'"
-            exit 0
-          fi
-          markers=$(printf '%s\n' "$classified" | awk -F'|' '$1 == "OK" { print $2 "|" $3 "|" $4 }')
-          if [ -n "$markers" ]; then
-            # For each marker, resolve the new upstream value via nix
-            # eval of the corresponding vu.read* helper against the
-            # fresh src, then feed a JSON array of
-            # {lineno, new_value} pairs to Python to rewrite the file.
-            resolved="[]"
-            while IFS='|' read -r lineno kind manifest_rel; do
-              [ -z "$lineno" ] && continue
-              upstream_error=$(mktemp)
-              # A marker names a manifest the maintainer asserts exists.
-              # Failing to read it means the path moved upstream, the
-              # helper name is wrong, or the manifest changed shape. In
-              # every case the literal below stays at the OLD version
-              # while rev + src.hash have already been bumped, so the
-              # package would ship claiming one version and building
-              # another. Hold it back rather than continue.
-              if ! new_upstream=$(nix eval --impure --raw --expr "
+					if [ -n "$malformed" ]; then
+						# Falling through here would bump rev + src.hash while
+						# leaving `upstream = "..."` at the previous value, so the
+						# package would ship claiming one version and building
+						# another. That is the failure mode this guard exists for.
+						git -C "$wt" reset --hard "$base_head"
+						report_held_back "$name" "malformed upstream marker" \
+							"$(basename "$target_file") $malformed: expected '# upstream: <helper> @ <path>'"
+						exit 0
+					fi
+					markers=$(printf '%s\n' "$classified" | awk -F'|' '$1 == "OK" { print $2 "|" $3 "|" $4 }')
+					if [ -n "$markers" ]; then
+						# For each marker, resolve the new upstream value via nix
+						# eval of the corresponding vu.read* helper against the
+						# fresh src, then feed a JSON array of
+						# {lineno, new_value} pairs to Python to rewrite the file.
+						resolved="[]"
+						while IFS='|' read -r lineno kind manifest_rel; do
+							[ -z "$lineno" ] && continue
+							upstream_error=$(mktemp)
+							# A marker names a manifest the maintainer asserts exists.
+							# Failing to read it means the path moved upstream, the
+							# helper name is wrong, or the manifest changed shape. In
+							# every case the literal below stays at the OLD version
+							# while rev + src.hash have already been bumped, so the
+							# package would ship claiming one version and building
+							# another. Hold it back rather than continue.
+							if ! new_upstream=$(nix eval --impure --raw --expr "
                 let vu = import (toString $PWD/lib/packaging.nix);
                 in vu.$kind ($storePath + \"/$manifest_rel\")
               " 2>"$upstream_error") || [ -z "$new_upstream" ]; then
-                cat "$upstream_error" >&2
-                eval_error=$(tr -s '\n' ' ' <"$upstream_error")
-                eval_error=${eval_error% }
-                rm -f "$upstream_error"
-                git -C "$wt" reset --hard "$base_head"
-                report_held_back "$name" "upstream version not derivable" \
-                  "$(basename "$target_file") L$lineno: $kind @ $manifest_rel: $eval_error"
-                exit 0
-              fi
-              rm -f "$upstream_error"
-              resolved=$(echo "$resolved" | jq --arg n "$lineno" --arg v "$new_upstream" \
-                '. + [{lineno: ($n | tonumber), value: $v}]')
-              log_info "Upstream (L$lineno): $kind @ $manifest_rel -> $new_upstream"
-            done <<<"$markers"
-            if [ "$resolved" != "[]" ]; then
-              # Exits non-zero, WITHOUT writing, if any marker had no
-              # literal to rewrite — see the rationale in the script.
-              if ! python3 - "$target_file" "$resolved" <<'PY'
+								cat "$upstream_error" >&2
+								eval_error=$(tr -s '\n' ' ' <"$upstream_error")
+								eval_error=${eval_error% }
+								rm -f "$upstream_error"
+								git -C "$wt" reset --hard "$base_head"
+								report_held_back "$name" "upstream version not derivable" \
+									"$(basename "$target_file") L$lineno: $kind @ $manifest_rel: $eval_error"
+								exit 0
+							fi
+							rm -f "$upstream_error"
+							resolved=$(echo "$resolved" | jq --arg n "$lineno" --arg v "$new_upstream" \
+								'. + [{lineno: ($n | tonumber), value: $v}]')
+							log_info "Upstream (L$lineno): $kind @ $manifest_rel -> $new_upstream"
+						done <<<"$markers"
+						if [ "$resolved" != "[]" ]; then
+							# Exits non-zero, WITHOUT writing, if any marker had no
+							# literal to rewrite — see the rationale in the script.
+							if ! python3 - "$target_file" "$resolved" <<'PY'
 import json, re, sys
 path, spec = sys.argv[1], sys.argv[2]
 entries = json.loads(spec)
@@ -327,23 +327,23 @@ if unmatched:
 with open(path, "w") as f:
     f.write("\n".join(lines))
 PY
-              then
-                git -C "$wt" reset --hard "$base_head"
-                report_held_back "$name" "upstream literal not rewritten" \
-                  "$(basename "$target_file"): marker resolved but no literal followed it"
-                exit 0
-              fi
-            fi
-          fi
-        fi
+							then
+								git -C "$wt" reset --hard "$base_head"
+								report_held_back "$name" "upstream literal not rewritten" \
+									"$(basename "$target_file"): marker resolved but no literal followed it"
+								exit 0
+							fi
+						fi
+					fi
+				fi
 
-        # Commit rev + src hash + upstream version so nix-update has a
-        # clean tree to evaluate
-        git -C "$wt" add -A
-        git -C "$wt" commit -m "chore(packages): update $name"
-      fi
-    fi
-  fi
+				# Commit rev + src hash + upstream version so nix-update has a
+				# clean tree to evaluate
+				git -C "$wt" add -A
+				git -C "$wt" commit -m "chore(packages): update $name"
+			fi
+		fi
+	fi
 fi
 
 # Phase 1: Update dep hashes via nix-update (needs clean committed state)
@@ -356,102 +356,102 @@ log_info "Running nix-update..."
 target_rc=0
 set +e
 (
-  set -euETo pipefail
-  shopt -s inherit_errexit 2>/dev/null || :
+	set -euETo pipefail
+	shopt -s inherit_errexit 2>/dev/null || :
 
-  cd "$wt"
+	cd "$wt"
 
-  # Rev-tracked packages can carry source-derived toolchain literals and
-  # Python dependency pins. Refresh those opt-in values before nix-update
-  # evaluates dependencies, even when Phase 0 found no new rev. Release scripts own this ordering themselves.
-  if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
-    for refresh in 'fixGoFloor Go-floor' 'fixPythonDependencies Python-dependency' 'fixRustToolchain Rust-toolchain'; do
-      read -r fixer_attr label <<<"$refresh"
-      if ! refresh_package_source_version "$name" "$fixer_attr" "$label"; then
-        log_failure "$label refresh failed"
-        exit 1
-      fi
-    done
-    if ! commit_pending_update; then
-      exit 1
-    fi
-  fi
+	# Rev-tracked packages can carry source-derived toolchain literals and
+	# Python dependency pins. Refresh those opt-in values before nix-update
+	# evaluates dependencies, even when Phase 0 found no new rev. Release scripts own this ordering themselves.
+	if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
+		for refresh in 'fixGoFloor Go-floor' 'fixPythonDependencies Python-dependency' 'fixRustToolchain Rust-toolchain'; do
+			read -r fixer_attr label <<<"$refresh"
+			if ! refresh_package_source_version "$name" "$fixer_attr" "$label"; then
+				log_failure "$label refresh failed"
+				exit 1
+			fi
+		done
+		if ! commit_pending_update; then
+			exit 1
+		fi
+	fi
 
-  # Prime the src derivation file in the store. The Phase 0 prefetch
-  # (prefetch_source) populates the source output but does NOT create a
-  # .drv for the fetchFromGitHub derivation — .drv files are machine-local
-  # and neither prefetch path produces one. nix-update's
-  # internal nix-instantiate then fails at `readFile "${src}/..."`
-  # with "path '...source.drv' is not valid" because readFile's
-  # context-realization needs the drv registered. A single
-  # `nix eval` on drvPath instantiates the derivation file without
-  # building the output, which is enough to unblock nix-update.
-  nix eval --raw ".#$(nat_attr "$name").src.drvPath" >/dev/null 2>&1 || true
+	# Prime the src derivation file in the store. The Phase 0 prefetch
+	# (prefetch_source) populates the source output but does NOT create a
+	# .drv for the fetchFromGitHub derivation — .drv files are machine-local
+	# and neither prefetch path produces one. nix-update's
+	# internal nix-instantiate then fails at `readFile "${src}/..."`
+	# with "path '...source.drv' is not valid" because readFile's
+	# context-realization needs the drv registered. A single
+	# `nix eval` on drvPath instantiates the derivation file without
+	# building the output, which is enough to unblock nix-update.
+	nix eval --raw ".#$(nat_attr "$name").src.drvPath" >/dev/null 2>&1 || true
 
-  # `if !` rather than a bare pipeline plus a PIPESTATUS test: `pipefail`
-  # already makes the pipeline's status nix-update's, and with errexit armed
-  # a bare pipeline would abort before any status check ran, losing this
-  # message.
-  # shellcheck disable=SC2086
-  if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$(nat_system)" $extra_flags 2>&1 | tee "$version_file"; then
-    # PIPESTATUS survives into this block — measured, including the real
-    # exit code and which side failed:
-    #   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi
-    #   42 0
-    # so the `if !` form costs nothing in diagnosis. Report both: under
-    # `pipefail` a `tee` failure (full disk, bad path) fails the pipeline
-    # just as loudly as the real command, and attributing it to the wrong
-    # one sends the next reader looking in the wrong place.
-    pipe=("${PIPESTATUS[@]}")
-    log_failure "nix-update failed (nix-update=${pipe[0]} tee=${pipe[1]})"
-    exit 1
-  fi
+	# `if !` rather than a bare pipeline plus a PIPESTATUS test: `pipefail`
+	# already makes the pipeline's status nix-update's, and with errexit armed
+	# a bare pipeline would abort before any status check ran, losing this
+	# message.
+	# shellcheck disable=SC2086
+	if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$(nat_system)" $extra_flags 2>&1 | tee "$version_file"; then
+		# PIPESTATUS survives into this block — measured, including the real
+		# exit code and which side failed:
+		#   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi
+		#   42 0
+		# so the `if !` form costs nothing in diagnosis. Report both: under
+		# `pipefail` a `tee` failure (full disk, bad path) fails the pipeline
+		# just as loudly as the real command, and attributing it to the wrong
+		# one sends the next reader looking in the wrong place.
+		pipe=("${PIPESTATUS[@]}")
+		log_failure "nix-update failed (nix-update=${pipe[0]} tee=${pipe[1]})"
+		exit 1
+	fi
 
-  # Format pins written by nix-update and owner update scripts. A formatter
-  # failure leaves the branch incomplete and holds the package back.
-  #
-  # Both dirtiness gates below go through git_diff_quiet, which discriminates
-  # the THREE-valued diff status by value instead of by truthiness. Under the
-  # bare `! git … diff --quiet` form an ERRORING git read as "the tree is
-  # dirty" at both gates at once: the `||` short-circuits, so a failure of the
-  # FIRST invocation skipped the second entirely and flipped both gates from
-  # one fault. Reasoning about either gate in isolation understated it. The
-  # gate below is the harmless half (a redundant reformat); the gate after it
-  # is the one that stages everything and commits or amends.
-  if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
-    # Explicit `exit`, because this body is the CONDITION of the `if ! (`
-    # above and bash disables errexit for a condition — a bare failing
-    # call falls through to the commit below instead of aborting.
-    if ! nix fmt; then
-      log_failure "formatter errored"
-      exit 1
-    fi
-  fi
+	# Format pins written by nix-update and owner update scripts. A formatter
+	# failure leaves the branch incomplete and holds the package back.
+	#
+	# Both dirtiness gates below go through git_diff_quiet, which discriminates
+	# the THREE-valued diff status by value instead of by truthiness. Under the
+	# bare `! git … diff --quiet` form an ERRORING git read as "the tree is
+	# dirty" at both gates at once: the `||` short-circuits, so a failure of the
+	# FIRST invocation skipped the second entirely and flipped both gates from
+	# one fault. Reasoning about either gate in isolation understated it. The
+	# gate below is the harmless half (a redundant reformat); the gate after it
+	# is the one that stages everything and commits or amends.
+	if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
+		# Explicit `exit`, because this body is the CONDITION of the `if ! (`
+		# above and bash disables errexit for a condition — a bare failing
+		# call falls through to the commit below instead of aborting.
+		if ! nix fmt; then
+			log_failure "formatter errored"
+			exit 1
+		fi
+	fi
 
-  # Commit generated changes (amend if update commit exists, new commit
-  # otherwise). This is the failure-becomes-a-commit shape git_diff_quiet
-  # closes: with the tree genuinely clean and `git diff` merely erroring, the
-  # bare form reached `commit --amend`, which succeeds on an unchanged tree and
-  # rewrote the update commit for no reason.
-  if ! commit_pending_update; then
-    # Explicit exit: this call is tested by `if !`, so errexit is disabled in
-    # the function body. A failure means the PR cannot be written.
-    exit 1
-  fi
+	# Commit generated changes (amend if update commit exists, new commit
+	# otherwise). This is the failure-becomes-a-commit shape git_diff_quiet
+	# closes: with the tree genuinely clean and `git diff` merely erroring, the
+	# bare form reached `commit --amend`, which succeeds on an unchanged tree and
+	# rewrote the update commit for no reason.
+	if ! commit_pending_update; then
+		# Explicit exit: this call is tested by `if !`, so errexit is disabled in
+		# the function body. A failure means the PR cannot be written.
+		exit 1
+	fi
 )
 target_rc=$?
 set -e
 
 if [ "$target_rc" -ne 0 ]; then
-  version_detail=$(parse_pkg_version "$version_file")
-  # Roll back the Phase 0 rev+src commit so a held-back package does
-  # NOT leave a branch ahead of base. The PR-creation step in
-  # .github/workflows/update.yml filters on `wt_head == base_head`, so
-  # resetting here is what makes held-back packages skip their PR.
-  # Successful targets keep their commit and open their PR as before.
-  git -C "$wt" reset --hard "$base_head"
-  report_held_back "$name" "toolchain refresh, nix-update, formatter or commit failed" "$version_detail"
-  exit 0
+	version_detail=$(parse_pkg_version "$version_file")
+	# Roll back the Phase 0 rev+src commit so a held-back package does
+	# NOT leave a branch ahead of base. The PR-creation step in
+	# .github/workflows/update.yml filters on `wt_head == base_head`, so
+	# resetting here is what makes held-back packages skip their PR.
+	# Successful targets keep their commit and open their PR as before.
+	git -C "$wt" reset --hard "$base_head"
+	report_held_back "$name" "toolchain refresh, nix-update, formatter or commit failed" "$version_detail"
+	exit 0
 fi
 
 # Extract version info
@@ -460,8 +460,8 @@ version_detail=$(parse_pkg_version "$version_file")
 # Check if the worktree actually made commits
 wt_head=$(git -C "$wt" rev-parse HEAD)
 if [ "$wt_head" = "$base_head" ]; then
-  report_unchanged "$name"
-  exit 0
+	report_unchanged "$name"
+	exit 0
 fi
 
 log_success "$name: branch update/$name ready for PR"

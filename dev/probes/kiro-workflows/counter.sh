@@ -27,20 +27,20 @@ mkdir -p -- "$root"
 log="$root/invocations.log"
 
 now() {
-  local t
-  if [ -n "${EPOCHREALTIME:-}" ]; then
-    printf '%s\n' "${EPOCHREALTIME/,/.}"
-    return 0
-  fi
-  t="$(date +%s.%N)"
-  # shfmt owns this block's indentation. treefmt runs it WITHOUT `-ci`, so
-  # patterns align with `case`/`esac`; indenting them is what `-ci` would do and
-  # the next treefmt run reverts it. `shfmt -i 2 -d` on this file is clean.
-  case "$t" in
-  *.N) t="${t%.N}" ;; # no sub-second resolution available
-  *) ;;               # already carries fractional seconds
-  esac
-  printf '%s\n' "$t"
+	local t
+	if [ -n "${EPOCHREALTIME:-}" ]; then
+		printf '%s\n' "${EPOCHREALTIME/,/.}"
+		return 0
+	fi
+	t="$(date +%s.%N)"
+	# shfmt owns this block's indentation. treefmt runs it WITHOUT `-ci`, so
+	# patterns align with `case`/`esac`; indenting them is what `-ci` would do and
+	# the next treefmt run reverts it. `shfmt -i 2 -d` on this file is clean.
+	case "$t" in
+	*.N) t="${t%.N}" ;; # no sub-second resolution available
+	*) ;;               # already carries fractional seconds
+	esac
+	printf '%s\n' "$t"
 }
 
 printf '%s invocation\n' "$(now)" >>"$log"
@@ -48,8 +48,8 @@ printf '%s invocation\n' "$(now)" >>"$log"
 count="$(grep -c -- invocation "$log" | tr -d ' ')"
 
 if [ "$count" -ge "$target" ]; then
-  printf '{"reached": true, "count": %s}\n' "$count" >"$root/reached.json"
-  printf 'INVOCATION %s of %s — TARGET REACHED\n' "$count" "$target"
+	printf '{"reached": true, "count": %s}\n' "$count" >"$root/reached.json"
+	printf 'INVOCATION %s of %s — TARGET REACHED\n' "$count" "$target"
 else
-  printf 'INVOCATION %s of %s — more work remains\n' "$count" "$target"
+	printf 'INVOCATION %s of %s — more work remains\n' "$count" "$target"
 fi

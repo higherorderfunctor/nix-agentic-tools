@@ -13,13 +13,13 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$here/../../common/pin.sh"
 work="$(probe_workdir kimchi)"
 if [[ $# -eq 0 ]]; then
-  # LIVE scenarios (live_upstream: real gateway, operator key) run only when named.
-  for f in "$here"/sc/*.json; do
-    grep -q '"live_upstream"' "$f" || set -- "$@" "$(basename "$f" .json)"
-  done
+	# LIVE scenarios (live_upstream: real gateway, operator key) run only when named.
+	for f in "$here"/sc/*.json; do
+		grep -q '"live_upstream"' "$f" || set -- "$@" "$(basename "$f" .json)"
+	done
 fi
 for n in "$@"; do
-  python3 "$here/drive.py" "$here/sc/$n.json" "$work/$n"
-  python3 "$here/summ.py" "$work/$n" >"$work/$n/summary.txt" || :
+	python3 "$here/drive.py" "$here/sc/$n.json" "$work/$n"
+	python3 "$here/summ.py" "$work/$n" >"$work/$n/summary.txt" || :
 done
 printf 'work: %s\n' "$work"

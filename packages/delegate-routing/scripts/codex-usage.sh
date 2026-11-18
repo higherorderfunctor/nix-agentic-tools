@@ -39,6 +39,6 @@ finally:
         p.kill()
         p.wait()
 PY
-  printf '%s\n' 'usage: invalid codex usage response' >&2
-  exit 1
+	printf '%s\n' 'usage: invalid codex usage response' >&2
+	exit 1
 }

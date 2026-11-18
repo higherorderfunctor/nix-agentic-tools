@@ -18,21 +18,21 @@ pkg="${CODEX_PKG:-$(probe_pkg chatgpt-codex)}"
 src="$(probe_pkg chatgpt-codex.src)"
 auth="$HOME/.codex/auth.json"
 [[ -f $auth ]] || {
-  printf 'no %s: log in with codex login first\n' "$auth" >&2
-  false
+	printf 'no %s: log in with codex login first\n' "$auth" >&2
+	false
 }
 # CHATGPT_ACCESS_TOKEN_REFRESH_WINDOW_MINUTES = 5 (login/src/auth/manager.rs); keep a margin.
 exp="$(jq -r '.tokens.access_token | split(".")[1] | gsub("-";"+") | gsub("_";"/") | . + ("=" * ((4 - length % 4) % 4)) | @base64d | fromjson | .exp' "$auth")"
 if ((exp < $(date +%s) + 3600)); then
-  printf 'access token expires within the hour; run any codex command once so ~/.codex refreshes it, then retry\n' >&2
-  false
+	printf 'access token expires within the hour; run any codex command once so ~/.codex refreshes it, then retry\n' >&2
+	false
 fi
 S="$(mktemp -d -t codex-liveparity.XXXXXX)"
 trap 'rm -rf "$S"' EXIT
 mkdir -p "$S/home" "$S/plain"
 (
-  umask 077
-  cp "$auth" "$S/home/auth.json"
+	umask 077
+	cp "$auth" "$S/home/auth.json"
 )
 cat >"$S/home/config.toml" <<EOF
 model = "$model"
@@ -44,10 +44,10 @@ check_for_update_on_startup = false
 memories = false
 EOF
 (cd "$S/plain" && CODEX_HOME="$S/home" timeout 300 "$pkg/bin/codex" --no-daemon exec --json --skip-git-repo-check \
-  'Use your spawn_agent tool exactly once: task_name "p", fork_turns "none", message "Reply with exactly the word PONG and nothing else." Then call wait_agent once, then reply with exactly DONE.' \
-  </dev/null >"$S/events.jsonl" 2>"$S/stderr.txt")
+	'Use your spawn_agent tool exactly once: task_name "p", fork_turns "none", message "Reply with exactly the word PONG and nothing else." Then call wait_agent once, then reply with exactly DONE.' \
+	</dev/null >"$S/events.jsonl" 2>"$S/stderr.txt")
 if ! cmp -s "$auth" "$S/home/auth.json"; then
-  printf 'WARNING: the scratch auth.json changed (token refreshed); copy it back to %s before using codex again\n' "$auth" >&2
+	printf 'WARNING: the scratch auth.json changed (token refreshed); copy it back to %s before using codex again\n' "$auth" >&2
 fi
 python3 - "$S/home/models_cache.json" "$src/codex-rs/models-manager/models.json" <<'EOF'
 import json, sys

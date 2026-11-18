@@ -33,33 +33,33 @@ out="$root/$label-received.txt"
 
 i=0
 for a in "$@"; do
-  i=$((i + 1))
-  # One grouped redirect rather than six individual ones (SC2129), so the file
-  # is opened once. That is all it buys: the block still performs one write per
-  # printf, so it is NOT an atomic append and a concurrent reader could observe a
-  # partial record. Nothing here needs that property — each invocation writes its
-  # own `$label`-keyed file — so the redirect is not doing safety work.
-  {
-    printf 'ARG%d_LEN=%s\n' "$i" "${#a}"
-    printf 'ARG%d_VALUE=<<<%s>>>\n' "$i" "$a"
-    # `-f` and `-r` rather than `-e`: under `set -e` (plus inherit_errexit) an
-    # unreadable file or a DIRECTORY would make the `cat` below fail and kill the
-    # script mid-probe, losing the records already gathered. `--` because the args
-    # are interpolated data: a value beginning with "-" would become a cat option.
-    if [ -f "$a" ] && [ -r "$a" ]; then
-      printf 'ARG%d_IS_PATH=yes\n' "$i"
-      # The byte count comes from the FILE, not from the substitution below,
-      # which is the whole point: `$(...)` discards trailing newlines, so a file
-      # of `\n\n\n` yields an empty CONTENT and reads exactly like an empty file
-      # — the false-empty ambiguity the length fields exist to close (§7.3). `<`
-      # rather than `cat` because the shell opens the path itself, so this needs
-      # no `--` guard.
-      printf 'ARG%d_CONTENT_LEN=%s\n' "$i" "$(wc -c <"$a" | tr -d ' ')"
-      printf 'ARG%d_CONTENT=<<<%s>>>\n' "$i" "$(cat -- "$a")"
-    else
-      printf 'ARG%d_IS_PATH=no\n' "$i"
-    fi
-  } >>"$out"
+	i=$((i + 1))
+	# One grouped redirect rather than six individual ones (SC2129), so the file
+	# is opened once. That is all it buys: the block still performs one write per
+	# printf, so it is NOT an atomic append and a concurrent reader could observe a
+	# partial record. Nothing here needs that property — each invocation writes its
+	# own `$label`-keyed file — so the redirect is not doing safety work.
+	{
+		printf 'ARG%d_LEN=%s\n' "$i" "${#a}"
+		printf 'ARG%d_VALUE=<<<%s>>>\n' "$i" "$a"
+		# `-f` and `-r` rather than `-e`: under `set -e` (plus inherit_errexit) an
+		# unreadable file or a DIRECTORY would make the `cat` below fail and kill the
+		# script mid-probe, losing the records already gathered. `--` because the args
+		# are interpolated data: a value beginning with "-" would become a cat option.
+		if [ -f "$a" ] && [ -r "$a" ]; then
+			printf 'ARG%d_IS_PATH=yes\n' "$i"
+			# The byte count comes from the FILE, not from the substitution below,
+			# which is the whole point: `$(...)` discards trailing newlines, so a file
+			# of `\n\n\n` yields an empty CONTENT and reads exactly like an empty file
+			# — the false-empty ambiguity the length fields exist to close (§7.3). `<`
+			# rather than `cat` because the shell opens the path itself, so this needs
+			# no `--` guard.
+			printf 'ARG%d_CONTENT_LEN=%s\n' "$i" "$(wc -c <"$a" | tr -d ' ')"
+			printf 'ARG%d_CONTENT=<<<%s>>>\n' "$i" "$(cat -- "$a")"
+		else
+			printf 'ARG%d_IS_PATH=no\n' "$i"
+		fi
+	} >>"$out"
 done
 
 printf '{"done":true,"args":%d}\n' "$i" >"$root/$label.json"
