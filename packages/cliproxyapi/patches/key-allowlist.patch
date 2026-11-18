@@ -386,7 +386,7 @@ index d3a586a..d2975a7 100644
  		cfg.Discovery.ServiceType = DefaultDiscoveryServiceType
  	}
 diff --git a/internal/config/sdk_config.go b/internal/config/sdk_config.go
-index 4591917..d25b055 100644
+index c5b13ae..156d983 100644
 --- a/internal/config/sdk_config.go
 +++ b/internal/config/sdk_config.go
 @@ -99,6 +99,10 @@ type SDKConfig struct {
@@ -463,10 +463,10 @@ index 0000000..c6771d7
 +	assertState(2, "key-c")
 +}
 diff --git a/sdk/api/handlers/handlers_interceptors.go b/sdk/api/handlers/handlers_interceptors.go
-index 16203c4..ea18938 100644
+index ecec386..87c8cb8 100644
 --- a/sdk/api/handlers/handlers_interceptors.go
 +++ b/sdk/api/handlers/handlers_interceptors.go
-@@ -733,6 +733,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
+@@ -798,6 +798,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
  		}
  	}
  
@@ -744,10 +744,10 @@ index 0000000..cc91257
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/conductor.go b/sdk/cliproxy/auth/conductor.go
-index 3f485fc..0c7a675 100644
+index 571c745..8709150 100644
 --- a/sdk/cliproxy/auth/conductor.go
 +++ b/sdk/cliproxy/auth/conductor.go
-@@ -224,6 +224,8 @@ type Manager struct {
+@@ -247,6 +247,8 @@ type Manager struct {
  	// runtimeConfig stores the latest application config for request-time decisions.
  	// It is initialized in NewManager; never Load() before first Store().
  	runtimeConfig atomic.Value
@@ -756,7 +756,7 @@ index 3f485fc..0c7a675 100644
  
  	// Optional HTTP RoundTripper provider injected by host.
  	rtProvider RoundTripperProvider
-@@ -279,6 +281,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
+@@ -304,6 +306,7 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
  		manager.ApplyHomeInFlightPublisherConfig(defaultInFlightConfig)
  	}
  	manager.scheduler = newAuthScheduler(selector)
@@ -764,8 +764,30 @@ index 3f485fc..0c7a675 100644
  	return manager
  }
  
+diff --git a/sdk/cliproxy/auth/conductor_continuity.go b/sdk/cliproxy/auth/conductor_continuity.go
+index df5f9cf..360e90d 100644
+--- a/sdk/cliproxy/auth/conductor_continuity.go
++++ b/sdk/cliproxy/auth/conductor_continuity.go
+@@ -661,7 +661,7 @@ func (m *Manager) buildCodexContinuityCandidates(
+ 	if !providersIncludeCodex(providers) {
+ 		return nil
+ 	}
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 	excludedIDs := homeExcludedAuthIDsFromMetadata(opts.Metadata)
+ 	var excludedSet map[string]struct{}
+@@ -878,7 +878,7 @@ func (m *Manager) evaluatePreOutputStreamQuotaGate(
+ 		return false, markContinuityTerminatedError(err)
+ 	}
+ 	retryModel := authSelectionModelFromOptions(opts, model)
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 	defaultRequestRetry, _, _ := m.retrySettings()
+ 	if !m.retryAllowedForRequest(ctx, session.codexAttemptsUsed, normalized, retryModel, eligibility, pinnedAuthID, defaultRequestRetry, opts.Headers) {
 diff --git a/sdk/cliproxy/auth/conductor_cooldown.go b/sdk/cliproxy/auth/conductor_cooldown.go
-index 62bd171..65f4275 100644
+index a6d911a..d5f5243 100644
 --- a/sdk/cliproxy/auth/conductor_cooldown.go
 +++ b/sdk/cliproxy/auth/conductor_cooldown.go
 @@ -175,6 +175,7 @@ func (m *Manager) setConfigSnapshotLocked(cfg *internalconfig.Config) bool {
@@ -776,8 +798,30 @@ index 62bd171..65f4275 100644
  	clearedCooldowns := m.clearDisabledCooldownStates(cfg)
  	if clearedCooldowns && oldCooldownStore != nil {
  		m.mu.Lock()
+diff --git a/sdk/cliproxy/auth/conductor_execution.go b/sdk/cliproxy/auth/conductor_execution.go
+index 96bad50..0042a50 100644
+--- a/sdk/cliproxy/auth/conductor_execution.go
++++ b/sdk/cliproxy/auth/conductor_execution.go
+@@ -343,7 +343,7 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
+ 		}
+ 		lastErr = errExec
+ 		if upstreamAttempted && m.isCodexAttemptFailure(errExec, roundAttempted) {
+-			eligibility := authSelectionEligibilityForRequest(ctx, opts)
++			eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 			pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 			if _, okContinuity := m.canRunCodexContinuity(ctx, normalized); okContinuity &&
+ 				isPositiveQuotaRejectionError(errExec) {
+@@ -615,7 +615,7 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
+ 		terminalRoundRejectedByScheduler = hasRoundEndedBySchedulerReject(errStream)
+ 		lastErr = errStream
+ 		if upstreamAttempted && m.isCodexAttemptFailure(errStream, roundAttempted) {
+-			eligibility := authSelectionEligibilityForRequest(ctx, opts)
++			eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 			pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 			if _, okContinuity := m.canRunCodexContinuity(ctx, normalized); okContinuity &&
+ 				isPositiveQuotaRejectionError(errStream) {
 diff --git a/sdk/cliproxy/auth/conductor_home.go b/sdk/cliproxy/auth/conductor_home.go
-index ddd7a2b..b6da6b7 100644
+index a57aef7..e0f2240 100644
 --- a/sdk/cliproxy/auth/conductor_home.go
 +++ b/sdk/cliproxy/auth/conductor_home.go
 @@ -1009,6 +1009,11 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
@@ -826,7 +870,7 @@ index 4704918..b6476ab 100644
  
  func TestIssue7017SiblingQuotaDoesNotBlockTransientZeroWait(t *testing.T) {
 diff --git a/sdk/cliproxy/auth/conductor_selection.go b/sdk/cliproxy/auth/conductor_selection.go
-index c9bb0db..b22b450 100644
+index f101257..92745bb 100644
 --- a/sdk/cliproxy/auth/conductor_selection.go
 +++ b/sdk/cliproxy/auth/conductor_selection.go
 @@ -87,6 +87,9 @@ type authSelectionEligibility struct {
@@ -860,7 +904,7 @@ index c9bb0db..b22b450 100644
  	return !e.disallowFreeAuth || !isFreeCodexAuth(auth)
  }
  
-@@ -1816,7 +1823,7 @@ func (m *Manager) shouldRetryAfterErrorWithAttempted(ctx context.Context, opts c
+@@ -1867,7 +1874,7 @@ func (m *Manager) shouldRetryAfterErrorWithAttempted(ctx context.Context, opts c
  		}
  		return *retryAfter, true
  	}
@@ -869,7 +913,7 @@ index c9bb0db..b22b450 100644
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
  	if affinity, ok := m.Selector().(*SessionAffinitySelector); ok && affinity != nil && affinity.rebindOnNever {
  		var authErr *Error
-@@ -2249,7 +2256,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
+@@ -2300,7 +2307,7 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
  	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = provider
  
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
@@ -878,7 +922,7 @@ index c9bb0db..b22b450 100644
  	pluginScheduler, schedulerAcross := m.snapshotPluginScheduler()
  
  	m.mu.RLock()
-@@ -2562,7 +2569,7 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
+@@ -2656,7 +2663,7 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
  	if m.hasPluginScheduler() || !m.useSchedulerFastPath() {
  		return m.pickNextLegacy(ctx, provider, model, opts, tried)
  	}
@@ -887,7 +931,7 @@ index c9bb0db..b22b450 100644
  	targetKey := canonicalSchedulingProvider(provider)
  	if strings.TrimSpace(model) != "" || targetKey == "codex" {
  		m.mu.RLock()
-@@ -2637,7 +2644,7 @@ func (m *Manager) HasAlternativeTargetForModel(ctx context.Context, providers []
+@@ -2731,7 +2738,7 @@ func (m *Manager) HasAlternativeTargetForModel(ctx context.Context, providers []
  	if len(providerSet) == 0 {
  		return false
  	}
@@ -896,7 +940,7 @@ index c9bb0db..b22b450 100644
  	modelKey := canonicalModelKey(model)
  	registryRef := registry.GetGlobalRegistry()
  
-@@ -2688,7 +2695,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
+@@ -2782,7 +2789,7 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
  	opts.Metadata[cliproxyexecutor.SessionAffinityProviderMetadataKey] = "mixed"
  
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
@@ -905,7 +949,7 @@ index c9bb0db..b22b450 100644
  
  	providerSet := make(map[string]struct{}, len(providers))
  	for _, provider := range providers {
-@@ -2894,7 +2901,7 @@ func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model s
+@@ -3017,7 +3024,7 @@ func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model s
  	if len(eligibleProviders) == 0 {
  		return nil, nil, "", &Error{Code: "auth_not_found", Message: "no auth available"}
  	}
@@ -914,7 +958,16 @@ index c9bb0db..b22b450 100644
  	providerSet := make(map[string]struct{}, len(eligibleProviders))
  	for _, providerKey := range eligibleProviders {
  		providerSet[providerKey] = struct{}{}
-@@ -3005,7 +3012,7 @@ func (m *Manager) warnLogAuthUnavailable(ctx context.Context, providers []string
+@@ -3144,7 +3151,7 @@ func (m *Manager) earliestPoolCooldownForModelAt(ctx context.Context, providers
+ 	excludeZeroWeight := selectorExcludesZeroWeight(m.Selector())
+ 	m.mu.RLock()
+ 	defer m.mu.RUnlock()
+-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
++	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
+ 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
+ 	providerSet := make(map[string]struct{}, len(providers))
+ 	for _, p := range providers {
+@@ -3266,7 +3273,7 @@ func (m *Manager) warnLogAuthUnavailable(ctx context.Context, providers []string
  	now := time.Now()
  	m.mu.RLock()
  	defer m.mu.RUnlock()
@@ -1486,7 +1539,7 @@ index 0000000..233e2b1
 +	}
 +}
 diff --git a/sdk/cliproxy/auth/scheduler.go b/sdk/cliproxy/auth/scheduler.go
-index 9908e7a..8575fb9 100644
+index 5e10145..edd4d45 100644
 --- a/sdk/cliproxy/auth/scheduler.go
 +++ b/sdk/cliproxy/auth/scheduler.go
 @@ -51,6 +51,8 @@ type authScheduler struct {

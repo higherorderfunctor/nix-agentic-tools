@@ -62,6 +62,9 @@ func TestNatLoad(t *testing.T) {
 		if len(cfg.Payload.DefaultRaw) != 1 || len(cfg.Payload.OverrideRaw) != 1 {
 			t.Fatalf("load %d: raw payload rules dropped: default=%d override=%d", load, len(cfg.Payload.DefaultRaw), len(cfg.Payload.OverrideRaw))
 		}
+		if len(cfg.Payload.Replace) != 1 {
+			t.Fatalf("load %d: payload replace rule dropped: %d", load, len(cfg.Payload.Replace))
+		}
 		if cfg.Payload.DefaultRaw[0].Params["sample"] != "{}" || cfg.Payload.OverrideRaw[0].Params["sample"] != "{}" {
 			t.Fatalf("load %d: raw payload params changed", load)
 		}

@@ -25,14 +25,14 @@ var keyAllowlistLoopExemptions = map[string]string{
 	"Manager.HasProviderAuth":                          "reports whether a provider has any credential, chooses none",
 	"Manager.List":                                     "returns copies of the pool; a caller that selects from them is outside this check",
 	"Manager.LookupSessionAffinity":                    "observes a binding for the plugin host's affinity callback; the instance module refuses plugins beside the allowlist",
-	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.0.38 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (scheduler.go:426,487,494); re-check on bump",
-	"Manager.RegisterExecutor":                         "reschedules refreshes for an executor's credentials",
+	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.0.76 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.RegisterExecutorWithRevision":             "reschedules refreshes for an executor's credentials",
 	"Manager.clearDisabledCooldownStates":              "clears cooldown state on config reload",
 	"Manager.cooldownStateRecordsSnapshot":             "snapshots cooldown state for persistence",
-	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.0.62 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (scheduler.go:414,501); re-check on bump",
+	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.0.76 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
 	"Manager.rebuildAPIKeyModelAliasLocked":            "rebuilds model alias tables on config reload",
 	"Manager.requestRetryRoundExclusions":              "returns IDs to exclude; it only narrows a selection that still runs allows",
-	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; in 8.0.38 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (scheduler.go:426,487,494); re-check on bump",
+	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; in 8.0.76 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
 	"authAutoRefreshLoop.rebuild":                      "schedules background token refreshes, serves no request",
 }
 
@@ -78,7 +78,7 @@ func (m *Manager) keyAllowlistBypassClosure(eligibility authSelectionEligibility
 // Not seen: an indexed lookup (m.auths[id]), an alias of the map, the map
 // passed to a helper, a loop over a copy (snapshotAuths, List), and the
 // scheduler's own pools and pickers, which match every entry on a nil
-// predicate. In 8.0.38 none of these chooses a request's credential outside
+// predicate. In 8.0.76 none of these chooses a request's credential outside
 // allows; that is a review obligation on each bump, not something this test
 // checks.
 func keyAllowlistLoopsWithoutAllows(t *testing.T, fixture bool) []string {

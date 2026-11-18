@@ -9,10 +9,10 @@ Applied after key-allowlist and zai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
-index baaafca..391bf46 100644
+index a3dffac..a84c257 100644
 --- a/config.example.yaml
 +++ b/config.example.yaml
-@@ -961,6 +961,20 @@ upstream:
+@@ -986,6 +986,20 @@ upstream:
  #         - api-key: "..."
  #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
  #
@@ -616,10 +616,10 @@ index 0000000..bf9e29d
 +	}
 +}
 diff --git a/internal/api/server_routes.go b/internal/api/server_routes.go
-index e2b039a..eb72733 100644
+index 57a8fd8..5aa29dc 100644
 --- a/internal/api/server_routes.go
 +++ b/internal/api/server_routes.go
-@@ -30,6 +30,7 @@ import (
+@@ -31,6 +31,7 @@ import (
  	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/claude"
  	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/gemini"
  	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai"
@@ -627,7 +627,7 @@ index e2b039a..eb72733 100644
  	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
  	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
  	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
-@@ -71,6 +72,7 @@ func (s *Server) setupRoutes() {
+@@ -74,6 +75,7 @@ func (s *Server) setupRoutes() {
  			c.Set(handlers.ModelDetailIDContextKey, strings.TrimPrefix(c.Param("model"), "/"))
  			s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers)(c)
  		})
@@ -636,10 +636,10 @@ index e2b039a..eb72733 100644
  		v1.POST("/completions", openaiHandlers.Completions)
  		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)
 diff --git a/internal/config/config.go b/internal/config/config.go
-index dad8d43..b5f59bd 100644
+index 9cd301b..530d0ed 100644
 --- a/internal/config/config.go
 +++ b/internal/config/config.go
-@@ -193,6 +193,9 @@ type Config struct {
+@@ -199,6 +199,9 @@ type Config struct {
  	// OpenAICompatibility defines OpenAI API compatibility configurations for external providers.
  	OpenAICompatibility []OpenAICompatibility `yaml:"openai-compatibility" json:"openai-compatibility"`
  
@@ -675,7 +675,7 @@ index 10c7a69..e6a0a4d 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 377673f..a45ae25 100644
+index cd8aa20..262dbfe 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
 @@ -69,6 +69,7 @@ var v8KeyFamilies = []configPath{
@@ -1193,10 +1193,10 @@ index 0000000..1eab4a5
 +	}
 +}
 diff --git a/internal/registry/model_registry.go b/internal/registry/model_registry.go
-index f02e53f..33eeb96 100644
+index 001f108..095b586 100644
 --- a/internal/registry/model_registry.go
 +++ b/internal/registry/model_registry.go
-@@ -1634,6 +1634,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
+@@ -1641,6 +1641,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
  	return available, expiresAt
  }
  
@@ -1240,7 +1240,7 @@ index f02e53f..33eeb96 100644
  // GetAvailableModelInfos returns cloned metadata for all currently available models.
  func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	now := r.now()
-@@ -1643,10 +1680,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+@@ -1650,10 +1687,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	result := make([]*ModelInfo, 0, len(r.models))
  	for _, registration := range r.models {
  		available, _ := modelRegistrationAvailability(registration, now)
@@ -1254,7 +1254,7 @@ index f02e53f..33eeb96 100644
  	}
  	sort.Slice(result, func(i, j int) bool {
  		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
-@@ -1667,7 +1705,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
+@@ -1674,7 +1712,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
  			continue
  		}
  
@@ -1263,7 +1263,7 @@ index f02e53f..33eeb96 100644
  		if model != nil {
  			models = append(models, model)
  		}
-@@ -1721,6 +1759,9 @@ func cloneModelMapValue(value any) any {
+@@ -1728,6 +1766,9 @@ func cloneModelMapValue(value any) any {
  //   - []*ModelInfo: List of available models for the provider
  func (r *ModelRegistry) GetAvailableModelsByProvider(provider string) []*ModelInfo {
  	provider = strings.ToLower(strings.TrimSpace(provider))
@@ -1878,18 +1878,18 @@ index 0000000..919cabd
 +	}
 +}
 diff --git a/sdk/api/handlers/handlers_execution.go b/sdk/api/handlers/handlers_execution.go
-index dff03be..160fbeb 100644
+index 130c830..e3f549f 100644
 --- a/sdk/api/handlers/handlers_execution.go
 +++ b/sdk/api/handlers/handlers_execution.go
 @@ -10,6 +10,7 @@ import (
- 
+ 	"github.com/MoeForge/moego/json"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 +	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
+ 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
  	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
- 	coreusage "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/usage"
-@@ -56,7 +57,14 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -57,7 +58,14 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	if routeDecision.ExecutorPluginID != "" {
  		return h.executeWithPluginExecutor(ctx, entryProtocol, responseProtocol, modelName, originalRequestedModel, rawJSON, alt, routeDecision.ExecutorPluginID, execOptions)
  	}
@@ -1905,7 +1905,7 @@ index dff03be..160fbeb 100644
  	if errMsg != nil {
  		return nil, nil, errMsg
  	}
-@@ -101,7 +109,16 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -102,7 +110,16 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	opts.Metadata = reqMeta
  	ctx = enrichContextWithSessionHierarchy(ctx, opts.Headers, req.Payload, opts.Metadata)
  	var interceptErr *interfaces.ErrorMessage
@@ -1923,7 +1923,7 @@ index dff03be..160fbeb 100644
  	if interceptErr != nil {
  		lifecycle.completeError(ctx, interceptErr)
  		return nil, nil, interceptErr
-@@ -119,7 +136,10 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -120,7 +137,10 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	rawResponseHeaders := cloneHeader(resp.Headers)
  	passthroughHeaders := executionPassthroughHeaders(h.CurrentConfig(), execOptions.InternalSource)
  	responseHeaders := downstreamHeadersFromExecutor(rawResponseHeaders, passthroughHeaders)
@@ -2116,7 +2116,7 @@ index 0000000..b5cd3d0
 +	return model.String(), nil
 +}
 diff --git a/sdk/cliproxy/service_executors.go b/sdk/cliproxy/service_executors.go
-index c83c246..e8f6f4a 100644
+index 4b0f0b9..990ed11 100644
 --- a/sdk/cliproxy/service_executors.go
 +++ b/sdk/cliproxy/service_executors.go
 @@ -7,6 +7,7 @@ import (
@@ -2127,7 +2127,7 @@ index c83c246..e8f6f4a 100644
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
  	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
-@@ -194,6 +195,14 @@ func (s *Service) registerAvailableExecutors(ctx context.Context, opts executorR
+@@ -269,6 +270,14 @@ func (s *Service) registerAvailableExecutors(ctx context.Context, opts executorR
  	if ctx.Err() != nil {
  		return
  	}
@@ -2142,7 +2142,7 @@ index c83c246..e8f6f4a 100644
  	// Keep all Service-owned executor registration paths here so native, Home,
  	// auth-derived, and plugin executors stay in the same binding order.
  	if opts.includeBaseline {
-@@ -284,6 +293,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
+@@ -359,6 +368,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
  	if a.Disabled {
  		return
  	}

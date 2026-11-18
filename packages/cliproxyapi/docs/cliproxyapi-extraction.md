@@ -1,6 +1,6 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-10-30 — CPA 8.0.41 custom YAML decoders are probed
+> **Last verified:** 2026-11-17 — CPA 8.0.76 custom YAML decoders are probed
 > through yaml.v3; z.ai documentation and the OpenCode Go catalog and plan page
 > use the shared `webDocsLib.mkSnapshot` updater and validate candidates.
 
@@ -96,13 +96,16 @@ extraction. A type with a custom YAML decoder is typed by probing that decoder
 through yaml.v3: try the scalar `true`, then the sequence `[]`, stopping at the
 first success, which makes it `any`. Only if both reject, decode the mapping
 `{}`; acceptance makes it an `object` whose reflected fields are its children,
-as for a plain struct. Rejection fails extraction with the path, Go type and
-probe. `credentials.concurrency` and `oauth.providers.codex.live-media-relay`
-decode into plain structs and are `object`;
-`multimedia.disable-image-generation` reads `true` and `plugins.configs.<name>`
-keeps any YAML subtree, so both are `any`. An `any` struct still retains its
-known child fields: the mapping form of `plugins.configs.<name>` has the
-measured `enabled` and `priority` fields.
+as for a plain struct. A decoder that rejects `{}` is probed once more with
+`{k: v}` and publishes the kind Go reflects: `PayloadReplacement`
+(`requests.payload.replace[].replacements[]`) is a `map[string]string` whose
+decoder requires exactly one entry, so it is a `map`. Rejection of both mappings
+fails extraction with the path and Go type. `credentials.concurrency` and
+`oauth.providers.codex.live-media-relay` decode into plain structs and are
+`object`; `multimedia.disable-image-generation` reads `true` and
+`plugins.configs.<name>` keeps any YAML subtree, so both are `any`. An `any`
+struct still retains its known child fields: the mapping form of
+`plugins.configs.<name>` has the measured `enabled` and `priority` fields.
 
 The raw has one `config` tree. `extracted/facts.json` declares it as an opaque
 `object` because its keys contain dots, with one Linux measurement because the

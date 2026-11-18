@@ -41,6 +41,10 @@
     "oauth.providers.codex.live-media-relay.ice-servers[].urls[]" = "stun:127.0.0.1";
     "oauth.providers.codex.live-media-relay.public-ip" = "127.0.0.1";
     "oauth.providers.codex.live-media-relay.udp-port-max" = 2;
+    # config/payload_replace.go: a user target at a positive position, not all
+    "requests.payload.replace[].target.all" = false;
+    "requests.payload.replace[].target.positions[]" = 1;
+    "requests.payload.replace[].target.role" = "user";
     # config/config_validation.go: raw params must contain valid JSON text
     "requests.payload.default-raw[].params.<name>" = "{}";
     "requests.payload.override-raw[].params.<name>" = "{}";
