@@ -5,10 +5,10 @@ remote-run resource, so every caller gated on it (ferment and permissions
 "run in cloud" choices) goes quiet when the resource is off.
 
 diff --git i/src/cli.ts w/src/cli.ts
-index 8c23489..6d14d97 100644
+index 240e739..9b7dc76 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -1042,8 +1042,10 @@ async function cliMain(): Promise<void> {
+@@ -1048,8 +1048,10 @@ async function cliMain(): Promise<void> {
  				inputHistoryExtension,
  				bugReportDestinationExtension,
  				tagsExtension,
@@ -18,9 +18,9 @@ index 8c23489..6d14d97 100644
 +					{ id: "extensions.remote-run", factory: remoteRunExtension },
 +					{ id: "extensions.teleport", factory: teleportExtension },
 +				] satisfies ManagedExtensionFactory[]),
+ 				prWatchExtension,
  				telemetryExtension(telemetryConfig),
  				sessionMetadataExtension(),
- 				surveysExtension(),
 diff --git i/src/extensions/remote-run/runner.ts w/src/extensions/remote-run/runner.ts
 index d8ebe4e..d569dc1 100644
 --- i/src/extensions/remote-run/runner.ts
@@ -43,7 +43,7 @@ index d8ebe4e..d569dc1 100644
  	if (value === undefined || value === "") return true
  	return !DISABLE_VALUES.has(value)
 diff --git i/src/resources/definitions.ts w/src/resources/definitions.ts
-index 5937101..4e4ccfd 100644
+index a63b442..06da966 100644
 --- i/src/resources/definitions.ts
 +++ w/src/resources/definitions.ts
 @@ -167,6 +167,22 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
