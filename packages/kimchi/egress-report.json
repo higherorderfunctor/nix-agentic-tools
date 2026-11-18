@@ -44,6 +44,7 @@
       "phase",
       "plugins",
       "pr-reporting",
+      "pr-watch",
       "processes",
       "remote-run",
       "remote-sessions",
@@ -176,6 +177,30 @@
   },
   "endpointVariables": [
     {
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "consumerOverridable": true,
+      "name": "GH_HOST",
+      "readBy": ["kimchi"]
+    },
+    {
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "consumerOverridable": true,
+      "name": "GITLAB_HOST",
+      "readBy": ["kimchi"]
+    },
+    {
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "consumerOverridable": true,
+      "name": "GITLAB_URI",
+      "readBy": ["kimchi"]
+    },
+    {
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "consumerOverridable": true,
+      "name": "GL_HOST",
+      "readBy": ["kimchi"]
+    },
+    {
       "callSites": ["src/http/proxy.ts:48"],
       "consumerOverridable": true,
       "name": "HTTPS_PROXY",
@@ -282,8 +307,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-vJaBi7qZcW/v48GMpw5arlReomK9ZeJBpfeOZ3hzFgo=",
-      "kimchiVersion": "1.35.2",
+      "kimchiSourceHash": "sha256-q/ew6pY/j7Fx8nlYr70dtmwGOIEuu9s7imryfDVFf4E=",
+      "kimchiVersion": "1.36.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -301,8 +326,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-vJaBi7qZcW/v48GMpw5arlReomK9ZeJBpfeOZ3hzFgo=",
-      "kimchiVersion": "1.35.2",
+      "kimchiSourceHash": "sha256-q/ew6pY/j7Fx8nlYr70dtmwGOIEuu9s7imryfDVFf4E=",
+      "kimchiVersion": "1.36.0",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -467,7 +492,7 @@
     },
     {
       "callSites": [
-        "src/extensions/pull-request-status/provider-api.ts:265",
+        "src/extensions/pull-request-status/provider-api.ts:278",
         "src/utils/http.ts:90"
       ],
       "files": [
@@ -827,6 +852,7 @@
         "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js:493",
         "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js:2",
         "@earendil-works/pi-coding-agent/dist/utils/management-http.js:28",
+        "src/extensions/pull-request-status/provider-api.ts:278",
         "src/utils/http.ts:90"
       ],
       "files": [
@@ -842,9 +868,15 @@
         "pi-mcp-adapter/dist/mcp-oauth-provider.js",
         "pi-mcp-adapter/mcp-oauth-provider.ts",
         "src/extensions/bug-report.ts",
+        "src/extensions/pull-request-status/provider-api.ts",
         "src/update/github.ts"
       ],
       "value": "github.com"
+    },
+    {
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "files": ["src/extensions/pull-request-status/provider-api.ts"],
+      "value": "gitlab.com"
     },
     {
       "callSites": [
@@ -3681,13 +3713,55 @@
       "bundledModule": null,
       "file": "src/extensions/pull-request-status/provider-api.ts",
       "library": "fetch",
-      "line": 265,
+      "line": 278,
       "readBy": "kimchi",
       "targets": [
         {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:112",
+          "value": "GH_HOST"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:106",
+          "value": "GITLAB_HOST"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:106",
+          "value": "GITLAB_URI"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:106",
+          "value": "GL_HOST"
+        },
+        {
+          "host": "github.com",
+          "kind": "host",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:112",
+          "value": "github.com"
+        },
+        {
+          "host": "gitlab.com",
+          "kind": "host",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:106",
+          "value": "gitlab.com"
+        },
+        {
           "host": "api.github.com",
           "kind": "url",
-          "origin": "src/extensions/pull-request-status/provider-api.ts:208",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:220",
+          "value": "https://api.github.com/graphql"
+        },
+        {
+          "host": "api.github.com",
+          "kind": "url",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:214",
           "value": "https://api.github.com"
         }
       ]
@@ -3906,49 +3980,49 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/index.ts:1164",
+          "origin": "src/extensions/agents/index.ts:1165",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1228",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1264",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1242",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1278",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:546",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:564",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:586",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:604",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:636",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:654",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:686",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:704",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:729",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:747",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -5509,7 +5583,7 @@
       "file": "src/extensions/pull-request-status/provider-api.ts",
       "guards": [],
       "library": "fetch",
-      "line": 265,
+      "line": 278,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5916,7 +5990,25 @@
     {
       "callee": "execFileSync",
       "category": "spawn",
+      "file": "kimchi/tests/e2e/fixtures/pr-watch-github-api.js",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
+      "file": "kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
       "file": "kimchi/tests/e2e/tui/support/kimchi-fixture.ts",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
+      "file": "kimchi/tests/e2e/tui/support/pr-watch-targets.ts",
       "target": "\"git\""
     }
   ],
@@ -6072,6 +6164,18 @@
       "value": "/api/v1/auth/keys"
     },
     {
+      "files": ["kimchi/src/extensions/pr-watch/providers.ts"],
+      "value": "/api/v4/merge_requests"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js"],
+      "value": "/api/v4/projects/42"
+    },
+    {
+      "files": ["kimchi/src/extensions/pr-watch/providers.ts"],
+      "value": "/api/v4/user"
+    },
+    {
       "files": ["pi/dist/bundle/chunks/llama-cpp-classify-FYN623RH.js"],
       "value": "/apply-template"
     },
@@ -6206,6 +6310,10 @@
       "value": "/chatkit/threads"
     },
     {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/check-runs"
+    },
+    {
       "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
       "value": "/client/v4/accounts/%7BCLOUDFLARE_ACCOUNT_ID%7D/ai"
     },
@@ -6227,6 +6335,10 @@
         "pi/dist/modes/interactive/theme/theme-schema.js"
       ],
       "value": "/colors"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/comments"
     },
     {
       "files": ["kimchi/src/modes/acp/commands.ts"],
@@ -6294,6 +6406,10 @@
       "value": "/dev/stdout"
     },
     {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js"],
+      "value": "/discussions"
+    },
+    {
       "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
       "value": "/doc/2011-06-15/"
     },
@@ -6352,6 +6468,25 @@
       "value": "/evals"
     },
     {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/example/kimchi-lab"
+    },
+    {
+      "files": [
+        "kimchi/tests/e2e/fixtures/pr-watch-github-api.js",
+        "kimchi/tests/e2e/tui/support/pr-watch-targets.ts"
+      ],
+      "value": "/example/kimchi-lab.git"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/example/kimchi-lab/actions/runs/1"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/example/kimchi-lab/pull/7"
+    },
+    {
       "files": ["kimchi/tests/e2e/tui/support/ledger-driver.ts"],
       "value": "/example/repo/pull/1"
     },
@@ -6401,6 +6536,20 @@
     {
       "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
       "value": "/googleapis/google-cloud-node-core/tree/main/packages/gaxios"
+    },
+    {
+      "files": [
+        "kimchi/src/extensions/pull-request-status/provider-api.ts",
+        "kimchi/tests/e2e/fixtures/pr-watch-github-api.js"
+      ],
+      "value": "/graphql"
+    },
+    {
+      "files": [
+        "kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js",
+        "kimchi/tests/e2e/tui/support/pr-watch-targets.ts"
+      ],
+      "value": "/group/subgroup/kimchi-lab.git"
     },
     {
       "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
@@ -6474,6 +6623,10 @@
       "value": "/install.sh"
     },
     {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js"],
+      "value": "/jobs"
+    },
+    {
       "files": ["pi/dist/bundle/chunks/bedrock-converse-stream.js"],
       "value": "/latest/api/token"
     },
@@ -6512,6 +6665,10 @@
     {
       "files": ["pi/dist/bundle/chunks/chunk-2LOB3CBH.js"],
       "value": "/media/"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-gitlab-api.js"],
+      "value": "/members/all/6"
     },
     {
       "files": ["kimchi/tests/e2e/mcp/fixture-server.mjs"],
@@ -6786,6 +6943,10 @@
       "value": "/posts/2026-04-08-ive-sold-out/"
     },
     {
+      "files": ["kimchi/src/extensions/pr-watch/command.ts"],
+      "value": "/pr-watch"
+    },
+    {
       "files": [
         "kimchi/src/extensions/documents/ooxml/xml.ts",
         "kimchi/src/extensions/documents/writers/template.ts"
@@ -6846,6 +7007,10 @@
     {
       "files": ["kimchi/src/extensions/teleport/ui/help-modal.ts"],
       "value": "/remote-sessions"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/repos/example/kimchi-lab"
     },
     {
       "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
@@ -6940,6 +7105,10 @@
     {
       "files": ["kimchi/tools/proxy-helper/cmd/proxy/proxy.go"],
       "value": "/ssh"
+    },
+    {
+      "files": ["kimchi/tests/e2e/fixtures/pr-watch-github-api.js"],
+      "value": "/status"
     },
     {
       "files": ["kimchi/src/extensions/teleport/ui/help-modal.ts"],
