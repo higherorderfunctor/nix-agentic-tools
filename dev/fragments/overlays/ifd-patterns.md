@@ -611,13 +611,16 @@ names need no annotation rows. Feature maturity policy stays at the factory's
 
 - **Apply patch metadata by key, not as lockfile hunks.** Upstream can reshuffle
   peer variants without changing the patched code.
-  `packages/oxlint/src/oxlint-pnpm-patch-meta.awk` inserts the name-only patch
-  key, then stamps the patch hash on resolved importer versions, snapshot keys,
-  and transitive dependency references. It scopes importers separately from
-  catalog metadata, covers peerless resolutions, and rejects missing coverage or
-  an existing top-level `patchedDependencies` block. The source copier also
-  rejects an upstream file at our patch destination. Pnpm's frozen install
-  validates the resulting lock.
+  `packages/oxlint/src/oxlint-pnpm-patch-meta.awk` adds the name-only patch key,
+  then stamps the patch hash on resolved importer versions, snapshot keys, and
+  transitive dependency references. When upstream's workspace or lock already
+  has a top-level `patchedDependencies` block, the key joins that block, since
+  YAML keeps only one of two same-named keys. Otherwise it gets a new block
+  before the key that follows `overrides:`. The awk refuses an upstream block
+  that already names `@napi-rs/cli`, and any block it cannot parse. It scopes
+  importers separately from catalog metadata, covers peerless resolutions, and
+  rejects missing coverage. The source copier also rejects an upstream file at
+  our patch destination. Pnpm's frozen install validates the resulting lock.
 
   **Settled — do not restore a version or calendar gate.** The September 18–20
   UTC sweeps were held back by the 3.10.1 catalog guard even though the
