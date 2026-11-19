@@ -11,12 +11,12 @@
 }: let
   vu = packageLib;
 
-  rev = "4e6e6c053e48aac182f7768162fef2ad42fe7d5f";
+  rev = "df32d7ec5786e0e71932767fce9982409cbaec40";
   src = pkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-4j1VdUmjqhQOCJ7cGya7vp98IzgN3KmjTO6XkFuQVAU=";
+    hash = "sha256-i3guhJRI7MPgLt+f7zn5zIjDtQqqrCiKbTFBebYpoYo=";
   };
 
   goFloor = "1.27.3";
