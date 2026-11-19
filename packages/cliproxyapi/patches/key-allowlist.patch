@@ -281,10 +281,10 @@ index 4f9daa2..cc0e2da 100644
  	// Hash remote management key if plaintext is detected (nested)
  	// We consider a value to be already hashed if it looks like a bcrypt hash ($2a$, $2b$, or $2y$ prefix).
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 72de903..2b243ec 100644
+index e6e9b3b..1e83468 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -76,7 +76,7 @@ func buildV8Paths() []configPath {
+@@ -77,7 +77,7 @@ func buildV8Paths() []configPath {
  		{"host", "server.host"}, {"port", "server.port"}, {"max-request-body-bytes", "server.max-request-body-bytes"}, {"trusted-proxies", "server.trusted-proxies"},
  		{"github-token", "server.github-token"},
  		{"tls", "server.tls"}, {"shutdown-timeout", "server.shutdown-timeout"}, {"commercial-mode", "server.commercial-mode"}, {"discovery", "server.discovery"}, {"kv-store", "server.kv-store"},
@@ -463,10 +463,10 @@ index 0000000..c6771d7
 +	assertState(2, "key-c")
 +}
 diff --git a/sdk/api/handlers/handlers_interceptors.go b/sdk/api/handlers/handlers_interceptors.go
-index ecec386..87c8cb8 100644
+index 4385cfa..64d12c8 100644
 --- a/sdk/api/handlers/handlers_interceptors.go
 +++ b/sdk/api/handlers/handlers_interceptors.go
-@@ -798,6 +798,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
+@@ -800,6 +800,17 @@ func (h *BaseAPIHandler) WriteModelListResponse(c *gin.Context, sourceFormat str
  		}
  	}
  

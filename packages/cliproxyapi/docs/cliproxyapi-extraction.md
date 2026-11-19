@@ -1,6 +1,6 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-11-17 — CPA 8.0.76 custom YAML decoders are probed
+> **Last verified:** 2026-11-19 — CPA 8.0.78 custom YAML decoders are probed
 > through yaml.v3; Z.ai documentation and the OpenCode Go catalog and plan page
 > use the shared `webDocsLib.mkSnapshot` updater and validate candidates.
 

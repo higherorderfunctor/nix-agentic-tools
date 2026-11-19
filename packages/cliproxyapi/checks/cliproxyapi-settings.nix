@@ -11,6 +11,10 @@
 }: let
   inherit (import ../lib/default.nix {inherit lib;}) cliproxyapi;
   inherit (import ../../../lib/extracted/render.nix {inherit lib;}) fill;
+  # The sample's one requests.payload.replace rule under the given target
+  # overrides; LoadConfig drops a rule whose targets conflict.
+  payloadReplaceRule = targetOverrides:
+    lib.head (cliproxyapi.sample {overrides = targetOverrides;}).requests.payload.replace;
   # Values LoadConfig validates beyond their node type, each with the file in
   # internal/ that refuses the sample's generic value:
   overrides = {
@@ -41,10 +45,21 @@
     "oauth.providers.codex.live-media-relay.ice-servers[].urls[]" = "stun:127.0.0.1";
     "oauth.providers.codex.live-media-relay.public-ip" = "127.0.0.1";
     "oauth.providers.codex.live-media-relay.udp-port-max" = 2;
-    # config/payload_replace.go: a user target at a positive position, not all
-    "requests.payload.replace[].target.all" = false;
-    "requests.payload.replace[].target.positions[]" = 1;
-    "requests.payload.replace[].target.role" = "user";
+    # config/payload_replace.go: target.paths excludes the role selectors, so
+    # one rule sets each kind of target
+    "requests.payload.replace" = map payloadReplaceRule [
+      {
+        "requests.payload.replace[].target.all" = null;
+        "requests.payload.replace[].target.positions" = null;
+        "requests.payload.replace[].target.role" = null;
+      }
+      {
+        "requests.payload.replace[].target.all" = false;
+        "requests.payload.replace[].target.paths" = null;
+        "requests.payload.replace[].target.positions[]" = 1;
+        "requests.payload.replace[].target.role" = "user";
+      }
+    ];
     # config/config_validation.go: raw params must contain valid JSON text
     "requests.payload.default-raw[].params.<name>" = "{}";
     "requests.payload.override-raw[].params.<name>" = "{}";

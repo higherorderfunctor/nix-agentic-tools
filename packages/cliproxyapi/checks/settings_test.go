@@ -62,8 +62,8 @@ func TestNatLoad(t *testing.T) {
 		if len(cfg.Payload.DefaultRaw) != 1 || len(cfg.Payload.OverrideRaw) != 1 {
 			t.Fatalf("load %d: raw payload rules dropped: default=%d override=%d", load, len(cfg.Payload.DefaultRaw), len(cfg.Payload.OverrideRaw))
 		}
-		if len(cfg.Payload.Replace) != 1 {
-			t.Fatalf("load %d: payload replace rule dropped: %d", load, len(cfg.Payload.Replace))
+		if len(cfg.Payload.Replace) != 2 || len(cfg.Payload.Replace[0].Target.Paths) != 1 || cfg.Payload.Replace[1].Target.Role != "user" {
+			t.Fatalf("load %d: payload replace rules dropped or reordered: %+v", load, cfg.Payload.Replace)
 		}
 		if cfg.Payload.DefaultRaw[0].Params["sample"] != "{}" || cfg.Payload.OverrideRaw[0].Params["sample"] != "{}" {
 			t.Fatalf("load %d: raw payload params changed", load)
@@ -106,5 +106,5 @@ func TestNatLoad(t *testing.T) {
 			t.Fatalf("load %d: management hash differs from persisted value", load)
 		}
 	}
-	t.Log("native v8 validation and unknown-key control passed; raw payload rules retained; persisted bcrypt, legacy removal, other values and substituted secret preserved across reload")
+	t.Log("native v8 validation and unknown-key control passed; raw and both payload replace rules retained; persisted bcrypt, legacy removal, other values and substituted secret preserved across reload")
 }

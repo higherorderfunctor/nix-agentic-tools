@@ -203,9 +203,11 @@ URL with quotes, backslash, colon, hash, brackets, newline and a literal
 placeholder. `checks/settings_test.go` validates the clean v8 sample with native
 `ValidateV8Config` and rejects an unknown-key control, then injects a
 conflicting legacy proxy key and calls `LoadConfig` twice on a writable copy. It
-checks both raw payload rules survive, the rewritten file persists the bcrypt
-hash and removes the legacy key, every other document value stays equal after
-JSON normalization, and the hash and secret remain unchanged on reload.
+checks both raw payload rules and both payload replace rules survive (a
+`target.paths` rule and a role-selector rule, which `payload_replace.go` makes
+mutually exclusive), the rewritten file persists the bcrypt hash and removes the
+legacy key, every other document value stays equal after JSON normalization, and
+the hash and secret remain unchanged on reload.
 
 `module-service-instances-real-daemons` starts the packaged CPA and Manager Plus
 through their evaluated Home Manager instance units with runtime dummy secret
