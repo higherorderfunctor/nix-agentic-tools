@@ -45,10 +45,7 @@
       role = "commit-message";
       hook = {
         enable = true;
-        # nixpkgs' cargoUseSystemLibs sets LIBGIT2_NO_VENDOR, but convco's
-        # git2 unstable-sha256 feature needs a libgit2-experimental build that
-        # nixpkgs' convco does not provide. Keep convco's vendored libgit2.
-        package = pkgs.convco.overrideAttrs {dontCargoUseSystemLibs = true;};
+        package = pkgs.convco;
       };
       ci = null;
     };
