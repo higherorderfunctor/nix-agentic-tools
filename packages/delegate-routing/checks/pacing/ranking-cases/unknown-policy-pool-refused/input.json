@@ -1,0 +1,21 @@
+{
+  "now": 1794447300,
+  "policy": { "idleBaseline": 1.0, "weights": { "absent": 1.0 } },
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "allowance": {
+            "capacity": 100.0,
+            "models": ["canonical"],
+            "role": "pace",
+            "window": "7d"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {},
+    "routes": [{ "id": "canonical", "maker": null, "model": "served" }]
+  }
+}

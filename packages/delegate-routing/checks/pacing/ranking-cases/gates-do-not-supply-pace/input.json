@@ -1,0 +1,41 @@
+{
+  "now": 1794447300,
+  "snapshot": {
+    "pools": {
+      "budget": {
+        "limits": {
+          "closed": {
+            "capacity": 40.0,
+            "models": ["blocked"],
+            "role": "gate",
+            "window": "7d:closed"
+          },
+          "open": {
+            "capacity": 40.0,
+            "models": ["open-only", "paced"],
+            "role": "gate",
+            "window": "5h:open"
+          },
+          "pace": {
+            "capacity": 100.0,
+            "models": ["blocked", "paced"],
+            "role": "pace",
+            "window": "7d"
+          }
+        },
+        "readerPool": "reader"
+      }
+    },
+    "readers": {
+      "budget": {
+        "exit": 0,
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"synthetic\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"5h:open\":{\"enforced\":true,\"remainingPercent\":25.0,\"resetsAt\":null,\"status\":\"ok\",\"usedPercent\":75.0,\"windowSeconds\":18000},\"7d\":{\"enforced\":true,\"remainingPercent\":50.0,\"resetsAt\":\"2026-11-15T13:35:00Z\",\"status\":\"ok\",\"usedPercent\":50.0,\"windowSeconds\":604800},\"7d:closed\":{\"enforced\":true,\"remainingPercent\":0.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":100.0,\"windowSeconds\":604800}}}"
+      }
+    },
+    "routes": [
+      { "id": "paced", "maker": null, "model": "paced-served" },
+      { "id": "blocked", "maker": null, "model": "blocked-served" },
+      { "id": "open-only", "maker": null, "model": "open-served" }
+    ]
+  }
+}

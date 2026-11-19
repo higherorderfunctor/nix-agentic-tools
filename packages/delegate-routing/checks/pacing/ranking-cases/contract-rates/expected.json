@@ -1,0 +1,104 @@
+{
+  "entries": [
+    {
+      "id": "hour-model",
+      "maker": null,
+      "model": "hour-served",
+      "pace": 84.0,
+      "pool": "budget",
+      "score": 84.0,
+      "state": "ready"
+    },
+    {
+      "id": "idle-model",
+      "maker": null,
+      "model": "idle-served",
+      "pace": 2.0,
+      "pool": "budget",
+      "score": 2.0,
+      "state": "ready"
+    },
+    {
+      "id": "weekly-model",
+      "maker": null,
+      "model": "weekly-served",
+      "pace": 1.0,
+      "pool": "budget",
+      "score": 1.0,
+      "state": "ready"
+    },
+    {
+      "id": "monthly-model",
+      "maker": null,
+      "model": "monthly-served",
+      "pace": 0.2,
+      "pool": "budget",
+      "score": 0.2,
+      "state": "ready"
+    }
+  ],
+  "snapshot": {
+    "asOf": 1794447300,
+    "pools": {
+      "budget": {
+        "limits": [
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "monthly-half",
+            "models": ["monthly-model"],
+            "naturalResetAt": 1795786500,
+            "reason": null,
+            "remaining": 10.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 2678400
+          },
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "weekly-half",
+            "models": ["weekly-model"],
+            "naturalResetAt": 1794749700,
+            "reason": null,
+            "remaining": 50.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 604800
+          },
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "weekly-hour",
+            "models": ["hour-model"],
+            "naturalResetAt": 1794450900,
+            "reason": null,
+            "remaining": 50.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 604800
+          },
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "weekly-idle",
+            "models": ["idle-model"],
+            "naturalResetAt": 1794749700,
+            "reason": null,
+            "remaining": 100.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 604800
+          }
+        ],
+        "scopeResolved": true
+      }
+    },
+    "routes": [
+      { "id": "monthly-model", "maker": null, "model": "monthly-served" },
+      { "id": "weekly-model", "maker": null, "model": "weekly-served" },
+      { "id": "hour-model", "maker": null, "model": "hour-served" },
+      { "id": "idle-model", "maker": null, "model": "idle-served" }
+    ]
+  }
+}

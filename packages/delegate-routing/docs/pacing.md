@@ -143,3 +143,67 @@ Its whole expected output is:
   "routes": [{ "id": "canonical-a", "maker": null, "model": "served-fable" }]
 }
 ```
+
+## Allowance ranking
+
+`rank(normalized, policy=None)` in `scripts/pacing.py` returns a `Ranking`: the
+original typed `Normalized` snapshot and ordered `Entry` models. Call
+`normalize(snapshot, now)` first. The owner tests are the library's callers
+today, and there is no ranking command.
+
+`RankingPolicy` has positive finite `idleBaseline`, default 1.0, and a `weights`
+map of finite nonnegative numbers; omitted pools weigh 1:
+
+```python
+policy = RankingPolicy.model_validate(
+    {"idleBaseline": 2.5, "weights": {"budget": 1.5}}
+)
+ranking = rank(normalize(snapshot, now), policy)
+```
+
+Unknown weight keys are refused before entries are produced. Ready scores are
+pace times weight; weight zero changes preference without making a ready entry
+unavailable. Overflow is refused by the result model.
+
+A pool applies when one of its limits names the route's canonical `id`, while
+the served `model` spelling stays separate. Every applicable credential remains
+an alternative, and an unmatched route gets one null-pool entry. The lowest pace
+across applicable paced limits is restrictive. Ranking sees no raw
+`usedPercent`; normalized `remaining == capacity` identifies an idle pace.
+
+For a valid enforced pace with a future reset, the rate is:
+
+```text
+remaining / capacity × windowSeconds / seconds until reset
+```
+
+The rate is not clipped: half a weekly allowance with half the week left is 1.0,
+a full weekly allowance then is 2.0, half a weekly allowance with an hour left
+is 84, and 10% of a monthly allowance with half the month left is 0.2.
+
+An idle pace with an absent, equal, or past reset uses `idleBaseline`. There is
+no positive remaining time to divide by, and ranking never invents a refill.
+Unused valid evidence therefore ranks while stale or invalid positive evidence
+stays unusable.
+
+- A positive valid gate does not change pace, and a gate alone supplies no pace.
+- Any proven zero blocks readiness; a proven paced zero stays pace zero when
+  timing evidence is invalid.
+- Missing, invalid, stale, unknown-enforcement, not-enforced, or
+  unresolved-scope evidence cannot establish positive pace or readiness.
+- Failed and exhausted alternatives remain, with their reasons on the retained
+  snapshot's observations rather than global diagnostics.
+
+Entries expose `pace` (restrictive rate or null), `pool` (applicable credential
+or null), `score` (weighted pace when ready, otherwise zero), and `state`
+(`ready` or `out`). They sort by descending score, ready before out, then pool,
+served model, canonical id, and maker (null before strings). Ranking itself has
+no session-reserve rule.
+
+The `delegate-routing-allowance-ranking` check reads every case in
+`checks/pacing/ranking-cases/`, parses each input and one expected file, and
+compares the complete serialized ranking, including its retained snapshot.
+Expected errors record the ranking boundary error. Its properties prove that
+invalid timing cannot hide a proven paced zero, positive unknown evidence never
+becomes ready, overlapping paced limits use the smaller rate, and pool and route
+permutations cannot change weighted ordering.

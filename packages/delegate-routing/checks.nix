@@ -8,6 +8,17 @@
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
   checks = {
+    # Handwritten saved captures and properties reject clipped pace and unreadable evidence.
+    delegate-routing-allowance-ranking =
+      pkgs.runCommand "delegate-routing-allowance-ranking" {
+        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export HYPOTHESIS_STORAGE_DIRECTORY="$TMPDIR/hypothesis"
+        python3 -I -B ${./checks/pacing}/test_allowance.py ${./scripts} ${./checks/pacing/ranking-cases}
+        touch "$out"
+      '';
     # Validates every case and renders its fixture and launch plan with no
     # harness on PATH and no login: the suite's --dry-run, nothing launched.
     delegate-routing-eval-structure =

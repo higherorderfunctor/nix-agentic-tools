@@ -1,0 +1,100 @@
+{
+  "entries": [
+    {
+      "id": "canonical",
+      "maker": null,
+      "model": "covered",
+      "pace": 1.0,
+      "pool": "c",
+      "score": 2.0,
+      "state": "ready"
+    },
+    {
+      "id": "canonical",
+      "maker": null,
+      "model": "covered",
+      "pace": 1.0,
+      "pool": "b",
+      "score": 0.0,
+      "state": "ready"
+    },
+    {
+      "id": "uncovered",
+      "maker": null,
+      "model": "uncovered",
+      "pace": null,
+      "pool": null,
+      "score": 0.0,
+      "state": "out"
+    },
+    {
+      "id": "canonical",
+      "maker": null,
+      "model": "covered",
+      "pace": null,
+      "pool": "a",
+      "score": 0.0,
+      "state": "out"
+    }
+  ],
+  "snapshot": {
+    "asOf": 1794447300,
+    "pools": {
+      "a": {
+        "limits": [
+          {
+            "capacity": 100.0,
+            "enforced": null,
+            "id": "allowance",
+            "models": ["canonical"],
+            "naturalResetAt": null,
+            "reason": "missing-capture",
+            "remaining": null,
+            "role": "pace",
+            "status": "missing",
+            "windowSeconds": null
+          }
+        ],
+        "scopeResolved": false
+      },
+      "b": {
+        "limits": [
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "allowance",
+            "models": ["canonical"],
+            "naturalResetAt": 1794749700,
+            "reason": null,
+            "remaining": 50.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 604800
+          }
+        ],
+        "scopeResolved": true
+      },
+      "c": {
+        "limits": [
+          {
+            "capacity": 100.0,
+            "enforced": true,
+            "id": "allowance",
+            "models": ["canonical"],
+            "naturalResetAt": 1794749700,
+            "reason": null,
+            "remaining": 50.0,
+            "role": "pace",
+            "status": "valid",
+            "windowSeconds": 604800
+          }
+        ],
+        "scopeResolved": true
+      }
+    },
+    "routes": [
+      { "id": "canonical", "maker": null, "model": "covered" },
+      { "id": "uncovered", "maker": null, "model": "uncovered" }
+    ]
+  }
+}
