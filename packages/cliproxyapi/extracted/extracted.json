@@ -3936,49 +3936,6 @@
         "release_date": "2026-10-13",
         "type": "chat"
       },
-      "glm-5.2": {
-        "api": {
-          "chat-completions": {
-            "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "choice": ["auto"], "updates": [] } },
-            "compatibility": { "reasoning_field": "reasoning_content" },
-            "sdk": {
-              "aisdk": "@ai-sdk/openai-compatible",
-              "opencodeai": "@opencode/ai/providers/openai-compatible"
-            }
-          }
-        },
-        "canonical_id": "zhipuai/glm-5.2",
-        "capabilities": {
-          "effort_updates": false,
-          "reasoning": { "effort": ["high", "max"], "supported": true },
-          "structured_output": true,
-          "system_updates": true,
-          "temperature": true,
-          "tools": { "supported": true },
-          "top_k": true,
-          "top_p": true
-        },
-        "cost": {
-          "text": {
-            "input": { "cache": { "read": 0.26 }, "price": 1.4 },
-            "output": { "price": 4.4 }
-          }
-        },
-        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
-        "family": "glm",
-        "id": "glm-5.2",
-        "last_updated": "2026-06-13",
-        "limit": { "context": 1000000, "output": 131072 },
-        "modalities": { "input": ["text"], "output": ["text"] },
-        "name": "GLM-5.2",
-        "object": "model",
-        "open_weights": true,
-        "owned_by": "opencode",
-        "recommended_api": "chat-completions",
-        "release_date": "2026-06-13",
-        "type": "chat"
-      },
       "glm-5.3": {
         "api": {
           "chat-completions": {
@@ -5542,7 +5499,6 @@
         "deepseek-v4-pro": 15,
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
-        "glm-5.2": 60,
         "glm-5.3": 500,
         "glm-5.3-flash": 60,
         "gpt-5.6-luna": 15,
@@ -5576,7 +5532,6 @@
         "deepseek-v4-pro": 60,
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
-        "glm-5.2": 180,
         "glm-5.3": 1000,
         "glm-5.3-flash": 180,
         "gpt-5.6-luna": 60,
@@ -5610,7 +5565,6 @@
         "deepseek-v4-pro": 20,
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
-        "glm-5.2": 65,
         "glm-5.3": 505,
         "glm-5.3-flash": 65,
         "gpt-5.6-luna": 20,
