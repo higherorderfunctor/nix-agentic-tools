@@ -1,6 +1,6 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-11-06 — a pnpm repin comes from the update tooling;
+> **Last verified:** 2026-11-18 — a pnpm repin comes from the update tooling;
 > extracted facts self-heal through visible PR CI commits, with Linux carrying
 > its facts before Darwin measures.
 >
@@ -10,9 +10,9 @@
 > - **Packaging a pnpm major does not prove fetcher compatibility.**
 >   `pnpm-fetcher-parity` enumerates existing `pnpmDeps` consumers; no consumer
 >   exercised pnpm 12 when its package was added. The pinned fetcher omits an
->   empty registry flag; pnpm_12 uses its frozen 12.15.0 bootstrap for fetching
->   and configuration. Oxlint uses pnpm_11; moving that consumer requires
->   validating its fetch/build pair separately.
+>   empty registry flag; pnpm_12 fetches and configures with upstream's prebuilt
+>   build pnpm, the pinned tag's `packageManager` version. Oxlint uses pnpm_11;
+>   moving that consumer requires validating its fetch/build pair separately.
 > - **An empty capture can be the ANSWER, not a dead anchor.** Demand a
 >   non-empty result only where absence is impossible. Where a mechanism can
 >   legitimately not exist, assert instead on the thing proving the probe COULD
@@ -577,10 +577,10 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   check, so Rust pnpm 12 can use its normal registry default. Do not move oxlint
   from `pnpm_11` just because upstream's `packageManager` moved to 12; any swap
   must move BOTH pnpm sites together and validate that consumer, or the parity
-  check fails on the store-path mismatch. pnpm_12's staged bootstrap uses
-  `fetcherVersion = 4`: the pinned nixpkgs supports 3, 4 and 5, and rejects only
-  3 for pnpm >= 11. Version 4 dumps the v11 SQLite store to SQL, which
-  `pnpmConfigHook` reconstructs before installing.
+  check fails on the store-path mismatch. pnpm_12 uses `fetcherVersion = 4`: the
+  pinned nixpkgs supports 3, 4 and 5, and rejects only 3 for pnpm >= 11. Version
+  4 dumps the v11 SQLite store to SQL, which `pnpmConfigHook` reconstructs
+  before installing.
 
 - **A multi-document `pnpm-lock.yaml` is fine for the awk.** pnpm 12 writes a
   leading `---` document carrying its own self-management deps
@@ -669,11 +669,10 @@ names need no annotation rows. Feature maturity policy stays at the factory's
   fetch whose mismatch reports the real `got:`. oxlint, context7-mcp and
   effect-mcp still pass the bare `pname`.
 
-  A pnpm_12 bootstrap-stage swap has the same constraint: FODs with the same
-  name and hash share an output path, regardless of their pnpm input. Its
-  bootstrap dependency FOD has a distinct name from the main dependency FOD;
-  changing the bootstrap input requires moving the name or hash to exercise the
-  fetch instead of substituting the recorded output.
+  Changing pnpm_12's build pnpm has the same constraint: FODs with the same name
+  and hash share an output path, regardless of their pnpm input. A new build
+  pnpm at an unchanged release substitutes the recorded output; its fetch is
+  first exercised when the version, and so the FOD name, moves.
 
   A versioned name covers a VERSION bump only. A nixpkgs or pnpm bump at an
   unchanged kimchi version moves neither the name nor the declared hash, so the
