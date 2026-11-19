@@ -1,8 +1,9 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-11-17 — kiro-cli owns its payload derivation and its
-> Linux FHS env; pnpm_12 bootstrap has no hash fixers and builds with its own
-> frozen JavaScript pnpm 11 pin; a hand hash edit needs a reason.
+> **Last verified:** 2026-11-18 — kiro-cli owns its payload derivation and its
+> Linux FHS env; pnpm_12 fetches and configures its dependencies with upstream's
+> prebuilt build pnpm, and its update script re-pins that pnpm from the new tag
+> before repairing the dependency hash; a hand hash edit needs a reason.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -625,8 +626,7 @@ build.
 to any versioned attribute family:
 
 - For the JavaScript majors 10 and 11, one shared builder
-  (`packages/pnpm/lib/mkMajor.nix`) takes the major as an argument, with
-  optional `sidecar`, `sources` and `updateScript` for a frozen pin; the
+  (`packages/pnpm/lib/mkMajor.nix`) takes the major as an argument; the
   per-major files are two-line delegations. They exist because each major needs
   its own path for `--override-filename` in owner `registry.nix` and its own
   sidecar beside it — not because the logic differs.
@@ -661,21 +661,7 @@ to any versioned attribute family:
 - pnpm_12 generates `cas-loader.mjs.inc` with upstream's
   `pnpm/esm-loader/scripts/bundle-runtime.mjs` in `preBuild`, preserving the
   inherited Cargo phase. Its `fetchPnpmDeps` and `pnpmConfigHook` use the same
-  frozen Rust pnpm 12.15.0 bootstrap and `@pnpm/esm-loader` workspace selection.
-  The bootstrap uses the same recipe with
-  `packages/pnpm/sources-12-bootstrap.json` and a JavaScript pnpm 11 built by
-  `mkMajor.nix` from that sidecar's `builder` pin, with no update script, never
-  the shipped pnpm_11: pnpm 11.28.12 applies version-selector `overrides` to
-  `catalog:` dependencies, which fails 12.15.0's frozen install on `socks`, and
-  a frozen stage needs a frozen builder. Passthru is outside the derivation, so
-  the builder shares its store path with a shipped pnpm_11 at the same pin; the
-  main release uses `packages/pnpm/sources-12.json`. pnpm 12.16+ includes
-  catalogs and policies from `.config/pnpm/*.yaml`, which requires pnpm >=
-  12.15.0; nixpkgs' pnpm_12 is older. The private bootstrap is reachable through
-  the main `pnpmDeps.nativeBuildInputs`; its dependency FOD has a distinct name
-  from the main release's FOD. The bootstrap exposes no hash fixers, update
-  script or registry entry. The bootstrap is bumped deliberately. Both stages
-  check their installed version against their own sidecar. Both installs disable
+  build pnpm and `@pnpm/esm-loader` workspace selection. Both installs disable
   the global virtual store: otherwise upstream's `virtualStoreType: global` puts
   package files under the dependency fetcher's store, and nixpkgs' JSON
   normalization tries to parse non-JSON fixtures. The configure hook installs
@@ -685,17 +671,47 @@ to any versioned attribute family:
   lockfile but are not downloaded or linked; the bundler uses Nix's build Node.
   Without it, a dependency store fetched on Linux contains only Linux's managed
   Node and offline Darwin configuration tries to download its own runtime.
-- pnpm_12 keeps version/source/cargo/pnpm pins and `rustToolchainChannel` in its
-  sidecar, with `mkUpdateScript`'s cheap no-op exit. The main `pnpmDeps` keeps
-  its name and pinned hash, so at the current pin its output path equals the one
-  fetched by pnpm_11 and is substituted. Rust pnpm first fetches the main
-  dependencies when the Update sweep moves the version, giving the FOD a new
-  name; the hash fixer then derives `pnpmDepsHash`. Its `rustUpdateExtract`
-  restores the source hash, records the source's channel through
-  `fixRustToolchain`, then restores Cargo and pnpm hashes after a bump or input
-  update. npm's `latest-12` dist-tag picks the release and the source fixer
-  fetches the matching GitHub tag. Earlier binary and JavaScript-placeholder
-  measurements are historical:
+- **pnpm_12's build pnpm is upstream's prebuilt release binary, never a
+  from-source stage.** pnpm_12 itself is compiled; only the pnpm that fetches
+  and configures its JavaScript dependencies is unpacked. Its version is the one
+  the pinned tag names in `package.json` `packageManager`, which is the pnpm
+  upstream builds that release with, so it reads that tag's workspace settings
+  and lockfile. A from-source builder does not keep up: pnpm 12.16+ includes
+  catalogs and policies from `.config/pnpm/*.yaml`, which nixpkgs' pnpm_12
+  cannot read, and upstream commits a 13.0 lockfile from 12.20.0, which the
+  frozen 12.15.0 stage used until 2026-11-18 could not read. Each such move
+  needs another frozen stage, and a stage built by pnpm_11 changes pnpm_12 on
+  every pnpm_11 bump. The mechanism is `buildPnpm` in
+  `packages/pnpm/packages/ai/generic/pnpm_12/package.nix`: the `builder` object
+  in `packages/pnpm/sources-12.json` pins the version and one release-tarball
+  hash per system, and the recipe's `builderAssets` table gives the URL and
+  `meta.platforms`, so the sidecar cannot re-point the fetch. The tarball's
+  `pnpm` and `dist/` stay side by side. Linux patches the interpreter and
+  `libgcc_s` with autoPatchelf; the Darwin binary is left as upstream signed it,
+  and neither is stripped. The install check requires the binary to report the
+  pinned version. It takes `nodejs-slim` from nixpkgs' pnpm_12, because
+  `fetchPnpmDeps` reads it. `prePnpmInstall` fails both the fetch and the
+  configure when the source's `packageManager` is not the pinned builder, so a
+  release bump cannot keep the previous release's build pnpm.
+- pnpm_12 keeps version/source/cargo/pnpm pins, `rustToolchainChannel` and the
+  `builder` pin in its sidecar, with `mkUpdateScript`'s cheap no-op exit. A
+  dependency FOD's output path depends on its name and hash, not on the pnpm
+  that fetches it, so changing the build pnpm at an unchanged release
+  substitutes the recorded output. The build pnpm first fetches when the Update
+  sweep moves the version, giving the FOD a new name; the hash fixer then
+  derives `pnpmDepsHash`. `mkUpdateScript` rewrites the sidecar with the version
+  alone, so a bump runs three steps in order. A source-only hash fixer restores
+  `srcHash`. `fixBuilderPin` then builds that source, reads `packageManager`
+  from its `package.json`, refuses anything but `pnpm@<major>.<minor>.<patch>`,
+  prefetches that release's tarball for every system in `builderAssets` and
+  writes `builder`. It must follow the source hash because it builds `.src`, and
+  precede the pnpm hash repair because that repair runs the build pnpm.
+  `rustUpdateExtract` runs last: it finds the source hash restored, records the
+  source's channel through `fixRustToolchain`, then restores Cargo and pnpm
+  hashes. An input update runs `rustUpdateExtract` alone, because the release
+  and its `builder` have not moved. npm's `latest-12` dist-tag picks the release
+  and the source fixer fetches the matching GitHub tag. Earlier binary and
+  JavaScript-placeholder measurements are historical:
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 
 Rust packages take `rustPlatform` from `vu.mkRustPlatform`. Literal recipes pass
@@ -889,8 +905,7 @@ optional `rustToolchainOverride` and `rustToolchainRoot`, and, for sidecars,
 metadata or constructing a second writer. Sidecar update scripts pass
 `extraExtract = "${rustPlatform.passthru.rustUpdateExtract}"`; extra hash
 repairs such as pnpm_12's pnpm dependencies use the platform's `targets`
-parameter, whose default is the Cargo vendor target. The pnpm_12 bootstrap
-passes no fixer targets and does not merge the platform's passthru.
+parameter, whose default is the Cargo vendor target.
 
 Rust updaters extract `channel` from `rust-toolchain.toml` or `rust-toolchain`
 at the recipe's crate/workspace root, using `codex-rs` for `chatgpt-codex`.

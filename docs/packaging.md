@@ -151,12 +151,14 @@ own runner (`dev/scripts/update-matrix.py`).
   `.override` of nixpkgs' `pnpm_12` rather than an `mkMajor.nix` caller. It
   moves the version, `srcHash`, `cargoHash`, the locked `rustPlatform` and the
   update script. Its `pnpmDepsHash` pins offline JavaScript dependencies;
-  `preBuild` generates the embedded loader with upstream's bundler, using a
-  frozen 12.15.0 bootstrap built by a frozen pnpm 11 builder from
-  `sources-12-bootstrap.json` (never the shipped pnpm_11). Both dependency
-  installs pass `--no-runtime` to use Nix's build Node instead of downloading
-  upstream's managed runtime. Its sidecar's source, Cargo and pnpm hashes are
-  restored by `passthru.rustUpdateExtract`, with `fixRustToolchain` recording
+  `preBuild` generates the embedded loader with upstream's bundler. The pnpm
+  that fetches and configures those dependencies is upstream's prebuilt release
+  binary of the version the pinned tag names in `packageManager`, pinned under
+  `builder` in the sidecar; a from-source builder needs a new frozen stage
+  whenever upstream's lockfile format moves. Both dependency installs pass
+  `--no-runtime` to use Nix's build Node instead of downloading upstream's
+  managed runtime. Its sidecar's source, Cargo and pnpm hashes are restored by
+  `passthru.rustUpdateExtract`, with `fixRustToolchain` recording
   `rustToolchainChannel` after the source hash and before the Cargo hash. It
   carries its own major guard. Until 2026-10-03 it unpacked upstream's prebuilt
   `@pnpm/exe.<platform>` binaries; measurements at
