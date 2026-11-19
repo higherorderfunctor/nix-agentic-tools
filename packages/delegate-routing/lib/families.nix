@@ -38,7 +38,7 @@
   };
   openai = {
     astra = {
-      avoidFor = "code review and judging (untested on code-review benchmarks); ultra (spawns subagents, cost unknown)";
+      avoidFor = "code-review checks and judging (no result in the one code-review benchmark tested); ultra (spawns subagents, cost unknown)";
       defaultEffort = "medium";
       effort = "medium sweet spot, high = operator's config default, xhigh only for named-hard; flat above medium";
       match = "gpt-*-astra";
@@ -61,7 +61,7 @@
       match = "gpt-*-sol";
       orchestration = "default orchestrator";
       tier = "strong";
-      useFor = "code writer; long-horizon coding; second check and judge (high precision on code review); written deliverables";
+      useFor = "code writer; long-horizon coding; code-review second check and judge (highest OpenAI judge precision in one single-run code-review benchmark); written deliverables";
     };
     terra = {
       avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";
