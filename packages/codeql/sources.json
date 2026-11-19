@@ -1,47 +1,47 @@
 {
-  "version": "2.27.4",
+  "version": "2.27.5",
   "actions": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-actions-linux64.tar.zst",
-    "hash": "sha256-8SuEwe01QMVGkSV93qG3K2L3hci7PsqQdWLGqKI2HTI="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-actions-linux64.tar.zst",
+    "hash": "sha256-/XkV6fJC2CPeQPr+1Y9JgW26jlqPRDGRkk6vnHkvZlU="
   },
   "bare": {
-    "url": "https://github.com/github/codeql-cli-binaries/releases/download/v2.27.4/codeql-linux64.zip",
-    "hash": "sha256-OTv5K2ZZYUHsk7r5tIP0o1DzdJkWySL+0N1jxncGBH0="
+    "url": "https://github.com/github/codeql-cli-binaries/releases/download/v2.27.5/codeql-linux64.zip",
+    "hash": "sha256-kCbAH0qkzNZv5zTI/gN+egOuz+FR9oF2CSLDBN2hQgg="
   },
   "cpp": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-cpp-linux64.tar.zst",
-    "hash": "sha256-7qWnbtZ3iJInijh8Q2L++NA+Wpw3lfXVAi1Jb8z9U4g="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-cpp-linux64.tar.zst",
+    "hash": "sha256-BmtDrQSsgVT+g3QOxtJLNUeNn2h/UcnciH3/OWFFR30="
   },
   "csharp": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-csharp-linux64.tar.zst",
-    "hash": "sha256-uZHSP2vET6NPgdDUuhWaMx8xwqf0/11Td47QoZoLSKo="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-csharp-linux64.tar.zst",
+    "hash": "sha256-JKyLNYqMS5qryIpQSE9b4kEot77NknVT3usw+ZF7P6w="
   },
   "full": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-linux64.tar.zst",
-    "hash": "sha256-2j6VLH/peKC2uT512curvfhTVmfKCBC9Syrje8hA/+4="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-linux64.tar.zst",
+    "hash": "sha256-FB5utOmchJihJY4oLm97WcdHtLGn6rx8v30aqSeS7fA="
   },
   "go": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-go-linux64.tar.zst",
-    "hash": "sha256-15sz+G7Isgr3PTRWBBNJongMEIHujA7KYkuaJcXLLhU="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-go-linux64.tar.zst",
+    "hash": "sha256-J2F421LRd/CpklI7u9iEzeVCYX8MyjFXi+n2a+Thjyg="
   },
   "java": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-java-linux64.tar.zst",
-    "hash": "sha256-2+uOL0RUv0qtNf4W2HcNzEpM4MNYXYlS1X5BkFOWr/g="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-java-linux64.tar.zst",
+    "hash": "sha256-dPqIQ0tsJS/JgzPjxNCH+IgsXjShs/GvICGnWyswP6E="
   },
   "javascript": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-javascript-linux64.tar.zst",
-    "hash": "sha256-CC55jJeDEoOipfaekZjFEnDldnAT1TM9ruq2Ugr5znI="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-javascript-linux64.tar.zst",
+    "hash": "sha256-sQlXFAp5aYGQIurCOmo30MamXeEqhHBMpxxBa5gO21w="
   },
   "python": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-python-linux64.tar.zst",
-    "hash": "sha256-2GLLEa/wNZiPF4cDtpdRvgcvKqfnZhbxa7cloge1C30="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-python-linux64.tar.zst",
+    "hash": "sha256-rlBncvzGq+uBDchiyTRuq6Vebm1lyd9W901pZmkO5Qc="
   },
   "ruby": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-ruby-linux64.tar.zst",
-    "hash": "sha256-qzpau4kmOpKi6LKZ27eGyfnXtGWTui2UwP9j2KrbmhU="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-ruby-linux64.tar.zst",
+    "hash": "sha256-6A4ZA92XP+XsModwID5RiaTKQGPMneB8On0SunqDlF0="
   },
   "rust": {
-    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.4/codeql-bundle-rust-linux64.tar.zst",
-    "hash": "sha256-HC+GcJS4DkPJoOURCQ5X4Oo78QdgC0s3Y8UrkCC07Es="
+    "url": "https://github.com/github/codeql-action/releases/download/codeql-bundle-v2.27.5/codeql-bundle-rust-linux64.tar.zst",
+    "hash": "sha256-+sFogtHFbzzf5QKxAh5EQHl24yYMxGYLT4mAgsMV+sk="
   }
 }
