@@ -1,26 +1,75 @@
-Add `extensions.teleport` and `extensions.remote-run` to Kimchi's resource
-registry, both enabled by default, and route the two extensions through
+Add `extensions.pr-watch`, `extensions.remote-run` and `extensions.teleport`
+to Kimchi's resource registry and route the three extensions through
 `enabledExtensionFactories`. `isRemoteRunEnabled()` also honours the
 remote-run resource, so every caller gated on it (ferment and permissions
 "run in cloud" choices) goes quiet when the resource is off.
 
+Remote run and teleport default to true. PR watch defaults to false: its
+model-callable `pr_watch` tool starts with `autoFix` true, so one call lets
+the model edit, commit and push to a PR, and a confirmed offer re-arms in
+later sessions. `isPRMonitoringPermitted()` honours the resource too, which
+keeps the extension inert under ACP, and the ACP server neither advertises
+`prMonitoring` nor intercepts `/pr-watch` prompts or lists the command while
+it is off.
+
 diff --git i/src/cli.ts w/src/cli.ts
-index 240e739..9b7dc76 100644
+index 240e739..3e250fd 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -1048,8 +1048,10 @@ async function cliMain(): Promise<void> {
+@@ -147,6 +147,7 @@ import pluginPackageHooksAdapter from "./extensions/plugin-package-hook-adapter/
+ import powershellGateExtension from "./extensions/powershell-gate.js"
+ import prCostReportingExtension from "./extensions/pr-cost-reporting/index.js"
+ import prWatchExtension from "./extensions/pr-watch/index.js"
++import { PR_WATCH_RESOURCE_ID } from "./extensions/pr-watch/resource.js"
+ import { setPrintGate } from "./extensions/print-mode.js"
+ import promptEnrichmentExtension from "./extensions/prompt-construction/prompt-enrichment.js"
+ import promptSummaryExtension from "./extensions/prompt-summary.js"
+@@ -1048,9 +1049,11 @@ async function cliMain(): Promise<void> {
  				inputHistoryExtension,
  				bugReportDestinationExtension,
  				tagsExtension,
 -				teleportExtension,
 -				remoteRunExtension,
+-				prWatchExtension,
 +				...enabledExtensionFactories([
++					{ id: PR_WATCH_RESOURCE_ID, factory: prWatchExtension },
 +					{ id: "extensions.remote-run", factory: remoteRunExtension },
 +					{ id: "extensions.teleport", factory: teleportExtension },
 +				] satisfies ManagedExtensionFactory[]),
- 				prWatchExtension,
  				telemetryExtension(telemetryConfig),
  				sessionMetadataExtension(),
+ 				surveysExtension(),
+diff --git i/src/extensions/pr-watch/resource.ts w/src/extensions/pr-watch/resource.ts
+new file mode 100644
+index 0000000..b60c29d
+--- /dev/null
++++ w/src/extensions/pr-watch/resource.ts
+@@ -0,0 +1,2 @@
++/** The /resources id for pr-watch: off leaves no pr_watch tool, auto-watch or ACP PR monitoring. */
++export const PR_WATCH_RESOURCE_ID = "extensions.pr-watch"
+diff --git i/src/extensions/pr-watch/session-policy.ts w/src/extensions/pr-watch/session-policy.ts
+index a9da721..42471a5 100644
+--- i/src/extensions/pr-watch/session-policy.ts
++++ w/src/extensions/pr-watch/session-policy.ts
+@@ -1,4 +1,6 @@
+ import { isAcpSessionHost } from "../../modes/acp/state.js"
++import { isResourceEnabled } from "../../resources/store.js"
++import { PR_WATCH_RESOURCE_ID } from "./resource.js"
+ 
+ let prMonitoringPermitted = false
+ 
+@@ -8,5 +10,10 @@ export function setPRMonitoringPermitted(permitted: boolean): void {
+ }
+ 
+ export function isPRMonitoringPermitted(): boolean {
+-	return !isAcpSessionHost() || prMonitoringPermitted
++	return isPRWatchResourceEnabled() && (!isAcpSessionHost() || prMonitoringPermitted)
++}
++
++/** The extensions.pr-watch resource; ACP advertises and accepts PR monitoring only when it is on. */
++export function isPRWatchResourceEnabled(): boolean {
++	return isResourceEnabled(PR_WATCH_RESOURCE_ID)
+ }
 diff --git i/src/extensions/remote-run/runner.ts w/src/extensions/remote-run/runner.ts
 index d8ebe4e..d569dc1 100644
 --- i/src/extensions/remote-run/runner.ts
@@ -42,14 +91,70 @@ index d8ebe4e..d569dc1 100644
  	const value = process.env.KIMCHI_REMOTE_RUN?.trim().toLowerCase()
  	if (value === undefined || value === "") return true
  	return !DISABLE_VALUES.has(value)
+diff --git i/src/modes/acp/server.ts w/src/modes/acp/server.ts
+index 1edd2df..4c2c33b 100644
+--- i/src/modes/acp/server.ts
++++ w/src/modes/acp/server.ts
+@@ -150,7 +150,7 @@ import {
+ import { prWatchCommandArgs, runPRWatchCommand } from "../../extensions/pr-watch/command.js"
+ import { getPRWatcher } from "../../extensions/pr-watch/index.js"
+ import { formatPRWatchStatus } from "../../extensions/pr-watch/presentation.js"
+-import { setPRMonitoringPermitted } from "../../extensions/pr-watch/session-policy.js"
++import { isPRWatchResourceEnabled, setPRMonitoringPermitted } from "../../extensions/pr-watch/session-policy.js"
+ import { isRefusal, refusalText } from "../../extensions/refused-turns.js"
+ import { modelSupportsImages } from "../../extensions/vision-support.js"
+ import { configureHttpIdleTimeout } from "../../http/proxy.js"
+@@ -770,7 +770,7 @@ export class KimchiAcpAgent implements Agent {
+ 					// button. Note the agent NEEDS this flag advertised only so
+ 					// clients feature-detect the gate; emission is opt-in gated.
+ 					[BACKGROUND_RUNS_CAPABILITY]: true,
+-					[PR_MONITORING_CAPABILITY]: true,
++					[PR_MONITORING_CAPABILITY]: isPRWatchResourceEnabled(),
+ 					// Cast AI SSO login via the stepwise `_kimchi.dev/sso_*` ext
+ 					// methods. Clients gate their SSO UI on this flag.
+ 					sso: true,
+@@ -1585,7 +1585,7 @@ export class KimchiAcpAgent implements Agent {
+ 			return { stopReason: "end_turn" }
+ 		}
+ 		const prWatchArgs =
+-			getClientOptedIntoPRMonitoring(this.clientCapabilities) && images.length === 0
++			isPRWatchResourceEnabled() && getClientOptedIntoPRMonitoring(this.clientCapabilities) && images.length === 0
+ 				? prWatchCommandArgs(text)
+ 				: undefined
+ 		if (prWatchArgs !== undefined) {
+@@ -3475,7 +3475,7 @@ export class KimchiAcpAgent implements Agent {
+ 					sessionUpdate: "available_commands_update",
+ 					availableCommands: composeAvailableCommands(
+ 						record.skillCommands,
+-						getClientOptedIntoPRMonitoring(this.clientCapabilities),
++						isPRWatchResourceEnabled() && getClientOptedIntoPRMonitoring(this.clientCapabilities),
+ 					),
+ 				},
+ 			})
 diff --git i/src/resources/definitions.ts w/src/resources/definitions.ts
-index a63b442..06da966 100644
+index a63b442..17c27ee 100644
 --- i/src/resources/definitions.ts
 +++ w/src/resources/definitions.ts
-@@ -167,6 +167,22 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
+@@ -4,6 +4,7 @@ import { KIMCHI_MCP_GATEWAY_RESOURCE_ID } from "../extensions/mcp/gateway.js"
+ import { MEMORY_RESOURCE_ID } from "../extensions/memory/config.js"
+ import { PI_PACKAGE_LOOKUP_RESOURCE_ID } from "../extensions/pi-package-lookup/index.js"
+ import { PII_REDACTION_RESOURCE_ID } from "../extensions/pii-redaction/resource.js"
++import { PR_WATCH_RESOURCE_ID } from "../extensions/pr-watch/resource.js"
+ import { SIDE_CHAT_PILL_RESOURCE_ID } from "../extensions/side-chat/resource.js"
+ import { COST_PER_PR_RESOURCE_ID } from "../extensions/work-attribution/resource.js"
+ import { discoverBashHookResources } from "./bash-hook-discovery.js"
+@@ -167,6 +168,30 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
  		defaultEnabled: false,
  		restartRequired: true,
  	},
++	{
++		id: PR_WATCH_RESOURCE_ID,
++		kind: "extensions",
++		label: "PR watch",
++		description: "Enable /pr-watch and the pr_watch tool, which can edit, commit and push fixes to watched PRs.",
++		defaultEnabled: false,
++		restartRequired: true,
++	},
 +	{
 +		id: "extensions.remote-run",
 +		kind: "extensions",

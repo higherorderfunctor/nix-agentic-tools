@@ -1,9 +1,10 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-11-07 — package precedence and the shared background
-> step handoff contract account for trust bootstrap initializing a shadowed user
-> copy; bundled skills gated off by `requires-resource` leave each visible skill
-> as its own in-place root; config guards include the helpers readConfigExtras
+> **Last verified:** 2026-11-18 — the pr-watch extension is a resource that
+> defaults off; package precedence and the shared background step handoff
+> contract account for trust bootstrap initializing a shadowed user copy;
+> bundled skills gated off by `requires-resource` leave each visible skill as
+> its own in-place root; config guards include the helpers readConfigExtras
 > hands `parsed.<key>` to, and a `delete` target is not a read; pi 1.3 settings
 > follow reexports and inherited TypeBox properties through lock-pinned
 > declaration entrypoints; scope follows settings accessors, with unread JSON
@@ -418,14 +419,28 @@ Other providers and invalid values produce a warning and use upstream's
 Devenv exposes the same option type, but its existing user-scope assertion
 rejects `modelRoles`: Kimchi reads these roles from the user harness settings.
 
-`remote-feature-toggles.patch` adds `extensions.remote-run` and
-`extensions.teleport` to Kimchi's resource registry. Both default to true, so
-the package retains upstream behavior until a consumer disables one. Home
-Manager can disable them declaratively, for example:
+`remote-feature-toggles.patch` adds `extensions.pr-watch`,
+`extensions.remote-run` and `extensions.teleport` to Kimchi's resource registry.
+Remote run and teleport default to true, so the package retains upstream
+behavior until a consumer disables one. Home Manager can disable them
+declaratively, for example:
 
 ```nix
 ai.kimchi.native.harnessSettings.resources."extensions.teleport" = false;
 ```
+
+PR watch defaults to false, unlike upstream. Its `pr_watch` tool is
+model-callable and starts with `autoFix` true, so one call lets the model edit,
+commit and push to a PR; after one accepted offer it also watches later
+sessions' PRs. Enable it with
+`ai.kimchi.native.harnessSettings.resources."extensions.pr-watch" = true;`,
+which works on both backends: Home Manager writes it to the harness
+settings.json and devenv passes it in `KIMCHI_ENABLE_RESOURCES`. Off, the
+extension does not load, its session policy refuses, and the ACP server neither
+advertises `prMonitoring` nor accepts or lists `/pr-watch`. The `--pr-watch`
+flag and the `/help` entry remain and do nothing. `kimchi-pr-watch-resource`
+runs the real resource registry and session policy against the release and
+patched trees and checks the cli.ts and ACP wiring as source.
 
 The remote-run resource gates its extension plus every caller of
 `isRemoteRunEnabled()`: ferment and permissions therefore omit their "run in
