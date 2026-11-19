@@ -511,8 +511,8 @@
     ],
     "header": {
       "scan": {
-        "kimchiSourceHash": "sha256-q/ew6pY/j7Fx8nlYr70dtmwGOIEuu9s7imryfDVFf4E=",
-        "kimchiVersion": "1.36.0",
+        "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
+        "kimchiVersion": "1.37.0",
         "piVersion": "1.3.0",
         "scannerVersion": "2.0.0"
       }
@@ -11163,12 +11163,12 @@
       "functionSite": {
         "column": 31,
         "file": "kimchi/src/cli.ts",
-        "line": 881
+        "line": 882
       },
       "kind": "boundary",
       "property": "onModelCompletionSettled",
       "reason": "depth",
-      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 877 }
+      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 878 }
     },
     {
       "callSite": {
@@ -11212,7 +11212,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 882 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 883 }
     },
     {
       "callSite": {
@@ -11707,12 +11707,12 @@
       "functionSite": {
         "column": 31,
         "file": "kimchi/src/cli.ts",
-        "line": 881
+        "line": 882
       },
       "kind": "boundary",
       "property": "onModelCompletionSettled",
       "reason": "depth",
-      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 877 }
+      "site": { "column": 4, "file": "kimchi/src/cli.ts", "line": 878 }
     },
     {
       "callSite": {
@@ -11756,7 +11756,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 882 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 883 }
     },
     {
       "callSite": {
@@ -16535,12 +16535,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "boundary",
       "property": null,
       "reason": "stored",
-      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 640 }
+      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 641 }
     },
     {
       "callSite": {
@@ -16555,12 +16555,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 648 }
+      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 649 }
     },
     {
       "callSite": {
@@ -16604,7 +16604,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 641 }
+      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 642 }
     },
     {
       "callSite": {
@@ -16624,7 +16624,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 650 }
+      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 651 }
     },
     {
       "callSite": {
@@ -16644,7 +16644,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 688 }
+      "site": { "column": 27, "file": "kimchi/src/cli.ts", "line": 689 }
     },
     {
       "callSite": {
@@ -16848,11 +16848,11 @@
         "line": 224
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -16864,11 +16864,11 @@
         "line": 224
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -16883,12 +16883,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 645 }
+      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 646 }
     },
     {
       "callSite": {
@@ -17480,7 +17480,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 33, "file": "kimchi/src/cli.ts", "line": 680 }
+      "site": { "column": 33, "file": "kimchi/src/cli.ts", "line": 681 }
     },
     {
       "callSite": {
@@ -17687,12 +17687,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "boundary",
       "property": null,
       "reason": "stored",
-      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 640 }
+      "site": { "column": 23, "file": "kimchi/src/cli.ts", "line": 641 }
     },
     {
       "callSite": {
@@ -17707,12 +17707,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 648 }
+      "site": { "column": 96, "file": "kimchi/src/cli.ts", "line": 649 }
     },
     {
       "callSite": {
@@ -17732,7 +17732,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 641 }
+      "site": { "column": 7, "file": "kimchi/src/cli.ts", "line": 642 }
     },
     {
       "callSite": {
@@ -17752,7 +17752,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 660 }
+      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 661 }
     },
     {
       "callSite": {
@@ -17772,7 +17772,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 695 }
+      "site": { "column": 12, "file": "kimchi/src/cli.ts", "line": 696 }
     },
     {
       "callSite": {
@@ -17784,11 +17784,11 @@
         "line": 247
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -17800,11 +17800,11 @@
         "line": 247
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -17819,12 +17819,12 @@
       "functionSite": {
         "column": 23,
         "file": "kimchi/src/cli.ts",
-        "line": 640
+        "line": 641
       },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 645 }
+      "site": { "column": 31, "file": "kimchi/src/cli.ts", "line": 646 }
     },
     {
       "callSite": {
@@ -18756,7 +18756,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1051 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1052 }
     },
     {
       "callSite": {
@@ -20792,7 +20792,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1051 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 1052 }
     },
     {
       "callSite": {
@@ -24688,7 +24688,7 @@
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 8, "file": "kimchi/src/cli.ts", "line": 357 }
+      "site": { "column": 8, "file": "kimchi/src/cli.ts", "line": 358 }
     },
     {
       "callSite": {
@@ -24772,11 +24772,11 @@
         "line": 90
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "boundary",
       "property": null,
       "reason": "unreferenced",
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -24788,11 +24788,11 @@
         "line": 90
       },
       "distance": 4,
-      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 295 },
+      "functionSite": { "column": 1, "file": "kimchi/src/cli.ts", "line": 296 },
       "kind": "caller",
       "property": null,
       "reason": null,
-      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1147 }
+      "site": { "column": 6, "file": "kimchi/src/cli.ts", "line": 1150 }
     },
     {
       "callSite": {
@@ -25292,7 +25292,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "unresolved",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 943 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 944 }
     },
     {
       "callSite": {
@@ -25456,7 +25456,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 3, "file": "kimchi/src/cli.ts", "line": 380 }
+      "site": { "column": 3, "file": "kimchi/src/cli.ts", "line": 381 }
     },
     {
       "callSite": {
@@ -25476,7 +25476,7 @@
       "kind": "boundary",
       "property": null,
       "reason": "depth",
-      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 570 }
+      "site": { "column": 5, "file": "kimchi/src/cli.ts", "line": 571 }
     },
     {
       "callSite": {
