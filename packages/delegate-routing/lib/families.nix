@@ -38,13 +38,13 @@
   };
   openai = {
     astra = {
-      avoidFor = "ultra (spawns subagents, cost unknown)";
+      avoidFor = "code-review checks and judging (no result in the one code-review benchmark tested); ultra (spawns subagents, cost unknown)";
       defaultEffort = "medium";
       effort = "medium sweet spot, high = operator's config default, xhigh only for named-hard; flat above medium";
       match = "gpt-*-astra";
       orchestration = "reserved for hard work";
       tier = "frontier";
-      useFor = "hardest coding and agentic work on the Codex pool; long implementation runs; computer use; novel reasoning";
+      useFor = "architecture, design and unit plans; hardest coding on the Codex pool; long implementation runs; computer use";
     };
     luna = {
       avoidFor = "long context (vendor-only cliff); spec writing; judging";
@@ -55,13 +55,13 @@
       useFor = "classification, extraction, routing, high-volume mechanical work; cheapest code writer";
     };
     sol = {
-      avoidFor = "sole grader or judge; ultra";
+      avoidFor = "ultra";
       defaultEffort = "medium";
       effort = "medium default, high when the task needs more reasoning";
       match = "gpt-*-sol";
       orchestration = "default orchestrator";
       tier = "strong";
-      useFor = "code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
+      useFor = "code writer; long-horizon coding; code-review second check and judge (highest OpenAI judge precision in one single-run code-review benchmark); written deliverables";
     };
     terra = {
       avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";
