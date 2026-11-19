@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-11-18 — a pnpm repin comes from the update tooling;
 > extracted facts self-heal through visible PR CI commits, with Linux carrying
-> its facts before Darwin measures.
+> its facts before Darwin measures; the Claude census evaluates its converter
+> and filter as declaration slices.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -268,6 +269,11 @@ reads that is neither a pi `Settings` key nor a typed addition is emitted with
 `type = null`, and reconcile fails it as `needs-human` until a row supplies the
 type or an ignore reason. pi's own variable names come from Kimchi's
 `piConfig.name` the way pi derives them, not from pi's `PI_` default.
+
+The Claude census evaluates only the settings-schema chunk's import closure. The
+converter and filter run as declaration slices cut from their own chunks with
+the TypeScript checker (`packages/claude-code/extract/slice.mjs`), because from
+2.1.326 those chunks import Bun-only modules that Node cannot load.
 
 Owner layout, combination and platform rules live in the
 `dev/fragments/extracted/facts-contract.md`.

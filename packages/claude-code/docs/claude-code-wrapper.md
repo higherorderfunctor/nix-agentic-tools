@@ -1,17 +1,18 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-30 — settings env defaults auto-update off on both
-> backends when Nix installs the binary; a selected proxy wraps the binary and
-> suppresses the inherited API-key descriptor before Claude caches it; plugins
-> are staged entries delivered through the ai-module files layers; the personal
-> plugin carries MCP servers only; unknown native settings and stale warning
-> suppressions use the generic open-keys inspector on both backends; settings
-> are generated from the committed facts in packages/claude-code/extracted/,
-> measured once on Linux; Darwin validates its own extraction against that raw.
-> The schema check gates stale and shadowed rows, missing paths and wildcard
-> grammar. Catalog, retirement and launch-pin facts are content-located AST
-> reads of the unpacked graph; unsupported catalog properties, retirement rows
-> and launch-pin shapes fail with PROBE.
+> **Last verified:** 2026-11-17 — the settings census evaluates the converter
+> and filter as declaration slices; settings env defaults auto-update off on
+> both backends when Nix installs the binary; a selected proxy wraps the binary
+> and suppresses the inherited API-key descriptor before Claude caches it;
+> plugins are staged entries delivered through the ai-module files layers; the
+> personal plugin carries MCP servers only; unknown native settings and stale
+> warning suppressions use the generic open-keys inspector on both backends;
+> settings are generated from the committed facts in
+> packages/claude-code/extracted/, measured once on Linux; Darwin validates its
+> own extraction against that raw. The schema check gates stale and shadowed
+> rows, missing paths and wildcard grammar. Catalog, retirement and launch-pin
+> facts are content-located AST reads of the unpacked graph; unsupported catalog
+> properties, retirement rows and launch-pin shapes fail with PROBE.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -104,6 +105,20 @@ and `$schema`-description anchors. The description may sit in the builder
 itself, or in a descriptor factory called by exactly one wrapper that constructs
 the schema and returns `.whole()`. More than one matching wrapper is ambiguous
 and stops extraction.
+
+The census evaluates only the schema module's import closure. The emitter module
+is read as text: its emitter statement names the builder, converter and filter,
+and `resolveDefinition` in `packages/claude-code/extract/locate.mjs` follows
+each name through export aliases to its declaring chunk. The builder must be
+declared in the schema module. The converter and filter are cut out of their
+chunks as declaration slices by `packages/claude-code/extract/slice.mjs`, which
+resolves identifiers with the TypeScript checker and refuses a slice whose state
+code outside it can touch: a sliced variable used outside, a sliced function
+used outside other than by a call or export, and any class. A slice that loads a
+module outside the schema closure is refused, naming the module. From 2.1.326
+those chunks import Bun-only modules such as `ws`, so evaluating them under Node
+fails. Any bare package import in what the census does load is refused with the
+specifier and importing chunk named.
 
 Catalog aliases come from one array of literal `id`/`family` objects, never
 `provider_ids.first_party`. Announced retirement-table membership removes an

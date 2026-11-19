@@ -64,6 +64,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { sliceModule } from "./slice.mjs";
 
 // ---------------------------------------------------------------------------
 // Content anchors. Each one is a literal that upstream cannot change without a
@@ -125,8 +126,8 @@ export function bunfsToPath(root, spec) {
 // The builder is deliberately NOT resolved here — it is cross-checked in
 // `locate()` from both sides, and those two answers agreeing across the split
 // is what proves the split was re-chunking rather than a reshape. `locate()`
-// resolves the schema-side name through the emitter module's import list
-// first, because the two names live in different namespaces once minified.
+// follows the emitter's name to its declaration (`resolveDefinition`) first,
+// because the two names live in different namespaces once minified.
 // ---------------------------------------------------------------------------
 export function findSettingsModules(root) {
   const schemaAnchor = Buffer.from(ANCHORS.schemaKeyDescription, "utf8");
@@ -200,17 +201,6 @@ export function parseImports(src) {
     }
   }
   return map;
-}
-
-// Given an EXPORTED name and a predicate on the module specifier, return the
-// LOCAL name this module binds it to. A minifier renames across chunk
-// boundaries, so an identifier is only meaningful together with the namespace
-// it was read from; this is what carries a name from one into another.
-export function importedLocalFor(src, exported, specMatches) {
-  for (const [local, info] of parseImports(src)) {
-    if (info.exported === exported && specMatches(info.spec)) return local;
-  }
-  return null;
 }
 
 // `export{local as ALIAS,...}` — resolve minified export aliases statically.
@@ -634,71 +624,91 @@ export function locateInitThunks(src, memoLocal) {
   return out;
 }
 
+// Follow a binding through `import{…}from"…"` / `export{…}` pairs to the module
+// that DECLARES it. A minifier renames across chunk boundaries, so a name is
+// only carried from one namespace into the next through the export alias,
+// never compared by spelling.
+export function resolveDefinition(root, startPath, startSrc, startLocal) {
+  let file = startPath,
+    src = startSrc,
+    local = startLocal;
+  for (let hop = 0; hop < 8; hop++) {
+    const imp = parseImports(src).get(local);
+    if (!imp) return { path: file, src, local, hops: hop };
+    if (!isBunfs(imp.spec))
+      throw new Error(
+        `${local} is imported from ${imp.spec}, which is not a bundled chunk`,
+      );
+    const next = bunfsToPath(root, imp.spec);
+    const nextSrc = fs.readFileSync(next, "utf8");
+    const locals = [...parseExports(nextSrc)]
+      .filter(([, alias]) => alias === imp.exported)
+      .map(([l]) => l);
+    if (locals.length !== 1)
+      throw new Error(
+        `export ${imp.exported} of ${path.basename(next)} resolves to ${locals.length} locals`,
+      );
+    file = next;
+    src = nextSrc;
+    local = locals[0];
+  }
+  throw new Error(`re-export chain for ${startLocal} is longer than 8 hops`);
+}
+
 // ---------------------------------------------------------------------------
 // One call that produces everything the census needs to drive the module.
+//
+// The census ENTERS the graph at the schema module and nowhere else. The
+// emitter module is only READ: it pins builder, converter and filter to each
+// other in one statement, and each is then followed to the module that
+// declares it. The builder must be declared in the schema module. The
+// converter and filter are handed to the census as declaration SLICES
+// (slice.mjs), one per declaring module, so the emitter module's own import
+// closure is never evaluated. From 2.1.326 that closure imports Bun-only
+// modules Node cannot load. Slicing applies even when the schema module
+// declares them itself, so every layout runs one code path.
 // ---------------------------------------------------------------------------
-export function locate(root) {
+export function locate(root, ts) {
   const { emitterPath, schemaPath } = findSettingsModules(root);
-  // census imports and instruments THIS module. In the split topology the
-  // converter and filter are DEFINED here and the builder is in scope as an
-  // import, so a single `export{… as __c_build}` shim still reaches all three
-  // — which is why the emitter module, not the schema module, is the one the
-  // census drives.
-  const settingsPath = emitterPath;
   const split = emitterPath !== schemaPath;
-  const src = fs.readFileSync(settingsPath, "utf8");
-  const schemaSrc = split ? fs.readFileSync(schemaPath, "utf8") : src;
-  const specToPath = (spec) =>
-    isBunfs(spec)
-      ? bunfsToPath(root, spec)
-      : path.resolve(path.dirname(settingsPath), spec);
+  const emitterSrc = fs.readFileSync(emitterPath, "utf8");
+  const schemaSrc = split ? fs.readFileSync(schemaPath, "utf8") : emitterSrc;
   const readSpec = (spec) => {
+    if (!isBunfs(spec)) return null;
     try {
-      return fs.readFileSync(specToPath(spec), "utf8");
+      return fs.readFileSync(bunfsToPath(root, spec), "utf8");
     } catch {
       return null;
     }
   };
 
-  const emitter = locateEmitter(src);
+  const emitter = locateEmitter(emitterSrc);
+  const converterAlt = locateConverterByOption(emitterSrc);
+  const filterAlt = locateFilterByMarker(emitterSrc);
+  // Answers in the SCHEMA module's namespace; it is compared with the
+  // emitter's builder only after that one is resolved to its declaration.
+  const builderAlt = locateBuilderByDescription(schemaSrc);
 
-  // `locateBuilderByDescription` answers in the SCHEMA module's namespace,
-  // while `emitter.build` is a local in THIS one. In the two-module layout
-  // those are different namespaces, so comparing them directly is only
-  // accidentally right — it holds at 2.1.250 solely because that build does no
-  // import renaming. At 2.1.245 every one of ~50k cross-chunk bindings IS
-  // renamed, so a build that is both SPLIT and alias-minified would either
-  // report a bundler alias as an anchor disagreement, or — on the fallback
-  // path, where there is no cross-check at all — hand census a name to export
-  // from the wrong namespace. Minified names are heavily recycled across
-  // chunks, so that resolves to an unrelated local rather than failing.
-  // Resolve through the import so both answers are expressed in one namespace.
-  let builderAlt = locateBuilderByDescription(schemaSrc);
-  if (split && builderAlt) {
-    const localName = importedLocalFor(
-      src,
-      builderAlt,
-      (spec) => specToPath(spec) === schemaPath,
-    );
-    if (!localName)
-      throw new Error(
-        `the settings builder (${builderAlt} in the schema module) is not ` +
-          "imported by the emitter module — the two anchors no longer describe " +
-          "one pipeline",
-      );
-    builderAlt = localName;
-  }
-  const converterAlt = locateConverterByOption(src);
-  const filterAlt = locateFilterByMarker(src);
-
-  const build = emitter?.build ?? builderAlt;
   const convert = emitter?.convert ?? converterAlt;
   const filter = emitter?.filter ?? filterAlt;
+  if (!convert)
+    throw new Error("could not locate the zod->JSON-Schema converter");
+  if (!filter) throw new Error("could not locate the @internal filter");
+
+  const def = (local) =>
+    resolveDefinition(root, emitterPath, emitterSrc, local);
+  const buildDef = emitter ? def(emitter.build) : null;
+  const convertDef = def(convert);
+  const filterDef = def(filter);
 
   const disagreements = [];
-  if (emitter && builderAlt && emitter.build !== builderAlt)
+  if (buildDef && buildDef.path !== schemaPath)
     disagreements.push(
-      `builder: emitter says ${emitter.build}, $schema-description says ${builderAlt}`,
+      `builder: the emitter's builder is declared in ${path.basename(buildDef.path)}, not in the schema module`,
+    );
+  if (buildDef && builderAlt && buildDef.local !== builderAlt)
+    disagreements.push(
+      `builder: emitter says ${buildDef.local}, $schema-description says ${builderAlt}`,
     );
   if (emitter && converterAlt && emitter.convert !== converterAlt)
     disagreements.push(
@@ -712,48 +722,57 @@ export function locate(root) {
     throw new Error(
       "independent anchors disagree — " + disagreements.join("; "),
     );
-
+  const build = buildDef?.local ?? builderAlt;
   if (!build) throw new Error("could not locate the settings-schema builder");
-  if (!convert)
-    throw new Error("could not locate the zod->JSON-Schema converter");
-  if (!filter) throw new Error("could not locate the @internal filter");
 
   const features = locateFeatureList(schemaSrc);
   if (!features) throw new Error("could not locate the feature-gate registry");
 
-  const memo = locateMemoizerLocal(src, readSpec);
+  const memo = locateMemoizerLocal(schemaSrc, readSpec);
   if (!memo)
     throw new Error(
       "could not locate the lazy-thunk memoizer (neither bun's __esm lowering " +
-        "nor the lazy-registry helper matched a module this one imports)",
+        "nor the lazy-registry helper matched a module the schema module imports)",
     );
   const memoLocals = (memo.all ?? [{ local: memo.local }]).map((m) => m.local);
   const thunks = [
-    ...new Set(memoLocals.flatMap((l) => locateInitThunks(src, l))),
+    ...new Set(memoLocals.flatMap((l) => locateInitThunks(schemaSrc, l))),
   ];
 
+  const byModule = new Map();
+  for (const [role, d] of [
+    ["convert", convertDef],
+    ["filter", filterDef],
+  ]) {
+    const e = byModule.get(d.path) ?? { path: d.path, src: d.src, roles: {} };
+    e.roles[role] = d.local;
+    byModule.set(d.path, e);
+  }
+  const slices = [...byModule.values()].map((e) => ({
+    path: e.path,
+    roles: e.roles,
+    ...sliceModule(ts, e.path, e.src, Object.values(e.roles)),
+  }));
+
   return {
-    settingsPath,
     schemaPath,
+    emitterPath,
     layout: split ? "two-module" : "one-module",
-    src,
-    symbols: {
-      build,
-      convert,
-      filter,
-      buildGated: emitter?.buildGated ?? null,
-    },
+    src: schemaSrc,
+    build,
+    slices,
     via: {
       build: emitter ? "emitter-composite" : "schema-key-description",
       convert: emitter ? "emitter-composite" : "unrepresentable-option-site",
       filter: emitter ? "emitter-composite" : "internal-marker-chain",
     },
-    alternates: { build: builderAlt, convert: converterAlt, filter: filterAlt },
+    alternateAnchorsAgree:
+      builderAlt === build && converterAlt === convert && filterAlt === filter,
     features,
     memo,
     thunks,
-    imports: parseImports(src),
-    exports: parseExports(src),
+    imports: parseImports(schemaSrc),
+    exports: parseExports(schemaSrc),
   };
 }
 
