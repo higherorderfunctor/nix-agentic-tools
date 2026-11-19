@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // claude-extract-locate.mjs — fixture gate for structural anchors in
-// packages/claude-code/extract/locate.mjs.
+// packages/claude-code/extract/locate.mjs and the declaration slicer in
+// packages/claude-code/extract/slice.mjs.
 //
-//   node claude-extract-locate.mjs <extract-dir> <fixture-dir>
+//   node claude-extract-locate.mjs <extract-dir> <fixture-dir> <typescript.js>
 //
 // The lazy-thunk memoizer is the one anchor the settings census needs that is
 // NOT part of the settings schema, and it has now broken the update sweep
@@ -24,17 +25,23 @@
 // fixture as the defining module. When upstream ships a third shape, add it
 // here in the same commit as the locator change.
 
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const [extractDir, fixtureDir, typescriptPath] = process.argv.slice(2);
-if (!extractDir || !fixtureDir) {
-  console.error("usage: claude-extract-locate.mjs <extract-dir> <fixture-dir>");
+if (!extractDir || !fixtureDir || !typescriptPath) {
+  console.error(
+    "usage: claude-extract-locate.mjs <extract-dir> <fixture-dir> <typescript.js>",
+  );
   process.exit(2);
 }
 const L = await import(pathToFileURL(path.join(extractDir, "locate.mjs")).href);
+const { sliceModule } = await import(
+  pathToFileURL(path.join(extractDir, "slice.mjs")).href
+);
 
 const fixture = (name) => fs.readFileSync(path.join(fixtureDir, name), "utf8");
 const readSpec = (spec) => {
@@ -208,6 +215,180 @@ check(
 );
 
 const ts = (await import(pathToFileURL(typescriptPath).href)).default;
+
+// ── resolveDefinition follows import/export aliases to the declaring chunk ──
+// From 2.1.326 the emitter imports the converter from another chunk under a
+// different minified name; only the export alias carries the name across.
+const chain = fs.mkdtempSync(path.join(os.tmpdir(), "claude-resolve-"));
+try {
+  const write = (name, src) => fs.writeFileSync(path.join(chain, name), src);
+  write("hop.js", 'import{X as q}from"/$bunfs/root/decl.js";export{q as Y};');
+  write("decl.js", "function c(e){return e}export{c as X};");
+  write("two.js", "function a(){}function b(){}export{a as Z,b as Z};");
+  const start =
+    'import{Y as k,Z as m}from"/$bunfs/root/hop.js";import{W as n}from"./rel.js";';
+  const d = L.resolveDefinition(
+    chain,
+    path.join(chain, "start.js"),
+    start,
+    "k",
+  );
+  check(
+    "resolveDefinition: two hops through export aliases reach the declaration",
+    d.path === path.join(chain, "decl.js") && d.local === "c" && d.hops === 2,
+    { path: path.basename(d.path), local: d.local, hops: d.hops },
+  );
+  for (const [name, src, local, diagnostic] of [
+    [
+      "an alias no export carries",
+      start,
+      "m",
+      "export Z of hop.js resolves to 0 locals",
+    ],
+    [
+      "an alias two exports carry",
+      'import{Z as m}from"/$bunfs/root/two.js";',
+      "m",
+      "export Z of two.js resolves to 2 locals",
+    ],
+    [
+      "an import from outside the bundle",
+      start,
+      "n",
+      "n is imported from ./rel.js, which is not a bundled chunk",
+    ],
+  ]) {
+    let error = "";
+    try {
+      L.resolveDefinition(chain, path.join(chain, "start.js"), src, local);
+    } catch (e) {
+      error = e.message;
+    }
+    check(`resolveDefinition: refuses ${name}`, error === diagnostic, error);
+  }
+} finally {
+  fs.rmSync(chain, { recursive: true, force: true });
+}
+
+// ── The slicer cuts by checker symbol and refuses state it cannot prove ──
+// Each refusal names the shape a slice would otherwise evaluate wrongly: a
+// slicer that matched names by spelling, or skipped the closure scan,
+// passes the positive cases and fails these.
+const slice = (src, roots) => sliceModule(ts, "/fixture/chunk.js", src, roots);
+{
+  const r = slice(
+    'import{q as e}from"/$bunfs/root/big.js";var S=new Set(["a"]);' +
+      "function f(e){return S.has(e)}export{f};",
+    ["f"],
+  );
+  const cut =
+    Object.keys(r.stats.imports).length === 0 && r.stats.declarations === 2;
+  // Only a cut with no imports can be evaluated outside the unpacked graph.
+  const m = cut
+    ? await import(
+        "data:text/javascript," + encodeURIComponent(`${r.source}export{f};`)
+      )
+    : null;
+  check(
+    "slice: a parameter does not drag in its top-level namesake",
+    cut && m.f("a") === true && m.f("b") === false,
+    r,
+  );
+}
+{
+  const r = slice(
+    'import{a,b as c}from"/$bunfs/root/x.js";import{z}from"/$bunfs/root/y.js";' +
+      "function f(v){return c(v)}function g(){return z()+a}export{f,g};",
+    ["f"],
+  );
+  check(
+    "slice: keeps the imported helper and drops the unrelated import",
+    r.source.startsWith('import{b as c}from"/$bunfs/root/x.js";') &&
+      !r.source.includes("y.js") &&
+      !r.source.includes("function g"),
+    r,
+  );
+}
+for (const [name, src, roots, diagnostic] of [
+  [
+    "state mutated outside the slice",
+    'var S=new Set(["a"]);function f(v){return S.has(v)}function o(){S.add("b")}export{f,o};',
+    ["f"],
+    "sliced variable S is referenced or exported outside the slice",
+  ],
+  [
+    "exported state",
+    'var S=new Set(["a"]);function f(v){return S.has(v)}export{f,S};',
+    ["f"],
+    "sliced variable S is referenced or exported outside the slice",
+  ],
+  [
+    "lazily initialized state",
+    'var S;var i=m(()=>{S=new Set(["a"])});function f(v){return S.has(v)}function m(x){return x}export{f};',
+    ["f"],
+    "sliced variable S has no initializer",
+  ],
+  [
+    "a sliced class (its copy breaks instanceof)",
+    "class C{}function f(v){return v instanceof C}export{f};",
+    ["f"],
+    "slice needs the class C",
+  ],
+  [
+    "a sliced function reassigned elsewhere",
+    "function h(v){return v}function f(v){return h(v)}function p(){h=()=>1}export{f};",
+    ["f"],
+    "sliced function h is used outside the slice other than by a call",
+  ],
+  [
+    "a sliced function reassigned by destructuring",
+    "function h(v){return v}function f(v){return h(v)}function p(o){[h]=o}export{f};",
+    ["f"],
+    "sliced function h is used outside the slice other than by a call",
+  ],
+  [
+    "a sliced function patched through a property",
+    "function h(v){return h.k+v}function f(v){return h(v)}var i=()=>{h.k=1};export{f};",
+    ["f"],
+    "sliced function h is used outside the slice other than by a call",
+  ],
+  [
+    "a sliced function patched by Object.assign",
+    "function h(v){return v}function f(v){return h(v)}function p(){Object.assign(h,{k:1})}export{f};",
+    ["f"],
+    "sliced function h is used outside the slice other than by a call",
+  ],
+  [
+    "an unresolved identifier that is not a global",
+    "function f(v){return notDeclaredAnywhere(v)}export{f};",
+    ["f"],
+    "unresolved identifier notDeclaredAnywhere is not a global",
+  ],
+  [
+    "a default import",
+    'import d from"ws";function f(v){return d(v)}export{f};',
+    ["f"],
+    "slice needs a non-named import from ws",
+  ],
+  [
+    "a root that is not a top-level declaration",
+    "function f(v){return v}export{f};",
+    ["g"],
+    "root binding g is not a top-level declaration",
+  ],
+]) {
+  let error = "";
+  try {
+    slice(src, roots);
+  } catch (e) {
+    error = e.message;
+  }
+  check(
+    `slice: refuses ${name}`,
+    error === `census-slice: chunk.js: ${diagnostic}`,
+    error,
+  );
+}
 for (const [name, key, expected] of [
   [
     "model-catalog.js.txt",
@@ -346,6 +527,69 @@ try {
   );
 } finally {
   fs.rmSync(graph, { recursive: true, force: true });
+}
+
+// ── The slices may load only modules the settings-schema closure loaded ──
+// A slice that imports any other chunk would evaluate code no init thunk
+// prepared, so census.mjs refuses it by name. A census that dropped that
+// comparison passes the first case and fails the second. Each case runs in
+// its own node process: loadSplit registers process-wide loader hooks once.
+{
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), "claude-load-split-"));
+  try {
+    const write = (name, src) => fs.writeFileSync(path.join(tree, name), src);
+    write("shared.js", "export function u(){return 1}");
+    write("extra.js", "export function x(){return 2}");
+    // The slice is served under its declaring chunk's URL; that chunk exists,
+    // as it does in the unpacked tree, and must never itself be evaluated.
+    write("decl.js", 'throw new Error("declaring chunk evaluated")');
+    const schema =
+      'import{u}from"/$bunfs/root/shared.js";function b(){return u()}';
+    write("schema.js", schema);
+    const loadSplit = (sliceImport) =>
+      spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `const{loadSplit}=await import(process.argv[1]);` +
+            `await loadSplit(process.argv[2],JSON.parse(process.argv[3]));`,
+          pathToFileURL(path.join(extractDir, "census.mjs")).href,
+          tree,
+          JSON.stringify({
+            build: "b",
+            schemaPath: path.join(tree, "schema.js"),
+            slices: [
+              {
+                path: path.join(tree, "decl.js"),
+                roles: { convert: "c", filter: "f" },
+                source: `${sliceImport}function c(e){return e}function f(){}`,
+              },
+            ],
+            src: schema,
+            thunks: [],
+          }),
+        ],
+        { encoding: "utf8" },
+      );
+    const inside = loadSplit('import{u}from"/$bunfs/root/shared.js";');
+    check(
+      "loadSplit: a slice importing a schema-closure module loads",
+      inside.status === 0,
+      inside.stderr,
+    );
+    const outside = loadSplit('import{x}from"/$bunfs/root/extra.js";');
+    check(
+      "loadSplit: refuses a slice that loads a module outside the schema closure",
+      outside.status !== 0 &&
+        outside.stderr.includes(
+          "census: the slices load modules outside the settings-schema closure: extra.js",
+        ),
+      outside.stderr,
+    );
+  } finally {
+    fs.rmSync(tree, { recursive: true, force: true });
+  }
 }
 
 if (failures) {

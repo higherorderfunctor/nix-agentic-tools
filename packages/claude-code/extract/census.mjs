@@ -3,7 +3,7 @@
 // by driving the claude-code binary's OWN settings-schema builder, its OWN
 // zod -> JSON-Schema converter and its OWN @internal filter.
 //
-//   node census.mjs <unpacked-root> [--out FILE] [--legacy --typescript FILE] [--diagnostics]
+//   node census.mjs <unpacked-root> --typescript FILE [--out FILE] [--legacy] [--diagnostics]
 //
 // Nothing in the OUTPUT contains a chunk filename, a minified identifier, a
 // byte offset or a module count. macOS and Linux builds of one version do not
@@ -11,7 +11,7 @@
 // and the anchor justification in the accompanying report.
 
 import fs from "node:fs";
-import { registerHooks } from "node:module";
+import { isBuiltin, registerHooks } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import * as L from "./locate.mjs";
@@ -50,13 +50,14 @@ const sortObj = (o) =>
 // resurfacing later as an opaque TypeError.
 //
 // KNOWN GAP, deliberately not closed: only the CALL form is detected. The
-// alias form — `var ee=import.meta.require;` in the react-sentinel chunk — is
-// passed through, and under Node it binds `undefined`. That chunk IS in the
-// settings closure today and is harmless there because nothing in this path
-// calls `ee`. If something ever does, the failure is `ee is not a function`,
-// which reads like an anchor problem and is not one. Rewriting the alias would
-// mean widening this hook over a module it currently never touches, for a
-// caller that does not exist; the honest trade is to name the gap here.
+// alias form — `var ee=import.meta.require;` — is passed through, and under
+// Node it binds `undefined`. From 2.1.326 modules in the emitter module's
+// closure DO call the alias at load time (on embedded `.md`/`.txt`/`.node`
+// assets, which no Node loader serves), which is one reason the census never
+// evaluates that closure: locate.mjs hands it the converter and filter as
+// declaration slices instead. The settings-schema closure and the slices load
+// without calling the alias. If a module they load ever does, the failure is
+// `ee is not a function`, which reads like an anchor problem and is not one.
 // ---------------------------------------------------------------------------
 const BUN_REQUIRE_RE = /import\.meta\.require\(\s*(["'])([^"'\\]+)\1\s*\)/g;
 
@@ -88,18 +89,31 @@ export function rewriteBunRequire(src) {
 // ---------------------------------------------------------------------------
 let hooksRegistered = false;
 
-async function loadSplit(root, info) {
+export async function loadSplit(root, info) {
   const bunRequire = { modules: 0, sites: 0 };
-  const url = pathToFileURL(info.settingsPath).href;
+  const url = pathToFileURL(info.schemaPath).href;
   const shim =
     ";export{" +
     [
-      `${info.symbols.build} as __c_build`,
-      `${info.symbols.convert} as __c_convert`,
-      `${info.symbols.filter} as __c_filter`,
+      `${info.build} as __c_build`,
       ...info.thunks.map((t, i) => `${t} as __c_init${i}`),
     ].join(",") +
     "};";
+  // The converter and filter arrive as declaration slices (locate.mjs). Each
+  // is served under its declaring file's URL plus a query, so it is a module
+  // of its own and the declaring chunk itself is never loaded.
+  const slices = new Map(
+    info.slices.map((s) => [
+      pathToFileURL(s.path).href + "?census-slice",
+      s.source +
+        ";export{" +
+        Object.entries(s.roles)
+          .map(([role, local]) => `${local} as __c_${role}`)
+          .join(",") +
+        "};",
+    ]),
+  );
+  const loadedUrls = new Set();
 
   if (hooksRegistered)
     throw new Error("census: one process can drive one unpack root");
@@ -113,13 +127,23 @@ async function loadSplit(root, info) {
           shortCircuit: true,
         };
       }
+      // Bun resolves some bare package names (`ws` at 2.1.326) to modules
+      // built into its own runtime; Node has no such module and the unpacked
+      // tree has no node_modules. Refuse here, naming the specifier and its
+      // importer, rather than let Node report a missing package.
+      if (!isBuiltin(spec) && !/^(?:file:|node:|\.{0,2}\/)/.test(spec))
+        throw new Error(
+          `census: ${path.basename(ctx.parentURL ?? "?")} imports the bare specifier ` +
+            `${JSON.stringify(spec)}, which Node cannot resolve in the unpacked graph`,
+        );
       return next(spec, ctx);
     },
-    // Re-export the three located symbols under stable names, so nothing
-    // downstream has to know a minified export alias. `convert` is an IMPORT
-    // binding in this module; ESM lets an import be re-exported by local name,
-    // which is how the re-export chain gets resolved without naming a chunk.
+    // Re-export the builder, the thunks and each slice's roots under stable
+    // names, so nothing downstream has to know a minified export alias.
     load(u, ctx, next) {
+      if (u.startsWith("file:")) loadedUrls.add(u);
+      if (slices.has(u))
+        return { format: "module", source: slices.get(u), shortCircuit: true };
       if (u === url) {
         const r = rewriteBunRequire(info.src);
         if (r.specs) {
@@ -154,6 +178,7 @@ async function loadSplit(root, info) {
   });
 
   const mod = await import(url);
+  const schemaClosure = loadedUrls.size;
   // The bundle is lazily initialized: every module body sits behind a memoised
   // thunk and the only thing that normally calls them is the CLI entry point,
   // which would start Claude Code. Calling THIS module's own thunks instead
@@ -171,7 +196,33 @@ async function loadSplit(root, info) {
       initErrors.push(String(e && e.message).slice(0, 120));
     }
   }
-  return { mod, ran, total, initErrors, topology: "split", bunRequire };
+  // Slices load AFTER the schema module's thunks, so every module they share
+  // with the schema closure is already initialized. A slice that pulls in
+  // any OTHER module would evaluate code whose lazy state no thunk above ran,
+  // so the census refuses it, naming the modules.
+  const fns = { __c_build: mod.__c_build };
+  const schemaUrls = new Set(loadedUrls);
+  for (const u of slices.keys()) Object.assign(fns, await import(u));
+  const extra = [...loadedUrls].filter(
+    (u) => !schemaUrls.has(u) && !slices.has(u),
+  );
+  if (extra.length)
+    throw new Error(
+      "census: the slices load modules outside the settings-schema closure: " +
+        extra.map((u) => path.basename(new URL(u).pathname)).join(", "),
+    );
+  for (const k of ["__c_build", "__c_convert", "__c_filter"])
+    if (typeof fns[k] !== "function")
+      throw new Error(`census: ${k} did not load as a function`);
+  return {
+    mod: fns,
+    ran,
+    total,
+    initErrors,
+    topology: "split",
+    bunRequire,
+    modulesLoaded: { schemaClosure, total: loadedUrls.size },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -410,8 +461,8 @@ function confirmAlias(schema, p, alias) {
 }
 
 // ---------------------------------------------------------------------------
-export async function census(root) {
-  const info = L.locate(root);
+export async function census(root, ts) {
+  const info = L.locate(root, ts);
   const loaded =
     info.exports.size > 0 ? await loadSplit(root, info) : loadMono();
   const { mod } = loaded;
@@ -447,18 +498,17 @@ export async function census(root) {
     rawEnums: raw,
     diagnostics: {
       topology: loaded.topology,
-      settingsModule: path.basename(info.settingsPath),
       // The settings anchors sit in ONE module through 2.1.245 and in TWO from
       // 2.1.248; report both so a re-chunk is visible in the diagnostics rather
       // than only as a build failure.
       settingsLayout: info.layout,
       schemaModule: path.basename(info.schemaPath),
+      emitterModule: path.basename(info.emitterPath),
+      slices: info.slices.map((s) => s.stats),
+      modulesLoaded: loaded.modulesLoaded,
       bunRequireRewrites: `${loaded.bunRequire.modules} module(s), ${loaded.bunRequire.sites} site(s)`,
       locatedVia: info.via,
-      alternateAnchorsAgree:
-        info.alternates.build === info.symbols.build &&
-        info.alternates.convert === info.symbols.convert &&
-        info.alternates.filter === info.symbols.filter,
+      alternateAnchorsAgree: info.alternateAnchorsAgree,
       features: info.features,
       // Both memoizer mechanisms have been live upstream at once, so a module
       // could use more than one. locateMemoizerLocal unions them; surface the
@@ -514,19 +564,20 @@ if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
   const root = process.argv[2];
   if (!root) {
     console.error(
-      "usage: census.mjs <unpacked-root> [--out FILE] [--legacy --typescript FILE] [--diagnostics]",
+      "usage: census.mjs <unpacked-root> --typescript FILE [--out FILE] [--legacy] [--diagnostics]",
     );
     process.exit(2);
   }
   const outIdx = process.argv.indexOf("--out");
   const out = outIdx > -1 ? process.argv[outIdx + 1] : null;
-  const r = await census(path.resolve(root));
+  // Required unconditionally: locate() slices with the TypeScript checker.
+  const tsIdx = process.argv.indexOf("--typescript");
+  if (tsIdx < 0) throw new Error("census.mjs requires --typescript FILE");
+  const ts = (await import(pathToFileURL(process.argv[tsIdx + 1]).href))
+    .default;
+  const r = await census(path.resolve(root), ts);
   const doc = { settings: r.settings };
   if (process.argv.includes("--legacy")) {
-    const tsIdx = process.argv.indexOf("--typescript");
-    if (tsIdx < 0) throw new Error("--legacy requires --typescript FILE");
-    const ts = (await import(pathToFileURL(process.argv[tsIdx + 1]).href))
-      .default;
     doc.legacy = {
       ...legacyFromCensus(r.settings, r.rawEnums),
       ...L.modelFacts(path.resolve(root), ts),

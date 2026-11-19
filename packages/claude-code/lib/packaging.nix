@@ -9,9 +9,11 @@ rec {
   #
   #   1. The SETTINGS SCHEMA comes from the binary describing ITSELF.
   #      `bununpack.py` unpacks the Bun single-exec's module graph; `census.mjs`
-  #      imports the settings chunk out of that graph and calls the binary's OWN
-  #      schema builder, its OWN zod -> JSON-Schema converter and its OWN
-  #      `@internal` filter. Nothing about the settings surface is grepped,
+  #      imports the settings-schema chunk out of that graph and calls the
+  #      binary's OWN schema builder, its OWN zod -> JSON-Schema converter and
+  #      its OWN `@internal` filter. The converter and filter are evaluated as
+  #      declaration slices cut out of their chunks (`slice.mjs`, with the
+  #      TypeScript checker), so the CLI code around them never runs. Nothing about the settings surface is grepped,
   #      guessed or curated, so a key upstream adds arrives with the package
   #      bump instead of waiting for a human to notice it. `effortLevels`,
   #      `hookEvents` and `settingsBooleanKeys` are read out of that same schema
@@ -39,8 +41,8 @@ rec {
   # filters those three names by the type the schema actually gives them, so a
   # retype shortens the array.
   #
-  #   assets: the packages/claude-code/extract/ directory — bununpack.py, census.mjs
-  #           and locate.mjs. Passed as a path so the scripts ride the
+  #   assets: the packages/claude-code/extract/ directory — bununpack.py, census.mjs,
+  #           locate.mjs and slice.mjs. Passed as a path so the scripts ride the
   #           derivation's inputs rather than being interpolated into this
   #           string.
   #   bin:  absolute path to the claude binary.
@@ -69,7 +71,7 @@ rec {
 
     # ── The settings schema, from the binary's own emitter ─────────────────
     #
-    # Unpack the Bun module graph, then let census.mjs import the settings
+    # Unpack the Bun module graph, then let census.mjs import the settings-schema
     # chunk and run the binary's own schema pipeline over it. Both steps are
     # CONTENT-located: nothing here names a chunk file, a minified identifier or
     # a byte offset, because macOS and Linux builds of one version agree on none
