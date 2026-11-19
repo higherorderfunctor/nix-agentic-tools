@@ -1,8 +1,8 @@
 {
-  "version": "0.58.0",
+  "version": "0.59.0",
   "src": {
-    "url": "https://github.com/paradigmxyz/iron-proxy/archive/v0.58.0.tar.gz",
-    "hash": "sha256-EqzRH/IFLQvUU3jL31FikTiBpm4dFQylpfdnE04AVak="
+    "url": "https://github.com/paradigmxyz/iron-proxy/archive/v0.59.0.tar.gz",
+    "hash": "sha256-dMl5TqNW4NOEdVs6UTQGNWhK6hqJVegbGDpACfC1fBU="
   },
   "goFloor": "1.27.3",
   "vendorHash": "sha256-QPOCQHaTDKnB+IVH2ooqJYRqmkma1RcfXsxejKegrZc="
