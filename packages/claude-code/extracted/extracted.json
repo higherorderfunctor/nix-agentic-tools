@@ -63,6 +63,8 @@
   ],
   "settings": {
     "internalKeys": [
+      "autoCompactOfferAnswer",
+      "autoCompactRaisedForLoad",
       "awaySummaryEnabled",
       "breakReminder",
       "clawdFileProgressEnabled",
@@ -72,6 +74,7 @@
       "precomputeArmTokens",
       "quietHours",
       "remoteControl",
+      "remoteMessageReceipts",
       "remoteTools",
       "responseComparisonEnabled",
       "skipWorkflowUsageWarning",
@@ -284,6 +287,7 @@
       "allowManagedHooksOnly": { "type": "boolean" },
       "allowManagedMcpServersOnly": { "type": "boolean" },
       "allowManagedPermissionRulesOnly": { "type": "boolean" },
+      "allowNestedModelAccessUnderForceLogin": { "type": "boolean" },
       "allowedChannelPlugins": { "type": "array" },
       "allowedChannelPlugins[]": { "type": "object" },
       "allowedChannelPlugins[].marketplace": { "type": "string" },
@@ -441,6 +445,15 @@
       "attributionProjectPolicy": { "type": "object" },
       "attributionProjectPolicy.default": { "type": "string" },
       "autoCompactEnabled": { "type": "boolean" },
+      "autoCompactOfferAnswer": { "type": "object" },
+      "autoCompactOfferAnswer.at": { "type": "integer" },
+      "autoCompactOfferAnswer.choice": {
+        "enum": ["accept", "keep", "undo"],
+        "type": "string"
+      },
+      "autoCompactOfferAnswer.model": { "type": "string" },
+      "autoCompactOfferAnswer.tokens": { "type": "integer" },
+      "autoCompactRaisedForLoad": { "type": "boolean" },
       "autoCompactWindow": { "type": "integer" },
       "autoContinueAtUsageLimit": { "type": "boolean" },
       "autoDreamEnabled": { "type": "boolean" },
@@ -1005,6 +1018,10 @@
       "hooks.*[].hooks[]|4.if": { "type": "string" },
       "hooks.*[].hooks[]|4.input": { "type": "object" },
       "hooks.*[].hooks[]|4.input.*": { "type": "any" },
+      "hooks.*[].hooks[]|4.onFailure": {
+        "enum": ["block", "continue"],
+        "type": "string"
+      },
       "hooks.*[].hooks[]|4.once": { "type": "boolean" },
       "hooks.*[].hooks[]|4.server": { "type": "string" },
       "hooks.*[].hooks[]|4.statusMessage": { "type": "string" },
@@ -1255,6 +1272,10 @@
         "type": "string"
       },
       "remoteControlAtStartup": { "type": "boolean" },
+      "remoteMessageReceipts": {
+        "enum": ["always", "off", "on"],
+        "type": "string"
+      },
       "remoteTools": { "type": "object" },
       "remoteTools.allowUnattendedServing": { "type": "boolean" },
       "requiredMaximumVersion": { "type": "string" },
@@ -1372,6 +1393,11 @@
       "sandbox.ripgrep.args[]": { "type": "string" },
       "sandbox.ripgrep.command": { "type": "string" },
       "sandbox.socatPath": { "type": "string" },
+      "sandbox.windows": { "type": "object" },
+      "sandbox.windows.backend": {
+        "enum": ["mxc", "sandboxuser"],
+        "type": "string"
+      },
       "showClearContextOnPlanAccept": { "type": "boolean" },
       "showMessageTimestamps": { "type": "boolean" },
       "showThinkingSummaries": { "type": "boolean" },
@@ -1672,6 +1698,7 @@
       "allowManagedHooksOnly",
       "allowManagedMcpServersOnly",
       "allowManagedPermissionRulesOnly",
+      "allowNestedModelAccessUnderForceLogin",
       "allowedChannelPlugins",
       "allowedHttpHookUrls",
       "allowedMarketplaces",
