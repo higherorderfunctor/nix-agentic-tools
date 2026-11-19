@@ -43,10 +43,7 @@
   definitions = {
     convco = {
       role = "commit-message";
-      hook = {
-        enable = true;
-        package = pkgs.convco;
-      };
+      hook.enable = true;
       ci = null;
     };
     cspell = {
