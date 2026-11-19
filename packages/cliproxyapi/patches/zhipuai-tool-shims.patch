@@ -141,10 +141,10 @@ index cc0e2da..10c7a69 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_types.go b/internal/config/config_types.go
-index 8899d80..a4508df 100644
+index 9151df1..b92075a 100644
 --- a/internal/config/config_types.go
 +++ b/internal/config/config_types.go
-@@ -757,6 +757,9 @@ type CloakConfig struct {
+@@ -767,6 +767,9 @@ type CloakConfig struct {
  // ClaudeKey represents the configuration for a Claude API key,
  // including the API key itself and an optional base URL for the API endpoint.
  type ClaudeKey struct {
@@ -154,7 +154,7 @@ index 8899d80..a4508df 100644
  	// APIKey is the authentication key for accessing Claude API services.
  	APIKey string `yaml:"api-key" json:"api-key"`
  
-@@ -1099,6 +1102,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
+@@ -1109,6 +1112,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
  // OpenAICompatibility represents the configuration for OpenAI API compatibility
  // with external providers, allowing model aliases to be routed through OpenAI API format.
  type OpenAICompatibility struct {
@@ -165,10 +165,10 @@ index 8899d80..a4508df 100644
  	Name string `yaml:"name" json:"name"`
  
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 2b243ec..cd8aa20 100644
+index 1e83468..0933397 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -381,6 +381,12 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+@@ -385,6 +385,12 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
  	return root, nil
  }
  
@@ -181,7 +181,7 @@ index 2b243ec..cd8aa20 100644
  var sharedKeyFields = map[string]bool{
  	"priority": true, "prefix": true, "proxy-url": true, "headers": true,
  	"models": true, "excluded-models": true, "disable-cooling": true,
-@@ -422,7 +428,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -426,7 +432,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		}
  		for i := 0; i < len(group.Content); i += 2 {
  			field := group.Content[i].Value
@@ -190,7 +190,7 @@ index 2b243ec..cd8aa20 100644
  				return nil, fmt.Errorf("api-keys.%s: unsupported group field %s", provider, field)
  			}
  		}
-@@ -436,7 +442,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -440,7 +446,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  			item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
  			for i := 0; i < len(group.Content); i += 2 {
  				field := group.Content[i].Value
@@ -199,7 +199,7 @@ index 2b243ec..cd8aa20 100644
  					setYAMLPath(item, field, group.Content[i+1])
  				}
  			}
-@@ -499,7 +505,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -503,7 +509,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  			key := deepCopyNode(entry)
  			for i := 0; i < len(entry.Content); i += 2 {
  				field := entry.Content[i].Value

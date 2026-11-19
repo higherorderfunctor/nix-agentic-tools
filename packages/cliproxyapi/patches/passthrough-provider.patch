@@ -9,10 +9,10 @@ Applied after key-allowlist and zhipuai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
-index a3dffac..a84c257 100644
+index 6b798c3..7deb1ab 100644
 --- a/config.example.yaml
 +++ b/config.example.yaml
-@@ -986,6 +986,20 @@ upstream:
+@@ -1011,6 +1011,20 @@ upstream:
  #         - api-key: "..."
  #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
  #
@@ -675,10 +675,10 @@ index 10c7a69..e6a0a4d 100644
  		return nil, errValidate
  	}
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index cd8aa20..262dbfe 100644
+index 0933397..a142a1b 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -69,6 +69,7 @@ var v8KeyFamilies = []configPath{
+@@ -70,6 +70,7 @@ var v8KeyFamilies = []configPath{
  	{"vertex-api-key", "vertex"}, {"codex-api-key", "codex"},
  	{"claude-api-key", "claude"}, {"xai-api-key", "xai"}, {"meta-api-key", "meta"},
  	{"openai-compatibility", "openai-compatibility"},
@@ -686,7 +686,7 @@ index cd8aa20..262dbfe 100644
  }
  
  func buildV8Paths() []configPath {
-@@ -381,6 +382,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+@@ -385,6 +386,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
  	return root, nil
  }
  
@@ -700,7 +700,7 @@ index cd8aa20..262dbfe 100644
  // isV8GroupKeyField is shared with the settings extractor: a field accepted
  // on a provider group must also appear in that group's generated schema.
  func isV8GroupKeyField(provider, field string) bool {
-@@ -412,7 +420,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -416,7 +424,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		if err := validateWeightSequenceNode(keys, "api-keys."+provider+".keys"); err != nil {
  			return nil, err
  		}
@@ -709,7 +709,7 @@ index cd8aa20..262dbfe 100644
  			item := deepCopyNode(group)
  			deleteYAMLPath(item, "keys")
  			deleteYAMLPath(item, "auth_index")
-@@ -492,7 +500,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -496,7 +504,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  	out := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
  	for index, entry := range keys.Content {
  		group := deepCopyNode(entry)
@@ -1878,7 +1878,7 @@ index 0000000..919cabd
 +	}
 +}
 diff --git a/sdk/api/handlers/handlers_execution.go b/sdk/api/handlers/handlers_execution.go
-index 130c830..e3f549f 100644
+index 65b2bce..8d3b7f1 100644
 --- a/sdk/api/handlers/handlers_execution.go
 +++ b/sdk/api/handlers/handlers_execution.go
 @@ -10,6 +10,7 @@ import (
@@ -1889,7 +1889,7 @@ index 130c830..e3f549f 100644
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
  	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
  	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
-@@ -57,7 +58,14 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -62,7 +63,14 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	if routeDecision.ExecutorPluginID != "" {
  		return h.executeWithPluginExecutor(ctx, entryProtocol, responseProtocol, modelName, originalRequestedModel, rawJSON, alt, routeDecision.ExecutorPluginID, execOptions)
  	}
@@ -1905,7 +1905,7 @@ index 130c830..e3f549f 100644
  	if errMsg != nil {
  		return nil, nil, errMsg
  	}
-@@ -102,7 +110,16 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -107,7 +115,16 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	opts.Metadata = reqMeta
  	ctx = enrichContextWithSessionHierarchy(ctx, opts.Headers, req.Payload, opts.Metadata)
  	var interceptErr *interfaces.ErrorMessage
@@ -1923,14 +1923,14 @@ index 130c830..e3f549f 100644
  	if interceptErr != nil {
  		lifecycle.completeError(ctx, interceptErr)
  		return nil, nil, interceptErr
-@@ -120,7 +137,10 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
+@@ -125,7 +142,10 @@ func (h *BaseAPIHandler) executeWithAuthManagerFormats(ctx context.Context, entr
  	rawResponseHeaders := cloneHeader(resp.Headers)
  	passthroughHeaders := executionPassthroughHeaders(h.CurrentConfig(), execOptions.InternalSource)
  	responseHeaders := downstreamHeadersFromExecutor(rawResponseHeaders, passthroughHeaders)
--	body, responseHeaders := h.applyResponseInterceptors(ctx, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
+-	body, responseHeaders := h.applyResponseInterceptors(ctx, pluginapi.ResponseInterceptKindExecution, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
 +	body := resp.Payload
 +	if entryProtocol != coreexecutor.PassthroughProtocol {
-+		body, responseHeaders = h.applyResponseInterceptors(ctx, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
++		body, responseHeaders = h.applyResponseInterceptors(ctx, pluginapi.ResponseInterceptKindExecution, lifecycle.requestID(), responseProtocol, normalizedModel, originalRequestedModel, executedOpts, rawResponseHeaders, responseHeaders, executedOpts.OriginalRequest, executedReq.Payload, resp.Payload, http.StatusOK, execOptions.SkipInterceptorPluginID, passthroughHeaders)
 +	}
  	lifecycle.complete(pluginapi.RequestCompletionSucceeded, http.StatusOK, nil)
  	return body, responseHeaders, nil
@@ -2158,7 +2158,7 @@ index 4b0f0b9..990ed11 100644
  		if compatProviderKey == "" {
  			compatProviderKey = strings.ToLower(strings.TrimSpace(a.Provider))
 diff --git a/sdk/cliproxy/service_models.go b/sdk/cliproxy/service_models.go
-index 7daa6ed..42854ea 100644
+index 196a0fd..87123e3 100644
 --- a/sdk/cliproxy/service_models.go
 +++ b/sdk/cliproxy/service_models.go
 @@ -57,6 +57,23 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
