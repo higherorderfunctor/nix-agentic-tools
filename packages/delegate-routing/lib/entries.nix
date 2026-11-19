@@ -216,8 +216,10 @@ in {
             text = ''
               **Fixtures.** Fixtures send the production client's exact shape, use bounded
               literal cases for contract edges, and cover input spaces with a few named
-              properties. A fixture that cannot reproduce production names the difference;
-              a path no fixture exercises is a finding.
+              properties. Cases that share a setup go in one input and expected pair,
+              with each behavior a named entry so a failure names the rule it broke. A
+              fixture that cannot reproduce production names the difference; a path no
+              fixture exercises is a finding.
             '';
           }
           {
