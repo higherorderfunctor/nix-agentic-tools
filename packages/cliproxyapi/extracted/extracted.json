@@ -3162,7 +3162,7 @@
     },
     "requests.payload.override[].params.<name>": { "type": "any" },
     "requests.payload.replace": {
-      "description": "Replace defines ordered literal replacements in selected user messages.",
+      "description": "Replace defines ordered literal and Go RE2 regex replacements in selected strings.",
       "type": "list"
     },
     "requests.payload.replace[]": { "type": "object" },
@@ -3212,6 +3212,8 @@
     "requests.payload.replace[].replacements[].<name>": { "type": "string" },
     "requests.payload.replace[].target": { "type": "object" },
     "requests.payload.replace[].target.all": { "type": "bool" },
+    "requests.payload.replace[].target.paths": { "type": "list" },
+    "requests.payload.replace[].target.paths[]": { "type": "string" },
     "requests.payload.replace[].target.positions": { "type": "list" },
     "requests.payload.replace[].target.positions[]": { "type": "int" },
     "requests.payload.replace[].target.role": { "type": "string" },
