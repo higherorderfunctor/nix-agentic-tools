@@ -307,8 +307,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-q/ew6pY/j7Fx8nlYr70dtmwGOIEuu9s7imryfDVFf4E=",
-      "kimchiVersion": "1.36.0",
+      "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
+      "kimchiVersion": "1.37.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -326,8 +326,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-q/ew6pY/j7Fx8nlYr70dtmwGOIEuu9s7imryfDVFf4E=",
-      "kimchiVersion": "1.36.0",
+      "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
+      "kimchiVersion": "1.37.0",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
