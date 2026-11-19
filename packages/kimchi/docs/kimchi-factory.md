@@ -437,10 +437,12 @@ sessions' PRs. Enable it with
 which works on both backends: Home Manager writes it to the harness
 settings.json and devenv passes it in `KIMCHI_ENABLE_RESOURCES`. Off, the
 extension does not load, its session policy refuses, and the ACP server neither
-advertises `prMonitoring` nor accepts or lists `/pr-watch`. The `--pr-watch`
-flag and the `/help` entry remain and do nothing. `kimchi-pr-watch-resource`
-runs the real resource registry and session policy against the release and
-patched trees and checks the cli.ts and ACP wiring as source.
+advertises `prMonitoring` nor accepts or lists `/pr-watch`. The `/help` entry
+remains and does nothing. `--help` still lists `--pr-watch`, but no extension
+registers the flag, so pi rejects it with `Unknown option: --pr-watch` and exits
+with status 1. `kimchi-pr-watch-resource` runs the real resource registry and
+session policy against the release and patched trees and checks the cli.ts and
+ACP wiring as source.
 
 The remote-run resource gates its extension plus every caller of
 `isRemoteRunEnabled()`: ferment and permissions therefore omit their "run in
