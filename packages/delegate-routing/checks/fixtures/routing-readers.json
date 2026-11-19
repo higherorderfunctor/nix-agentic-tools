@@ -124,15 +124,15 @@
         }
       }
     },
-    "z-ai": {
+    "zhipuai": {
       "account": {
-        "auth_index": "fixture-z-ai-auth_index",
-        "name": "fixture-z-ai-name",
+        "auth_index": "fixture-zhipuai-auth_index",
+        "name": "fixture-zhipuai-name",
         "plan": "max"
       },
       "balances": [],
       "bonuses": [],
-      "pool": "zai",
+      "pool": "zhipuai",
       "windows": {
         "5h": {
           "remainingPercent": 100,

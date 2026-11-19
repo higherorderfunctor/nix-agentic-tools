@@ -24,7 +24,7 @@
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/codex-usage.sh];
     opencode-usage = mkUsageScript "opencode-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/opencode-usage.sh];
     proxy-accounted-usage = mkUsageScript "proxy-accounted-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/proxy-accounted-usage.sh];
-    zai-usage = mkUsageScript "zai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zai-usage.sh];
+    zhipuai-usage = mkUsageScript "zhipuai-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/zhipuai-usage.sh];
   };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;
@@ -61,7 +61,7 @@
       ];
     }).config;
   # Manual builders merge the same owner contributions as module callers.
-  catalog =
+  catalogConfig =
     (lib.evalModules {
       modules = [
         ../../../ai-module/modules/catalog.nix
@@ -69,11 +69,13 @@
         ../../../claude-code/modules/catalog.nix
         ../../../cliproxyapi/modules/catalog.nix
       ];
-    }).config.ai.catalog;
+    }).config.ai;
+  inherit (catalogConfig) catalog;
+  servedModels = catalogConfig.cliproxyapi.servedModels;
   defaults =
     rawDefaults
     // {
-      inherit catalog;
+      inherit catalog servedModels;
       inherit (normalized) routing skill workflows techniques;
     };
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
@@ -93,6 +95,7 @@
     techniques = normalizeTechniques args.techniques;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
+      inherit (args) servedModels;
       inherit (args) catalog runtime families models;
       cpaRoutes = args.cpaRoutes or {};
       inherit (args) picker;

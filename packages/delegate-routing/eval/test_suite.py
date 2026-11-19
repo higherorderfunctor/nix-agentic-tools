@@ -90,7 +90,7 @@ class CliRecords(unittest.TestCase):
         # Match Claude's production assistant tool-use blocks, including child IDs.
         case = {"runtime": "claude", "techniques": {"claude": {"Agent": "subagent", "Workflow": "workflow"}},
                 "files": [{"path": ".claude/agents/opus.md"}, {"path": ".claude/skills/delegate-routing/SKILL.md"}],
-                "usageCommands": ["/nix/store/fixture/bin/claude-usage", "/nix/store/fixture/bin/zai-usage claude"]}
+                "usageCommands": ["/nix/store/fixture/bin/claude-usage", "/nix/store/fixture/bin/zhipuai-usage claude"]}
         call_id = 0
         def event(name, value, child=False):
             nonlocal call_id

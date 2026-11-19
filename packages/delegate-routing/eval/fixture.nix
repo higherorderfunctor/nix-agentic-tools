@@ -50,7 +50,7 @@
         useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
       };
       zhipuai = lib.mapAttrs (_: family:
-        family // {pools = lib.genAttrs ["claude" "codex" "kimchi"] (_: "zai-coding");}) {
+        family // {pools = lib.genAttrs ["claude" "codex" "kimchi"] (_: "zhipuai-coding");}) {
         glm = {
           avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
           effort = "low, high or max; high default, max for judging";
@@ -76,11 +76,11 @@
           unit = "credits";
         };
       };
-      zai-coding = {
+      zhipuai-coding = {
         description = "Example shared budget for GLM reaches.";
         usage = {
           runtime = "claude";
-          technique = "zai-usage";
+          technique = "zhipuai-usage";
         };
       };
     };
@@ -106,8 +106,8 @@
             command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.opencode-usage} claude";
             kind = "usage";
           };
-          zai-usage = {
-            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} claude";
+          zhipuai-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zhipuai-usage} claude";
             kind = "usage";
           };
         };
@@ -122,8 +122,8 @@
             command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.opencode-usage} codex";
             kind = "usage";
           };
-          zai-usage = {
-            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zai-usage} codex";
+          zhipuai-usage = {
+            command = "${lib.getExe config.ai.internal.roots.delegate-routing-content.usageScripts.zhipuai-usage} codex";
             kind = "usage";
           };
         };

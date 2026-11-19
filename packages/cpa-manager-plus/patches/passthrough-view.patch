@@ -21,17 +21,17 @@ index 0000000..3a4c1be
 +
 +const groups: PassthroughGroup[] = [
 +  {
-+    baseUrl: 'https://zai.example/api',
++    baseUrl: 'https://zhipuai.example/api',
 +    disabled: false,
 +    keys: [
 +      { apiKey: 'secret-key-one', authIndex: 'a1' },
 +      { apiKey: 'secret-key-two', authIndex: 'a2' },
 +    ],
 +    models: [{ alias: 'glm', name: 'glm-4.6' }, { name: 'glm-4.5' }],
-+    name: 'Zai',
++    name: 'Zhipuai',
 +    path: '/v1/chat/completions',
 +    priority: 7,
-+    providerKey: 'passthrough-zai',
++    providerKey: 'passthrough-zhipuai',
 +  },
 +  {
 +    baseUrl: 'https://off.example',
@@ -69,17 +69,17 @@ index 0000000..3a4c1be
 +
 +describe('PassthroughTable', () => {
 +  it('shows each group with its URL, path, models, priority, key count and state', () => {
-+    const [zai, off] = getRows(render());
++    const [zhipuai, off] = getRows(render());
 +
-+    const zaiText = getText(zai);
-+    expect(zaiText).toContain('Zai');
-+    expect(zaiText).toContain('https://zai.example/api');
-+    expect(zaiText).toContain('/v1/chat/completions');
-+    expect(zaiText).toContain('ai_providers.openai_keys_count: 2');
-+    const zaiCells = zai.findAll((node) => node.type === 'div' && node.props.role === 'cell');
-+    expect(getText(zaiCells[4])).toBe('common.priority7');
-+    expect(zaiText).toContain('common.enabled');
-+    expect(zai.findByProps({ title: 'glm → glm-4.6\nglm-4.5' })).toBeTruthy();
++    const zhipuaiText = getText(zhipuai);
++    expect(zhipuaiText).toContain('Zhipuai');
++    expect(zhipuaiText).toContain('https://zhipuai.example/api');
++    expect(zhipuaiText).toContain('/v1/chat/completions');
++    expect(zhipuaiText).toContain('ai_providers.openai_keys_count: 2');
++    const zhipuaiCells = zhipuai.findAll((node) => node.type === 'div' && node.props.role === 'cell');
++    expect(getText(zhipuaiCells[4])).toBe('common.priority7');
++    expect(zhipuaiText).toContain('common.enabled');
++    expect(zhipuai.findByProps({ title: 'glm → glm-4.6\nglm-4.5' })).toBeTruthy();
 +
 +    const offCells = off.findAll((node) => node.type === 'div' && node.props.role === 'cell');
 +    expect(getText(offCells[4])).toBe('common.priority—');
@@ -101,24 +101,24 @@ index 0000000..3a4c1be
 +  it('reads recent requests under the passthrough provider key', () => {
 +    const usageByProvider: ProviderRecentUsageMap = new Map([
 +      [
-+        'passthrough-zai',
++        'passthrough-zhipuai',
 +        new Map([
 +          [
-+            buildRecentRequestCompositeKey('https://zai.example/api', 'secret-key-one'),
++            buildRecentRequestCompositeKey('https://zhipuai.example/api', 'secret-key-one'),
 +            { success: 4, failed: 1, recentRequests: [] },
 +          ],
 +          [
-+            buildRecentRequestCompositeKey('https://zai.example/api', 'secret-key-two'),
++            buildRecentRequestCompositeKey('https://zhipuai.example/api', 'secret-key-two'),
 +            { success: 2, failed: 0, recentRequests: [] },
 +          ],
 +        ]),
 +      ],
 +    ]);
-+    const [zai, off] = getRows(render(usageByProvider));
++    const [zhipuai, off] = getRows(render(usageByProvider));
 +
-+    expect(getText(zai.findByProps({ title: 'stats.success' }))).toBe(' 6');
-+    expect(getText(zai.findByProps({ title: 'stats.failure' }))).toBe(' 1');
-+    expect(zai.findAllByType(ProviderStatusBar)).toHaveLength(1);
++    expect(getText(zhipuai.findByProps({ title: 'stats.success' }))).toBe(' 6');
++    expect(getText(zhipuai.findByProps({ title: 'stats.failure' }))).toBe(' 1');
++    expect(zhipuai.findAllByType(ProviderStatusBar)).toHaveLength(1);
 +    expect(getText(off)).toContain('status_bar.no_requests');
 +  });
 +});
@@ -383,14 +383,14 @@ index 4a71d45..8fe13a6 100644
  });
 +
 +describe('AiProvidersPage All tab', () => {
-+  const zai: PassthroughGroup = {
-+    baseUrl: 'https://zai.example/api',
++  const zhipuai: PassthroughGroup = {
++    baseUrl: 'https://zhipuai.example/api',
 +    disabled: false,
 +    keys: [{ apiKey: 'secret-key-one', authIndex: 'a1' }],
 +    models: [{ name: 'glm-4.6' }],
-+    name: 'Zai',
++    name: 'Zhipuai',
 +    path: '/v1/chat/completions',
-+    providerKey: 'passthrough-zai',
++    providerKey: 'passthrough-zhipuai',
 +  };
 +
 +  beforeEach(() => {
@@ -410,7 +410,7 @@ index 4a71d45..8fe13a6 100644
 +    mocks.fetchConfig.mockImplementation(async () => mocks.config);
 +    mocks.getVertexConfigs.mockImplementation(async () => mocks.config.vertexApiKeys);
 +    mocks.getOpenAIProviders.mockResolvedValue([]);
-+    mocks.getPassthroughGroups.mockResolvedValueOnce([zai]);
++    mocks.getPassthroughGroups.mockResolvedValueOnce([zhipuai]);
 +  });
 +
 +  it('lists passthrough groups read-only below the editable rows and counts them', async () => {
@@ -423,7 +423,7 @@ index 4a71d45..8fe13a6 100644
 +    const toolbar = renderer.root.find((node) => node.props.kindCounts !== undefined);
 +    expect(toolbar.props.kindCounts.all).toBe(2);
 +    const table = renderer.root.findByType(mocks.PassthroughTable);
-+    expect(table.props.groups).toEqual([zai]);
++    expect(table.props.groups).toEqual([zhipuai]);
 +    // The read-only table takes no handler, so no edit, delete, toggle or check reaches a group.
 +    expect(Object.keys(table.props).sort()).toEqual([
 +      'emptyState',

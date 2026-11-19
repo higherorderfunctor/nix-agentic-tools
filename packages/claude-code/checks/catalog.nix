@@ -9,7 +9,7 @@
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   # The aggregate's set value is a list, not an attribute set of model records.
   ids = facts.get (facts.load {dir = ../extracted;}).aggregate "models";
-  # CPA's independent input establishes overlapping identities and their aliases.
+  # CPA's independent input establishes overlapping identities and evidence.
   go = (facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo").models;
   # Select an override target from current input so release changes need no fixture edits.
   chosen = lib.head ids;
@@ -29,7 +29,6 @@
   configured.ai.catalog = {
     models = {
       ${chosen} = {
-        aliases.claude = ["configured-spelling"];
         maker = "configured-maker";
         source = ["configured evidence"];
       };
@@ -47,7 +46,6 @@
       vendorOverride = (evaluate [{ai.catalog.vendors.claude.maker = "configured-maker";}]).config.ai.catalog;
       cases = {
         "aggregate set misread or owner ids discarded" = builtins.isList ids && sorted (builtins.attrNames isolated.models) == sorted ids;
-        "invented native aliases" = lib.all (id: isolated.models.${id}.aliases == {}) ids;
         "missing backend import or enable-gated facts" = lib.all (catalog:
           lib.all (id: catalog.models ? ${id} && catalog.models.${id}.maker == "anthropic" && lib.elem "claude-code:models" catalog.models.${id}.source) ids)
         catalogs;
@@ -55,12 +53,11 @@
           lib.all (id: let
             identity = catalog.models.${id};
           in
-            lib.elem "cliproxyapi:opencodeGo.models.${id}" identity.source
-            && sorted identity.aliases.opencode-go == lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)
+            lib.elem "cliproxyapi:opencodeGo.models.${id}" identity.source)
           (lib.filter (id: go ? ${id}) ids))
         catalogs;
         "user addition lost or maker-wide offer narrowed" = changed.models.catalog-test-added.maker == "anthropic" && changed.models.catalog-test-added.source == ["configured addition"] && changed.vendors.claude.maker == "anthropic" && changed.vendors.claude.models == null;
-        "user leaf override blocked by owner priority" = changed.models.${chosen}.maker == "configured-maker" && changed.models.${chosen}.source == ["configured evidence"] && changed.models.${chosen}.aliases.claude == ["configured-spelling"];
+        "user leaf override blocked by owner priority" = changed.models.${chosen}.maker == "configured-maker" && changed.models.${chosen}.source == ["configured evidence"];
         "vendor leaf override blocked by owner priority" = vendorOverride.vendors.claude.maker == "configured-maker";
         "vendor offer is finite or runtime-gated" = lib.all (catalog: catalog.vendors.claude.maker == "anthropic" && catalog.vendors.claude.models == null) catalogs;
       };

@@ -3,12 +3,13 @@
 {
   lib,
   catalog,
+  servedModels,
   instances ? {},
   inferenceInstances ? {},
   selections ? {},
 }: let
   # Canonicalization preserves vendor-scoped aliases without resolving routes again.
-  providers = import ../../cliproxyapi/lib/providers.nix {inherit lib catalog;};
+  providers = import ../../cliproxyapi/lib/providers.nix {inherit lib catalog servedModels;};
   # A runtime sees only the credentials exported for its selected CPA client.
   project = runtime: selection: let
     instance = instances.${selection.instance} or null;

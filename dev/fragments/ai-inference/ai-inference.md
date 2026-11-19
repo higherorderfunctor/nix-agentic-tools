@@ -137,7 +137,7 @@ warnings and verifies unconsumed normalized inference stays null.
 `module-ai-inference-instance-clients` checks generated blocks, named routes,
 exact OAuth account placeholders, rules and refusals on both backends. The
 native allowlist check covers account matching and hot-added logins.
-`module-ai-inference-z-ai-credential` checks vendor defaults and overrides on
+`module-ai-inference-zhipuai-credential` checks vendor defaults and overrides on
 both backends, including client routing and the preserved model list.
 `module-service-instances-runtime-providers` sends Anthropic and Responses
 requests through the packaged CPA, including a Codex CLI client key routed to a

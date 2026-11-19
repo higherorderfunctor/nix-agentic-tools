@@ -9,7 +9,7 @@
 > unprompted fetches the pinned CPA has a switch for, types `server.tls.key` as
 > a secret file, and derives named client keys' `access.api-keys` and
 > `access.key-allowlist` entries from named upstream routes. Built-in
-> `vendor = "z-ai"` defaults upstream API-key models and APIs from pinned
+> `vendor = "zhipuai"` defaults upstream API-key models and APIs from pinned
 > official documentation; `vendor = "opencode-go"` places each pinned OpenCode
 > Go catalog model on its native API. Named API-key credentials accept an
 > optional integer priority, omitted when unset.
@@ -44,20 +44,20 @@ secret references and the overlapping subscription/API-key recipe using
 every API served by the credential; OAuth priority belongs to CPA's login file
 metadata and cannot be set through `oauth`.
 
-For the built-in z.ai vendor, the upstream credential needs only its secret:
+For the built-in Z.ai vendor, the upstream credential needs only its secret:
 
 ```nix
-ai.cliproxyapi.instances.main.credentials.zai-api-personal = {
-  vendor = "z-ai";
-  apiKey.key = redact.file "/run/secrets/zai-api-key";
+ai.cliproxyapi.instances.main.credentials.zhipuai-api-personal = {
+  vendor = "zhipuai";
+  apiKey.key = redact.file "/run/secrets/zhipuai-api-key";
 };
 ```
 
 `apiKey.apis` defaults to Anthropic-compatible and OpenAI chat-compatible
-endpoints, and `apiKey.models` to z.ai's published general API chat catalog.
+endpoints, and `apiKey.models` to Z.ai's published general API chat catalog.
 Override either endpoint's `base-url`, set an API to `null`, or replace `models`
 with the subset your upstream credential permits. Check the key classification
-and entitlements in z.ai's
+and entitlements in Z.ai's
 [API Key Management Guide](https://docs.z.ai/devpack/notice/api-key-management):
 new Standard/Coding Plan keys determine billing across supported endpoints;
 older Compatible keys retain endpoint-dependent rules. Standard usage can
@@ -68,7 +68,7 @@ CLI Responses request to chat.
 
 The vendor also defaults `apiKey.toolAliases.ToolSearch = "ToolSearch_"` on the
 Anthropic API and `apiKey.codexShellArgCleanup = true` on chat. The former
-avoids z.ai's exact-name ToolSearch interception; the latter removes redundant
+avoids Z.ai's exact-name ToolSearch interception; the latter removes redundant
 approval fields from Codex shell results translated from chat. Both are
 credential-scoped, and explicit `toolAliases = {};` and
 `codexShellArgCleanup = false;` disable them. Other vendors omit both fields

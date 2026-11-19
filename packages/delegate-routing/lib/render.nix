@@ -14,9 +14,10 @@
   workflows ? {},
   extraRuntimes ? [],
   manualExternalDelegates ? [],
+  servedModels ? {},
 }: let
   view = import ./routing-view.nix {
-    inherit lib catalog cpaRoutes runtime families models techniques pools resolvedAgentFiles extraRuntimes manualExternalDelegates;
+    inherit lib catalog cpaRoutes runtime families models techniques pools resolvedAgentFiles extraRuntimes manualExternalDelegates servedModels;
   };
   inherit (import ./vocabulary.nix) delegateKinds tiers;
   inherit (view) candidates;

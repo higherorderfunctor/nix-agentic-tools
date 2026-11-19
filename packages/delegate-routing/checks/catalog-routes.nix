@@ -11,9 +11,9 @@
     devenv = harness.evalDevenvModules;
     hm = harness.evalHmModules;
   };
-  # Model facts are deliberately synthetic, with aliases shared across vendor scopes.
-  identity = maker: aliases: {
-    inherit aliases maker;
+  # Model facts are deliberately synthetic, with served spellings shared across vendor scopes.
+  identity = maker: {
+    inherit maker;
     source = ["synthetic route identity"];
   };
   # Each credential offers two APIs; the client route must pick exactly one.
@@ -34,15 +34,15 @@
   fixture.ai = {
     catalog = {
       models = {
-        test-alpha-1 = identity "alpha" {z-ai = ["short"];};
-        test-alpha-2 = identity "alpha" {};
-        test-beta-1 = identity "beta" {other = ["short"];};
-        test-unknown-1 = identity null {};
+        test-alpha-1 = identity "alpha";
+        test-alpha-2 = identity "alpha";
+        test-beta-1 = identity "beta";
+        test-unknown-1 = identity null;
       };
       vendors = {
         finite.models = ["test-alpha-1" "test-unknown-1"];
         wide.maker = "alpha";
-        z-ai.models = lib.mkForce ["test-alpha-1"];
+        zhipuai.models = lib.mkForce ["test-alpha-1"];
       };
     };
     claude = {
@@ -63,7 +63,7 @@
       enable = true;
       settings.config-version = 8;
       credentials = {
-        aliased = (key ["short"]) // {vendor = "z-ai";};
+        aliased = (key ["short"]) // {vendor = "zhipuai";};
         first = key ["test-alpha-1" "test-unknown-1"];
         filtered = (key ["test-alpha-1" "test-beta-1"]) // {excludeMakers = ["alpha"];};
         finite.oauth = {
@@ -97,6 +97,11 @@
         };
       };
     };
+    cliproxyapi.servedModels = {
+      other.test-beta-1 = ["short"];
+      zhipuai.test-alpha-1 = ["short" "solo"];
+      zhipuai.test-alpha-2 = ["test-alpha-1"];
+    };
     programs.delegate-routing = {
       enable = true;
       skill.entries."Family tables" = {
@@ -123,6 +128,7 @@
     import ../lib/cpa-routes.nix {
       inherit lib;
       inherit (config.ai) catalog;
+      servedModels = config.ai.cliproxyapi.servedModels;
       instances = config.ai.cliproxyapi.instances;
       inferenceInstances = config.ai.internal.inferenceInstances;
       selections = lib.genAttrs ["claude" "codex"] (runtime: config.ai.${runtime}.settings.inference);
@@ -142,12 +148,16 @@
       inherit credential;
       api = "chat";
     }) ["first" "second"]);
-    selection = import ../lib/select-families.nix {inherit lib;};
+    selection = import ../lib/select-families.nix {
+      inherit lib;
+      servedModels = config.ai.cliproxyapi.servedModels;
+    };
     validate = selection.validateId catalog;
     content = config.ai.internal.roots.delegate-routing-content;
     args = {
       inherit catalog;
       cpaRoutes = routes;
+      inherit (config.ai.cliproxyapi) servedModels;
       inherit (config.ai.programs.delegate-routing) families skill;
       models = lib.mapAttrs (_: settings: settings.models) config.ai.programs.delegate-routing.runtimes;
       runtime = "claude";
@@ -170,7 +180,7 @@
       // lib.optionalAttrs projection {
         "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
         "ambiguous vendor alias chooses first identity" = refuses (project (change {
-          ai.catalog.models.test-alpha-2.aliases.z-ai = ["short"];
+          ai.cliproxyapi.servedModels.zhipuai.test-alpha-2 = ["short"];
           ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [
             {
               credential = "aliased";
@@ -184,6 +194,22 @@
           (view {
             catalog = catalog // {models = catalog.models // {test-alpha-1 = catalog.models.test-alpha-1 // {maker = null;};};};
           }).routes;
+        "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
+        "native alias spelling rewritten" = let
+          aliasRoutes =
+            (view {
+              cpaRoutes = {};
+              resolvedAgentFiles.alpha = {
+                family = args.families.fixture.alpha;
+                id = "solo";
+              };
+            }).routes;
+        in
+          lib.any (
+            route:
+              lib.any (technique: technique.model.value == "solo") route.techniques
+          )
+          aliasRoutes;
         "explicit agent pin escapes selected client" =
           refuses
           (view {
@@ -245,7 +271,6 @@
             }).routes).pool
           == "configured"
           && lib.length overlapping.claude == 3;
-        "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
         "native launch skips identity validation" = refuses (validate null "missing");
         "null-maker concrete launch succeeds" = refuses (validate routes.claude "test-unknown-1");
         "outside-client concrete launch succeeds" = refuses (validate routes.claude "test-beta-1");
@@ -253,7 +278,8 @@
         "singular credential replaces family pool" = (lib.head (view {}).routes).pool == null;
         "unknown offers disappear" = (lib.last routes.claude).maker == null;
         "unoffered alias borrows another vendor identity" = refuses (validate (oauth "wide") "short");
-        "unscoped ambiguous alias chooses first identity" = refuses (validate null "short");
+        "ambiguous native alias chooses first identity" = refuses (validate null "short");
+        "native launch drops noncanonical spelling" = validate null "solo" == "solo";
         "vendor alias borrows another vendor" =
           validate
           (clientRoutes [

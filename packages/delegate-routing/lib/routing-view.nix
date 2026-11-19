@@ -12,8 +12,9 @@
   resolvedAgentFiles ? null,
   extraRuntimes ? [],
   manualExternalDelegates ? [],
+  servedModels ? {},
 }: let
-  selection = import ./select-families.nix {inherit lib;};
+  selection = import ./select-families.nix {inherit lib servedModels;};
   inherit (import ./vocabulary.nix) delegateKinds effortLevels;
   runtimes = selection.automatic {inherit runtime extraRuntimes manualExternalDelegates;};
   # Null means no declared CPA reach, rather than an empty allowed model set.
