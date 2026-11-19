@@ -540,6 +540,7 @@
     "test",
     "test_internal_only",
     "test_nightly_only",
+    "themes_v2",
     "trust_classifier_shadow"
   ],
   "rolloutPatchability": {
@@ -570,13 +571,19 @@
     "test": { "patchable": true, "unmatchedSites": 0 },
     "test_internal_only": { "patchable": true, "unmatchedSites": 0 },
     "test_nightly_only": { "patchable": true, "unmatchedSites": 0 },
+    "themes_v2": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
     "trust_classifier_shadow": { "patchable": true, "unmatchedSites": 0 }
   },
   "rolloutStates": {
     "background_execution": {
       "channel": "nightly",
       "segment": "internal",
-      "treatment_percent": 0
+      "treatment_percent": 100
     },
     "c2s": {
       "channel": "nightly",
@@ -612,6 +619,11 @@
       "channel": "nightly",
       "segment": "internal",
       "treatment_percent": 100
+    },
+    "themes_v2": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
     },
     "trust_classifier_shadow": {
       "channel": "nightly",
@@ -680,6 +692,7 @@
     "chat.subagent.showResponses",
     "chat.subagent.showRoles",
     "chat.terminalTitle",
+    "chat.theme",
     "chat.tools.argsMaxChars",
     "chat.tools.argsMaxLines",
     "chat.tools.argsMode",
