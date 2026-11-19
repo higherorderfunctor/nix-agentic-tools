@@ -2619,6 +2619,11 @@
       "description": "TOSPauseWindow controls the pool-wide protective pause armed after the first\n403 TOS_VIOLATION. Defaults to \"0\" (disabled), so only the violating\ncredential is deactivated unless a positive Go duration string (e.g. \"6h\")\nis explicitly configured. Set to \"0\", \"off\", \"false\", \"none\", or\n\"disabled\" to explicitly disable the pause.",
       "type": "string"
     },
+    "oauth.providers.claude": { "type": "object" },
+    "oauth.providers.claude.oauth-include-create-api-key": {
+      "description": "OAuthIncludeCreateAPIKey controls whether new Claude OAuth authorization\nURLs request the org:create_api_key scope in addition to ClaudeOAuthScope.\nNil defaults to true to match native Claude Code.",
+      "type": "bool"
+    },
     "oauth.providers.codex": {
       "description": "Codex configures provider-wide Codex request behavior.",
       "template": "Codex provider behavior.",
