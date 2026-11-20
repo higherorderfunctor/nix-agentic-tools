@@ -3861,6 +3861,19 @@
               "aisdk": "@ai-sdk/google",
               "opencodeai": "@opencode/ai/providers/google"
             }
+          },
+          "interactions": {
+            "base_url": "https://opencode.ai/inference/go/google/v1beta",
+            "capabilities": {
+              "tools": {
+                "choice": ["auto", "none", "required", "tool"],
+                "updates": []
+              }
+            },
+            "sdk": {
+              "aisdk": "@ai-sdk/google",
+              "opencodeai": "@opencode/ai/providers/google/interactions"
+            }
           }
         },
         "canonical_id": "google/gemini-4-argon",
@@ -3932,7 +3945,7 @@
         "object": "model",
         "open_weights": false,
         "owned_by": "opencode",
-        "recommended_api": "generate-content",
+        "recommended_api": "interactions",
         "release_date": "2026-10-13",
         "type": "chat"
       },
