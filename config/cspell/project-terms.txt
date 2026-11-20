@@ -615,6 +615,7 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
+zeroblob
 zhipuai
 zstd
 gnupatch

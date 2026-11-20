@@ -1,4 +1,9 @@
-"""Private, independent Kiro calibration evidence store; no provider calls."""
+"""Store private Kiro calibration evidence for offline queries.
+
+The collector, sealer, disk index, and maintenance commands open WAL writers
+through open_database. Read-only reports, exit summaries, and payload exports
+open readers to consume the facts and retained evidence.
+"""
 
 import argparse
 import base64
@@ -20,6 +25,9 @@ import threading
 import time
 import uuid
 import zlib
+
+# Keep room to reuse pages across several 4 MiB capture batches.
+WAL_RETAINED_BYTES = 16 * 1024 * 1024
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS capture_meta (version INTEGER NOT NULL);
@@ -82,7 +90,9 @@ def snapshot(db):
 
 
 def open_database(path):
-    """Require a private directory; never change permissions on an existing path."""
+    """Open a WAL writer for the capture store; require a private directory and never change permissions on an existing path.
+
+    The collector, the sealer and the exit refresh all open writers here, so they share one journal policy."""
     path = Path(path).expanduser().absolute()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     for candidate in (path.parent, path):
@@ -99,6 +109,7 @@ def open_database(path):
         db.execute("PRAGMA journal_mode=WAL")
         # WAL commits skip fsync; checkpoints still sync. A power loss can drop recent commits, never corrupt.
         db.execute("PRAGMA synchronous=NORMAL")
+        db.execute(f"PRAGMA journal_size_limit={WAL_RETAINED_BYTES}")
     except sqlite3.Error:
         db.close()
         raise
