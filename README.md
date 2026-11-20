@@ -176,8 +176,8 @@ default to its own packages.
 - **`follows` is the opt-out.** Setting
   `inputs.nix-agentic-tools.inputs.nixpkgs.follows = "nixpkgs"` rebuilds every
   package on your nixpkgs, with no cache. You then own breakage where a recipe
-  borrows nixpkgs' recipe text, patches or fetchers: tsgolint's patch list,
-  kiro-cli's install step, the pnpm fetcher versions, Go `vendorHash`.
+  borrows nixpkgs' recipe text, patches or fetchers: kiro-cli's install step,
+  the pnpm fetcher versions, Go `vendorHash`.
 - **Other systems build locally.** On systems this flake does not build
   (anything but `aarch64-darwin` and `x86_64-linux`), cross builds, and musl or
   static package sets, the overlay builds on your package set.
