@@ -146,17 +146,29 @@ later. After a timed-out wait, unfinished calls stay flagged as incomplete
 coverage. It then automatically refreshes the local disk index from
 `~/.kiro/sessions` when that directory exists. The summary reads no disk data;
 the refresh keeps `kiro-usage session` and `report --session`, which do,
-current. This exit scan reads the `session.json` of sessions changed since the
-launch, indexes the messages only of those linked to captures, and never prunes.
-Index failures warn and leave the child exit status intact; disk observations
-may then be stale. An explicit `kiro-usage index` holds a lock beside the
-database for its whole pass; the exit scan then skips with a one-line warning
-that disk observations were not refreshed instead of interleaving. Exit scans of
-concurrent launches do not skip each other; they queue on a second lock and run
-one at a time, since two scans of one session would index the same records.
-Rerun the index if that pass began before Kiro exited. Nested `kiro-usage exec`
-launches share the parent's marker and produce one summary when the outer launch
-exits.
+current. The exit refresh starts with the launches' captured conversation and
+root IDs and any `--resume-id`, including resumes with no captured calls. It
+looks up those session directories directly. To find descendants, it checks
+recorded lineage and looks for new session directories in workspaces whose
+timestamps changed since launch. It refreshes changed files in that scope
+without pruning. Run `kiro-usage index` for unrelated changes or for an in-place
+append to a never-indexed descendant in a workspace whose timestamp predates the
+launch. The first exit refresh after upgrading builds the four lineage indexes
+once over the indexed session rows if they are still missing.
+
+Tracked exits add their launch to a shared pending queue. A refresh covers the
+launches already queued when it reads the queue under the lock. On success it
+acknowledges that snapshot. A launch whose capture wait timed out stays queued
+for one more successful pass, which can pick up late captures. If a session's
+metadata or transcript cannot be read, the refresh warns with the session path
+and continues with the other sessions. If a transcript read fails, indexing that
+transcript again resumes from the last committed checkpoint.
+
+Index failures warn and leave the child exit status intact. If an explicit
+`kiro-usage index` holds the index lock, the exit leaves its launch queued and
+warns that disk observations were not refreshed. Rerun the index if that pass
+began before Kiro exited. Nested `kiro-usage exec` launches share the parent's
+marker and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -292,15 +304,15 @@ batch logs one journal line without payload text and waits for the next daily
 run; it never stops sealing or capture. A manual `mitmdump -s` run without
 `KIRO_USAGE_RETENTION_DAYS` keeps payloads forever.
 
-`payloadWarnBytes` (default 5 GiB of compressed payload bytes) is a warning, not
-a cap: past it the collector logs one warning line to its service journal and
-keeps capturing, and every tracked `exec` exit summary prints a one-line warning
-with the store's size while it stays above. Capture never deletes capture rows.
-To retire a store, stop the `kiro-usage` service, then archive or delete
-`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
-one. The threshold counts payloads only: sealed captures' compressed blobs, the
-gzip copies of captures not yet sealed, and usage summaries. Metadata, session
-indexes, SQLite pages, and WAL files need additional space.
+`payloadWarnBytes` supplies the `--warn-bytes` threshold, which defaults to 5
+GiB. At each tracked `exec` exit, the summary warns when the combined on-disk
+size of `usage.sqlite3` and its `-wal` file exceeds that threshold. The
+collector uses the same threshold for retained payload bytes and logs one
+warning to its service journal while capture continues. It counts sealed
+captures' compressed blobs, gzip copies of captures not yet sealed, and usage
+summaries. Capture never deletes capture rows. To retire a store, stop the
+`kiro-usage` service and archive or delete `usage.sqlite3` with its `-wal` and
+`-shm` files. The next start creates a new store.
 
 The collector seals each capture once it finishes, on its own thread, into a
 compact form the reports and `kiro-usage unpack` read as before. Each start also

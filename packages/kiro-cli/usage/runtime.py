@@ -1,4 +1,8 @@
-"""Start the private capture service and fail closed before a tracked launch."""
+"""Run the private capture service and supervise tracked Kiro launches.
+
+On exit, wait for the launch's captures, refresh the pending disk index, then
+check the store size and print the launch's capture summary.
+"""
 # cspell:words getpgrp tcgetpgrp
 
 import argparse
@@ -116,25 +120,50 @@ def service(args, path):
     ])
 
 
-def refresh_disk_index(path, since):
-    """Read only sessions changed since the launch (UTC ns); others are only stat-checked. The run's exit summary
-    reads no disk data: this keeps kiro-usage session and report --session, which do, current after a launch."""
+def enqueue_refresh(db, invocation, since, resume_id, retry):
+    """Persist a launch before taking refresh locks so another exit can refresh it."""
+    from disk_index import PENDING_SCHEMA
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(PENDING_SCHEMA)
+        db.execute(
+            "INSERT INTO disk_refresh_pending(invocation,since_ns,resume_id,retry) VALUES (?,?,?,?) "
+            "ON CONFLICT(invocation) DO NOTHING",
+            (invocation, since, resume_id, retry),
+        )
+
+
+def refresh_disk_index(path, since, invocation, *, resume_id=None, settled=True):
+    """Queue the launch and refresh sessions linked to the pending launch snapshot."""
     from capture import lock_beside, open_database
     from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
     try:
         sessions = Path.home() / ".kiro/sessions"
         if not sessions.exists():
             return
-        with closing(open_database(path / "usage.sqlite3")) as db:
-            lock = lock_beside(path / "usage.sqlite3", INDEX_LOCK, shared=True)
+        database = path / "usage.sqlite3"
+        with closing(open_database(database)) as db:
+            enqueue_refresh(db, invocation, since, resume_id, retry=not settled)
+            index_lock = lock_beside(database, INDEX_LOCK, shared=True)
             try:
-                queue = lock_beside(path / "usage.sqlite3", REFRESH_LOCK, blocking=True)
+                refresh_lock = lock_beside(database, REFRESH_LOCK, blocking=True)
                 try:
-                    index_tree(db, sessions, since)
+                    # A missing or already deferred row was handled while this exit waited for the lock.
+                    own = db.execute("SELECT retry FROM disk_refresh_pending WHERE invocation=?", (invocation,)).fetchone()
+                    if own is None or (not settled and not own[0]):
+                        return
+                    pending = db.execute("SELECT invocation,since_ns,resume_id,retry FROM disk_refresh_pending").fetchall()
+                    index_tree(db, sessions, launch=(tuple(row[0] for row in pending), min(row[1] for row in pending)),
+                               resume_ids=tuple(row[2] for row in pending))
+                    with db:
+                        db.executemany("DELETE FROM disk_refresh_pending WHERE invocation=?",
+                                       ((key,) for key, _, _, retry in pending if not retry))
+                        db.executemany("UPDATE disk_refresh_pending SET retry=0 WHERE invocation=?",
+                                       ((key,) for key, _, _, retry in pending if retry))
                 finally:
-                    os.close(queue)
+                    os.close(refresh_lock)
             finally:
-                os.close(lock)
+                os.close(index_lock)
     except BlockingIOError:
         print("Warning: a full Kiro session index is running; disk observations were not refreshed (rerun kiro-usage index if it began before Kiro exited).", file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
@@ -177,19 +206,29 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
+def store_size_bytes(database):
+    """Return the database and WAL size in bytes for the exit warning without opening SQLite."""
+    size = os.stat(database).st_size
+    try:
+        size += os.stat(f"{database}-wal").st_size
+    except FileNotFoundError:
+        pass
+    return size
+
+
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
     earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
     from query import render_summary, run_report
-    from store import payload_bytes
     import summary_theme
     try:
+        database = path / "usage.sqlite3"
+        size = store_size_bytes(database)
+        if size > warn_bytes:
+            # Capture never stops for size; this is the operator's only prompt to retire the store.
+            print(f"Warning: the usage store is {size / 2**20:,.0f} MiB on disk, past the {warn_bytes / 2**20:,.0f} MiB warning size; "
+                  f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.", file=sys.stderr)
         with read_only(path) as db:
-            retained = payload_bytes(db)
-            if retained > warn_bytes:
-                # Capture never stops for size; this is the operator's only prompt to retire the store.
-                print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
-                      f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
             rows = invocation_captures(db, invocation, 0)[0]
             if not rows:  # e.g. resumed and exited without a turn
                 print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
@@ -204,7 +243,7 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
             # invocation, not one session, so only the last block carries them.
             caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
                        *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
-            theme = summary_theme.load(theme)  # after the payload warning, which a refused theme must not hide
+            theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
             for session in sessions:
                 print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
@@ -250,16 +289,19 @@ def launch_options(arguments):
     return arguments[:arguments.index("--")] if "--" in arguments else arguments
 
 
-def launch_subcommand(options, value_options):
-    """The first token that is not an option or an option's value, or None for a bare launch. `value_options` are the
-    launcher options that take the next token (measured from the binary's help); any other option takes none."""
-    leading = iter(options)
-    for option in leading:
-        if option in value_options:
-            next(leading, None)
-        elif not option.startswith("-"):
-            return option
-    return None
+def launch_selection(options, value_options):
+    """Read the first positional subcommand and any resume ID before the CLI delimiter."""
+    subcommand, resume_id = None, None
+    remaining = iter(options)
+    for option in remaining:
+        flag, separator, value = option.partition("=")
+        if flag == "--resume-id":
+            resume_id = value if separator else next(remaining, None)
+        elif option in value_options:
+            next(remaining, None)
+        elif subcommand is None and not option.startswith("-"):
+            subcommand = option
+    return subcommand, resume_id
 
 
 def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=()):
@@ -277,7 +319,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
         if "--v3" not in launch_options(tail):
             tail.insert(0, "--v3")
         options = launch_options(tail)
-        subcommand = launch_subcommand(options, launch_value_options)
+        subcommand, resume_id = launch_selection(options, launch_value_options)
         # `acp` ignores the global `--v3`; it resolves its engine from its own
         # `--agent-engine`, so name it before `--` unless the caller already did.
         if subcommand == "acp" and not any(option.partition("=")[0] == "--agent-engine" for option in options):
@@ -299,7 +341,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
                 try:
                     # Refresh scopes from persisted captures, so settle them first.
                     settled = settle_captures(path, invocation)
-                    refresh_disk_index(path, started)
+                    refresh_disk_index(path, started, invocation, resume_id=resume_id, settled=settled)
                     invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
@@ -358,7 +400,7 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
-        if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
+        if mode in ("cli", "service"):
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")

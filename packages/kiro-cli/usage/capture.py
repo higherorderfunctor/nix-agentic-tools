@@ -1,4 +1,9 @@
-"""Private, independent Kiro calibration evidence store; no provider calls."""
+"""Store private Kiro calibration evidence for offline queries.
+
+The collector, sealer, disk index, and maintenance commands open WAL writers
+through open_database. Read-only reports, exit summaries, and payload exports
+open readers to consume the facts and retained evidence.
+"""
 
 import argparse
 import base64
@@ -21,6 +26,9 @@ import time
 import uuid
 import zlib
 
+# Keep room to reuse pages across several 4 MiB capture batches.
+WAL_RETAINED_BYTES = 16 * 1024 * 1024
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS capture_meta (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS captures (
@@ -34,8 +42,9 @@ CREATE TABLE IF NOT EXISTS captures (
  credits REAL, context_usage_percentage REAL, input_tokens INTEGER,
  output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER
 );
-CREATE INDEX IF NOT EXISTS capture_session ON captures(json_extract(metadata_json, '$."kiro:conversation_id"'));
+CREATE INDEX IF NOT EXISTS capture_invocation ON captures(json_extract(metadata_json,'$.invocation'));
 CREATE INDEX IF NOT EXISTS capture_request_id ON captures(json_extract(response_json, '$.upstream_request_id'));
+CREATE INDEX IF NOT EXISTS capture_session ON captures(json_extract(metadata_json, '$."kiro:conversation_id"'));
 CREATE TABLE IF NOT EXISTS chunks (
  capture_id TEXT, seq INTEGER, utc_ns INTEGER, mono_ns INTEGER,
  entity_gzip BLOB, application_gzip BLOB,
@@ -82,7 +91,9 @@ def snapshot(db):
 
 
 def open_database(path):
-    """Require a private directory; never change permissions on an existing path."""
+    """Open a WAL writer for the capture store; require a private directory and never change permissions on an existing path.
+
+    The collector, the sealer and the exit refresh all open writers here, so they share one journal policy."""
     path = Path(path).expanduser().absolute()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     for candidate in (path.parent, path):
@@ -99,6 +110,7 @@ def open_database(path):
         db.execute("PRAGMA journal_mode=WAL")
         # WAL commits skip fsync; checkpoints still sync. A power loss can drop recent commits, never corrupt.
         db.execute("PRAGMA synchronous=NORMAL")
+        db.execute(f"PRAGMA journal_size_limit={WAL_RETAINED_BYTES}")
     except sqlite3.Error:
         db.close()
         raise
@@ -385,7 +397,7 @@ def framing_kind(response, rpc):
 # Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
 # faster but 16% larger, reaching the payload warning sooner. Small chunks compress alike at every level.
 GZIP_LEVEL = 6
-WARN_BYTES = 5 * 1024 ** 3  # Retained payload bytes past which the collector and exit summary warn.
+WARN_BYTES = 5 * 1024 ** 3  # Retained payload bytes past which the collector warns.
 # Payload copies the queue may refuse while parsing still sees every byte; usage stays complete without them.
 OMISSIONS = {"request_payload_omitted", "response_payload_omitted"}
 # Streamed /v1/responses tool-argument and reasoning parts; a kind with any of these ignores its terminal copy.
