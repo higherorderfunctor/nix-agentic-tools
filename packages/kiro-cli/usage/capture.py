@@ -85,7 +85,9 @@ def snapshot(db):
 
 
 def open_database(path):
-    """Open a WAL writer for the capture store; require a private directory and never change permissions on an existing path."""
+    """Open a WAL writer for the capture store; require a private directory and never change permissions on an existing path.
+
+    The collector, the sealer and the exit refresh all open writers here, so they share one journal policy."""
     path = Path(path).expanduser().absolute()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     for candidate in (path.parent, path):

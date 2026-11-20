@@ -513,7 +513,7 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA synchronous").fetchone()[0], 1)  # NORMAL
 
     def test_wal_reuse_caps_retained_size_after_reader_releases_snapshot(self):
-        """Use synthetic BLOB writes to exercise SQLite's WAL reset without a collector."""
+        """An oversized WAL shrinks to the retained limit once a reader releases and the still-open writer reuses it."""
         wal_path = self.path.with_suffix(".sqlite3-wal")
         with contextlib.closing(open_database(self.path)) as db:
             db.execute("CREATE TABLE filler(payload BLOB)")
