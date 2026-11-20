@@ -24,8 +24,14 @@
     messages = "anthropic";
     responses = "responses";
   };
+  # Gemini uses chat even when the catalog recommends interactions.
+  expectedNative = id:
+    if go.${id}.api ? generate-content
+    then "generate-content"
+    else lib.head (builtins.attrNames go.${id}.api);
+  expectedPlacement = id: nativeApi.${expectedNative id};
   # Expected per-API model sets are derived from the raw input inventory.
-  expectedGo = lib.groupBy (id: nativeApi.${lib.head (builtins.attrNames go.${id}.api)}) eligible;
+  expectedGo = lib.groupBy expectedPlacement eligible;
   # Synthetic secrets use the same references as production instance options.
   redact = import ../../../lib/redact {inherit lib;};
   # Production fixtures exercise vendor construction, lowering and typed settings on both backends.
@@ -48,15 +54,29 @@
     anthropic = native "messages" "https://go.example/anthropic/v1";
     chat = native "chat-completions" "https://go.example/openai/v1";
   };
+  # Both Gemini protocols advertise Google's URL. Only a native chat model supplies the chat URL.
+  gemini = {
+    api = lib.genAttrs ["generate-content" "interactions"] (_: {base_url = "https://go.example/google/v1beta";});
+    recommended_api = "interactions";
+  };
   # Force placement and URL checks without evaluating a service derivation.
   builds = models: (builtins.tryEval (builtins.deepSeq (manual.opencodeGo models).apis true)).success;
   # Each property names the malformed input its constructor must reject.
   catalogShapes = {
     "conflicting base URLs accepted" = !(builds (shaped // {other = native "chat-completions" "https://elsewhere.example/v1";}));
+    "Gemini pair placed outside native chat" =
+      (manual.opencodeGo (shaped // {gemini-4-argon = gemini;})).apis.chat
+      == {
+        base-url = "https://go.example/openai/v1";
+        models = ["chat" "gemini-4-argon"];
+      };
+    "Gemini pair with missing interactions URL accepted" = !(builds (shaped // {gemini-4-argon.api = gemini.api // {interactions = {};};}));
+    "Gemini pair with unrelated model id accepted" = !(builds (shaped // {other = gemini;}));
+    "interactions alone accepted" = !(builds (shaped // {gemini-4-argon.api = {inherit (gemini.api) interactions;};}));
     "messages URL without /v1 accepted" = !(builds (shaped // {anthropic = native "messages" "https://go.example/anthropic";}));
     "missing base_url accepted" = !(builds (shaped // {bare.api.responses = {};}));
-    "two native APIs accepted" = !(builds (shaped // {two.api = shaped.anthropic.api // shaped.chat.api;}));
     "unknown native API accepted" = !(builds (shaped // {odd = native "embeddings" "https://go.example/openai/v1";}));
+    "unrelated native API pair accepted" = !(builds (shaped // {gemini-4-argon.api = shaped.anthropic.api // shaped.chat.api;}));
     "well-formed catalog rejected" = builds shaped;
   };
   # Use real backend harnesses rather than a fabricated credential option shape.
@@ -153,7 +173,7 @@
       # Exclude two makers taken from the extracted Go facts, so no maker name or model id is pinned.
       excluded = lib.take 2 (sorted (map expectedMaker eligible));
       filteredGo = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = excluded;}]);
-      expectedFilteredGo = lib.mapAttrs (_: sorted) (lib.groupBy (id: nativeApi.${lib.head (builtins.attrNames go.${id}.api)}) (lib.filter (id: !(lib.elem (expectedMaker id) excluded)) eligible));
+      expectedFilteredGo = lib.mapAttrs (_: sorted) (lib.groupBy expectedPlacement (lib.filter (id: !(lib.elem (expectedMaker id) excluded)) eligible));
       # Synthetic explicit offers exercise alias scope, canonical precedence and unknown maker preservation.
       explicit = exclusions:
         evaluate [
@@ -242,9 +262,9 @@
       block = value: family: vendor: lib.head (blocks value family vendor);
       # Native base URLs are independently extracted; messages drops the executor's /v1 suffix.
       expectedUrl = api: let
-        ids = lib.filter (id: nativeApi.${lib.head (builtins.attrNames go.${id}.api)} == api && !(go.${id}.api ? generate-content)) eligible;
-        entry = go.${lib.head ids};
-        url = entry.api.${lib.head (builtins.attrNames entry.api)}.base_url;
+        ids = lib.filter (id: expectedPlacement id == api && !(go.${id}.api ? generate-content)) eligible;
+        id = lib.head ids;
+        url = go.${id}.api.${expectedNative id}.base_url;
       in
         if api == "anthropic"
         then lib.removeSuffix "/v1" url
@@ -337,7 +357,7 @@
           };
         }
       ]);
-      expectedNarrowGo = {${nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}} = [chosen];};
+      expectedNarrowGo = {${expectedPlacement chosen} = [chosen];};
       cases =
         catalogShapes
         // {
@@ -407,7 +427,7 @@
           in
             actual == map (_: {name = entry.id;}) entry.apis) [
             {
-              apis = [nativeApi.${lib.head (builtins.attrNames go.${chosen}.api)}];
+              apis = [(expectedPlacement chosen)];
               id = chosen;
               vendor = "opencode-go";
             }

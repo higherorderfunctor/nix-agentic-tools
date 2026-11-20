@@ -32,9 +32,7 @@
     models = identities;
     vendors.opencode-go.models = builtins.attrNames extracted;
   };
-  # OpenCode Go serves each catalog model on one native API. Each lands on
-  # that API only, so CPA translates every other protocol itself. A function
-  # of the catalog (`opencodeGo.models`) so checks can feed it malformed ones.
+  # Credentials and catalog checks use the measured models to build one CPA route per offer.
   opencodeGo = models: let
     # Gemini's generate-content has no API here; OpenCode serves every Go
     # text model on chat completions too, so it goes on chat.
@@ -46,14 +44,18 @@
     };
     placed = lib.mapAttrsToList (id: entry: let
       natives = builtins.attrNames entry.api;
-      native = lib.head natives;
+      native =
+        if lib.length natives == 1
+        then lib.head natives
+        else if id == "gemini-4-argon" && natives == ["generate-content" "interactions"]
+        then "generate-content"
+        else throw "cliproxyapi opencode-go: catalog model `${id}` has unsupported native APIs ${builtins.toJSON natives}.";
+      missingUrl = lib.findFirst (api: !(builtins.isString (entry.api.${api}.base_url or null)) || entry.api.${api}.base_url == "") null natives;
     in
-      if lib.length natives != 1
-      then throw "cliproxyapi opencode-go: catalog model `${id}` has ${toString (lib.length natives)} native APIs; expected exactly one."
-      else if !(apiOf ? ${native})
+      if !(apiOf ? ${native})
       then throw "cliproxyapi opencode-go: catalog model `${id}` has unknown native API `${native}`."
-      else if !(entry.api.${native} ? base_url)
-      then throw "cliproxyapi opencode-go: catalog model `${id}` has no base_url for native API `${native}`."
+      else if missingUrl != null
+      then throw "cliproxyapi opencode-go: catalog model `${id}` has no base_url for native API `${missingUrl}`."
       else {
         inherit id native;
         api = apiOf.${native};
