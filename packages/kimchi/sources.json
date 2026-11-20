@@ -1,9 +1,9 @@
 {
-  "version": "1.37.0",
+  "version": "1.37.2",
   "extraction": {
     "kimchiSource": {
-      "hash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
-      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.37.0.tar.gz"
+      "hash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
+      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.37.2.tar.gz"
     },
     "piAgentCorePackage": {
       "hash": "sha256-ysVosz0AfYCaH/1o87QiCjys0DRQDZJ2i6m4ygSNS8c=",

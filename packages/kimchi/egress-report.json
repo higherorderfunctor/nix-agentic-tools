@@ -238,9 +238,9 @@
     },
     {
       "callSites": [
-        "src/extensions/pr-cost-reporting/worker.ts:350",
-        "src/extensions/pr-cost-reporting/worker.ts:657",
-        "src/extensions/work-attribution/cost-sync.ts:331",
+        "src/extensions/pr-cost-reporting/worker.ts:357",
+        "src/extensions/pr-cost-reporting/worker.ts:664",
+        "src/extensions/work-attribution/cost-sync.ts:351",
         "src/sandbox/cloud/http.ts:21",
         "src/utils/http.ts:90"
       ],
@@ -307,8 +307,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
-      "kimchiVersion": "1.37.0",
+      "kimchiSourceHash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
+      "kimchiVersion": "1.37.2",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -326,8 +326,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
-      "kimchiVersion": "1.37.0",
+      "kimchiSourceHash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
+      "kimchiVersion": "1.37.2",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -435,9 +435,9 @@
       "callSites": [
         "src/cli-auth/oauth.ts:320",
         "src/cli-auth/oauth.ts:355",
-        "src/extensions/pr-cost-reporting/worker.ts:350",
-        "src/extensions/pr-cost-reporting/worker.ts:657",
-        "src/extensions/work-attribution/cost-sync.ts:331",
+        "src/extensions/pr-cost-reporting/worker.ts:357",
+        "src/extensions/pr-cost-reporting/worker.ts:664",
+        "src/extensions/work-attribution/cost-sync.ts:351",
         "src/sandbox/cloud/http.ts:21",
         "src/utils/http.ts:90"
       ],
@@ -473,9 +473,9 @@
       "callSites": [
         "src/cli-auth/oauth.ts:320",
         "src/cli-auth/oauth.ts:355",
-        "src/extensions/pr-cost-reporting/worker.ts:350",
-        "src/extensions/pr-cost-reporting/worker.ts:657",
-        "src/extensions/work-attribution/cost-sync.ts:331",
+        "src/extensions/pr-cost-reporting/worker.ts:357",
+        "src/extensions/pr-cost-reporting/worker.ts:664",
+        "src/extensions/work-attribution/cost-sync.ts:351",
         "src/sandbox/cloud/http.ts:21",
         "src/utils/http.ts:90"
       ],
@@ -3644,7 +3644,7 @@
       "bundledModule": null,
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "library": "fetch",
-      "line": 350,
+      "line": 357,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3671,13 +3671,13 @@
       "bundledModule": null,
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "library": "fetch",
-      "line": 593,
+      "line": 600,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/pr-cost-reporting/worker.ts:593",
+          "origin": "src/extensions/pr-cost-reporting/worker.ts:600",
           "value": "input"
         }
       ]
@@ -3686,7 +3686,7 @@
       "bundledModule": null,
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "library": "fetch",
-      "line": 657,
+      "line": 664,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3770,13 +3770,13 @@
       "bundledModule": null,
       "file": "src/extensions/session-name.ts",
       "library": "fetch",
-      "line": 190,
+      "line": 256,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/session-name.ts:190",
+          "origin": "src/extensions/session-name.ts:256",
           "value": "url"
         }
       ]
@@ -3815,7 +3815,7 @@
       "bundledModule": null,
       "file": "src/extensions/work-attribution/cost-sync.ts",
       "library": "fetch",
-      "line": 331,
+      "line": 351,
       "readBy": "kimchi",
       "targets": [
         {
@@ -5556,7 +5556,7 @@
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "guards": [],
       "library": "fetch",
-      "line": 350,
+      "line": 357,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5565,7 +5565,7 @@
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "guards": [],
       "library": "fetch",
-      "line": 593,
+      "line": 600,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5574,7 +5574,7 @@
       "file": "src/extensions/pr-cost-reporting/worker.ts",
       "guards": [],
       "library": "fetch",
-      "line": 657,
+      "line": 664,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5592,7 +5592,7 @@
       "file": "src/extensions/session-name.ts",
       "guards": [],
       "library": "fetch",
-      "line": 190,
+      "line": 256,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5619,7 +5619,7 @@
       "file": "src/extensions/work-attribution/cost-sync.ts",
       "guards": [],
       "library": "fetch",
-      "line": 331,
+      "line": 351,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -6298,7 +6298,10 @@
       "value": "/changelog"
     },
     {
-      "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+      "files": [
+        "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+        "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
+      ],
       "value": "/chat/completions"
     },
     {

@@ -1,28 +1,20 @@
 diff --git a/src/extensions/prompt-construction/prompt-enrichment.test.ts b/src/extensions/prompt-construction/prompt-enrichment.test.ts
-index ed5f735..1030ac7 100644
+index 47c3c9a..ff09180 100644
 --- a/src/extensions/prompt-construction/prompt-enrichment.test.ts
 +++ b/src/extensions/prompt-construction/prompt-enrichment.test.ts
-@@ -619,12 +619,12 @@ describe("prompt enrichment skills", () => {
- 			| undefined
- 
- 		// Bundled skills not already in the harness dir are contributed via a
--		// filtered temp copy (e.g. dap-debugging). Skills already in the harness
-+		// direct directory paths (e.g. dap-debugging). Skills already in the harness
- 		// dir (e.g. improve if previously deployed) are silently skipped.
+@@ -624,6 +624,7 @@ describe("prompt enrichment skills", () => {
  		const paths = result?.skillPaths ?? []
  		expect(paths.length).toBeGreaterThan(0)
--		// At least one contributed path should contain a bundled skill dir.
--		expect(paths.some((p) => existsSync(join(p, "dap-debugging")) || existsSync(join(p, "improve")))).toBe(true)
-+		// At least one contributed path is a bundled skill directory.
-+		expect(paths.some((p) => p.startsWith(bundledDir) && existsSync(join(p, "SKILL.md")))).toBe(true)
+ 		expect(paths.every((path) => existsSync(join(path, "SKILL.md")))).toBe(true)
++		expect(paths).toContain(join(bundledDir, "create-skill"))
  		const loaded = paths.map((path) => loadSkillsFromDir({ dir: path, source: "path" }))
  		const creator = loaded.flatMap((result) => result.skills).find((skill) => skill.name === "create-skill")
  		expect(creator).toBeDefined()
 diff --git a/src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts b/src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts
-index 5204e4a..6e7c74e 100644
+index 6e93e7a..178c4a9 100644
 --- a/src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts
 +++ b/src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts
-@@ -49,19 +49,19 @@ describe("requires-resource bundled skill gating", () => {
+@@ -49,10 +49,10 @@ describe("requires-resource bundled skill gating", () => {
  
  	it("excludes a requires-resource skill when its toggle is disabled in settings", () => {
  		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ resources: { "skills.pptx": false } }))
@@ -34,6 +26,11 @@ index 5204e4a..6e7c74e 100644
 +		const roots = resolveSkillRoots({ cwd: "/nonexistent-cwd", bundledDir })
 +		const bundled = roots.filter((root) => root.kind === "bundled").map((root) => root.dir)
 +		expect(bundled).toEqual([join(bundledDir, "ungated")])
+ 	})
+ 
+ 	it("discovers resource-enabled survivors from their original directories", () => {
+@@ -67,13 +67,13 @@ describe("requires-resource bundled skill gating", () => {
+ 		expect(second).toEqual([join(bundledDir, "ungated")])
  	})
  
 -	it("toggle flips reuse the cached visible dir instead of making new temp copies", () => {
@@ -50,7 +47,7 @@ index 5204e4a..6e7c74e 100644
  		expect(again?.dir).toBe(first?.dir)
  
 diff --git a/src/shared/skill-discovery/resolve-skill-roots.ts b/src/shared/skill-discovery/resolve-skill-roots.ts
-index 823121e..2074e6b 100644
+index aaccf1e..6e1568c 100644
 --- a/src/shared/skill-discovery/resolve-skill-roots.ts
 +++ b/src/shared/skill-discovery/resolve-skill-roots.ts
 @@ -1,6 +1,6 @@
@@ -73,23 +70,24 @@ index 823121e..2074e6b 100644
  	}
  
  	pushRoot(resolveHarnessSkillsDir(home), "harness")
-@@ -169,7 +168,7 @@ export function resolveSkillRoots(options: ResolveSkillRootsOptions): SkillRoot[
-  * - The harness dir is excluded because pi loads it natively via
-  *   includeDefaults (agentDir/skills) — contributing it again is redundant.
-  * - Bundled skills already present in a stronger path (harness, config, or
-- *   project) are silently skipped via a filtered temp copy, so no collision
-+ *   project) are silently skipped; remaining bundled directories are used directly, so no collision
-  *   warnings are emitted. New bundled skills not present elsewhere are still
-  *   contributed.
-  *
-@@ -227,10 +226,10 @@ export function resolveSkillPathsForDiscovery(
+@@ -190,7 +189,6 @@ export function resolveSkillPathsForDiscovery(
+ 	},
+ ): string[] {
+ 	const home = options?.homeDir ?? homedir()
+-	const originalBundledDir = options?.bundledDir === undefined ? resolveBundledSkillsDir(home) : options.bundledDir
+ 	const roots = resolveSkillRoots({
+ 		cwd,
+ 		homeDir: home,
+@@ -228,12 +226,10 @@ export function resolveSkillPathsForDiscovery(
  		if (!existsSync(normalized)) continue
  
  		if (root.kind === "bundled") {
--			const filtered = filterBundledSkills(normalized, skillNamesFromStronger)
--			if (filtered) {
--				seen.add(filtered)
--				paths.push(filtered)
+-			if (!originalBundledDir) continue
+-			// Other resolveSkillRoots consumers may need the cached gated view;
+-			// discovery always enumerates the original per-skill directories.
+-			for (const skillDir of filterBundledSkills(resolve(originalBundledDir), skillNamesFromStronger)) {
+-				seen.add(skillDir)
+-				paths.push(skillDir)
 +			for (const skillPath of filterBundledSkills(normalized, skillNamesFromStronger)) {
 +				if (seen.has(skillPath)) continue
 +				seen.add(skillPath)
@@ -97,7 +95,7 @@ index 823121e..2074e6b 100644
  			}
  			continue
  		}
-@@ -254,7 +253,13 @@ export function resolveSkillPathsForDiscovery(
+@@ -257,7 +253,13 @@ export function resolveSkillPathsForDiscovery(
  function listSkillNames(dir: string): string[] {
  	try {
  		return readdirSync(dir, { withFileTypes: true })
@@ -112,10 +110,11 @@ index 823121e..2074e6b 100644
  			.map((e) => e.name)
  	} catch {
  		return []
-@@ -339,57 +344,26 @@ function readDisablesSkillsNames(skillFilePath: string): string[] {
+@@ -342,56 +344,26 @@ function readDisablesSkillsNames(skillFilePath: string): string[] {
  	}
  }
  
+-/** Materialize a filtered skill set for visibleBundledDir(), its only caller. */
 -function copySkillsToTempDir(bundledDir: string, names: string[]): string {
 -	const tempDir = mkdtempSync(join(tmpdir(), "kimchi-bundled-skills-"))
 -	process.once("exit", () => {
@@ -172,12 +171,10 @@ index 823121e..2074e6b 100644
 +	return visible.map((name) => join(bundledDir, name))
  }
  
--function filterBundledSkills(bundledDir: string, existingSkillNames: Set<string>): string | undefined {
--	const bundledSkills = listSkillNames(bundledDir).filter((name) => !bundledSkillDisabledByResource(bundledDir, name))
--	if (bundledSkills.length === 0) return undefined
--	const newSkills = bundledSkills.filter((name) => !existingSkillNames.has(name))
--	if (newSkills.length === 0) return undefined
--	return copySkillsToTempDir(bundledDir, newSkills)
+-function filterBundledSkills(bundledDir: string, existingSkillNames: Set<string>): string[] {
+-	return listSkillNames(bundledDir)
+-		.filter((name) => !bundledSkillDisabledByResource(bundledDir, name) && !existingSkillNames.has(name))
+-		.map((name) => join(bundledDir, name))
 +function filterBundledSkills(bundledRoot: string, existingSkillNames: Set<string>): string[] {
 +	// Pi accepts individual skill directories and resolves supporting files relative
 +	// to SKILL.md. Keep immutable package assets at their original paths. A root is

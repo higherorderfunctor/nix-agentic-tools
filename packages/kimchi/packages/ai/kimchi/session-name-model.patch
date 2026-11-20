@@ -215,10 +215,10 @@ index 0ec082a..bc4e796 100644
  
  /**
 diff --git a/src/extensions/session-name.test.ts b/src/extensions/session-name.test.ts
-index 03d05f0..6a54c3b 100644
+index 2d92587..b08a053 100644
 --- a/src/extensions/session-name.test.ts
 +++ b/src/extensions/session-name.test.ts
-@@ -53,6 +53,14 @@ vi.mock("../config.js", () => ({
+@@ -54,6 +54,14 @@ vi.mock("../config.js", () => ({
  	loadConfig: mockLoadConfig,
  }))
  
@@ -233,7 +233,7 @@ index 03d05f0..6a54c3b 100644
  vi.mock("node:path", async () => {
  	const actual = await vi.importActual<typeof import("node:path")>("node:path")
  	return { ...actual, basename: () => "my-project" }
-@@ -61,6 +69,7 @@ vi.mock("node:path", async () => {
+@@ -62,6 +70,7 @@ vi.mock("node:path", async () => {
  let attributionDir: string
  beforeEach(() => {
  	attributionDir = mkdtempSync(join(tmpdir(), "name-attribution-"))
@@ -241,7 +241,7 @@ index 03d05f0..6a54c3b 100644
  	vi.stubEnv("PI_CODING_AGENT_DIR", attributionDir)
  	// Isolate from the ambient Kimchi agent dir: keyless configs now fall back
  	// to $KIMCHI_CODING_AGENT_DIR/auth.json, and a developer shell's real login
-@@ -202,6 +211,83 @@ describe("extractFirstUserMessage", () => {
+@@ -331,6 +340,83 @@ describe("extractFirstUserMessage", () => {
  })
  
  describe("suggestSessionName", () => {
@@ -326,18 +326,18 @@ index 03d05f0..6a54c3b 100644
  		vi.useFakeTimers()
  		mockLoadConfig.mockReturnValue({ apiKey: "test-key", llmEndpoint: "https://llm.test/openai/v1" })
 diff --git a/src/extensions/session-name.ts b/src/extensions/session-name.ts
-index d25a518..dd38be0 100644
+index e38dd81..a29ef86 100644
 --- a/src/extensions/session-name.ts
 +++ b/src/extensions/session-name.ts
-@@ -17,6 +17,7 @@ import { gatewayAuthHeaders, resolveGatewayCredentials } from "../auth/gateway-c
+@@ -18,6 +18,7 @@ import { gatewayAuthHeaders, resolveGatewayCredentials } from "../auth/gateway-c
  import { loadConfig, RETRY_DEFAULTS } from "../config.js"
  import { fetchWithRetry } from "../utils/http.js"
  import { notifyUser } from "../utils/notify-user.js"
 +import { resolveModelRoles } from "./orchestration/model-roles.js"
+ import { SKILL_INVOKE_PREFIX } from "./skills-manager/skill-triggers.js"
  import { createNativeUsageCapture } from "./work-attribution/native-usage.js"
  import { getWorkId, pinWorkContext, recordProviderRequest, warnWorkAttribution } from "./work-attribution.js"
- 
-@@ -142,7 +143,13 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
+@@ -208,7 +209,13 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  		warnWorkAttribution(ctx, error)
  	}
  
@@ -352,7 +352,7 @@ index d25a518..dd38be0 100644
  	let usage: ReturnType<typeof createNativeUsageCapture> | undefined
  	try {
  		const maxRetries = getSessionNameMaxRetries(ctx.cwd)
-@@ -155,7 +162,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
+@@ -221,7 +228,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  					...gatewayAuthHeaders(credentials),
  				},
  				body: JSON.stringify({
@@ -361,7 +361,7 @@ index d25a518..dd38be0 100644
  					messages: [
  						{ role: "system", content: SESSION_NAME_SYSTEM_PROMPT },
  						{
-@@ -176,11 +183,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
+@@ -242,11 +249,7 @@ export async function suggestSessionName(ctx: ExtensionContext, hint?: string, q
  					const headers = new Headers(init?.headers)
  					if (workId) {
  						try {

@@ -938,8 +938,8 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:f6bdf073e115820ea365a45aec2353405698416a4c3040d763785e8dcc414c47",
-      "id": "request-extensions-session-name-suggest-session-name-fetch-impl-0",
+      "evidenceHash": "sha256:dc679e390c67f532048a960b82d2108e5b717ecb12762c74fe4ab0119d41dc4a",
+      "id": "request-extensions-session-name-create-session-name-suggestion-fetch-impl-0",
       "missingEvidence": "default: reviewed default-configuration and initialization spans; destination: reviewed URL construction, routing and override spans; disable: reviewed disabling controls and their precedence spans; trigger: reviewed registration, lifecycle and invocation spans beyond the bounded caller evidence.",
       "rationale": "This record classifies the request occurrence as unknown. Its statement and bounded reachability rows have been captured; no conclusion about default execution, trigger, disabling controls or effective destination has been reviewed.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
@@ -956,7 +956,7 @@
                   "ordinal": 0
                 },
                 "symbol": [
-                  ["function:suggestSessionName", 0],
+                  ["function:createSessionNameSuggestion", 0],
                   ["function:fetchImpl", 0]
                 ]
               },
@@ -968,13 +968,15 @@
       },
       "evidence": {
         "call": "sha256:9dbaf118fd0c096ba6f620a222fdf43f9218d68a7ee848139eea7756fd61ddcb",
-        "root": "sha256:befe261f60c440951a5d1a91ec311ed77719b7afc965770bc665030951c038da",
+        "root": "sha256:688612d59e086f40155bd136a0ce20ec9bb763e87e9cf155460b50f4c356d25f",
         "rows": [
           "sha256:03300566e3352f952f9a54cbed762e52a69b29620ae83171592b59de7a5f0444",
-          "sha256:45611fcfabdf5e74f43337c89db3e7a5a8a7f876e6269a05a3a2185b0d712dff",
-          "sha256:816015d169f82feceffbf50351bea8b4210aac316f997c8c1e9f0c2e564c7d98",
+          "sha256:658e2287a853c0b2d268fc4719f8e5cc48adb9c6060da17c5b8c4e6021b03034",
+          "sha256:8bd9c8b00211e1ccd3f85e19edc04913c132e02a1a55ce5c071aca67400baa3c",
           "sha256:b019d2393ea2390d544898c40113a9f917f3922d77fd0d46f7745036eb03befc",
-          "sha256:f4078aa30de7162c36bd9b5950feae22f7dab5e23f50fc0b4bd591d496cfa24d"
+          "sha256:cc8e6c638c88c91e7b71760a3c5dbf5c630575f03098812a52dde14762f9225b",
+          "sha256:cf7cf0d58b91e55af402261ed4dc7d15b645ddde0ba57af08ef855533f8cdc46",
+          "sha256:d4b08741bb4d846bd9b8625f5d19b51b5c00b1f513f7599a6c8860b172199a57"
         ],
         "statement": "sha256:668991a6602e55856493a8484c6e7470d80d46c41fce063b30ba872164fec089"
       }
@@ -1778,7 +1780,7 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:b3e6dd517f5c11426692d29df52ef6a7389bcafe9cb1ea73fcfae36946ed8585",
+      "evidenceHash": "sha256:8d152456976baabe11cf0833602d6a2410b30154dd193a1eedf75f84ce339e77",
       "id": "request-utils-http-fetch-with-retry-0",
       "missingEvidence": "Still unreviewed: all utility caller defaults, effective caller URLs and overrides, complete caller disable/abort/retry precedence (including the MEMORY_PRE_REQUEST_TIMEOUT_MS bound on the recall and digest gates and the detached digest attempt that outlives it), and runtime caller prerequisites beyond reporting, stored, memory recall and digest depth boundaries.",
       "rationale": "Reviewed Kimchi 1.36.0 caller evidence: seven rows were removed and nine added, all in src/extensions/memory/index.ts. The withRecallIndicator wrapper (:433 in 1.35.2) is gone, so fireDetachedRecall (:856) now runs its async closure (:868) directly: the closure's caller row and the stored boundary at :856 moved from distance 4 to 3, the withRecallIndicator callback and depth boundary rows are removed, the fireDetachedRecall calls at :972 (coalesced refire, now a recursion boundary) and :1001 are caller rows at distance 4, and the before_agent_start registration (:744) is a depth boundary. computeDigest (:589) is now called from the new startDigestAttempt (:666, call at :674) instead of the before_agent_start handler, with a stored boundary at :666 and a depth boundary at the startDigestAttempt call (:817). Request call and statement bytes are unchanged, and src/utils/http.ts and src/extensions/memory/decision-gate.ts are byte-identical to 1.35.2. These measured changes do not settle the four runtime claim parts; the verdict remains unknown.",
@@ -1833,6 +1835,7 @@
           "sha256:2183e819251d0361a546149a3837956b32bd14ceebd5735e648615ac3879e0d3",
           "sha256:22a3c8a5674d5bc7178026e7e1ec7c80b3c5467813f2cdc7552ed13f88380f42",
           "sha256:230f0e34e15c98c2e97ba77a708fb545f4bc9e7c41f4cb11aaf5712b10c0c7c4",
+          "sha256:23149dc90a4b4b9337ccda2da6d432897e4948b6c4f3a0af847fbb67137e3956",
           "sha256:24685727fbb2fe54bf5431a84edaef024487f32b9feb12463febcbcb20fee47f",
           "sha256:28239f04f51481d98dd0945468a04ce7ea50a9c24609a0295673cd86e551bc70",
           "sha256:2a1af85e83665dc1bcfefa0549abfbe60aa8ab03a9f517ff578078ecf1248c6b",
@@ -1871,8 +1874,8 @@
           "sha256:5d84993913183e4dfbe8c026fe2bfceaefd7f4efc3330fa572e04c1a5d0e0072",
           "sha256:6490974aed603314b3e494c4c2e53791b6daf26c93cb10a02c921cd58f667fa9",
           "sha256:651de38cc1b13345aa8968fa33698118290f8c373c3273a08aa4d43b8634da67",
+          "sha256:658e2287a853c0b2d268fc4719f8e5cc48adb9c6060da17c5b8c4e6021b03034",
           "sha256:660a3f4047b039404ff1d4813540e5f52f104e64e3d216f36ee443107456081e",
-          "sha256:6a22eedf5664a573ea879dacfc8372d81c365e3b97d0913bb5b6c8b1ce045e19",
           "sha256:6ad88fe7d2e1ff6973edaf82d04df89bb25238e7fc810986037349220454dca9",
           "sha256:6bed42023a1178b6edc23bc9139d7186b40b26427b675c2259b36d13da7fe447",
           "sha256:6c43e11378eeab9fbb0bcd4f5467fbfd0e217ee7339cbc31583e9d76937df579",
@@ -1892,7 +1895,6 @@
           "sha256:7cda199dd696fbfd48365ca92c63b8f541a2dd7cfe36df8809f6a4bfe3c7d1b1",
           "sha256:7e928746c0f1430faff71ef98dd0fcdf17118faa6b1c1b0e470cfb68860b09bc",
           "sha256:804ce4a68af18e22a865c0c034d83141c5083eab81ca2cad677463c700084db9",
-          "sha256:816015d169f82feceffbf50351bea8b4210aac316f997c8c1e9f0c2e564c7d98",
           "sha256:8171e98e55afac4fe24c76b6a1e681d7d1d22607583fd468ec9d8f7b3b38c069",
           "sha256:8305078b0808ab70d2cee3bd80d92381f649f45a9a8a8bd697a466625d6f5316",
           "sha256:831f90c29160f7f1944fabfd3b23c3ca2d3340783c674b07cc95a7493687bc89",
@@ -1946,6 +1948,7 @@
           "sha256:c8c6f86022869003e234e40067e11a45f3ac1e37a1f880c8e7f5ecbb4438af77",
           "sha256:c8ce0d07b16f250aaa93962f227ed243c296988ce8f9af260d5e0a404c1503af",
           "sha256:c9ee7aac1f800ac7731ff47480955287fc4e5eb3342c9ae81b8451004077e7d4",
+          "sha256:cc8e6c638c88c91e7b71760a3c5dbf5c630575f03098812a52dde14762f9225b",
           "sha256:cd06856dc27ee6687d37ea0802a0b997fa5f3e6bdc6dad984c5c6fef1826f904",
           "sha256:cd24eca82bda8a267a803e64f9a36a4f7aa656afd1739826f90910fc5df164d8",
           "sha256:cd731d50555e1c32867d4e913b1be96123f16c480aa6fab2fe66c987c4975da1",
@@ -1953,6 +1956,7 @@
           "sha256:d09822e3955f0051df8817e29e10870cb2078034e9822eee69920754df00c066",
           "sha256:d1a02d437e2db3356914d4aeda4937d24410b5f61ac13bef1da4c61dca1fbbb5",
           "sha256:d418af0270e9149f0419dc8af55484735af288f5b8c93d903c299f7ac00f3606",
+          "sha256:d4b08741bb4d846bd9b8625f5d19b51b5c00b1f513f7599a6c8860b172199a57",
           "sha256:d5dd6d2b09ad6a37016198487728278d06c35a242a3eac4961e1f51f35cce570",
           "sha256:d881edf94c4176306aac8e033223d6c4abda91f2b33eaa0edcede68484ddc6c7",
           "sha256:d8cb6a06d9cd426d2ed72de8974119b5e0bb70949a4ac4122d2c1218c5ad3088",
