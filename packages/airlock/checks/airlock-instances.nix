@@ -7,7 +7,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm mkTest;
+  inherit (harness) claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest;
   evaluate = backend:
     if backend == "hm"
     then evalHm
@@ -71,12 +71,9 @@
       else if pkgs.stdenv.hostPlatform.isLinux
       then config.systemd.user.services ? "airlock-main"
       else
-        builtins.any (
-          warning:
-            warning
-            == "ai.services.airlock-main: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"
-        )
-        config.warnings;
+        # Darwin: fails when airlock-main is missing from launchd or runs
+        # something other than its launcher.
+        launchdAgentRunsLauncher config "airlock-main";
   in
     config.ai.airlock.instances.main.port
     == 8318

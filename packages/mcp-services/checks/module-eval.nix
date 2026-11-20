@@ -7,7 +7,7 @@
   ...
 }: let
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (harness) evalHm mcpLib mkTest;
+  inherit (harness) evalHm launchdAgentRunsLauncher mcpLib mkTest;
 
   assertionSettings = passing: {
     assertions = [
@@ -307,7 +307,8 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-mcp-services-darwin-warns = mkTest "mcp-services-darwin-warns" (
+      # Fails when a server's service is missing from launchd or runs something other than its launcher.
+      module-mcp-services-darwin-launchd = mkTest "mcp-services-darwin-launchd" (
         let
           result = evalHm {
             services.mcp-servers.servers = {
@@ -318,10 +319,7 @@ in {
         in
           result.config.systemd.user.services
           == {}
-          && lib.all (name:
-            builtins.elem
-            "ai.services.mcp-${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"
-            result.config.warnings) ["context7-mcp" "effect-mcp"]
+          && lib.all (launchdAgentRunsLauncher result.config) ["mcp-context7-mcp" "mcp-effect-mcp"]
       );
     };
 }
