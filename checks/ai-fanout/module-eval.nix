@@ -468,8 +468,11 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
-          opencodeGo.plan = ''null or one of "go", "go-plus", "go-teams"'';
-          opencodeGo.pool = "null or string";
+          opencodeGo = {
+            plan = ''null or one of "go", "go-plus", "go-teams"'';
+            pool = "null or string";
+            presetScope.excludeModelPrefixes = "attribute set of (null or non-empty string)";
+          };
           pools = "attribute set of (submodule)";
           reminder = "submodule";
           reviewPolicy = "submodule";

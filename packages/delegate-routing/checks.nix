@@ -46,13 +46,78 @@ in {
         python3 -I -B ${./checks/pacing}/run_cases.py ${./scripts} ${./checks/pacing/cases}
         touch "$out"
       '';
-    # Every servable OpenCode Go catalog model belongs to exactly one preset,
-    # and every preset matches a catalog model.
+    # Extracted-data property: rejects missing or duplicate fit ownership,
+    # including models previously hidden by fixed prefix exclusions.
     delegate-routing-opencode-go-presets = let
       inherit (import ./lib/opencode-go.nix {inherit lib;}) drift;
     in
       harness.mkTest "delegate-routing-opencode-go-presets" (
         drift == [] || throw "delegate-routing opencode-go presets drift from the pinned catalog: ${lib.concatStringsSep "; " drift}"
+      );
+    # Synthetic properties: ignored scope, case-insensitive matching, and
+    # ambiguous or incomplete guidance are distinct failures.
+    delegate-routing-opencode-go-scope = let
+      fit = {
+        avoidFor = "unverified output";
+        defaultEffort = null;
+        effort = "no effort pin";
+        match = "fixture-*";
+        useFor = "bounded fixture tasks";
+      };
+      check = args: (import ./lib/opencode-go.nix ({inherit lib;} // args)).drift;
+      fixture = {
+        guidance.example.test = fit;
+        modelIds = ["fixture-model"];
+      };
+      cases = {
+        default-scope-keeps-all-models = {
+          input.modelIds = ["claude-future" "glm-future" "gpt-future"];
+          expected = [
+            "catalog model `claude-future` matches no preset"
+            "catalog model `glm-future` matches no preset"
+            "catalog model `gpt-future` matches no preset"
+          ];
+        };
+        exclusions-match-case-insensitively = {
+          input =
+            fixture
+            // {
+              activeExclusionPrefixes = ["OTHER-"];
+              modelIds = ["fixture-model" "other-model"];
+            };
+          expected = [];
+        };
+        exclusions-preserve-unmatched-coverage = {
+          input =
+            fixture
+            // {
+              activeExclusionPrefixes = ["other-"];
+              modelIds = ["fixture-model" "new-model" "other-model"];
+            };
+          expected = ["catalog model `new-model` matches no preset"];
+        };
+        incomplete-guidance-is-reported = {
+          input = fixture // {guidance.example.test = fit // {useFor = "";};};
+          expected = ["catalog model `fixture-model` lacks fit guidance"];
+        };
+        overlapping-presets-are-reported = {
+          input =
+            fixture
+            // {
+              guidance.example = {
+                duplicate = fit;
+                test = fit;
+              };
+            };
+          expected = ["catalog model `fixture-model` matches several presets: example.duplicate, example.test"];
+        };
+      };
+    in
+      harness.mkTest "delegate-routing-opencode-go-scope" (
+        lib.all (name:
+          check cases.${name}.input
+          == cases.${name}.expected
+          || throw "delegate-routing opencode-go scope case `${name}` failed") (builtins.attrNames cases)
       );
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {

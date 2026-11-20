@@ -67,6 +67,12 @@
         };
       };
     };
+    # Native-family routing cases do not claim unique Go guidance ownership.
+    opencodeGo.presetScope.excludeModelPrefixes = {
+      deepseek = "deepseek-v4.1-flash";
+      kimi = "kimi-";
+      minimax = "minimax-";
+    };
     pools = {
       api-allowance = {
         description = "Example monthly allowance without a usage reader.";

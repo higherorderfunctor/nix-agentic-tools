@@ -492,10 +492,17 @@
           instance = "test";
           clientKey = "reader";
         };
-        programs.delegate-routing.runtimes = lib.genAttrs runtimes (_: {picker.entries = lib.mkForce [];});
-        programs.delegate-routing.families = {
-          anthropic.fable.match = "test-fable-*";
-          anthropic.opus.match = "test-opus-*";
+        programs.delegate-routing = {
+          families = {
+            anthropic.fable.match = "test-fable-*";
+            anthropic.opus.match = "test-opus-*";
+          };
+          # Version fixtures replace these native patterns with synthetic ids.
+          opencodeGo.presetScope.excludeModelPrefixes = {
+            claudeFable = "claude-fable-";
+            claudeOpus = "claude-opus-";
+          };
+          runtimes = lib.genAttrs runtimes (_: {picker.entries = lib.mkForce [];});
         };
       };
     };
@@ -1182,6 +1189,8 @@
               clientKey = "reader";
             };
             programs.delegate-routing = {
+              # This client offers only the synthetic GLM launch identity.
+              opencodeGo.presetScope.excludeModelPrefixes.legacyGlm = "glm-";
               families.zhipuai.glm = {
                 match = "test-glm-*";
                 tier = "strong";
@@ -1468,6 +1477,8 @@
         withExample = fixedSkill {ai.programs.delegate-routing.families.anthropic.opus.example.claude = "test-native-opus-1";};
         glm = skill {
           ai.programs.delegate-routing = {
+            # This launch fixture replaces GLM coverage with a synthetic pattern.
+            opencodeGo.presetScope.excludeModelPrefixes.legacyGlm = "glm-";
             families.zhipuai.glm = {
               example.claude = "test-glm-1";
               match = "glm-*";
@@ -1741,6 +1752,92 @@
               };
             };
         }).config.ai.programs.delegate-routing.families.opencode-go));
+    # Synthetic property: consumer guidance, including unselected families,
+    # controls skill coverage on both backends.
+    "module-delegate-routing-${name}-opencode-go-guidance" = mkTest "delegate-routing-${name}-opencode-go-guidance" (let
+      configured = useFor: change {ai.programs.delegate-routing.families.zhipuai.glm.useFor = useFor;};
+      builds = value: (builtins.tryEval (builtins.toString value)).success;
+      moduleBuilds = useFor: builds (configured useFor).config.ai.claude.skills.delegate-routing;
+    in
+      moduleBuilds "consumer GLM guidance" && !(moduleBuilds ""));
+    # Named entries merge by key. Each case also builds the skill with the
+    # named families made incomplete, so the expected drift proves the active
+    # prefix set rather than merely echoing the supplied option.
+    "module-delegate-routing-${name}-opencode-go-scope" = mkTest "delegate-routing-${name}-opencode-go-scope" (let
+      inheritedEntries = {
+        beam = lib.mkDefault "BEAM-";
+        gemini = lib.mkDefault "gemini-";
+      };
+      scopeCase = entries: incompleteFamilies:
+        change {
+          ai.programs.delegate-routing = {
+            families.opencode-go = lib.genAttrs incompleteFamilies (_: {useFor = "";});
+            opencodeGo.presetScope = lib.mkMerge [
+              {excludeModelPrefixes = inheritedEntries;}
+              {excludeModelPrefixes = entries;}
+            ];
+          };
+        };
+      added = scopeCase {grok = "grok-";} ["go-beam-free" "go-gemini-4-argon" "go-grok-4.7"];
+      removed = scopeCase {gemini = null;} ["go-beam-free" "go-gemini-4-argon"];
+      replaced = scopeCase {beam = "grok-";} [];
+      replacementExcludesNew =
+        scopeCase
+        {beam = "grok-";}
+        ["go-grok-4.7"];
+      replacementRestoresOld =
+        scopeCase
+        {beam = "grok-";}
+        ["go-beam-free"];
+      malformed = scopeCase {legacy = "";} [];
+      scopeOf = evaluation:
+        evaluation.config.ai.programs.delegate-routing.opencodeGo.presetScope.excludeModelPrefixes;
+      skillBuilds = evaluation: (builtins.tryEval (builtins.deepSeq evaluation.config.ai.claude.skills.delegate-routing true)).success;
+      builder = result.config.ai.internal.roots.delegate-routing-content.passthru.mkSkill;
+      manualFamilies = builtins.removeAttrs result.config.ai.programs.delegate-routing.families ["zhipuai"];
+      manual = prefixes:
+        builder {
+          families = manualFamilies;
+          opencodeGo.presetScope.excludeModelPrefixes = prefixes;
+          runtime = "claude";
+        };
+      effortOverride = change {ai.programs.delegate-routing.families.zhipuai.glm.defaultEffort = "max";};
+      defaultPortable = result.config.ai.programs.delegate-routing;
+    in
+      scopeOf result
+      == {}
+      && scopeOf added
+      == {
+        beam = "BEAM-";
+        gemini = "gemini-";
+        grok = "grok-";
+      }
+      && skillBuilds added
+      && scopeOf removed
+      == {
+        beam = "BEAM-";
+        gemini = null;
+      }
+      && !(skillBuilds removed)
+      && scopeOf replaced
+      == {
+        beam = "grok-";
+        gemini = "gemini-";
+      }
+      && skillBuilds replacementExcludesNew
+      && !(skillBuilds replacementRestoresOld)
+      && !(builtins.tryEval (builtins.deepSeq (scopeOf malformed) true)).success
+      && replaced.config.ai.catalog == result.config.ai.catalog
+      && replaced.config.ai.programs.delegate-routing.families
+      == result.config.ai.programs.delegate-routing.families
+      && (builtins.tryEval (builtins.deepSeq (manual {legacy = "GLM-";}).drvPath true)).success
+      && !(builtins.tryEval (builtins.deepSeq (manual {}).drvPath true)).success
+      && !(builtins.tryEval (builtins.deepSeq (manual {legacy = "";}).drvPath true)).success
+      && defaultPortable.families.zhipuai.glm.pools == {}
+      && defaultPortable.families.zhipuai.glm-flash.pools == {}
+      && defaultPortable.families.zhipuai.glm.defaultEffort == "high"
+      && defaultPortable.families.zhipuai.glm-flash.defaultEffort == null
+      && effortOverride.config.ai.programs.delegate-routing.families.zhipuai.glm.defaultEffort == "max");
     "module-delegate-routing-${name}-opencode-go" = mkTest "delegate-routing-${name}-opencode-go" (let
       goSelected = plan:
         change {
@@ -1768,6 +1865,8 @@
         change {
           ai.programs.delegate-routing = {
             inherit families;
+            # Exercise runtime overlap independently of unique guidance ownership.
+            opencodeGo.presetScope.excludeModelPrefixes.overlapKimi = "kimi-k3";
             runtimes.claude.models = [{vendors = ["opencode-go"];}] ++ models;
           };
         };
@@ -1819,6 +1918,7 @@
       && passes (change {
         ai.programs.delegate-routing = {
           families.example.kimi = kimi;
+          opencodeGo.presetScope.excludeModelPrefixes.overlapKimi = "kimi-k3";
           runtimes = {
             claude.models = [{families = ["kimi"];}];
             codex.models = [{vendors = ["opencode-go"];}];
@@ -1831,6 +1931,7 @@
             example.kimi = kimi;
             other.kimi-exact = kimi // {match = "kimi-k3";};
           };
+          opencodeGo.presetScope.excludeModelPrefixes.overlapKimi = "kimi-k3";
           runtimes.claude.models = [{families = ["kimi" "kimi-exact"];}];
         };
       }));
