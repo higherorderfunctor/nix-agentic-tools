@@ -512,6 +512,24 @@ class CaptureTests(unittest.TestCase):
         with contextlib.closing(open_database(self.path)) as db:
             self.assertEqual(db.execute("PRAGMA synchronous").fetchone()[0], 1)  # NORMAL
 
+    def test_wal_reuse_caps_retained_size_after_reader_releases_snapshot(self):
+        """Use synthetic BLOB writes to exercise SQLite's WAL reset without a collector."""
+        wal_path = self.path.with_suffix(".sqlite3-wal")
+        with contextlib.closing(open_database(self.path)) as db:
+            db.execute("CREATE TABLE filler(payload BLOB)")
+            with contextlib.closing(sqlite3.connect(self.path)) as reader, capture.snapshot(reader):
+                reader.execute("SELECT count(*) FROM filler").fetchone()
+                for _ in range(8):
+                    with db:
+                        db.execute("INSERT INTO filler VALUES (zeroblob(?))", (4 * 1024 * 1024,))
+                self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+
+            busy, frames, copied = db.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+            self.assertEqual((busy, copied), (0, frames))
+            with db:
+                db.execute("INSERT INTO filler VALUES (X'00')")
+            self.assertLessEqual(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+
     def test_payload_warning_threshold_keeps_retaining(self):
         writer = Collector(self.path, warn_bytes=1)
         identifiers = []
