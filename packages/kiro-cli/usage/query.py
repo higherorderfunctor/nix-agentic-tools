@@ -12,7 +12,7 @@ import sys
 
 import credit_discount
 from capture import snapshot
-from disk_index import LINKS, session_id
+from disk_index import LINKS, refresh_history, session_id
 from display import RULE, table, tables, value
 import summary_theme
 
@@ -179,9 +179,18 @@ def run_report(db, invocation, session):
                 "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
 
 
-def query(db, session, scope="session", since=None, until=None):
-    if not re.fullmatch(r"sess_[A-Za-z0-9_-]+", session):
+def history_reader(database: Path, sessions: tuple[str, ...], *, refresh: bool):
+    """Validate all requested IDs and return the CLI reader after any disk refresh."""
+    if any(not re.fullmatch(r"sess_[A-Za-z0-9_-]+", session) for session in sessions):
         raise ValueError("--session must be a sess_UUID identifier")
+    if refresh and sessions:
+        refresh_history(database, sessions)
+    uri = database.resolve().as_uri() + "?mode=ro"
+    return closing(sqlite3.connect(uri, uri=True))
+
+
+def query(db, session, scope="session", since=None, until=None):
+    """Read capture and disk facts for a validated session name or its whole tree."""
     if scope not in ("session", "tree"):
         raise ValueError("scope must be session or tree")
     db.row_factory = sqlite3.Row
@@ -193,15 +202,17 @@ def query(db, session, scope="session", since=None, until=None):
         paths = []
         if disk_available:
             rows = db.execute(f"""
-                WITH RECURSIVE chosen(path, identifiers_json) AS (
-                  SELECT path,identifiers_json FROM disk_sessions WHERE session_name(path)=?
+                WITH RECURSIVE chosen(path, name) AS (
+                  VALUES (NULL, ?)
                   UNION
-                  SELECT d.path,d.identifiers_json FROM disk_sessions d JOIN chosen p
+                  SELECT path,session_name(path) FROM disk_sessions WHERE session_name(path)=?
+                  UNION
+                  SELECT d.path,session_name(d.path) FROM disk_sessions d JOIN chosen p
                   ON ?='tree' AND EXISTS(SELECT 1 FROM json_each(d.identifiers_json) j
                     WHERE j.key IN ({",".join("?" for _ in LINKS)})
-                    AND j.value IN (session_name(p.path),substr(session_name(p.path),6)))
-                ) SELECT path FROM chosen
-            """, (session, scope, *LINKS))
+                    AND j.value IN (p.name,substr(p.name,6)))
+                ) SELECT path FROM chosen WHERE path IS NOT NULL
+            """, (session, session, scope, *LINKS))
             for row in rows:
                 paths.append(row[0])
                 selected.add(Path(row[0]).name)
@@ -639,15 +650,16 @@ def calculator_text(reports):
 
 
 def main():
+    """Serve the session CLI by printing text or JSON from a read snapshot after any requested refresh."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
+    parser.add_argument("--refresh-history", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--session", required=True)
     parser.add_argument("--scope", choices=("session", "tree"), default="session")
     parser.add_argument("--json", action="store_true", help="write the complete structured report as JSON")
     args = parser.parse_args()
     try:
-        uri = args.db.resolve().as_uri() + "?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True)) as db:
+        with history_reader(args.db, (args.session,), refresh=args.refresh_history) as db:
             report = query(db, args.session, args.scope)
             if args.json:
                 print(json.dumps(report, indent=2, sort_keys=True))

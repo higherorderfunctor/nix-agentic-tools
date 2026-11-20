@@ -1,7 +1,6 @@
 """Report captured usage at the current rates: every capture by model and conversation, or named session trees, every run included, in the exit summary's look."""
 
 import argparse
-from contextlib import closing
 from datetime import datetime
 import json
 from pathlib import Path
@@ -40,10 +39,12 @@ def render(report, theme=summary_theme.PLAIN):
 
 
 def main():
+    """Serve the report CLI by printing a store summary or named session trees from one snapshot."""
     zone = datetime.now().astimezone().tzname()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
     parser.add_argument("--json", action="store_true", help="write the store report, or the list of session reports, as JSON")
+    parser.add_argument("--refresh-history", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--session", action="append", metavar="ID",
                         help="show this session tree, every run included, in the exit summary's look instead of the store report; repeat it for each root after a switch or fork")
     parser.add_argument("--since", type=day, metavar="YYYY-MM-DD", help=f"first day to include, in local time ({zone}); inclusive")
@@ -51,16 +52,15 @@ def main():
     parser.add_argument("--until", type=day, metavar="YYYY-MM-DD", help=f"last day to include, in local time ({zone}); inclusive")
     args = parser.parse_args()
     try:
-        uri = args.db.resolve().as_uri() + "?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True)) as db:
+        with query.history_reader(args.db, tuple(args.session or ()), refresh=args.refresh_history) as db, query.snapshot(db):
             reports = ([query.query(db, session, "tree", args.since, args.until) for session in args.session] if args.session
                        else [store_report(db, args.since, args.until)])
-            if args.json:
-                print(json.dumps(reports if args.session else reports[0], indent=2, sort_keys=True))
-            else:
-                theme = summary_theme.load(args.summary_theme, sys.stdout)
-                print("\n\n".join((query.render_summary if args.session else render)(report, theme=theme) for report in reports))
-                print(query.calculator_text(reports))
+        if args.json:
+            print(json.dumps(reports if args.session else reports[0], indent=2, sort_keys=True))
+        else:
+            theme = summary_theme.load(args.summary_theme, sys.stdout)
+            print("\n\n".join((query.render_summary if args.session else render)(report, theme=theme) for report in reports))
+            print(query.calculator_text(reports))
     except (OSError, ValueError, sqlite3.Error) as error:
         parser.exit(1, f"cannot query calibration database: {error}\n")
 
