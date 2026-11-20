@@ -1,0 +1,27 @@
+{
+  "description": "The offline runner check compares every named capture and all shared attempts and delays to this snapshot.",
+  "snapshot": {
+    "calls": ["late", "late", "late", "fails", "fails", "fails", "sibling"],
+    "captures": {
+      "absent-command": "no registered Reader",
+      "healthy-sibling": {
+        "completed_at": "2026-01-01T00:00:07Z",
+        "stdout": "sibling stdout"
+      },
+      "late-success": {
+        "completed_at": "2026-01-01T00:00:03Z",
+        "stdout": "late stdout"
+      },
+      "repeated-failure": {
+        "completed_at": "2026-01-01T00:00:06Z",
+        "reason": "Reader exited 3"
+      },
+      "shared-command": {
+        "completed_at": "2026-01-01T00:00:03Z",
+        "stdout": "late stdout"
+      }
+    },
+    "delays": [0.75, 0.75, 0.75, 0.75],
+    "timeouts": [3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5]
+  }
+}

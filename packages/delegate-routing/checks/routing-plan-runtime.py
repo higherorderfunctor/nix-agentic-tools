@@ -25,6 +25,7 @@ from hypothesis import given, settings, strategies as st
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
+sys.path.insert(0, str(SOURCE.parent))
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
@@ -609,6 +610,8 @@ class Routing(unittest.TestCase):
             self.assertEqual(refused(config), ["manifest.readers[0].command", "manifest.readers[0].name"])
             config["readers"] = [{"command": "x"}, "outside"]
             self.assertEqual(refused(config), ["manifest.readers[0].name", "manifest.readers[1]"])
+            config["readers"] = [{"command": {}, "name": "outside"}]
+            self.assertEqual(refused(config), ["manifest.readers[0].command"])
             config["readers"] = {"name": "outside"}
             self.assertEqual(refused(config), ["manifest.readers"])
             (root / "context.json").write_text(json.dumps({"taskSummary": "ok"}))
@@ -1351,14 +1354,15 @@ class Routing(unittest.TestCase):
             )
             command = shlex.join([sys.executable, str(script)])
             readers = [{"command": command, "name": name} for name in ("outside", "alias")]
-            with patch.object(helper, "READER_TIMEOUT", 5), patch("time.sleep") as sleep:
-                result = helper.collect(readers, NOW, SHELL)
+            policy = helper.ReaderPolicy(timeout=5)
+            with patch("time.sleep") as sleep:
+                result = helper.collect(helper.reader_registrations.validate_python(readers), NOW, SHELL, policy=policy)
             self.assertEqual(int(counter.read_text()), count)
             self.assertEqual(result, {"alias": expected, "outside": expected})
             # Count only the retry pause: subprocess's own timeout polling also
             # calls time.sleep, as often as the runner's speed dictates.
-            retry_pauses = sleep.call_args_list.count(call(helper.READER_RETRY_DELAY))
-            self.assertEqual(helper.READER_RETRY_DELAY, 2)
+            retry_pauses = sleep.call_args_list.count(call(policy.retry_delay))
+            self.assertEqual(policy.retry_delay, 2)
             self.assertEqual(retry_pauses, 1 if count == 2 else 0)
 
     def test_reader_retries_nonzero_once_then_measures(self):
@@ -1399,6 +1403,8 @@ class Routing(unittest.TestCase):
             (subprocess.CompletedProcess("secret-command", 7, "", "HTTP 429 secret-stderr"), "Reader exited 7"),
             (subprocess.TimeoutExpired("secret-command", 10, stderr="secret-stderr"), "Reader timed out"),
             (OSError("secret-command secret-stderr"), "Reader could not execute"),
+            (UnicodeDecodeError("utf-8", b"\xff", 0, 1, "secret-decoding"), "invalid Reader output"),
+            (ValueError("embedded null byte secret-command"), "invalid Reader command"),
             ("secret-json", "invalid Reader output"),
             ("[]", "invalid Reader output"),
             (stream() + "\n" + stream(), "invalid Reader output"),
@@ -1488,7 +1494,9 @@ class Routing(unittest.TestCase):
         config = manifest()
         config["readers"].append({"command": "reader-outside", "name": "alias"})
         config["poolFamilies"]["alias"] = []
-        result, calls = self.run_plan(config, context(("writer", "judge")), ("writer", "judge"))
+        with patch.object(helper, "measure", wraps=helper.measure) as measure:
+            result, calls = self.run_plan(config, context(("writer", "judge")), ("writer", "judge"))
+        self.assertEqual(measure.call_count, 3)
         self.assertEqual(calls, ["reader-outside", "reader-session", "reader-hidden-runtime"])
         self.assertEqual(sorted(result["pools"]), ["alias", "hidden", "outside", "session"])
         self.assertEqual(result["automaticRuntimes"], ["codex"])
@@ -1821,8 +1829,11 @@ class Routing(unittest.TestCase):
         ctx = context()
         ctx["techniques"][0]["efforts"] = "high"
         self.assertEqual([error["path"] for error in self.request_errors(launch_context=ctx)], ["launchContext.techniques[0].efforts"])
-        with patch.object(helper, "READER_TIMEOUT", 0.02), patch("time.sleep"):
-            measured = helper.collect([{"command": "while :; do :; done", "name": "stuck"}], NOW, SHELL)
+        readers = helper.reader_registrations.validate_python(
+            [{"command": "while :; do :; done", "name": "stuck"}]
+        )
+        with patch("time.sleep"):
+            measured = helper.collect(readers, NOW, SHELL, policy=helper.ReaderPolicy(timeout=0.02))
         self.assertEqual(measured["stuck"]["status"], "unreachable")
         self.assertIn("timed out", measured["stuck"]["reason"])
 
