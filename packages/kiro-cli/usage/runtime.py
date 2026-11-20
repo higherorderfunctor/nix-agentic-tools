@@ -177,19 +177,29 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
+def store_size_bytes(database):
+    """Return the database and WAL size in bytes for the exit warning without opening SQLite."""
+    size = os.stat(database).st_size
+    try:
+        size += os.stat(f"{database}-wal").st_size
+    except FileNotFoundError:
+        pass
+    return size
+
+
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
     earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
     from query import render_summary, run_report
-    from store import payload_bytes
     import summary_theme
     try:
+        database = path / "usage.sqlite3"
+        size = store_size_bytes(database)
+        if size > warn_bytes:
+            # Capture never stops for size; this is the operator's only prompt to retire the store.
+            print(f"Warning: the usage store is {size / 2**20:,.0f} MiB on disk, past the {warn_bytes / 2**20:,.0f} MiB warning size; "
+                  f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.", file=sys.stderr)
         with read_only(path) as db:
-            retained = payload_bytes(db)
-            if retained > warn_bytes:
-                # Capture never stops for size; this is the operator's only prompt to retire the store.
-                print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
-                      f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
             rows = invocation_captures(db, invocation, 0)[0]
             if not rows:  # e.g. resumed and exited without a turn
                 print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
@@ -204,7 +214,7 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
             # invocation, not one session, so only the last block carries them.
             caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
                        *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
-            theme = summary_theme.load(theme)  # after the payload warning, which a refused theme must not hide
+            theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
             for session in sessions:
                 print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
@@ -358,7 +368,7 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
-        if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
+        if mode in ("cli", "service"):
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")

@@ -1,4 +1,5 @@
 apikey
+autocheckpoint
 AUTOUPDATER
 AUTOUPDATES
 AWSLAMBDA

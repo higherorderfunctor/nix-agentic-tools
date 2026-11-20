@@ -292,15 +292,15 @@ batch logs one journal line without payload text and waits for the next daily
 run; it never stops sealing or capture. A manual `mitmdump -s` run without
 `KIRO_USAGE_RETENTION_DAYS` keeps payloads forever.
 
-`payloadWarnBytes` (default 5 GiB of compressed payload bytes) is a warning, not
-a cap: past it the collector logs one warning line to its service journal and
-keeps capturing, and every tracked `exec` exit summary prints a one-line warning
-with the store's size while it stays above. Capture never deletes capture rows.
-To retire a store, stop the `kiro-usage` service, then archive or delete
-`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
-one. The threshold counts payloads only: sealed captures' compressed blobs, the
-gzip copies of captures not yet sealed, and usage summaries. Metadata, session
-indexes, SQLite pages, and WAL files need additional space.
+`payloadWarnBytes` supplies the `--warn-bytes` threshold, which defaults to 5
+GiB. At each tracked `exec` exit, the summary warns when the combined on-disk
+size of `usage.sqlite3` and its `-wal` file exceeds that threshold. The
+collector uses the same threshold for retained payload bytes and logs one
+warning to its service journal while capture continues. It counts sealed
+captures' compressed blobs, gzip copies of captures not yet sealed, and usage
+summaries. Capture never deletes capture rows. To retire a store, stop the
+`kiro-usage` service and archive or delete `usage.sqlite3` with its `-wal` and
+`-shm` files. The next start creates a new store.
 
 The collector seals each capture once it finishes, on its own thread, into a
 compact form the reports and `kiro-usage unpack` read as before. Each start also
