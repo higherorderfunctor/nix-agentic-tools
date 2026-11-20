@@ -298,7 +298,68 @@
           }
           // lib.optionalAttrs secretReader {Wants = providerUnits;};
       }) (enabled services));
-  hmWarnings = pkgs: services: lib.optionals (!pkgs.stdenv.hostPlatform.isLinux) (map (name: "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written") (builtins.attrNames (enabled services)));
+  # launchd's KeepAlive for each `restart` value.
+  keepAlive = {
+    always = true;
+    never = false;
+    "on-failure" = {SuccessfulExit = false;};
+  };
+  # systemd's default stop timeout, which the Linux unit inherits; launchd
+  # sends SIGKILL after 20 s unless told otherwise.
+  stopTimeoutSec = 90;
+  # Home Manager's launchd agents for the enabled services on Darwin, keyed
+  # by service name; empty elsewhere. The module (modules/homeManager) sets
+  # `launchd.agents` from it. Each agent runs the unstamped launcher devenv
+  # execs, because launchd sets no `$INVOCATION_ID` for the stamp to record.
+  # The launcher exports the environment, so the plist carries none.
+  hmAgents = pkgs: services: {homeDirectory}:
+    lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin (lib.mapAttrs (name: entry: let
+      log = "${homeDirectory}/Library/Logs/ai-service-${name}.log";
+    in {
+      config = {
+        ExitTimeOut = stopTimeoutSec;
+        KeepAlive = keepAlive.${entry.restart};
+        ProgramArguments = [(launch false pkgs name entry)];
+        RunAtLoad = true;
+        StandardErrorPath = log;
+        StandardOutPath = log;
+        ThrottleInterval = restartPolicy.restartSec;
+        WorkingDirectory = homeDirectory;
+      };
+      enable = true;
+    }) (enabled services));
+  # Each systemd behavior launchd lacks: which services use it, and the
+  # warning that names them. `providerUnits` is the secret provider units
+  # hmUnits orders readers after; with none, no start can beat a provider.
+  launchdGaps = providerUnits: {
+    restartOnChange = {
+      applies = entry: triggers entry != [];
+      text = names: "ai.services: launchd does not restart a service when a file it read at start changes (a restartOnChange path or a file a reference reads); restart it with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.<name>`. Services: ${names}";
+    };
+    secretProviderOrder = {
+      applies = entry: providerUnits != [] && readsSecrets entry;
+      text = names: "ai.services: launchd cannot start a service after its secret provider, so a start that comes first fails and only the restart policy retries it. Services: ${names}";
+    };
+    startLimit = {
+      applies = entry: entry.restart != "never";
+      text = names: "ai.services: launchd has no start limit, so a crash loop restarts every ${toString restartPolicy.restartSec} seconds instead of ending failed after ${toString restartPolicy.startLimit.burst} starts in ${toString restartPolicy.startLimit.intervalSec} seconds. Services: ${names}";
+    };
+  };
+  # The module's (modules/homeManager) `warnings` for the enabled services:
+  # on Darwin one per launchd gap a service uses; on a host with neither
+  # systemd nor launchd one naming every service, since none is written;
+  # none on Linux.
+  hmWarnings = pkgs: services: {providerUnits}: let
+    platform = pkgs.stdenv.hostPlatform;
+    # `text` given the enabled services `applies` holds for, if any.
+    warnWhere = applies: text: let
+      names = builtins.attrNames (lib.filterAttrs (_: applies) (enabled services));
+    in
+      lib.optional (names != []) (text (lib.concatStringsSep ", " names));
+  in
+    if platform.isDarwin
+    then lib.concatLists (lib.mapAttrsToList (_: gap: warnWhere gap.applies gap.text) (launchdGaps providerUnits))
+    else lib.optionals (!platform.isLinux) (warnWhere (_: true) (names: "ai.services: this platform has neither systemd user units nor launchd agents, so these services are not written: ${names}"));
   devenvProcesses = pkgs: services:
     lib.mapAttrs (
       name: entry:
@@ -432,5 +493,5 @@
       };
     };
 in {
-  inherit claimAssertions devenvProcesses hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
+  inherit claimAssertions devenvProcesses hmAgents hmReconcile hmUnits hmWarnings mkLauncher serviceEntry triggers;
 }

@@ -105,12 +105,26 @@
         };
       };
   };
-  darwin = backends.evaluate "hm" {
-    services = {
+  darwinServices.services =
+    entries
+    // {
       live = watched;
       stopped = daemon // {enable = false;};
     };
+  darwin = backends.evaluate "hm" darwinServices;
+  # A plain trigger file and no provider unit: nothing for a start to beat.
+  darwinNoProvider = backends.evaluate "hm" {
+    activationOrder.secretProviders.sops-nix = {};
+    services.trigger =
+      daemon
+      // {
+        restart = "never";
+        restartOnChange = ["/etc/daemon.conf"];
+      };
   };
+  # A Home Manager host with neither systemd nor launchd.
+  otherHostPkgs = pkgs // {stdenv = pkgs.stdenv // {hostPlatform = lib.systems.elaborate "x86_64-freebsd";};};
+  darwinDevenv = backends.evaluate "devenv" darwinServices;
   evaluateOwners = backend: definitions:
     (lib.evalModules {
       specialArgs = {
@@ -330,6 +344,12 @@
         shopt -s inherit_errexit 2>/dev/null || :
         touch "$out"
       '';
+  # mkCheck over named rules, so a failure names each rule it broke.
+  mkRulesCheck = name: rules: let
+    broken = builtins.attrNames (lib.filterAttrs (_: holds: !holds) rules);
+  in
+    assert lib.assertMsg (broken == []) "${name}: ${lib.concatStringsSep ", " broken} failed";
+      mkCheck name true;
 in {
   checks =
     {
@@ -422,6 +442,7 @@ in {
         && hm.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"]
         && !(devenv.tasks ? "ai:services-reconcile")
         && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-reconcile)
+        && hm.launchd.agents == {}
       );
       ai-module-services-claims = mkCheck "ai-module-services-claims" (
         lib.all (
@@ -699,11 +720,50 @@ in {
       '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      ai-module-services-darwin-warns = mkCheck "ai-module-services-darwin-warns" (
-        darwin.systemd.user.services
-        == {}
-        && darwin.warnings == ["ai.services.live: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"]
-        && !(darwin.home.activation ? ai-services-reconcile)
-      );
+      # Rejects an agent that is absent or `enable = false`, one that runs the
+      # daemon command or the stamped launcher, one that copies `environment`
+      # into the plist, and a wrong restart mapping; a secret-order warning
+      # without a provider unit, and silence on a host with neither backend.
+      ai-module-services-darwin-launchd = mkRulesCheck "ai-module-services-darwin-launchd" {
+        agentNames = builtins.attrNames darwin.launchd.agents == ["always" "live" "never" "on-failure"];
+        keepAlive =
+          lib.mapAttrs (_: agent: agent.config.KeepAlive) darwin.launchd.agents
+          == {
+            always = true;
+            live = {SuccessfulExit = false;};
+            never = false;
+            "on-failure" = {SuccessfulExit = false;};
+          };
+        liveAgent =
+          darwin.launchd.agents.live
+          == {
+            config = {
+              ExitTimeOut = 90;
+              KeepAlive = {SuccessfulExit = false;};
+              ProgramArguments = [darwinDevenv.processes.live.exec];
+              RunAtLoad = true;
+              StandardErrorPath = "/home/test/Library/Logs/ai-service-live.log";
+              StandardOutPath = "/home/test/Library/Logs/ai-service-live.log";
+              ThrottleInterval = 5;
+              WorkingDirectory = "/home/test";
+            };
+            enable = true;
+          };
+        noProviderNoOrderWarning =
+          darwinNoProvider.warnings
+          == ["ai.services: launchd does not restart a service when a file it read at start changes (a restartOnChange path or a file a reference reads); restart it with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.<name>`. Services: trigger"];
+        noReconcile = !(darwin.home.activation ? ai-services-reconcile);
+        noSystemdUnits = darwin.systemd.user.services == {};
+        otherHostWarns =
+          services.hmWarnings otherHostPkgs darwin.ai.services {providerUnits = [];}
+          == ["ai.services: this platform has neither systemd user units nor launchd agents, so these services are not written: always, live, never, on-failure"];
+        warnings =
+          darwin.warnings
+          == [
+            "ai.services: launchd does not restart a service when a file it read at start changes (a restartOnChange path or a file a reference reads); restart it with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.<name>`. Services: live"
+            "ai.services: launchd cannot start a service after its secret provider, so a start that comes first fails and only the restart policy retries it. Services: live"
+            "ai.services: launchd has no start limit, so a crash loop restarts every 5 seconds instead of ending failed after 5 starts in 300 seconds. Services: always, live, on-failure"
+          ];
+      };
     };
 }

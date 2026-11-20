@@ -106,6 +106,11 @@
           description = "User packages.";
         };
       };
+      launchd.agents = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = "Launchd user agents.";
+      };
       programs.git = {
         enable = lib.mkEnableOption "Git";
         # Home Manager's real type: `git.settings` is an alias of this option
