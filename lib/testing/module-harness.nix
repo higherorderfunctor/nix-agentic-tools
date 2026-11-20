@@ -131,6 +131,35 @@
         }
       ];
     }).config.files;
+  # Devenv evaluates an absolute root before the build directory is known.
+  # Fixtures relocate that literal root and references between launcher scripts
+  # at run time; production needs no relocation and creates its root itself.
+  devenvRuntime = "/devenv-1234567";
+  devenvRuntimeSetup = scripts: ''
+    export devenvRuntime="$NIX_BUILD_TOP"${lib.escapeShellArg devenvRuntime}
+    export devenvLaunchers="$NIX_BUILD_TOP/devenv-launchers"
+    ${pkgs.python3}/bin/python3 - ${lib.escapeShellArg devenvRuntime} ${lib.escapeShellArg (builtins.toJSON scripts)} <<'PY'
+    import json
+    import os
+    from pathlib import Path
+    import sys
+
+    root = Path(os.environ["devenvRuntime"])
+    root.mkdir(mode=0o700)
+    launchers = Path(os.environ["devenvLaunchers"])
+    launchers.mkdir(mode=0o700)
+    scripts = json.loads(sys.argv[2])
+    replacements = {source: str(launchers / name) for name, source in scripts.items()}
+    replacements[sys.argv[1]] = str(root)
+    for name, source in scripts.items():
+        text = Path(source).read_text()
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        target = launchers / name
+        target.write_text(text)
+        target.chmod(0o700)
+    PY
+  '';
   devenvStubs = {
     options = {
       assertions = lib.mkOption {
@@ -149,6 +178,10 @@
         root = lib.mkOption {
           type = lib.types.str;
           default = "/tmp/devenv-root";
+        };
+        runtime = lib.mkOption {
+          type = lib.types.str;
+          default = devenvRuntime;
         };
         state = lib.mkOption {
           type = lib.types.str;
@@ -451,6 +484,6 @@
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvRuntime devenvRuntimeSetup devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }
