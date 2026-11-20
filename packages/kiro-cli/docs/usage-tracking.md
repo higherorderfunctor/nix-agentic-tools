@@ -146,16 +146,21 @@ later. After a timed-out wait, unfinished calls stay flagged as incomplete
 coverage. It then automatically refreshes the local disk index from
 `~/.kiro/sessions` when that directory exists. The summary reads no disk data;
 the refresh keeps `kiro-usage session` and `report --session`, which do,
-current. The exit refresh indexes only changed sessions linked to the launches
-it covers through captured conversation and root IDs and previously indexed
-lineage. A change to an unrelated session, even during a tracked launch, appears
-in `session` and `report --session` after the next `kiro-usage index`. The exit
-refresh checks session file timestamps across the tree because a write inside an
-existing session can leave the workspace timestamp unchanged. It never prunes.
+current. The exit refresh starts with the launches' captured conversation and
+root IDs and any `--resume-id`, including resumes with no captured calls. It
+looks up those session directories directly. To find descendants, it checks
+recorded lineage and looks for new session directories in workspaces whose
+timestamps changed since launch. It refreshes changed files in that scope
+without pruning. Run `kiro-usage index` for unrelated changes or for an in-place
+append to a never-indexed descendant in a workspace whose timestamp predates the
+launch.
 
-Tracked exits add their launch to a shared pending queue. One refresh pass
-covers all launches already queued when it reads the queue under the lock and
-removes those entries after it succeeds.
+Tracked exits add their launch to a shared pending queue. A refresh covers the
+launches already queued when it reads the queue under the lock. On success it
+acknowledges that snapshot. A launch whose capture wait timed out stays queued
+for one more successful pass, which can pick up late captures. If a session's
+metadata or transcript cannot be read, the refresh warns with the session path,
+keeps its existing facts, and continues with the other sessions.
 
 Index failures warn and leave the child exit status intact. If an explicit
 `kiro-usage index` holds the index lock, the exit leaves its launch queued and

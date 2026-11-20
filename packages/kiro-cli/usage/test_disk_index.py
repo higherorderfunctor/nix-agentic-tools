@@ -1,5 +1,6 @@
 """Offline fixtures only: no Kiro, credentials, home paths or network."""
 
+import contextlib
 import io
 import json
 import os
@@ -474,34 +475,79 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(self.ids(old))
         self.assertEqual(self.count(), 1)
 
-    def test_launch_uses_older_indexed_ancestor_without_rereading_it(self):
+    def test_launch_leaves_unindexed_append_in_an_old_workspace_to_full_index(self):
+        """An in-place append to a never-indexed descendant needs an explicit full pass."""
         self.messages.write_bytes(usage())
         step = self.child("sess_step", {"ownerSessionId": "sess_synthetic"}, usage(2))
         self.scan()
         old = 10**18
         recent = old + 10 * disk_index.MTIME_SLACK_NS
         for path in (self.messages, self.metadata, step / "session.json", step / "messages.jsonl"):
-            with path.open("ab") as stream:
-                stream.write(usage(5) if path.suffix == ".jsonl" else b" ")
             os.utime(path, ns=(old, old))
         nested = self.child("sess_nested", {"_meta": {"kiro": {"serverSession": {"ownerSessionId": "sess_step"}}}},
                             mtime=old)
-        unlinked = self.child("sess_unlinked", {}, usage(4), mtime=recent)
         os.utime(nested.parent, ns=(old, old))
-        with (nested / "messages.jsonl").open("ab") as stream:
+        messages = nested / "messages.jsonl"
+        with messages.open("ab") as stream:
             stream.write(usage(3))
-        os.utime(nested / "messages.jsonl", ns=(recent, recent))
+        os.utime(messages, ns=(recent, recent))
         self.assertEqual(nested.parent.stat().st_mtime_ns, old)
-        read = []
-        original = disk_index.read_session
-        with patch.object(disk_index, "read_session", side_effect=lambda path: read.append(path.parent) or original(path)):
-            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), recent))
-        self.assertEqual(sorted(path.name for path in read), ["sess_nested", "sess_unlinked"])
+        disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), recent))
+        self.assertIsNone(self.ids(nested))
+        self.assertEqual(self.count(), 2)
+        self.scan()
         self.assertEqual(self.ids(nested), {"ownerSessionId": "sess_step"})
-        self.assertIsNone(self.ids(unlinked))
-        # Older in-scope sessions are neither re-read nor pruned.
         self.assertEqual(self.count(), 3)
-        self.assertIsNotNone(self.ids(step))
+
+    def test_launch_refreshes_indexed_descendant_in_an_old_workspace(self):
+        """An earlier exit records a chain that leads to the appended transcript without a walk."""
+        self.messages.write_bytes(usage())
+        step = self.child("sess_step", {"ownerSessionId": "synthetic"}, usage(2))
+        nested = self.child("sess_nested", {"parentSessionId": "sess_step"}, usage(3))
+        disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
+        self.assertEqual(self.count(), 3)
+        old = 10**18
+        recent = old + 10 * disk_index.MTIME_SLACK_NS
+        for path in (self.messages, self.metadata, step / "session.json", step / "messages.jsonl",
+                     nested / "session.json", nested.parent, self.session.parent):
+            os.utime(path, ns=(old, old))
+        messages = nested / "messages.jsonl"
+        with messages.open("ab") as stream:
+            stream.write(usage(4))
+        os.utime(messages, ns=(recent, recent))
+        with (patch.object(os, "scandir", wraps=os.scandir) as scandir,
+              patch.object(disk_index, "read_session", wraps=disk_index.read_session) as read):
+            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), recent))
+        self.assertEqual([call.args for call in scandir.call_args_list], [(self.sessions,)])
+        read.assert_called_once_with(nested / "session.json")
+        self.assertEqual(self.count(), 4)
+
+    def test_launch_read_error_after_a_message_batch_leaves_prior_facts(self):
+        """Fail after a replacement transcript has yielded a batch and preserve the old index."""
+        self.messages.write_bytes(usage())
+        self.scan()
+        self.messages.write_bytes(usage(3) * 130)
+        self.metadata.write_text('{"modelId":"replacement"}')
+        read_record = disk_index.read_record
+        reads = 0
+
+        def fail_after_batch(stream):
+            nonlocal reads
+            reads += 1
+            if reads == 129:
+                raise OSError("private fixture details")
+            return read_record(stream)
+
+        with (patch.object(disk_index, "read_record", side_effect=fail_after_batch),
+              contextlib.redirect_stderr(io.StringIO()) as output):
+            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
+        warning, = output.getvalue().splitlines()
+        self.assertIn(str(self.session), warning)
+        self.assertNotIn("private fixture details", warning)
+        self.assertEqual(self.count(), 1)
+        self.assertEqual(self.db.execute("SELECT model_id FROM disk_sessions").fetchone()[0], "synthetic-current")
+        self.assertEqual(json.loads(self.db.execute("SELECT usage_json FROM disk_records").fetchone()[0]),
+                         [{"usage": 1.25, "unit": "credit"}])
 
     def test_full_pass_keeps_rows_from_other_session_roots(self):
         self.messages.write_bytes(usage())

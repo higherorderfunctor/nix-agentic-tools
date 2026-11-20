@@ -1,4 +1,8 @@
-"""Start the private capture service and fail closed before a tracked launch."""
+"""Run the private capture service and supervise tracked Kiro launches.
+
+On exit, wait for the launch's captures, refresh the pending disk index, then
+check the store size and print the launch's capture summary.
+"""
 # cspell:words getpgrp tcgetpgrp
 
 import argparse
@@ -116,38 +120,51 @@ def service(args, path):
     ])
 
 
-def refresh_disk_index(path, since, invocation):
-    """Queue the invocation with its UTC launch time in ns and refresh linked sessions.
+def enqueue_refresh(db, invocation, since, resume_id, retry):
+    """Persist a launch before taking refresh locks, upgrading legacy queues in place."""
+    from disk_index import PENDING_SCHEMA
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(PENDING_SCHEMA)
+        columns = {row[1] for row in db.execute("PRAGMA table_info(disk_refresh_pending)")}
+        if "resume_id" not in columns:
+            db.execute("ALTER TABLE disk_refresh_pending ADD COLUMN resume_id TEXT")
+        if "retry" not in columns:
+            db.execute("ALTER TABLE disk_refresh_pending ADD COLUMN retry INTEGER NOT NULL DEFAULT 0")
+        db.execute(
+            "INSERT INTO disk_refresh_pending(invocation,since_ns,resume_id,retry) VALUES (?,?,?,?) "
+            "ON CONFLICT(invocation) DO NOTHING",
+            (invocation, since, resume_id, retry),
+        )
 
-    The exit pass reads changed sessions and checks timestamps on the rest to
-    keep kiro-usage session and report --session current.
-    """
+
+def refresh_disk_index(path, since, invocation, *, resume_id=None, settled=True):
+    """Queue the launch and refresh sessions linked to the pending launch snapshot."""
     from capture import lock_beside, open_database
-    from disk_index import INDEX_LOCK, PENDING_SCHEMA, REFRESH_LOCK, index_tree
+    from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
     try:
         sessions = Path.home() / ".kiro/sessions"
         if not sessions.exists():
             return
         database = path / "usage.sqlite3"
         with closing(open_database(database)) as db:
-            with db:
-                db.execute(PENDING_SCHEMA)
-                db.execute(
-                    "INSERT INTO disk_refresh_pending VALUES (?,?) ON CONFLICT(invocation) DO NOTHING",
-                    (invocation, since),
-                )
+            enqueue_refresh(db, invocation, since, resume_id, retry=not settled)
             index_lock = lock_beside(database, INDEX_LOCK, shared=True)
             try:
                 refresh_lock = lock_beside(database, REFRESH_LOCK, blocking=True)
                 try:
-                    # Reading the queue under the flock covers every exit enqueued before the read.
-                    # A missing row means a successful pass started after this exit enqueued and covered it.
-                    if not db.execute("SELECT 1 FROM disk_refresh_pending WHERE invocation=?", (invocation,)).fetchone():
+                    # A missing or already deferred row was handled while this exit waited for the lock.
+                    own = db.execute("SELECT retry FROM disk_refresh_pending WHERE invocation=?", (invocation,)).fetchone()
+                    if own is None or (not settled and not own[0]):
                         return
-                    pending = dict(db.execute("SELECT invocation,since_ns FROM disk_refresh_pending"))
-                    index_tree(db, sessions, launch=(tuple(pending), min(pending.values())))
+                    pending = db.execute("SELECT invocation,since_ns,resume_id,retry FROM disk_refresh_pending").fetchall()
+                    index_tree(db, sessions, launch=(tuple(row[0] for row in pending), min(row[1] for row in pending)),
+                               resume_ids=tuple(row[2] for row in pending))
                     with db:
-                        db.executemany("DELETE FROM disk_refresh_pending WHERE invocation=?", ((key,) for key in pending))
+                        db.executemany("DELETE FROM disk_refresh_pending WHERE invocation=?",
+                                       ((key,) for key, _, _, retry in pending if not retry))
+                        db.executemany("UPDATE disk_refresh_pending SET retry=0 WHERE invocation=?",
+                                       ((key,) for key, _, _, retry in pending if retry))
                 finally:
                     os.close(refresh_lock)
             finally:
@@ -277,16 +294,19 @@ def launch_options(arguments):
     return arguments[:arguments.index("--")] if "--" in arguments else arguments
 
 
-def launch_subcommand(options, value_options):
-    """The first token that is not an option or an option's value, or None for a bare launch. `value_options` are the
-    launcher options that take the next token (measured from the binary's help); any other option takes none."""
-    leading = iter(options)
-    for option in leading:
-        if option in value_options:
-            next(leading, None)
-        elif not option.startswith("-"):
-            return option
-    return None
+def launch_selection(options, value_options):
+    """Read the first positional subcommand and any resume ID before the CLI delimiter."""
+    subcommand, resume_id = None, None
+    remaining = iter(options)
+    for option in remaining:
+        flag, separator, value = option.partition("=")
+        if flag == "--resume-id":
+            resume_id = value if separator else next(remaining, None)
+        elif option in value_options:
+            next(remaining, None)
+        elif subcommand is None and not option.startswith("-"):
+            subcommand = option
+    return subcommand, resume_id
 
 
 def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=()):
@@ -304,7 +324,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
         if "--v3" not in launch_options(tail):
             tail.insert(0, "--v3")
         options = launch_options(tail)
-        subcommand = launch_subcommand(options, launch_value_options)
+        subcommand, resume_id = launch_selection(options, launch_value_options)
         # `acp` ignores the global `--v3`; it resolves its engine from its own
         # `--agent-engine`, so name it before `--` unless the caller already did.
         if subcommand == "acp" and not any(option.partition("=")[0] == "--agent-engine" for option in options):
@@ -326,7 +346,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
                 try:
                     # Refresh scopes from persisted captures, so settle them first.
                     settled = settle_captures(path, invocation)
-                    refresh_disk_index(path, started, invocation)
+                    refresh_disk_index(path, started, invocation, resume_id=resume_id, settled=settled)
                     invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
