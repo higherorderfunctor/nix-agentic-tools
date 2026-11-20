@@ -7,7 +7,7 @@ applyTo: ".github/workflows/devenv-test.yml,checks/*/module-eval.nix,checks/modu
 
 ## ai-module Files, Activation and Services Contract
 
-> **Last verified:** 2026-10-22 — secret providers supply activation nodes and
+> **Last verified:** 2026-11-19 — secret providers supply activation nodes and
 > Home Manager service unit ordering; repository modules reach Home Manager and
 > devenv file and activation sinks only through ai-module's three layers, apart
 > from the exact exemptions in `packages/ai-module/checks/sink-guard.nix`; a
@@ -15,9 +15,11 @@ applyTo: ".github/workflows/devenv-test.yml,checks/*/module-eval.nix,checks/modu
 > directories, chosen after the declared environment applies, with
 > user-qualified fallbacks; private secret slots are cleared before reads and
 > exec, public variables reserve `_ai_`, tool instances use `lib/instances.nix`,
-> a restart trigger alone makes a unit a secret reader, and every service has a
-> start limit so a crash loop ends failed. CPA client keys are instance-owned
-> rather than runtime resource claims.
+> a restart trigger alone makes a unit a secret reader, and every systemd and
+> devenv service has a start limit so a crash loop ends failed. Home Manager on
+> Darwin runs services as launchd agents and warns on each systemd behavior
+> launchd lacks. CPA client keys are instance-owned rather than runtime resource
+> claims.
 
 The detail lives in `packages/ai-module/docs/DESIGN.md` (layers, graph, guards,
 known limitations) and `packages/ai-module/docs/files-engine.md` (schema,
@@ -125,20 +127,23 @@ restart trigger, `Wants=` and `After=` on the registered provider units and
 starts it under the targets of provider units defined in the evaluated
 configuration, falling back to `default.target`; a plain service uses
 `network.target` ordering and `default.target`. Devenv lowers to processes and
-ignores provider units. Darwin Home Manager emits one warning per enabled
-service, since it has no systemd user units. File references in the environment
-and in file secrets join explicit restart triggers, which behave differently per
-backend. On Linux Home Manager the launcher stamps a digest of the triggers and
-its invocation ID under the runtime directory before exec, and one generated
+ignores provider units. Darwin Home Manager lowers each service to a launchd
+user agent running the devenv launcher, and warns once per gap, naming the
+services it affects: no start limit, no ordering after secret providers, no
+restart when a trigger changes. File references in the environment and in file
+secrets join explicit restart triggers, which behave differently per backend. On
+Linux Home Manager the launcher stamps a digest of the triggers and its
+invocation ID under the runtime directory before exec, and one generated
 `services-reconcile` activation entry after `reloadSystemd` restarts each active
 reader whose stamp differs from the files, through `systemd.user.systemctlPath`;
 a failed provider or reader, a restart that does not stamp current bytes, or an
 unreachable running user manager fails activation. Devenv uses `watch.paths`.
-Every service has one start limit, defined once as `restartPolicy` in
+Every service has one restart policy, defined once as `restartPolicy` in
 `lib/services.nix`: five starts in 300 s with `RestartSec=5`. Linux Home Manager
 writes `StartLimitBurst` and `StartLimitIntervalSec` in `[Unit]`; devenv writes
-`restart.max = 4` and `restart.window = 300`. Only ai-module writes these daemon
-sinks.
+`restart.max = 4` and `restart.window = 300`; Darwin Home Manager writes only
+`ThrottleInterval = 5`, because launchd has no start limit. Only ai-module
+writes these daemon sinks.
 
 ### State and ownership
 

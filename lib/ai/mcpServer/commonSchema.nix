@@ -286,7 +286,7 @@ in {
               can use it too.
 
               Home Manager runs the proxy as a systemd user service on
-              Linux and warns on Darwin, where launchd is unsupported.
+              Linux and as a launchd user agent on Darwin.
               Devenv emits a process that `devenv up` starts; the client
               entry is written at shell entry, so nothing listens on its
               port until the processes are up.

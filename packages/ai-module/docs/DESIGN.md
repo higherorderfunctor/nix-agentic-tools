@@ -239,7 +239,8 @@ commands and `content.run`. Devenv has no built-in provider.
 `ai.<owner>.services` through `runtimeModule`; enabled owners forward
 definitions with the same priorities as files. Disabled services still claim
 their key and ports; disabled owners forward nothing. Names match
-`^[a-z0-9][a-z0-9_-]*$` and become native unit or process keys verbatim.
+`^[a-z0-9][a-z0-9_-]*$` and become systemd unit, launchd agent or devenv process
+keys verbatim.
 
 | Field             | Type / default                                | Behavior                                                                                              |
 | ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -252,7 +253,7 @@ their key and ports; disabled owners forward nothing. Names match
 | `restartOnChange` | Absolute file paths, `[]`                     | Union with file references in environment values and file secrets, including concat parts.            |
 
 `lib/services.nix` builds one strict `writeShellApplication`,
-`ai-service-<key>`, for both backends. Native environment fields are never used.
+`ai-service-<key>`, for every backend. Native environment fields are never used.
 A daemon reads store paths and secrets at start, never files written by the
 files engine, so no unit depends on file activation. Each Linux Home Manager
 unit orders after `network.target`. A service whose environment contains a
@@ -325,40 +326,47 @@ cannot: the name is missing or the instance is disabled; `origin` is that URL
 alone. CLIProxyAPI and CPA Manager Plus use `select`; Airlock uses `module` and
 `origin`.
 
-| Backend             | Lowering                                                                                                                                                                                                                                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `StartLimitBurst = 5`, `StartLimitIntervalSec = 300`; `never` becomes `no`. |
-| Home Manager Darwin | No unit; one warning per enabled service says the platform has no systemd user units.                                                                                                                                                                            |
-| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`, `restart.window = 300`; `watch.paths` is present only for nonempty triggers.                                                                             |
+| Backend             | Lowering                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home Manager Linux  | User unit: `After = network.target`; secret readers get `Wants` and `After` on provider units, and `WantedBy` the providers' defined targets, or `default.target`; `RestartSec = 5`, `StartLimitBurst = 5`, `StartLimitIntervalSec = 300`; `never` becomes `no`.                                                                                                                                                                               |
+| Home Manager Darwin | User agent `launchd.agents.<key>`, label `org.nix-community.home.<key>`: `ProgramArguments` is the devenv launcher; `KeepAlive` is `true` for `always`, `false` for `never`, `{SuccessfulExit = false;}` for `on-failure`; `ThrottleInterval = 5`; `RunAtLoad`; stdout and stderr go to `~/Library/Logs/ai-service-<key>.log`; working directory `$HOME`; `ExitTimeOut = 90`. Warns on three gaps: see Start limit and the Darwin notes below. |
+| devenv              | Process `exec` is the same launcher; `restart.on` maps `on-failure` to `on_failure`; `restart.max = 4`, `restart.window = 300`; `watch.paths` is present only for nonempty triggers.                                                                                                                                                                                                                                                           |
 
 ### Start limit
 
-A daemon that fails within about 55 s of each start ends failed, so alerts on a
-failed unit fire; an instant crash loop ends failed after 25 s. Restarts are
-`RestartSec = 5` apart, and systemd's default `StartLimitIntervalSec=10s` and
-`StartLimitBurst=5` can never trip: the sixth start of an instant crash loop
-lands 5 x 5 = 25 s after the first, and a 10 s window holds at most three
-starts. The unit then stays in `activating (auto-restart)` for good.
-`restartPolicy` in `lib/services.nix` is the one definition: five starts in 300
-s. A daemon that lives longer than about 55 s per start (5 x (55 + 5) = 300 s)
-never trips it. The trade-off: a start-time dependency absent for longer than
-about 25 s, such as a keyring or the network at login, is now terminal where the
-unit used to retry for good. Recover with `systemctl --user reset-failed <unit>`
-and a start; the same command clears a trip that would refuse a fix-and-switch
-inside the 300 s interval, because the start limit also applies to manual starts
-and survives `daemon-reload`. The limit applies to every `restart` value,
-including `always`, and to every service; no consumer needs to tune it, so there
-is no option. Add one when a named consumer does.
+Under systemd and devenv, a daemon that fails within about 55 s of each start
+ends failed, so alerts on a failed unit fire; an instant crash loop ends failed
+after 25 s. Restarts are `RestartSec = 5` apart, and systemd's default
+`StartLimitIntervalSec=10s` and `StartLimitBurst=5` can never trip: the sixth
+start of an instant crash loop lands 5 x 5 = 25 s after the first, and a 10 s
+window holds at most three starts. The unit then stays in
+`activating (auto-restart)` for good. `restartPolicy` in `lib/services.nix` is
+the one definition: five starts in 300 s. A daemon that lives longer than about
+55 s per start (5 x (55 + 5) = 300 s) never trips it. The trade-off: a
+start-time dependency absent for longer than about 25 s, such as a keyring or
+the network at login, is now terminal where the unit used to retry for good.
+Recover with `systemctl --user reset-failed <unit>` and a start; the same
+command clears a trip that would refuse a fix-and-switch inside the 300 s
+interval, because the start limit also applies to manual starts and survives
+`daemon-reload`. The limit applies to every `restart` value, including `always`,
+and to every service; no consumer needs to tune it, so there is no option. Add
+one when a named consumer does.
 
 Devenv's native supervisor applies the same limit as `restart.max = 4` and
 `restart.window = 300`: it counts restarts after the first start in a sliding
 window, so five starts in 300 s.
 
+launchd has no start limit. A Darwin agent whose `restart` is not `never` is
+restarted every `ThrottleInterval` (5 s) for good, and evaluation warns naming
+each such service. Stop a crash loop with
+`launchctl bootout gui/$(id -u)/org.nix-community.home.<key>`; the next Home
+Manager activation loads it again.
+
 #### Recipe: a desktop notification when a service fails
 
-This is a personal recipe, not a module default and not an option. Home Manager
-only: devenv has no systemd, and its supervisor has no `OnFailure=`. A Home
-Manager `ai.services.<name>` entry becomes the user unit `<name>.service`, and
+This is a personal recipe, not a module default and not an option. Linux Home
+Manager only: devenv and launchd have no `OnFailure=`. A Home Manager
+`ai.services.<name>` entry becomes the user unit `<name>.service`, and
 `systemd.user.services.<name>` is an ordinary Home Manager attribute that merges
 with the generated definition, so a consumer adds `Unit.OnFailure` without
 touching the module. systemd then requests the templated unit on failure, with
@@ -392,12 +400,13 @@ a notification only when systemd gives up can also set
 (`systemd.service(5)`, `RestartMode=`). After the unit gives up, recover with
 `systemctl --user reset-failed <unit>` as above.
 
-Home Manager Linux reserves `services-reconcile`. The Home Manager launcher of a
-service with triggers hashes every trigger path and its bytes before it reads
-any secret, so a file replaced during a start leaves the stamp older than the
-daemon, never newer; a missing trigger fails the start. Immediately before exec
-it writes the digest and its `INVOCATION_ID` to
-`$XDG_RUNTIME_DIR/ai-service-<key>.stamp`. The devenv launcher writes no stamp.
+Home Manager Linux reserves `services-reconcile`. The Linux Home Manager
+launcher of a service with triggers hashes every trigger path and its bytes
+before it reads any secret, so a file replaced during a start leaves the stamp
+older than the daemon, never newer; a missing trigger fails the start.
+Immediately before exec it writes the digest and its `INVOCATION_ID` to
+`$XDG_RUNTIME_DIR/ai-service-<key>.stamp`. The devenv and Darwin launchers write
+no stamp.
 
 One generated activation entry runs after `files`, `secrets` and
 `reloadSystemd`, so it sees the units sd-switch started and the provider run
@@ -421,9 +430,32 @@ message, since `user@<uid>.service` turns `active` before its manager finishes
 starting. For any other answer, or none, it fails activation only when the
 system manager reports `user@<uid>.service` `active`; every other state skips
 with a message naming it, including a failed query on a host whose init is not
-systemd. The two backends differ: Home Manager compares content after each
+systemd. The backends differ: Linux Home Manager compares content after each
 switch, devenv's `watch.paths` restarts live on any change and accepts
 directories.
+
+Home Manager on Darwin has no reconcile entry. launchd sets no `$INVOCATION_ID`,
+so the agent runs the unstamped launcher. Home Manager reloads an agent whose
+plist changed, such as a new launcher path, but nothing restarts one when a
+trigger file's content changes. Evaluation warns naming each service with
+triggers. Restart one by hand after rotating its secrets:
+
+```console
+launchctl kickstart -k gui/$(id -u)/org.nix-community.home.<key>
+```
+
+Other Darwin differences:
+
+- **Logs.** The agent appends stdout and stderr to
+  `~/Library/Logs/ai-service-<key>.log`. Nothing rotates the file; truncate or
+  delete it by hand.
+- **Ordering.** launchd starts an agent at login with no ordering. A service
+  that reads a redact reference or a trigger file can start before its secret
+  provider; that start fails and only the restart policy retries it. Evaluation
+  warns naming each such service. There is no `network.target` equivalent
+  either.
+- **Stop.** `ExitTimeOut = 90` matches systemd's default stop timeout; launchd
+  would send SIGKILL after 20 s.
 
 Exclusive resources share `ai.claims.<group>.<key>`, a hidden registry of owner
 lists validated once in `modules/common.nix`. Runtime helpers register
