@@ -41,7 +41,6 @@
     "unpinOpus48LaunchEffort"
   ],
   "models": [
-    "claude-3-5-sonnet",
     "claude-fable-5",
     "claude-fable-5-1",
     "claude-fable-5-2",
@@ -56,13 +55,13 @@
     "claude-opus-4-8",
     "claude-opus-5",
     "claude-opus-5-5",
-    "claude-sonnet-4-5",
     "claude-sonnet-4-6",
     "claude-sonnet-5",
     "claude-sonnet-5-5"
   ],
   "settings": {
     "internalKeys": [
+      "additionalDirectoryConfigRoots",
       "autoCompactOfferAnswer",
       "autoCompactRaisedForLoad",
       "awaySummaryEnabled",
@@ -84,6 +83,8 @@
     ],
     "paths": {
       "$schema": { "type": "string" },
+      "additionalDirectoryConfigRoots": { "type": "object" },
+      "additionalDirectoryConfigRoots.*": { "type": "string" },
       "additionalMarketplaces": { "type": "object" },
       "additionalMarketplaces.*": { "type": "object" },
       "additionalMarketplaces.*.autoUpdate": { "type": "boolean" },
@@ -647,6 +648,7 @@
       "deniedMcpServers[].serverUrl": { "type": "string" },
       "deniedModels": { "type": "array" },
       "deniedModels[]": { "type": "string" },
+      "desktopMcpServersListScope": { "type": "string" },
       "desktopSessionCleanupPeriodDays": { "type": "integer" },
       "dialogExpiry": {
         "enum": ["10m", "5m", "60s", "never"],
@@ -963,6 +965,7 @@
         "type": "string"
       },
       "hooks.*[].hooks[]|0.command": { "type": "string" },
+      "hooks.*[].hooks[]|0.holdsTools": { "type": "boolean" },
       "hooks.*[].hooks[]|0.if": { "type": "string" },
       "hooks.*[].hooks[]|0.onFailure": {
         "enum": ["block", "continue"],
@@ -1130,6 +1133,8 @@
       },
       "permissions.workingDirectoriesAsGiven": { "type": "array" },
       "permissions.workingDirectoriesAsGiven[]": { "type": "string" },
+      "permissions.workingDirectoriesExclude": { "type": "array" },
+      "permissions.workingDirectoriesExclude[]": { "type": "string" },
       "plansDirectory": { "type": "string" },
       "pluginConfigs": { "type": "object" },
       "pluginConfigs.*": { "type": "anyOf" },
@@ -1740,6 +1745,7 @@
       "defaultView",
       "deniedMcpServers",
       "deniedModels",
+      "desktopMcpServersListScope",
       "desktopSessionCleanupPeriodDays",
       "dialogExpiry",
       "disableAgentView",
