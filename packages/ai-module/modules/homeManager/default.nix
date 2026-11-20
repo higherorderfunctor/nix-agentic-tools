@@ -45,6 +45,7 @@ in {
         secretNodes = secrets.nodes;
       };
     home.file = files.native;
+    launchd.agents = services.hmAgents pkgs config.ai.services {inherit (config.home) homeDirectory;};
     systemd.user.services = services.hmUnits pkgs config.ai.services {
       providerUnits = secrets.units;
       userServices = config.systemd.user.services;

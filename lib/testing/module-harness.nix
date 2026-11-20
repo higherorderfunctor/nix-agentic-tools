@@ -67,6 +67,13 @@
           default = [];
         };
       };
+      # Home Manager types each agent's `config` as a launchd.plist(5)
+      # submodule; this stub does not, so a misspelled key Home Manager would
+      # refuse evaluates here.
+      launchd.agents = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       # Home Manager's real value type, so a check rejects what Home Manager
       # rejects (a four-level key, a null); an `attrsOf anything` stub hid
       # exactly that once. `enable` defaults to false, as in Home Manager.
