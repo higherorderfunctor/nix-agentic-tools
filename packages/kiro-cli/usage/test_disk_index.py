@@ -495,7 +495,7 @@ class DiskIndexTests(unittest.TestCase):
         read = []
         original = disk_index.read_session
         with patch.object(disk_index, "read_session", side_effect=lambda path: read.append(path.parent) or original(path)):
-            disk_index.index_tree(self.db, self.sessions, launch=("a" * 32, recent))
+            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), recent))
         self.assertEqual(sorted(path.name for path in read), ["sess_nested", "sess_unlinked"])
         self.assertEqual(self.ids(nested), {"ownerSessionId": "sess_step"})
         self.assertIsNone(self.ids(unlinked))
@@ -522,7 +522,7 @@ class DiskIndexTests(unittest.TestCase):
             "serverSession": {"parentSessionId": "srv_x", "role": "workflow-step"}}}})
         self.assertEqual(ids, {"parentSessionId": "sess_local", "role": "workflow-step"})
 
-    def test_since_clears_repaired_omission_out_of_scope(self):
+    def test_launch_clears_repaired_omission_out_of_scope(self):
         self.messages.write_bytes(usage())
         unlinked = self.child("sess_unlinked", {}, usage(4))
         (unlinked / "session.json").write_text("{")
@@ -530,7 +530,7 @@ class DiskIndexTests(unittest.TestCase):
         rows = lambda: self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
         self.assertEqual(rows(), 1)
         (unlinked / "session.json").write_text("{}")
-        disk_index.index_tree(self.db, self.sessions, launch=("a" * 32, 0))
+        disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
         self.assertEqual(rows(), 0)
 
     def test_cli_vacuums_after_pruning(self):

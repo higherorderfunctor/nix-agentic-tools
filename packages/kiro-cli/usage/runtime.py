@@ -117,23 +117,41 @@ def service(args, path):
 
 
 def refresh_disk_index(path, since, invocation):
-    """Index changed sessions linked to this invocation so disk-backed commands stay current."""
+    """Queue the invocation with its UTC launch time in ns and refresh linked sessions.
+
+    The exit pass reads changed sessions and checks timestamps on the rest to
+    keep kiro-usage session and report --session current.
+    """
     from capture import lock_beside, open_database
-    from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
+    from disk_index import INDEX_LOCK, PENDING_SCHEMA, REFRESH_LOCK, index_tree
     try:
         sessions = Path.home() / ".kiro/sessions"
         if not sessions.exists():
             return
-        with closing(open_database(path / "usage.sqlite3")) as db:
-            lock = lock_beside(path / "usage.sqlite3", INDEX_LOCK, shared=True)
+        database = path / "usage.sqlite3"
+        with closing(open_database(database)) as db:
+            with db:
+                db.execute(PENDING_SCHEMA)
+                db.execute(
+                    "INSERT INTO disk_refresh_pending VALUES (?,?) ON CONFLICT(invocation) DO NOTHING",
+                    (invocation, since),
+                )
+            index_lock = lock_beside(database, INDEX_LOCK, shared=True)
             try:
-                queue = lock_beside(path / "usage.sqlite3", REFRESH_LOCK, blocking=True)
+                refresh_lock = lock_beside(database, REFRESH_LOCK, blocking=True)
                 try:
-                    index_tree(db, sessions, launch=(invocation, since))
+                    # Reading the queue under the flock covers every exit enqueued before the read.
+                    # A missing row means a successful pass started after this exit enqueued and covered it.
+                    if not db.execute("SELECT 1 FROM disk_refresh_pending WHERE invocation=?", (invocation,)).fetchone():
+                        return
+                    pending = dict(db.execute("SELECT invocation,since_ns FROM disk_refresh_pending"))
+                    index_tree(db, sessions, launch=(tuple(pending), min(pending.values())))
+                    with db:
+                        db.executemany("DELETE FROM disk_refresh_pending WHERE invocation=?", ((key,) for key in pending))
                 finally:
-                    os.close(queue)
+                    os.close(refresh_lock)
             finally:
-                os.close(lock)
+                os.close(index_lock)
     except BlockingIOError:
         print("Warning: a full Kiro session index is running; disk observations were not refreshed (rerun kiro-usage index if it began before Kiro exited).", file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:
