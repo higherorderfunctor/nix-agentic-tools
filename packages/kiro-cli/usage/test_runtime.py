@@ -21,7 +21,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from capture import Collector, lock_beside
+from capture import Collector, lock_beside, open_database
 import disk_index
 from mitm_addon import UsageCapture
 import runtime
@@ -112,17 +112,40 @@ class SummaryTests(unittest.TestCase):
                     runtime.invocation_summary(root, "a" * 32, 1 << 30, theme=root / "theme.json")
                 self.assertIn(expected, output.getvalue())
 
-    def test_summary_warns_past_the_payload_threshold(self):
+    def test_summary_warns_past_the_on_disk_threshold_even_without_captures(self):
+        """Hold test-only pages in the WAL to exercise disk growth independent of captured payloads."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "usage.sqlite3"
+            Collector(database).close()
+            no_calls = "Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.\n"
+            advice = f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.\n"
+            with self.subTest("database above threshold without a WAL"), contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(root, "a" * 32, 1024)
+                self.assertEqual(output.getvalue(), "Warning: the usage store is 0 MiB on disk, past the 0 MiB warning size; " + advice + no_calls)
+            with self.subTest("database below threshold without a WAL"), contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(root, "a" * 32, 1 << 20)
+                self.assertEqual(output.getvalue(), no_calls)
+            with contextlib.closing(open_database(database)) as writer:
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute("CREATE TABLE test_pages (data BLOB)")
+                writer.execute("INSERT INTO test_pages VALUES (zeroblob(2097152))")
+                writer.commit()
+                with self.subTest("WAL pushes the store above threshold"), contextlib.redirect_stderr(io.StringIO()) as output:
+                    runtime.invocation_summary(root, "a" * 32, 1 << 20)
+                    self.assertEqual(output.getvalue(), "Warning: the usage store is 2 MiB on disk, past the 1 MiB warning size; " + advice + no_calls)
+
+    def test_summary_runs_without_counting_payload_bytes(self):
+        """Refuse a store-wide payload count after collector startup and still render a captured call."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
             collector.finish(collector.begin({"invocation": "a" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_selected"}}'))
             collector.close()
-            for threshold, warned in ((collector.stored_bytes - 1, True), (collector.stored_bytes, False)):
-                with contextlib.redirect_stderr(io.StringIO()) as output:
-                    runtime.invocation_summary(root, "a" * 32, threshold)
-                self.assertEqual("archive or delete " + str(root / "usage.sqlite3") in output.getvalue(), warned)
-                self.assertIn("Kiro usage · sess_selected", output.getvalue())
+            with patch("store.payload_bytes", side_effect=AssertionError("exit must not count payload bytes")), \
+                    contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(root, "a" * 32, 1 << 30)
+            self.assertIn("Kiro usage · sess_selected · this run · 1 request", output.getvalue())
 
     def test_service_flag_sets_or_clears_retention_environment(self):
         with tempfile.TemporaryDirectory() as directory:
