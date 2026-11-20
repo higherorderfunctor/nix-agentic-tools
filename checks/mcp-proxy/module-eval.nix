@@ -876,7 +876,8 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-mcp-proxy-darwin-warns = mkTest "mcp-proxy-darwin-warns" (
+      # Fails when the proxy daemon is missing from launchd or runs something other than its launcher.
+      module-mcp-proxy-darwin-launchd = mkTest "mcp-proxy-darwin-launchd" (
         let
           result = evalHm {
             ai.claude = {
@@ -884,10 +885,14 @@ in {
               mcpServers.example = proxySampleServer;
             };
           };
+          agent = result.config.launchd.agents.mcp-proxy-example;
         in
           result.config.systemd.user.services
           == {}
-          && builtins.elem "ai.services.mcp-proxy-example: Home Manager writes services as systemd user units, which this platform lacks; the service is not written" result.config.warnings
+          && result.config.launchd.agents ? mcp-proxy-example
+          && agent.enable
+          && builtins.length agent.config.ProgramArguments == 1
+          && lib.hasSuffix "/bin/ai-service-mcp-proxy-example" (builtins.head agent.config.ProgramArguments)
       );
     };
 }

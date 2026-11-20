@@ -905,10 +905,15 @@ in {
           '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-service-instances-darwin-warns = mkTest "service-instances-darwin-warns" (
+      # Fails when an instance's service is missing from launchd or runs something other than its launcher.
+      module-service-instances-darwin-launchd = mkTest "service-instances-darwin-launchd" (
         hm.systemd.user.services
         == {}
-        && lib.all (name: lib.elem "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written" hm.warnings) ["cliproxyapi-main" "cpa-manager-plus-main"]
+        && lib.all (name:
+          hm.launchd.agents ? ${name}
+          && hm.launchd.agents.${name}.enable
+          && builtins.length hm.launchd.agents.${name}.config.ProgramArguments == 1
+          && lib.hasSuffix "/bin/ai-service-${name}" (builtins.head hm.launchd.agents.${name}.config.ProgramArguments)) ["cliproxyapi-main" "cpa-manager-plus-main"]
       );
     };
 }

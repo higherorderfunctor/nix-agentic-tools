@@ -65,18 +65,19 @@
   serviceContract = backend: let
     config = enabled backend;
     entry = config.ai.services.airlock-main;
+    agent = config.launchd.agents.airlock-main;
     native =
       if backend != "hm"
       then config.processes ? "airlock-main"
       else if pkgs.stdenv.hostPlatform.isLinux
       then config.systemd.user.services ? "airlock-main"
+      # Fails when airlock-main is missing from launchd or runs something other than its launcher.
       else
-        builtins.any (
-          warning:
-            warning
-            == "ai.services.airlock-main: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"
-        )
-        config.warnings;
+        config.launchd.agents
+        ? "airlock-main"
+        && agent.enable
+        && builtins.length agent.config.ProgramArguments == 1
+        && lib.hasSuffix "/bin/ai-service-airlock-main" (builtins.head agent.config.ProgramArguments);
   in
     config.ai.airlock.instances.main.port
     == 8318

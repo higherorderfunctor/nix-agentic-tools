@@ -307,7 +307,8 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-mcp-services-darwin-warns = mkTest "mcp-services-darwin-warns" (
+      # Fails when a server's service is missing from launchd or runs something other than its launcher.
+      module-mcp-services-darwin-launchd = mkTest "mcp-services-darwin-launchd" (
         let
           result = evalHm {
             services.mcp-servers.servers = {
@@ -315,13 +316,15 @@ in {
               effect-mcp.enable = true;
             };
           };
+          inherit (result.config.launchd) agents;
         in
           result.config.systemd.user.services
           == {}
           && lib.all (name:
-            builtins.elem
-            "ai.services.mcp-${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written"
-            result.config.warnings) ["context7-mcp" "effect-mcp"]
+            agents ? ${name}
+            && agents.${name}.enable
+            && builtins.length agents.${name}.config.ProgramArguments == 1
+            && lib.hasSuffix "/bin/ai-service-${name}" (builtins.head agents.${name}.config.ProgramArguments)) ["mcp-context7-mcp" "mcp-effect-mcp"]
       );
     };
 }
