@@ -7,7 +7,7 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/mcpServer/mk
 
 ## Managed MCP Service Bind-Address Contract
 
-> **Last verified:** 2026-10-17 — managed MCP daemons declare ai.services; the
+> **Last verified:** 2026-11-19 — managed MCP daemons declare ai.services; the
 > shared launcher owns environment resolution, rotation and port claims. Native
 > HTTP transport selection uses settingsToEnv. Full lineage:
 > `git show ed5898b1:dev/fragments/mcp-services/service-host-contract.md`.
@@ -76,7 +76,9 @@ only a redact reference, so a plain token in `env` fails evaluation.
 daemons cannot claim one port.
 
 The generic launcher resolves credentials at start. File references derive
-rotation triggers automatically; Home Manager activation compares content and
-try-restarts running units after the secrets point. Command references have no
-file trigger. Linux retains `mcp-<name>.service`; Darwin warns for each daemon
-because the Home Manager backend does not support launchd.
+rotation triggers automatically. On Linux, Home Manager activation compares
+content and try-restarts running units after the secrets point. Command
+references have no file trigger. Linux runs `mcp-<name>.service`; Darwin runs
+the launchd agent `org.nix-community.home.mcp-<name>`, which does not restart on
+rotation, so evaluation warns naming each daemon with a trigger. Restart one
+with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.mcp-<name>`.
