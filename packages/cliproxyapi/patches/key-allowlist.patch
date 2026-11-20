@@ -765,10 +765,10 @@ index 571c745..8709150 100644
  }
  
 diff --git a/sdk/cliproxy/auth/conductor_continuity.go b/sdk/cliproxy/auth/conductor_continuity.go
-index df5f9cf..360e90d 100644
+index b7f14f3..13db93e 100644
 --- a/sdk/cliproxy/auth/conductor_continuity.go
 +++ b/sdk/cliproxy/auth/conductor_continuity.go
-@@ -661,7 +661,7 @@ func (m *Manager) buildCodexContinuityCandidates(
+@@ -695,7 +695,7 @@ func (m *Manager) buildCodexContinuityCandidates(
  	if !providersIncludeCodex(providers) {
  		return nil
  	}
@@ -777,7 +777,7 @@ index df5f9cf..360e90d 100644
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
  	excludedIDs := homeExcludedAuthIDsFromMetadata(opts.Metadata)
  	var excludedSet map[string]struct{}
-@@ -878,7 +878,7 @@ func (m *Manager) evaluatePreOutputStreamQuotaGate(
+@@ -912,8 +912,8 @@ func (m *Manager) evaluatePreOutputStreamQuotaGate(
  		return false, markContinuityTerminatedError(err)
  	}
  	retryModel := authSelectionModelFromOptions(opts, model)
@@ -785,7 +785,8 @@ index df5f9cf..360e90d 100644
 +	eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
  	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
  	defaultRequestRetry, _, _ := m.retrySettings()
- 	if !m.retryAllowedForRequest(ctx, session.codexAttemptsUsed, normalized, retryModel, eligibility, pinnedAuthID, defaultRequestRetry, opts.Headers) {
+ 	// Home applies its authoritative per-credential retry limits to observation candidates.
+ 	if !m.HomeEnabled() && !m.retryAllowedForRequest(ctx, session.codexAttemptsUsed, normalized, retryModel, eligibility, pinnedAuthID, defaultRequestRetry, opts.Headers) {
 diff --git a/sdk/cliproxy/auth/conductor_cooldown.go b/sdk/cliproxy/auth/conductor_cooldown.go
 index a6d911a..d5f5243 100644
 --- a/sdk/cliproxy/auth/conductor_cooldown.go
