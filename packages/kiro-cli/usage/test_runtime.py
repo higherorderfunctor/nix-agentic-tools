@@ -411,9 +411,6 @@ class SummaryTests(unittest.TestCase):
             collector = Collector(state / "usage.sqlite3")
             collector.finish(collector.begin({"invocation": invocation}, json.dumps({"metadata": {"kiro:conversation_id": "sess_auto"}}).encode()))
             collector.close()
-            with contextlib.closing(open_database(state / "usage.sqlite3")) as db, db:
-                db.execute("CREATE TABLE disk_refresh_pending(invocation TEXT PRIMARY KEY,since_ns INTEGER NOT NULL)")
-                db.execute("INSERT INTO disk_refresh_pending VALUES (?,0)", ("d" * 32,))
             session = root / ".kiro/sessions/workspace/sess_auto"
             session.mkdir(parents=True)
             (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary", "promptTurnSummaries": []}}) + "\n")
@@ -442,8 +439,8 @@ class SummaryTests(unittest.TestCase):
                 os.close(held)
             self.assertEqual(output.getvalue(), "")
 
-    def test_one_walk_covers_concurrent_exits(self):
-        """Enqueue three exits before the snapshot and index all three in one walk."""
+    def test_queued_exits_share_one_refresh(self):
+        """Enqueue three exits before the snapshot and refresh all three together."""
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
             state = root / "state"
@@ -535,8 +532,8 @@ class SummaryTests(unittest.TestCase):
                 self.assertEqual([Path(row[0]).name for row in db.execute("SELECT path FROM disk_sessions ORDER BY path")],
                                  ["sess_alpha", "sess_beta"])
 
-    def test_unreadable_messages_leave_prior_facts_and_other_exit_is_acknowledged(self):
-        """Deny one transcript open with two exits queued and verify the healthy session is indexed."""
+    def test_unreadable_transcript_does_not_block_other_queued_exits(self):
+        """Keep committed metadata and transcript facts when one of two transcript opens fails."""
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
             state = root / "state"
@@ -573,11 +570,45 @@ class SummaryTests(unittest.TestCase):
             with contextlib.closing(sqlite3.connect(database)) as db:
                 self.assertEqual(db.execute("SELECT invocation FROM disk_refresh_pending").fetchall(), [])
                 self.assertEqual(db.execute("SELECT model_id FROM disk_sessions ORDER BY path").fetchall(),
-                                 [("prior",), ("healthy",)])
+                                 [("new",), ("healthy",)])
                 self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 2)
-            warning, = output.getvalue().splitlines()
-            self.assertIn(str(bad), warning)
-            self.assertNotIn("fixture content", warning)
+            self.assertEqual(output.getvalue(),
+                             f"Warning: could not read Kiro session {bad}; disk observations may be stale.\n")
+
+    def test_exit_skips_a_directory_entry_that_cannot_be_classified(self):
+        """Keep indexing the healthy sibling and acknowledge the launch after a failed is_dir."""
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
+            root = Path(directory)
+            state = root / "state"
+            database = state / "usage.sqlite3"
+            workspace = root / ".kiro/sessions/workspace"
+            bad, good = workspace / "sess_alpha", workspace / "sess_beta"
+            invocation = "a" * 32
+            Collector(database).close()
+            for session in (bad, good):
+                session.mkdir(parents=True)
+                (session / "session.json").write_text('{"parentSessionId":"sess_root"}')
+            scandir = os.scandir
+
+            def deny_classification(*_, **_options):
+                raise OSError("private fixture details")
+
+            @contextlib.contextmanager
+            def scan_entries(path):
+                with scandir(path) as entries:
+                    yield (
+                        SimpleNamespace(name=entry.name, path=entry.path, is_dir=deny_classification)
+                        if entry.path == str(bad) else entry
+                        for entry in entries
+                    )
+
+            with patch.object(os, "scandir", scan_entries), contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.refresh_disk_index(state, 0, invocation, resume_id="sess_root")
+            with contextlib.closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT invocation FROM disk_refresh_pending").fetchall(), [])
+                self.assertEqual(db.execute("SELECT path FROM disk_sessions").fetchall(), [(str(good),)])
+            self.assertEqual(output.getvalue(),
+                             f"Warning: could not read Kiro session {bad}; disk observations may be stale.\n")
 
     def test_resume_without_captures_refreshes_an_indexed_session(self):
         """Append inside an indexed session during a no-call resume and count the new record."""

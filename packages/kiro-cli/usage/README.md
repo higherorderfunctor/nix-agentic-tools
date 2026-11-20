@@ -518,10 +518,11 @@ follows indexed descendant links, and looks for new session directories only in
 recently changed workspaces. It refreshes linked files changed since launch,
 with one second of slack for coarse timestamps, and leaves pruning to the full
 pass. Run `kiro-usage index` for unrelated changes or an in-place append to a
-never-indexed descendant in a workspace whose timestamp predates the launch. An
-unreadable session produces a warning and keeps its prior facts while the other
-sessions refresh. The explicit `index` command is the full capture-scoped pass:
-it prunes `disk_*` rows for sessions no longer linked to captures and runs
+never-indexed descendant in a workspace whose timestamp predates the launch. The
+refresh warns when it cannot read a session and continues with the others. If a
+transcript read fails, indexing that transcript again resumes from the last
+committed checkpoint. The explicit `index` command is the full capture-scoped
+pass: it prunes `disk_*` rows for sessions no longer linked to captures and runs
 `VACUUM` plus a WAL checkpoint when its prune deleted rows. Lineage comes from
 `parentSessionId`, `rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow

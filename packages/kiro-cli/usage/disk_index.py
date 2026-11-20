@@ -1,11 +1,12 @@
-"""Incrementally index usage facts, never transcript text, from an explicit tree.
+"""Incrementally index Kiro session usage facts from a session tree.
 
-Only sessions linked to captures are indexed: a captured conversation or root
-ID, or a session.json naming an indexed session through LINKS. Unlinked
-sessions whose session.json and messages.jsonl both predate the earliest
-capture are skipped unread; Kiro rewrites session.json on resume. A full pass
-prunes disk rows for sessions no longer in scope. Runtime refreshes use pending
-launches' capture and resume IDs and follow their descendants without pruning.
+The explicit index scans for sessions linked to any capture and prunes rows
+that fall out of scope. It skips unlinked sessions if both files predate the
+earliest capture.
+
+The exit refresh starts with queued launches' captured conversation and root
+IDs and explicit resume IDs. It indexes changed sessions in that lineage and
+leaves pruning to the explicit index.
 
 JSONL files are assumed append-only between scans. Replacement, truncation,
 same-size edits and edits to checkpoint/head bytes invalidate their old facts.
@@ -15,18 +16,14 @@ the historical file; remove this source's disk_sources row to force a rescan.
 
 import argparse
 from collections import defaultdict
-from contextlib import nullcontext
-from functools import partial
 import hashlib
 import json
 import math
 import os
 from pathlib import Path
-import pickle
 import sqlite3
 import stat
 import sys
-from tempfile import SpooledTemporaryFile
 from typing import NamedTuple
 
 from capture import compact, decoded_json, lock_beside, open_database
@@ -197,96 +194,70 @@ def read_record(stream):
     return None, size, complete
 
 
-class MessageBatch(NamedTuple):
-    """A parsed batch and its ending checkpoint for the source index."""
-
-    offset: int
-    hashes: tuple[str, str]
-    records: list
-
-
-def message_batches(stream, path, offset):
-    """Yield starting and ending checkpoints with bounded batches of transcript facts."""
-    yield MessageBatch(offset, fingerprints(stream, offset), [])
-    while True:
-        stream.seek(offset)
-        batch, size = [], 0
-        while len(batch) < 128 and size < 256 * 1024:
-            line, length, complete = read_record(stream)
-            if not complete:
-                break  # An unfinished tail is retried, even when already oversized.
-            facts, reason = None, None
-            if line is None:
-                reason = "record_exceeds_parse_budget"
-            elif not line.isspace():
-                try:
-                    facts = record_facts(str(path), offset, decode(line, path, offset))
-                except MemoryError:
-                    reason = "parse_memory_exhausted"
-                except (ValueError, UnicodeError, RecursionError, OverflowError):
-                    reason = "invalid_json_or_usage_record"
-            batch.append((offset, length, facts, reason))
-            offset = stream.tell()
-            size += length
-        yield MessageBatch(offset, fingerprints(stream, offset), batch)
-        if not batch:
-            return
-
-
-def write_message_batches(db, path, source_stat, reset, batches):
-    """Commit transcript facts and checkpoints in bounded transactions."""
+def index_messages(db, path):
+    """Stream transcript facts into bounded transactions with a resumable checkpoint."""
     source = str(path)
-    identity = (source_stat.st_dev, source_stat.st_ino, source_stat.st_size, source_stat.st_mtime_ns)
-    start = next(batches)
-    with db:
-        db.execute("BEGIN IMMEDIATE")
+    prior = db.execute("SELECT * FROM disk_sources WHERE path=?", (source,)).fetchone()
+    with path.open("rb") as stream:
+        info = os.fstat(stream.fileno())
+        identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        offset = (prior["offset"] or 0) if prior else 0
+        reset = prior and (
+            (prior["device"], prior["inode"]) != identity[:2]
+            or info.st_size < prior["size"]
+            or (info.st_size == prior["size"] and info.st_mtime_ns != prior["mtime_ns"])
+            or fingerprints(stream, offset) != (prior["head_hash"], prior["checkpoint_hash"])
+        )
+        if (prior and not reset and offset == info.st_size
+                and info.st_size == prior["size"] and info.st_mtime_ns == prior["mtime_ns"]):
+            return
         if reset:
-            db.execute("DELETE FROM disk_sources WHERE path=?", (source,))
-        db.execute("INSERT OR IGNORE INTO disk_sources VALUES (?,?,?,?,?,?,?,?,?)",
-                   (source, str(path.parent), *identity, start.offset, *start.hashes))
-    for batch in batches:
+            offset = 0
+        hashes = fingerprints(stream, offset)
         with db:
             db.execute("BEGIN IMMEDIATE")
-            for position, length, facts, reason in batch.records:
-                if reason:
-                    db.execute("INSERT INTO disk_omissions VALUES (?,?,?,?)",
-                               (source, position, length, reason))
-                elif facts:
-                    db.execute("INSERT INTO disk_records VALUES (?,?,?,?,?,?,?,?,?,?,?)", facts[0])
-                    db.executemany("INSERT INTO disk_request_ids VALUES (?,?,?,?)", facts[1])
-            db.execute(
-                "UPDATE disk_sources SET device=?,inode=?,size=?,mtime_ns=?,offset=?,"
-                "head_hash=?,checkpoint_hash=? WHERE path=?",
-                (*identity, batch.offset, *batch.hashes, source),
-            )
-
-
-def index_messages(db, path, *, preserve_on_read_error=False):
-    """Index new transcript facts, staging exit batches so a read error preserves prior facts."""
-    prior = db.execute("SELECT * FROM disk_sources WHERE path=?", (str(path),)).fetchone()
-    # A savepoint around file reads would hold the SQLite writer lock and block capture.
-    with (SpooledTemporaryFile(max_size=1024 * 1024) if preserve_on_read_error else nullcontext()) as staged:
-        with path.open("rb") as stream:
-            source_stat = os.fstat(stream.fileno())
-            offset = (prior["offset"] or 0) if prior else 0
-            reset = prior and (
-                (prior["device"], prior["inode"]) != (source_stat.st_dev, source_stat.st_ino)
-                or source_stat.st_size < prior["size"]
-                or (source_stat.st_size == prior["size"] and source_stat.st_mtime_ns != prior["mtime_ns"])
-                or fingerprints(stream, offset) != (prior["head_hash"], prior["checkpoint_hash"])
-            )
-            if (prior and not reset and offset == source_stat.st_size
-                    and source_stat.st_size == prior["size"] and source_stat.st_mtime_ns == prior["mtime_ns"]):
-                return
-            batches = message_batches(stream, path, 0 if reset else offset)
-            if staged is None:
-                write_message_batches(db, path, source_stat, reset, batches)
-                return
-            for batch in batches:
-                pickle.dump(batch, staged)
-        pickle.dump(None, staged)
-        staged.seek(0)
-        write_message_batches(db, path, source_stat, reset, iter(partial(pickle.load, staged), None))
+            if reset:
+                db.execute("DELETE FROM disk_sources WHERE path=?", (source,))
+            db.execute("INSERT OR IGNORE INTO disk_sources VALUES (?,?,?,?,?,?,?,?,?)",
+                       (source, str(path.parent), *identity, offset, *hashes))
+        while True:
+            stream.seek(offset)
+            batch, size = [], 0
+            # File reads stay outside the transaction so they cannot hold up capture writes.
+            while len(batch) < 128 and size < 256 * 1024:
+                line, length, complete = read_record(stream)
+                if not complete:
+                    break  # An unfinished tail is retried, even when already oversized.
+                facts, reason = None, None
+                if line is None:
+                    reason = "record_exceeds_parse_budget"
+                elif not line.isspace():
+                    try:
+                        facts = record_facts(source, offset, decode(line, path, offset))
+                    except MemoryError:
+                        reason = "parse_memory_exhausted"
+                    except (ValueError, UnicodeError, RecursionError, OverflowError):
+                        reason = "invalid_json_or_usage_record"
+                batch.append((offset, length, facts, reason))
+                offset = stream.tell()
+                size += length
+            hashes = fingerprints(stream, offset)
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                for position, length, facts, reason in batch:
+                    if reason:
+                        db.execute("INSERT INTO disk_omissions VALUES (?,?,?,?)",
+                                   (source, position, length, reason))
+                    elif facts:
+                        db.execute("INSERT INTO disk_records VALUES (?,?,?,?,?,?,?,?,?,?,?)", facts[0])
+                        db.executemany("INSERT INTO disk_request_ids VALUES (?,?,?,?)", facts[1])
+                db.execute(
+                    "UPDATE disk_sources SET device=?,inode=?,size=?,mtime_ns=?,offset=?,"
+                    "head_hash=?,checkpoint_hash=? WHERE path=?",
+                    (*identity, offset, *hashes, source),
+                )
+            if not batch:
+                break
 
 
 class SessionMetadata(NamedTuple):
@@ -367,10 +338,8 @@ def add_session_links(children, path, facts):
             children[parent].add(path.name)
 
 
-def linked_sessions(candidates, captured, children):
+def linked_sessions(captured, children):
     """Follow parsed and recorded lineage from the scoped session names."""
-    for path, facts in candidates.items():
-        add_session_links(children, path, facts)
     scope = set(captured)
     pending = list(scope)
     while pending:
@@ -394,12 +363,18 @@ def warn_session_read(session):
     print(f"Warning: could not read Kiro session {session}; disk observations may be stale.", file=sys.stderr)
 
 
-def exit_candidates(db, workspaces, captured, cutoff):
-    """Find changed paths in scope or with new lineage, and retain older lineage edges."""
-    candidates, fresh_children, recorded_children = {}, defaultdict(set), defaultdict(set)
-    checked, messages = set(), set()
+def exit_candidates(db, sessions, captured, cutoff):
+    """Return changed session candidates and lineage from their files and the index."""
+    candidates, children = {}, defaultdict(set)
+    checked, workspaces = set(), set()
 
-    def consider(session, listed=False):
+    def skip_unreadable_session(session):
+        """Warn once and prevent discovery from probing this entry again."""
+        checked.add(session)
+        warn_session_read(session)
+
+    def record_changed_session(session, listed=False):
+        """Keep metadata, lineage and transcript presence for a changed session."""
         if session in checked:
             return
         checked.add(session)
@@ -415,37 +390,42 @@ def exit_candidates(db, workspaces, captured, cutoff):
         except OSError:
             warn_session_read(session)
             return
-        candidates[session] = facts
-        add_session_links(fresh_children, session, facts)
-        if transcript:
-            messages.add(session)
+        candidates[session] = facts, transcript is not None
+        add_session_links(children, session, facts)
 
-    for workspace in sorted(workspaces):
+    for workspace in sorted(directories(sessions, on_entry_error=warn_session_read)):
+        try:
+            info = entry_stat(workspace, stat.S_ISDIR)
+        except OSError:
+            warn_session_read(workspace)
+            continue
+        if info is None:
+            continue
+        workspaces.add(workspace)
         for name in sorted(captured):
-            consider(workspace / name)
-        info = entry_stat(workspace, stat.S_ISDIR)
-        if info and info.st_mtime_ns >= cutoff:
-            for session in directories(workspace, "sess_"):
+            record_changed_session(workspace / name)
+        if info.st_mtime_ns >= cutoff:
+            for session in directories(workspace, "sess_", skip=checked, on_entry_error=skip_unreadable_session):
                 # Indexed paths are checked only when their recorded lineage leads back to this launch.
-                if session not in checked and not db.execute(
+                if not db.execute(
                     "SELECT 1 FROM disk_sessions WHERE path=?", (str(session),)
                 ).fetchone():
-                    consider(session, listed=True)
+                    record_changed_session(session, listed=True)
 
     pending, visited = sorted(captured), set(captured)
     while pending:
         parent = pending.pop()
-        children = fresh_children[parent].copy()
+        descendants = children[parent].copy()
         for session in sorted(indexed_child_paths(db, parent)):
             if session.parent not in workspaces:
                 continue
-            consider(session)
-            children.add(session.name)
+            record_changed_session(session)
+            descendants.add(session.name)
             if session not in candidates:
-                recorded_children[parent].add(session.name)  # Fresh metadata supersedes recorded lineage.
-        pending.extend(sorted(children - visited))
-        visited.update(children)
-    return candidates, messages, recorded_children
+                children[parent].add(session.name)  # Fresh metadata supersedes recorded lineage.
+        pending.extend(sorted(descendants - visited))
+        visited.update(descendants)
+    return candidates, children
 
 
 def modified_ns(session):
@@ -473,12 +453,24 @@ def prune(db, table, column, keep, root):
         return db.execute(f"DELETE FROM {table} WHERE {column} IN (SELECT path FROM stale_paths)").rowcount
 
 
-def directories(root, prefix=""):
-    """Yield immediate real directories, using entry types where the filesystem supplies them."""
+def directories(root, prefix="", *, skip=(), on_entry_error=None):
+    """Yield matching directories and let exit refreshes skip failed type checks."""
     with os.scandir(root) as entries:
         for entry in entries:
-            if entry.name.startswith(prefix) and entry.is_dir(follow_symlinks=False):
-                yield Path(entry.path)
+            if not entry.name.startswith(prefix):
+                continue
+            path = Path(entry.path)
+            if path in skip:
+                continue
+            try:
+                is_dir = entry.is_dir(follow_symlinks=False)
+            except OSError:
+                if on_entry_error is None:
+                    raise
+                on_entry_error(path)
+                continue
+            if is_dir:
+                yield path
 
 
 def metadata_facts(path, *, record_read_error=False):
@@ -510,18 +502,17 @@ def update_metadata(db, session, facts, in_scope):
 
 def refresh_sessions(db, sessions, captured, cutoff):
     """Refresh changed candidates linked to the launch without pruning other rows."""
-    workspaces = set(directories(sessions))
-    candidates, messages, recorded_children = exit_candidates(db, workspaces, captured, cutoff)
-    scope = linked_sessions(candidates, captured, recorded_children)
-    for session, facts in candidates.items():
+    candidates, children = exit_candidates(db, sessions, captured, cutoff)
+    scope = linked_sessions(captured, children)
+    for session, (facts, has_transcript) in candidates.items():
         in_scope = session.name in scope
         try:
-            if in_scope and session in messages:
-                index_messages(db, session / "messages.jsonl", preserve_on_read_error=True)
+            update_metadata(db, session, facts, in_scope)
+            if in_scope and has_transcript:
+                index_messages(db, session / "messages.jsonl")
         except OSError:
+            # Earlier batches keep their checkpoint so the next pass resumes there.
             warn_session_read(session)
-            continue
-        update_metadata(db, session, facts, in_scope)
 
 
 def index_tree(db, sessions, *, launch: tuple[tuple[str, ...], int] | None = None,
@@ -546,6 +537,7 @@ def index_tree(db, sessions, *, launch: tuple[tuple[str, ...], int] | None = Non
 
     captured, cutoff = captured_sessions(db)
     candidates = {}
+    children = defaultdict(set)
     for workspace in directories(sessions) if captured else ():
         # Sub-execution logs have no usage records in the observed format.
         for session in directories(workspace, "sess_"):
@@ -554,9 +546,10 @@ def index_tree(db, sessions, *, launch: tuple[tuple[str, ...], int] | None = Non
                 if modified is None or cutoff is None or modified < cutoff:
                     continue
             metadata = session / "session.json"
-            candidates[session] = (metadata_facts(metadata, record_read_error=True)
-                                   if metadata.is_file() and not metadata.is_symlink() else None)
-    scope = linked_sessions(candidates, captured, defaultdict(set))
+            facts = metadata_facts(metadata, record_read_error=True) if metadata.is_file() and not metadata.is_symlink() else None
+            candidates[session] = facts
+            add_session_links(children, session, facts)
+    scope = linked_sessions(captured, children)
     indexed = [session for session in candidates if session.name in scope]
     for session, facts in candidates.items():
         update_metadata(db, session, facts, session.name in scope)

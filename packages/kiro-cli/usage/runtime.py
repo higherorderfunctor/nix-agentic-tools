@@ -121,16 +121,11 @@ def service(args, path):
 
 
 def enqueue_refresh(db, invocation, since, resume_id, retry):
-    """Persist a launch before taking refresh locks, upgrading legacy queues in place."""
+    """Persist a launch before taking refresh locks so another exit can refresh it."""
     from disk_index import PENDING_SCHEMA
     with db:
         db.execute("BEGIN IMMEDIATE")
         db.execute(PENDING_SCHEMA)
-        columns = {row[1] for row in db.execute("PRAGMA table_info(disk_refresh_pending)")}
-        if "resume_id" not in columns:
-            db.execute("ALTER TABLE disk_refresh_pending ADD COLUMN resume_id TEXT")
-        if "retry" not in columns:
-            db.execute("ALTER TABLE disk_refresh_pending ADD COLUMN retry INTEGER NOT NULL DEFAULT 0")
         db.execute(
             "INSERT INTO disk_refresh_pending(invocation,since_ns,resume_id,retry) VALUES (?,?,?,?) "
             "ON CONFLICT(invocation) DO NOTHING",

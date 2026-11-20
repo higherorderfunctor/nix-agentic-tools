@@ -475,7 +475,7 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(self.ids(old))
         self.assertEqual(self.count(), 1)
 
-    def test_launch_leaves_unindexed_append_in_an_old_workspace_to_full_index(self):
+    def test_launch_leaves_never_indexed_descendant_in_an_old_workspace_to_full_index(self):
         """An in-place append to a never-indexed descendant needs an explicit full pass."""
         self.messages.write_bytes(usage())
         step = self.child("sess_step", {"ownerSessionId": "sess_synthetic"}, usage(2))
@@ -522,11 +522,13 @@ class DiskIndexTests(unittest.TestCase):
         read.assert_called_once_with(nested / "session.json")
         self.assertEqual(self.count(), 4)
 
-    def test_launch_read_error_after_a_message_batch_leaves_prior_facts(self):
-        """Fail after a replacement transcript has yielded a batch and preserve the old index."""
+    def test_launch_read_error_keeps_committed_batch_and_resumes(self):
+        """Interrupt a replacement transcript and resume from the first batch's checkpoint."""
         self.messages.write_bytes(usage())
         self.scan()
-        self.messages.write_bytes(usage(3) * 130)
+        record = usage(3)
+        self.messages.write_bytes(record * 130)
+        checkpoint = len(record) * 128
         self.metadata.write_text('{"modelId":"replacement"}')
         read_record = disk_index.read_record
         reads = 0
@@ -541,13 +543,21 @@ class DiskIndexTests(unittest.TestCase):
         with (patch.object(disk_index, "read_record", side_effect=fail_after_batch),
               contextlib.redirect_stderr(io.StringIO()) as output):
             disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
-        warning, = output.getvalue().splitlines()
-        self.assertIn(str(self.session), warning)
-        self.assertNotIn("private fixture details", warning)
-        self.assertEqual(self.count(), 1)
-        self.assertEqual(self.db.execute("SELECT model_id FROM disk_sessions").fetchone()[0], "synthetic-current")
-        self.assertEqual(json.loads(self.db.execute("SELECT usage_json FROM disk_records").fetchone()[0]),
-                         [{"usage": 1.25, "unit": "credit"}])
+        self.assertEqual(output.getvalue(),
+                         f"Warning: could not read Kiro session {self.session}; disk observations may be stale.\n")
+        self.assertEqual(self.count(), 128)
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], checkpoint)
+        self.assertEqual(self.db.execute("SELECT model_id FROM disk_sessions").fetchone()[0], "replacement")
+        self.assertEqual(json.loads(self.db.execute("SELECT usage_json FROM disk_records WHERE byte_offset=0").fetchone()[0]),
+                         [{"usage": 3, "unit": "credit"}])
+
+        def read_remaining(stream):
+            self.assertGreaterEqual(stream.tell(), checkpoint)
+            return read_record(stream)
+
+        with patch.object(disk_index, "read_record", side_effect=read_remaining):
+            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
+        self.assertEqual(self.count(), 130)
 
     def test_full_pass_keeps_rows_from_other_session_roots(self):
         self.messages.write_bytes(usage())
