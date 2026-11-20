@@ -47,12 +47,12 @@
       useFor = "architecture, design and unit plans; hardest coding on the Codex pool; long implementation runs; computer use";
     };
     luna = {
-      avoidFor = "long context (vendor-only cliff); spec writing; judging";
+      avoidFor = "long context (vendor-only cliff); spec writing; code writing beyond mechanical edits; review and judging";
       defaultEffort = "high";
       effort = "medium→high is the best marginal buy in the set (+7 for 2×); no ultra";
       match = "gpt-*-luna";
       tier = "small";
-      useFor = "classification, extraction, routing, high-volume mechanical work; cheapest code writer";
+      useFor = "classification, extraction, routing, high-volume mechanical work";
     };
     sol = {
       avoidFor = "ultra";
@@ -64,7 +64,7 @@
       useFor = "code writer; long-horizon coding; code-review second check and judge (highest OpenAI judge precision in one single-run code-review benchmark); written deliverables";
     };
     terra = {
-      avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";
+      avoidFor = "review and judging; being the default when Sol is reachable (it beats Terra on cost at the same quality)";
       defaultEffort = "medium";
       effort = "medium; more effort rarely pays";
       match = "gpt-*-terra";

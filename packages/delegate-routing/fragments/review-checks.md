@@ -8,18 +8,19 @@ for aggregator routes. Honor those exclusions before launch.
 
 Review every change with all three checks below, each in a fresh context. The
 first check, the second check and the judge each put the writer family in their
-role's `avoid` list. Use different models for the two checks where possible.
-Report disagreements only. Hand the whole review as one job to a delegate on a
-runtime that runs its own subagents (the rendered technique notes' "runs own
-subagents" fact), ideally one whose models are not the writer's family. If that
-fact is unknown, probe it in the intended launcher before relying on it. It runs
-all three checks itself, mixing models, and returns each issue's outcome with
-evidence. When no such runtime is reachable, split the roles from this session
-through any tools that pin model and effort, whether a subagent call, a workflow
-agent call or an external launcher. An avoided-family fallback still uses a
-fresh separate evaluator, never self-evaluation; disclose its fallback metadata
-and launch effort. If no qualified route survives shared fallback, report a loop
-failure.
+role's `avoid` list. Use different models for the two checks only when both fit
+the role at strong or frontier tier. Otherwise run the best-fitting model again
+in a fresh context; never trade fit or tier for variety. Report disagreements
+only. Hand the whole review as one job to a delegate on a runtime that runs its
+own subagents (the rendered technique notes' "runs own subagents" fact), ideally
+one whose models are not the writer's family. If that fact is unknown, probe it
+in the intended launcher before relying on it. It runs all three checks itself
+and returns each issue's outcome with evidence. When no such runtime is
+reachable, split the roles from this session through any tools that pin model
+and effort, whether a subagent call, a workflow agent call or an external
+launcher. An avoided-family fallback still uses a fresh separate evaluator,
+never self-evaluation; disclose its fallback metadata and launch effort. If no
+qualified route survives shared fallback, report a loop failure.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests, a unit of a branch
