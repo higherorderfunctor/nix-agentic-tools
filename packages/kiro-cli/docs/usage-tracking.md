@@ -53,6 +53,21 @@ managed user service lifecycle. Then run `kiro-cli` normally: the Home Manager
 launcher already tracks it. Use `systemctl --user status kiro-usage.service` to
 diagnose readiness failures.
 
+On Darwin Home Manager, the same activation loads the collector as the launchd
+user agent `org.nix-community.home.kiro-usage`, which starts at login and
+restarts after a crash. Its output goes to
+`~/Library/Logs/ai-service-kiro-usage.log`, which is not rotated. Check and
+restart it with:
+
+```console
+launchctl print gui/$(id -u)/org.nix-community.home.kiro-usage
+launchctl kickstart -k gui/$(id -u)/org.nix-community.home.kiro-usage
+```
+
+Evaluation warns that launchd has no start limit: a collector that keeps
+crashing restarts every 5 seconds until you fix or unload it, where Linux would
+give up after five starts.
+
 From a project that supplies its own Kiro through devenv, reuse that same Home
 Manager collector:
 
@@ -169,9 +184,7 @@ trust path. Use `kiro-usage exec -- COMMAND ...` when an explicit command
 boundary is useful.
 
 For a standalone devenv-managed collector, start `kiro-usage` through the
-process supervisor with `devenv up kiro-usage`. Home Manager on Darwin emits the
-existing `ai.services` warning because it has no systemd user service backend;
-use devenv there for the managed service.
+process supervisor with `devenv up kiro-usage`.
 
 The service creates its CA on first start. A tracked launcher checks the private
 directory, CA file, and local listening port before starting Kiro. Missing

@@ -48,8 +48,9 @@ login that refresh never extends. A returned `refresh_token_expires_in` can
 impose an earlier deadline; its absence adds no deadline. The provider must
 issue a refresh token. `redirectUri` defaults to the registered callback above.
 
-For Linux Home Manager, import the public module, sops-nix and the shared
-module:
+For Home Manager, import the public module, sops-nix and the shared module. Each
+account's daemon runs as a systemd user unit on Linux and as a launchd agent on
+Darwin:
 
 ```nix
 { config, inputs, ... }: {
@@ -141,12 +142,13 @@ publication cannot be atomic; a crash after remote rotation can require login.
 Local users reaching the loopback port can exercise the account's authority.
 
 The package supports Linux (`xdg-open`, `notify-send`) and macOS (`open`,
-`osascript`), with gum on both. The Home Manager supervisor integration
-described here is Linux systemd; package availability does not provide a macOS
-user-service backend. devenv services require its running process supervisor.
-Automated checks use synthetic credentials/providers; live consent, sops
-decryption, desktop delivery and supervisor startup remain deployment
-validation. Provider expiry/revocation may interrupt established streams.
+`osascript`), with gum on both. Home Manager runs each daemon through
+`ai.services`: a systemd user unit on Linux, a launchd agent on Darwin. The
+Darwin path has not been run on a Mac with mcp-oauth. devenv services require
+its running process supervisor. Automated checks use synthetic
+credentials/providers; live consent, sops decryption, desktop delivery and
+supervisor startup remain deployment validation. Provider expiry/revocation may
+interrupt established streams.
 
 ## Mount an owner profile
 

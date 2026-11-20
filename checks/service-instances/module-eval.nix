@@ -9,7 +9,7 @@
   self,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm mkTest;
+  inherit (harness) claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest;
   redact = import ../../lib/redact {inherit lib;};
   services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
   strictShellApplication = import ../../lib/strict-shell-application.nix;
@@ -905,10 +905,11 @@ in {
           '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-service-instances-darwin-warns = mkTest "service-instances-darwin-warns" (
+      # Fails when an instance's service is missing from launchd or runs something other than its launcher.
+      module-service-instances-darwin-launchd = mkTest "service-instances-darwin-launchd" (
         hm.systemd.user.services
         == {}
-        && lib.all (name: lib.elem "ai.services.${name}: Home Manager writes services as systemd user units, which this platform lacks; the service is not written" hm.warnings) ["cliproxyapi-main" "cpa-manager-plus-main"]
+        && lib.all (launchdAgentRunsLauncher hm) ["cliproxyapi-main" "cpa-manager-plus-main"]
       );
     };
 }
