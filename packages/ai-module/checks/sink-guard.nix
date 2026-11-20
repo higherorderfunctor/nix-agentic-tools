@@ -8,9 +8,9 @@
   nonWriters = {
     "lib/ai/app/generatedFiles.nix" = ["files = lib.mapAttrs (path: entry:"];
     "lib/ai/app/sharedAgentsMd.nix" = ["files = lib.mkMerge [" "files = lib.mkOption {visible = false;};"];
-    "lib/options-doc.nix" = ["enterTest = lib.mkOption {" "files = lib.mkOption {" "home = {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
+    "lib/options-doc.nix" = ["enterTest = lib.mkOption {" "files = lib.mkOption {" "home = {" "launchd.agents = lib.mkOption {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
     "lib/testing/factory-harness.nix" = ["files = lib.mkOption {" "home = {"];
-    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
+    "lib/testing/module-harness.nix" = ["enterTest = lib.mkOption {" "files = config.ai.files;" "files = lib.mkOption {" "home = {" "launchd.agents = lib.mkOption {" "processes = lib.mkOption {" "systemd.user = {" "tasks = lib.mkOption {"];
     "packages/beads/modules/devenv/default.nix" = ["tasks ="];
     # glab's keyring sync is a oneshot behind a path unit, outside ai.services
     # by decision (daemons only); it keeps its native units.
