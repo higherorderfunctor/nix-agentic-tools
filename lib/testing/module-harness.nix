@@ -457,7 +457,19 @@
     if fromGeneratedTree path file
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
+  # Whether an evaluated Home Manager config's launchd agent for
+  # `ai.services.<name>` is enabled and runs only that service's launcher.
+  # The Darwin service checks of consumers that lower to ai.services call it,
+  # so each fails on a missing agent or one running another program.
+  launchdAgentRunsLauncher = config: name: let
+    agent = config.launchd.agents.${name};
+  in
+    config.launchd.agents
+    ? ${name}
+    && agent.enable
+    && builtins.length agent.config.ProgramArguments == 1
+    && lib.hasSuffix "/bin/ai-service-${name}" (builtins.head agent.config.ProgramArguments);
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs launchdAgentRunsLauncher markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
   inherit testing;
 }
