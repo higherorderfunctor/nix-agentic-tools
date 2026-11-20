@@ -1,7 +1,8 @@
 # ai-module architecture decisions
 
-> **Last verified:** 2026-11-07 — the vetted layer, secret, service, instance
-> and claim decisions moved here from the repository architecture list.
+> **Last verified:** 2026-11-19 — the vetted layer, secret, service, instance
+> and claim decisions live here; Home Manager on Darwin runs `ai.services` as
+> launchd agents.
 
 ## Files and activation
 
@@ -19,9 +20,18 @@
 
 - **Long-running services use `ai.services`.** Declare a daemon under
   `ai.<owner>.services`; `packages/ai-module/lib/services.nix` lowers it to
-  systemd or devenv. It reads store paths and secrets at start, never
-  engine-written files. One-shot jobs and file-watch units are outside this
-  surface; glab keyring keeps its native mechanism.
+  systemd user units, launchd user agents or devenv processes. It reads store
+  paths and secrets at start, never engine-written files. One-shot jobs and
+  file-watch units are outside this surface; glab keyring keeps its native
+  mechanism.
+- **Home Manager on Darwin runs services as launchd agents.** Each enabled
+  service becomes `launchd.agents.<name>` running the same launcher devenv
+  execs, so environment, rendered files and secret handling stay one definition.
+  What launchd cannot do (a start limit, starting after the secret provider,
+  restarting when a trigger file changes) produces one warning per gap naming
+  its services, rather than differing silently. See `hmAgents` and `launchdGaps`
+  in `packages/ai-module/lib/services.nix` and
+  `packages/ai-module/docs/DESIGN.md`, Services.
 - **Rendered service files use `serviceEntry.files`.** A daemon that reads
   secrets from a config file declares `files.<key>` on its `ai.services` entry:
   JSON content with `{$NAME}` placeholders, the redact references that fill

@@ -1,10 +1,10 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-10-21 — MCP credential settings and HTTP references
+> **Last verified:** 2026-11-19 — MCP credential settings and HTTP references
 > use redact; consumers derive environment names, resolve full concat values
 > with redact.assign, and abort on failed reads. Kiro headers resolve at launch,
 > URLs during files-engine apply after the secrets point. Proxy daemons use
-> ai.services and scoped service claims on both backends and render their
+> ai.services and scoped service claims on every backend and render their
 > Caddyfile from the shared `lib/ai/caddy.nix` helpers; a generic `toolPolicy`
 > rides the client entry to each runtime's per-tool surface. A remote server
 > owner declares a `meta.external` module whose reserved `settings`
@@ -364,7 +364,9 @@ leaky.
 
 **Per-server attribution comes from the UNIT, not from a logged header.** There
 is one ordinary `ai.services` unit, `mcp-proxy-<name>.service`, per server.
-`journalctl --user -u mcp-proxy-jira` is how you tell two proxies apart.
+`journalctl --user -u mcp-proxy-jira` is how you tell two proxies apart. On
+Darwin each agent writes its own file,
+`~/Library/Logs/ai-service-mcp-proxy-jira.log`.
 
 **Reproducing the leak needs the right failure.** A dead upstream
 (`connection refused`) logs an error with NO headers and reads as "no leak".
@@ -378,8 +380,11 @@ logged. That is deliberate (it is the single most useful field when debugging a
 remote 4xx) and is a hostname, not a bearer token, but it is worth knowing
 before treating a secret `url` as fully hidden.
 
-SCOPE — Home Manager runs the daemon on Linux and warns per service on Darwin
-because launchd is unsupported. Devenv emits each proxy as an ordinary
+SCOPE — Home Manager runs the daemon as a systemd user unit on Linux and as a
+launchd user agent on Darwin. On Darwin the agent's log file,
+`~/Library/Logs/ai-service-mcp-proxy-<name>.log`, takes the journal's place: it
+gets the same filtered Caddy output, is never rotated, and has not been measured
+for leaks the way the journal was. Devenv emits each proxy as an ordinary
 `ai.services` process; start it with `devenv up` before connecting clients.
 
 ### Two secret paths, because Kiro treats headers and url differently

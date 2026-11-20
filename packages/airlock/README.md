@@ -68,6 +68,22 @@ $ systemctl --user start airlock-main.service
 $ systemctl --user stop airlock-main.service
 ```
 
+On Home Manager Darwin, the instance is the launchd agent
+`org.nix-community.home.airlock-main`, logging to
+`~/Library/Logs/ai-service-airlock-main.log`. Restart and stop it with:
+
+```console
+$ launchctl kickstart -k gui/$(id -u)/org.nix-community.home.airlock-main
+$ launchctl bootout gui/$(id -u)/org.nix-community.home.airlock-main
+```
+
+A stopped agent stays stopped until the next Home Manager activation loads it
+again, or until you load it yourself:
+
+```console
+$ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.nix-community.home.airlock-main.plist
+```
+
 On devenv, use `devenv processes up` and `devenv processes down`. Restart Claude
 and other selected runtimes after changing the selection.
 
