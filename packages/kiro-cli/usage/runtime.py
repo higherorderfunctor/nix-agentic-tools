@@ -116,9 +116,8 @@ def service(args, path):
     ])
 
 
-def refresh_disk_index(path, since):
-    """Read only sessions changed since the launch (UTC ns); others are only stat-checked. The run's exit summary
-    reads no disk data: this keeps kiro-usage session and report --session, which do, current after a launch."""
+def refresh_disk_index(path, since, invocation):
+    """Index changed sessions linked to this invocation so disk-backed commands stay current."""
     from capture import lock_beside, open_database
     from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
     try:
@@ -130,7 +129,7 @@ def refresh_disk_index(path, since):
             try:
                 queue = lock_beside(path / "usage.sqlite3", REFRESH_LOCK, blocking=True)
                 try:
-                    index_tree(db, sessions, since)
+                    index_tree(db, sessions, launch=(invocation, since))
                 finally:
                     os.close(queue)
             finally:
@@ -309,7 +308,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
                 try:
                     # Refresh scopes from persisted captures, so settle them first.
                     settled = settle_captures(path, invocation)
-                    refresh_disk_index(path, started)
+                    refresh_disk_index(path, started, invocation)
                     invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):

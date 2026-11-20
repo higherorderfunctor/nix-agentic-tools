@@ -4,7 +4,8 @@ Only sessions linked to captures are indexed: a captured conversation or root
 ID, or a session.json naming an indexed session through LINKS. Unlinked
 sessions whose session.json and messages.jsonl both predate the earliest
 capture are skipped unread; Kiro rewrites session.json on resume. A full pass
-prunes disk rows for sessions no longer in scope.
+prunes disk rows for sessions no longer in scope. Runtime refreshes use one
+launch's capture IDs and follow changed sessions' lineage without pruning.
 
 JSONL files are assumed append-only between scans. Replacement, truncation,
 same-size edits and edits to checkpoint/head bytes invalidate their old facts.
@@ -13,6 +14,7 @@ the historical file; remove this source's disk_sources row to force a rescan.
 """
 
 import argparse
+from collections import defaultdict
 import hashlib
 import json
 import math
@@ -24,6 +26,8 @@ import sys
 from capture import compact, decoded_json, lock_beside, open_database
 
 
+CAPTURE_SESSION_IDS = """json_extract(metadata_json,'$."kiro:conversation_id"'),
+                         json_extract(metadata_json,'$."kiro:root_conversation_id"')"""
 DRAIN_CHUNK = 64 * 1024
 # The full pass waits on it; runtime.refresh_disk_index skips while it is held.
 INDEX_LOCK = ".index.lock"
@@ -266,15 +270,74 @@ def index_session(db, path, identity, session, ids):
         )
 
 
+def capture_names(rows):
+    """Normalize conversation and root IDs from either capture scope query."""
+    return {session_id(value) for row in rows for value in row if isinstance(value, str) and value}
+
+
 def captured_sessions(db):
     """Captured conversation and root IDs, and the earliest capture start."""
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='captures'").fetchone():
         return set(), None
-    names = set()
-    for row in db.execute("""SELECT json_extract(metadata_json,'$."kiro:conversation_id"'),
-                             json_extract(metadata_json,'$."kiro:root_conversation_id"') FROM captures"""):
-        names.update(session_id(value) for value in row if isinstance(value, str) and value)
+    names = capture_names(db.execute(f"SELECT {CAPTURE_SESSION_IDS} FROM captures"))
     return names, db.execute("SELECT min(started_utc_ns) FROM captures").fetchone()[0]
+
+
+def invocation_sessions(db, invocation):
+    """Return conversation and root names for one launch's automatic refresh."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='captures'").fetchone():
+        return set()
+    # The expression index keeps both the exit refresh and later settle queries off historical rows.
+    db.execute("CREATE INDEX IF NOT EXISTS capture_invocation ON captures(json_extract(metadata_json,'$.invocation'))")
+    return capture_names(db.execute(
+        f"SELECT {CAPTURE_SESSION_IDS} FROM captures WHERE json_extract(metadata_json,'$.invocation')=?",
+        (invocation,),
+    ))
+
+
+def session_links(ids):
+    """Return directory names referenced by parsed or previously indexed lineage."""
+    return {session_id(value) for key in LINKS if isinstance(value := ids.get(key), str)}
+
+
+def indexed_links(db, workspaces, name, candidates):
+    """Look up an older ancestor by path when a changed session names it."""
+    if Path(name).name != name:
+        return set()
+    links = set()
+    for workspace in workspaces:
+        path = workspace / name
+        if path not in candidates:
+            row = db.execute("SELECT identifiers_json FROM disk_sessions WHERE path=?", (str(path),)).fetchone()
+            if row:
+                links.update(session_links(json.loads(row[0])))
+    return links
+
+
+def linked_sessions(db, workspaces, candidates, captured, follow_indexed):
+    """Return capture names and their descendants among refresh or full-scan candidates."""
+    children = defaultdict(set)
+    for path, facts in candidates.items():
+        if isinstance(facts, tuple):
+            for parent in session_links(facts[2]):
+                children[parent].add(path.name)
+    if follow_indexed:
+        pending = list(children)
+        checked = set(captured)
+        while pending:
+            name = pending.pop()
+            if name not in checked:
+                checked.add(name)
+                for parent in indexed_links(db, workspaces, name, candidates):
+                    children[parent].add(name)
+                    pending.append(parent)
+    scope = set(captured)
+    pending = list(scope)
+    while pending:
+        new = children[pending.pop()] - scope
+        scope.update(new)
+        pending.extend(new)
+    return scope
 
 
 def modified_ns(session):
@@ -302,32 +365,37 @@ def prune(db, table, column, keep, root):
         return db.execute(f"DELETE FROM {table} WHERE {column} IN (SELECT path FROM stale_paths)").rowcount
 
 
-def index_tree(db, sessions, since=None):
+def directories(root, prefix=""):
+    """Yield immediate real directories, using entry types where the filesystem supplies them."""
+    with os.scandir(root) as entries:
+        for entry in entries:
+            if entry.name.startswith(prefix) and entry.is_dir(follow_symlinks=False):
+                yield Path(entry.path)
+
+
+def index_tree(db, sessions, *, launch: tuple[str, int] | None = None):
     """Scan exactly <root>/<workspace>/sess_*; no home-directory discovery.
 
-    With since (UTC ns), only sessions modified since then are read and nothing
-    is pruned; already indexed sessions still anchor their descendants. Returns
-    the number of pruned rows.
+    For an exit, launch gives the invocation marker and UTC start in ns.
+    Already indexed ancestors can connect changed sessions to its capture IDs.
+    Returns the number of rows pruned by a full pass.
     """
     sessions = Path(sessions).resolve(strict=True)
     if not sessions.is_dir():
         raise ValueError("--sessions must be a directory")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript(SCHEMA)
-    metadata_omissions = {row[0] for row in db.execute("SELECT session_path FROM disk_session_omissions")}
-    scope, earliest = captured_sessions(db)
-    if since is not None:
-        scope |= {Path(row[0]).name for row in db.execute("SELECT path FROM disk_sessions")}
-    cutoff = since - MTIME_SLACK_NS if since is not None else earliest
+    if launch is None:
+        captured, cutoff = captured_sessions(db)
+    else:
+        invocation, since = launch
+        captured, cutoff = invocation_sessions(db, invocation), since - MTIME_SLACK_NS
     candidates = {}
-    # Sub-execution logs have no usage records in the observed format.
-    for workspace in sessions.iterdir() if scope else ():
-        if workspace.is_symlink() or not workspace.is_dir():
-            continue
-        for session in workspace.iterdir():
-            if session.is_symlink() or not session.is_dir() or not session.name.startswith("sess_"):
-                continue
-            if since is not None or session.name not in scope:
+    workspaces = tuple(directories(sessions)) if captured else ()
+    # A write inside an existing session need not update its workspace's timestamp.
+    for workspace in workspaces:
+        for session in directories(workspace, "sess_"):
+            if launch is not None or session.name not in captured:
                 modified = modified_ns(session)
                 if modified is None or cutoff is None or modified < cutoff:
                     continue
@@ -339,14 +407,7 @@ def index_tree(db, sessions, since=None):
                 except (OSError, ValueError) as error:
                     facts = "unreadable_session_metadata" if isinstance(error, OSError) else "invalid_session_metadata"
             candidates[session] = facts
-    growing = True
-    while growing:
-        growing = False
-        for session, facts in candidates.items():
-            if session.name not in scope and isinstance(facts, tuple) and any(
-                    isinstance(facts[2].get(key), str) and session_id(facts[2][key]) in scope for key in LINKS):
-                scope.add(session.name)
-                growing = True
+    scope = linked_sessions(db, workspaces, candidates, captured, follow_indexed=launch is not None)
     indexed = [session for session in candidates if session.name in scope]
     for session, facts in candidates.items():
         if isinstance(facts, str):
@@ -357,14 +418,14 @@ def index_tree(db, sessions, since=None):
         elif facts:
             if session.name in scope:
                 index_session(db, session / "session.json", *facts)
-            if str(session) in metadata_omissions:
+            if db.execute("SELECT 1 FROM disk_session_omissions WHERE session_path=?", (str(session),)).fetchone():
                 with db:
                     db.execute("DELETE FROM disk_session_omissions WHERE session_path=?", (str(session),))
     for session in indexed:
         messages = session / "messages.jsonl"
         if messages.is_file() and not messages.is_symlink():
             index_messages(db, messages, session)
-    if since is not None:
+    if launch is not None:
         return 0
     keep = {str(session) for session in indexed}
     return (prune(db, "disk_sessions", "path", keep, sessions)
