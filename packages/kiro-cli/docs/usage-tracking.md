@@ -146,17 +146,22 @@ later. After a timed-out wait, unfinished calls stay flagged as incomplete
 coverage. It then automatically refreshes the local disk index from
 `~/.kiro/sessions` when that directory exists. The summary reads no disk data;
 the refresh keeps `kiro-usage session` and `report --session`, which do,
-current. This exit scan reads the `session.json` of sessions changed since the
-launch, indexes the messages only of those linked to captures, and never prunes.
-Index failures warn and leave the child exit status intact; disk observations
-may then be stale. An explicit `kiro-usage index` holds a lock beside the
-database for its whole pass; the exit scan then skips with a one-line warning
-that disk observations were not refreshed instead of interleaving. Exit scans of
-concurrent launches do not skip each other; they queue on a second lock and run
-one at a time, since two scans of one session would index the same records.
-Rerun the index if that pass began before Kiro exited. Nested `kiro-usage exec`
-launches share the parent's marker and produce one summary when the outer launch
-exits.
+current. The exit refresh indexes only changed sessions linked to the launches
+it covers through captured conversation and root IDs and previously indexed
+lineage. A change to an unrelated session, even during a tracked launch, appears
+in `session` and `report --session` after the next `kiro-usage index`. The exit
+refresh checks session file timestamps across the tree because a write inside an
+existing session can leave the workspace timestamp unchanged. It never prunes.
+
+Tracked exits add their launch to a shared pending queue. One refresh pass
+covers all launches already queued when it reads the queue under the lock and
+removes those entries after it succeeds.
+
+Index failures warn and leave the child exit status intact. If an explicit
+`kiro-usage index` holds the index lock, the exit leaves its launch queued and
+warns that disk observations were not refreshed. Rerun the index if that pass
+began before Kiro exited. Nested `kiro-usage exec` launches share the parent's
+marker and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing

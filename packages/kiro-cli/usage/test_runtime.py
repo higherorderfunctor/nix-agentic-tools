@@ -1,8 +1,11 @@
 """Offline launch summaries use exact identity and preserve command behavior."""
 # cspell:words preexec TIOCSCTTY
 import base64
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import fcntl
+from functools import partial
 import io
 import json
 import os
@@ -295,12 +298,109 @@ class SummaryTests(unittest.TestCase):
             with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
                 self.assertEqual([Path(row[0]).name for row in db.execute("SELECT path FROM disk_sessions")], ["sess_new"])
 
+    def test_exit_refresh_work_with_indexed_history(self):
+        """Count capture scope reads and filesystem probes while an exit indexes new lineage."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "state"
+            database = state / "usage.sqlite3"
+            sessions = root / ".kiro/sessions"
+            current = "a" * 32
+
+            def write_session(workspace, name, parent=None, old=False):
+                path = sessions / workspace / name
+                path.mkdir(parents=True, exist_ok=True)
+                metadata, messages = path / "session.json", path / "messages.jsonl"
+                metadata.write_text(json.dumps({"parentSessionId": parent} if parent else {}))
+                messages.write_text(json.dumps({"payload": {"type": "usage_summary"}}) + "\n")
+                if old:
+                    for file in (metadata, messages):
+                        os.utime(file, ns=(1, 1))
+
+            collector = Collector(database)
+            try:
+                for index in range(64):
+                    name = f"sess_history_{index:02}"
+                    workspace = "main" if index < 32 else "archive"
+                    collector.finish(collector.begin({"invocation": "b" * 32},
+                        json.dumps({"metadata": {"kiro:conversation_id": name}}).encode()))
+                    write_session(workspace, name, old=True)
+                collector.finish(collector.begin({"invocation": current},
+                    json.dumps({"metadata": {"kiro:conversation_id": "sess_launch"}}).encode()))
+            finally:
+                collector.close()
+            with contextlib.closing(open_database(database)) as db:
+                disk_index.index_tree(db, sessions)
+                self.assertEqual(db.execute("SELECT count(*) FROM disk_sessions").fetchone()[0], 64)
+                db.execute("DROP INDEX IF EXISTS capture_invocation")
+            Collector(database).close()
+
+            def write_launch():
+                write_session("main", "sess_launch")
+                write_session("main", "sess_helper", "sess_launch")
+                history = sessions / "archive/sess_history_63/messages.jsonl"
+                with history.open("a") as stream:
+                    stream.write('{"payload":{"type":"usage_summary"}}\n')
+
+            historical_reads, statements = [], []
+            directory_probes, file_probes = 0, 0
+
+            def stat_path(probe, path, *args, **kwargs):
+                nonlocal directory_probes, file_probes
+                if isinstance(path, (Path, str)):
+                    path = Path(path)
+                    if path.parent.parent == sessions and path.name.startswith("sess_"):
+                        directory_probes += 1
+                    if path.parent.parent.parent == sessions and path.parent.name.startswith("sess_"):
+                        file_probes += 1
+                return probe(path, *args, **kwargs)
+
+            def json_extract(data, path):
+                value = json.loads(data) if data else {}
+                key = path[2:].strip('"')
+                if value.get("invocation") == "b" * 32:
+                    historical_reads.append(path)
+                return value.get(key)
+
+            connect = sqlite3.connect
+
+            def traced_connect(*args, **kwargs):
+                db = connect(*args, **kwargs)
+                db.create_function("json_extract", 2, json_extract, deterministic=True)
+                db.set_trace_callback(statements.append)
+                return db
+
+            with (
+                patch.dict(os.environ, {"HOME": directory}, clear=True),
+                patch.object(runtime, "launch_environment", return_value={}),
+                patch.object(runtime, "wait_command", side_effect=self.writing_child(0, write_launch)),
+                patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex=current)),
+                patch.object(sqlite3, "connect", side_effect=traced_connect),
+                patch.object(os, "lstat", side_effect=partial(stat_path, os.lstat)),
+                patch.object(os, "stat", side_effect=partial(stat_path, os.stat)),
+                contextlib.redirect_stderr(io.StringIO()) as output,
+            ):
+                self.assertEqual(runtime.exec_command(state, 19001, 1 << 30, ["kiro-cli", "chat"]), 0)
+            self.assertNotIn("automatic Kiro session indexing failed", output.getvalue())
+            self.assertEqual(len(historical_reads), 0, f"Historical JSON evaluations by path: {dict(Counter(historical_reads))}")
+            self.assertEqual(directory_probes, 0)
+            self.assertLessEqual(file_probes, 142)
+            with contextlib.closing(open_database(database)) as db:
+                names = {Path(row[0]).name for row in db.execute("SELECT session_path FROM disk_sources")}
+                self.assertTrue({"sess_launch", "sess_helper"} <= names)
+                self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 66)
+                reads = [sql for sql in statements if sql.startswith("SELECT json_extract") and "FROM captures" in sql]
+                self.assertEqual(len(reads), 1)
+                plan = db.execute("EXPLAIN QUERY PLAN " + reads[0]).fetchone()[3]
+                self.assertIn("SEARCH captures USING INDEX capture_invocation", plan)
+
     def test_refresh_skips_while_full_index_holds_lock(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
             state = root / "state"
+            invocation = "a" * 32
             collector = Collector(state / "usage.sqlite3")
-            collector.finish(collector.begin({}, json.dumps({"metadata": {"kiro:conversation_id": "sess_auto"}}).encode()))
+            collector.finish(collector.begin({"invocation": invocation}, json.dumps({"metadata": {"kiro:conversation_id": "sess_auto"}}).encode()))
             collector.close()
             session = root / ".kiro/sessions/workspace/sess_auto"
             session.mkdir(parents=True)
@@ -308,56 +408,90 @@ class SummaryTests(unittest.TestCase):
             held = lock_beside(state / "usage.sqlite3", disk_index.INDEX_LOCK, blocking=True)
             try:
                 with contextlib.redirect_stderr(io.StringIO()) as output:
-                    runtime.refresh_disk_index(state, 0)
+                    runtime.refresh_disk_index(state, 0, invocation)
             finally:
                 os.close(held)
             self.assertEqual(output.getvalue().count("\n"), 1)
             self.assertIn("full Kiro session index is running", output.getvalue())
             with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
                 self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='disk_records'").fetchone())
-            runtime.refresh_disk_index(state, 0)
+            with patch.object(disk_index, "index_tree", side_effect=sqlite3.OperationalError("fixture failure")), contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.refresh_disk_index(state, 0, "b" * 32)
+            self.assertIn("automatic Kiro session indexing failed", output.getvalue())
+            runtime.refresh_disk_index(state, 0, "c" * 32)
             with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
                 self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 1)
+                self.assertEqual(db.execute("SELECT count(*) FROM disk_refresh_pending").fetchone()[0], 0)
             held = lock_beside(state / "usage.sqlite3", disk_index.INDEX_LOCK, shared=True)  # a concurrent launch's exit refresh
             try:
                 with contextlib.redirect_stderr(io.StringIO()) as output:
-                    runtime.refresh_disk_index(state, 0)
+                    runtime.refresh_disk_index(state, 0, invocation)
             finally:
                 os.close(held)
             self.assertEqual(output.getvalue(), "")
 
-    def test_concurrent_refreshes_queue_instead_of_racing(self):
+    def test_one_walk_covers_concurrent_exits(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
             state = root / "state"
-            collector = Collector(state / "usage.sqlite3")
-            collector.finish(collector.begin({}, json.dumps({"metadata": {"kiro:conversation_id": "sess_auto"}}).encode()))
-            collector.close()
-            session = root / ".kiro/sessions/workspace/sess_auto"
-            session.mkdir(parents=True)
-            (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary", "promptTurnSummaries": []}}) + "\n")
-            held = lock_beside(state / "usage.sqlite3", disk_index.REFRESH_LOCK, blocking=True)  # another launch's refresh mid-scan
+            database = state / "usage.sqlite3"
+            sessions = root / ".kiro/sessions"
+            launches = (("a" * 32, 1), ("b" * 32, 3_000_000_000), ("c" * 32, 3_000_000_000))
+            collector = Collector(database)
             try:
-                with contextlib.redirect_stderr(io.StringIO()) as output:
-                    thread = threading.Thread(target=runtime.refresh_disk_index, args=(state, 0))
-                    thread.start()
-                    thread.join(.5)
-                    self.assertTrue(thread.is_alive())  # waits rather than reading the same offset concurrently
-                    with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
-                        self.assertIsNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='disk_records'").fetchone())
+                for (invocation, since), name in zip(launches, ("sess_alpha", "sess_beta", "sess_gamma"), strict=True):
+                    collector.finish(collector.begin({"invocation": invocation},
+                        json.dumps({"metadata": {"kiro:conversation_id": name}}).encode()))
+                    session = sessions / "workspace" / name
+                    session.mkdir(parents=True)
+                    metadata = session / "session.json"
+                    metadata.write_text("{}")
+                    os.utime(metadata, ns=(since, since))
             finally:
-                os.close(held)
-            thread.join(10)
-            self.assertFalse(thread.is_alive())
-            with contextlib.closing(sqlite3.connect(state / "usage.sqlite3")) as db:
-                self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 1)
+                collector.close()
+
+            queued = threading.Barrier(3, timeout=10)
+            refreshed = threading.Event()
+            caller = threading.local()
+
+            def wait_for_exits(path, suffix, **kwargs):
+                if suffix == disk_index.REFRESH_LOCK:
+                    queued.wait()
+                    if caller.invocation != "b" * 32:
+                        self.assertTrue(refreshed.wait(10))
+                return lock_beside(path, suffix, **kwargs)
+
+            def refresh(invocation, since):
+                caller.invocation = invocation
+                try:
+                    runtime.refresh_disk_index(state, since, invocation)
+                finally:
+                    if invocation == "b" * 32:
+                        refreshed.set()
+
+            with (
+                patch("capture.lock_beside", side_effect=wait_for_exits),
+                patch.object(os, "scandir", wraps=os.scandir) as scandir,
+                contextlib.redirect_stderr(io.StringIO()) as output,
+                ThreadPoolExecutor(max_workers=3) as workers,
+            ):
+                exits = [workers.submit(refresh, invocation, since) for invocation, since in launches]
+                for finished in exits:
+                    finished.result()
             self.assertEqual(output.getvalue(), "")
-            self.assertEqual(os.stat(str(state / "usage.sqlite3") + disk_index.REFRESH_LOCK).st_mode & 0o777, 0o600)
+            self.assertEqual(sum(call.args == (sessions,) for call in scandir.call_args_list), 1)
+            with contextlib.closing(sqlite3.connect(database)) as db:
+                self.assertEqual(
+                    sorted(Path(row[0]).name for row in db.execute("SELECT path FROM disk_sessions")),
+                    ["sess_alpha", "sess_beta", "sess_gamma"],
+                )
+                self.assertEqual(db.execute("SELECT count(*) FROM disk_refresh_pending").fetchone()[0], 0)
+            self.assertEqual(os.stat(str(database) + disk_index.REFRESH_LOCK).st_mode & 0o777, 0o600)
 
     def test_index_missing_tree_and_failure_are_nonfatal(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
             root = Path(directory)
-            runtime.refresh_disk_index(root / "missing", 0)
+            runtime.refresh_disk_index(root / "missing", 0, "a" * 32)
             self.assertFalse((root / "missing").exists())
             sessions = root / ".kiro/sessions"
             sessions.parent.mkdir()

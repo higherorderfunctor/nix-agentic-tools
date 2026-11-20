@@ -52,7 +52,8 @@ class DiskIndexTests(unittest.TestCase):
     @staticmethod
     def captured(db, conversation, root=None, started=0):
         db.executescript(capture.SCHEMA)
-        metadata = {"kiro:conversation_id": conversation, **({"kiro:root_conversation_id": root} if root else {})}
+        metadata = {"invocation": "a" * 32, "kiro:conversation_id": conversation,
+                    **({"kiro:root_conversation_id": root} if root else {})}
         db.execute("INSERT INTO captures(id,started_utc_ns,metadata_json) VALUES (?,?,?)",
                    (conversation + str(started), started, json.dumps(metadata)))
         db.commit()
@@ -473,7 +474,7 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(self.ids(old))
         self.assertEqual(self.count(), 1)
 
-    def test_since_reads_only_recent_sessions_and_keeps_older_scope(self):
+    def test_launch_uses_older_indexed_ancestor_without_rereading_it(self):
         self.messages.write_bytes(usage())
         step = self.child("sess_step", {"ownerSessionId": "sess_synthetic"}, usage(2))
         self.scan()
@@ -484,12 +485,17 @@ class DiskIndexTests(unittest.TestCase):
                 stream.write(usage(5) if path.suffix == ".jsonl" else b" ")
             os.utime(path, ns=(old, old))
         nested = self.child("sess_nested", {"_meta": {"kiro": {"serverSession": {"ownerSessionId": "sess_step"}}}},
-                            usage(3), mtime=recent)
+                            mtime=old)
         unlinked = self.child("sess_unlinked", {}, usage(4), mtime=recent)
+        os.utime(nested.parent, ns=(old, old))
+        with (nested / "messages.jsonl").open("ab") as stream:
+            stream.write(usage(3))
+        os.utime(nested / "messages.jsonl", ns=(recent, recent))
+        self.assertEqual(nested.parent.stat().st_mtime_ns, old)
         read = []
         original = disk_index.read_session
         with patch.object(disk_index, "read_session", side_effect=lambda path: read.append(path.parent) or original(path)):
-            disk_index.index_tree(self.db, self.sessions, since=recent)
+            disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), recent))
         self.assertEqual(sorted(path.name for path in read), ["sess_nested", "sess_unlinked"])
         self.assertEqual(self.ids(nested), {"ownerSessionId": "sess_step"})
         self.assertIsNone(self.ids(unlinked))
@@ -516,7 +522,7 @@ class DiskIndexTests(unittest.TestCase):
             "serverSession": {"parentSessionId": "srv_x", "role": "workflow-step"}}}})
         self.assertEqual(ids, {"parentSessionId": "sess_local", "role": "workflow-step"})
 
-    def test_since_clears_repaired_omission_out_of_scope(self):
+    def test_launch_clears_repaired_omission_out_of_scope(self):
         self.messages.write_bytes(usage())
         unlinked = self.child("sess_unlinked", {}, usage(4))
         (unlinked / "session.json").write_text("{")
@@ -524,7 +530,7 @@ class DiskIndexTests(unittest.TestCase):
         rows = lambda: self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
         self.assertEqual(rows(), 1)
         (unlinked / "session.json").write_text("{}")
-        disk_index.index_tree(self.db, self.sessions, since=0)
+        disk_index.index_tree(self.db, self.sessions, launch=(("a" * 32,), 0))
         self.assertEqual(rows(), 0)
 
     def test_cli_vacuums_after_pruning(self):
