@@ -1,6 +1,6 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-13 — native picker schema and bounded repairs
+> **Last verified:** 2026-11-19 — native picker schema and bounded repairs
 > preserve logged sessions and executable-tool removal; shared avoid/exclude
 > fallback and all-technique machine defaults preserve floors, session gates and
 > intentional null omission; failure warnings and the fallback notice reach
@@ -23,7 +23,9 @@
 > the always-on stub names the source for steering its rules; OpenCode Go joins
 > z.ai as an API-key pool found by base URL, with opt-in Go preset families.
 > Packaged-helper checks execute every runtime’s delivered helper on both
-> backends and reject null sessionPool manifests.
+> backends and reject null sessionPool manifests. Review checks reuse the
+> best-fitting model in fresh contexts when only one model fits at strong or
+> frontier tier.
 >
 > **Settled — do not relitigate.** Per-turn chosen over once-per-session
 > (operator, 2026-10-08): accepts cumulative `additionalContext` history growth

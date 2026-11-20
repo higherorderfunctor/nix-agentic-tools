@@ -37,5 +37,6 @@ Name each role's model and effort in one line in the launch message to the user,
 or in the report to the orchestrator when non-interactive, so it can be
 overridden.
 
-Applying a reviewer's located list is mid-tier work at medium effort. Keep top
-tiers for finding, judging and design.
+Apply a reviewer's located list with the writer's model at medium effort when
+the helper still selects it; otherwise follow the helper. Use a lower tier only
+when it fits the task and its pool is ahead.
