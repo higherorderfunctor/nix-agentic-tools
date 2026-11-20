@@ -1,0 +1,43 @@
+{
+  "description": "Each case expects complete requests in order, followed by the public result.",
+  "request_defaults": {
+    "method": "GET",
+    "headers": { "Content-Type": "application/json" },
+    "body": null
+  },
+  "requests": {
+    "accounts": { "url": "http://cpa.test/v0/management/auth-files" },
+    "claude": { "url": "http://cpa.test/v8/management/config/api-keys/claude" },
+    "codex": { "url": "http://cpa.test/v8/management/config/api-keys/codex" },
+    "two": {
+      "method": "POST",
+      "url": "http://cpa.test/v0/management/api-call",
+      "body": {
+        "auth_index": "two",
+        "method": "POST",
+        "url": "https://vendor.test/usage",
+        "header": { "Accept": "text/plain", "Authorization": "Bearer $TOKEN$" },
+        "data": "query"
+      }
+    }
+  },
+  "success": { "status_code": 200, "body": "usage" },
+  "direct": { "private network exception": "HTTP request failed" },
+  "cases": {
+    "ambiguous discovery": [["accounts"], "ambiguous credentials"],
+    "correct pin sent": [["accounts", "two"], "success"],
+    "cross-origin key": [["claude", "codex"], "no matching credential"],
+    "cross-origin quota": [[], "credential origin mismatch"],
+    "crossed endpoint pin": [["claude", "codex"], "no matching credential"],
+    "crossed provider pin refused": [["accounts"], "no matching credential"],
+    "disabled pin refused": [["accounts"], "no matching credential"],
+    "duplicate keys": [["claude", "codex", "two"], "success"],
+    "malformed auth files": [["accounts"], "invalid CPA discovery response"],
+    "invalid reply": [["accounts", "two"], "invalid CPA api-call response"],
+    "management HTTP failure": [["accounts", "two"], "HTTP 503"],
+    "mixed sources skip I/O": [[], "conflicting CPA discovery sources"],
+    "registered pin skips discovery": [["two"], "success"],
+    "single provider login": [["accounts", "two"], "success"],
+    "vendor HTTP failure": [["accounts", "two"], "HTTP 403"]
+  }
+}

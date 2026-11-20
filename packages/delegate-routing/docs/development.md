@@ -705,6 +705,14 @@ last attempt finishes. Aliases share that capture. A registration without a
 command has no capture time. The helper measures each successful capture once
 and uses `--now` only to evaluate its windows.
 
+Direct HTTP binds its bearer token to one origin. With neither discovery source,
+CPA trusts a registered pin and skips discovery. Otherwise, choose an OAuth
+provider or key surfaces. CPA selects one eligible login or distinct key and
+verifies any supplied pin against that source. Key discovery matches the base
+path and its descendants on the same origin. Quota requests can use any path on
+that origin. CPA sends the index and `$TOKEN$` and checks both HTTP statuses
+before returning the vendor body.
+
 The required envelope has `account` fields `auth_index`, `name` and `plan`
 (including null values), a nonempty string `pool`, arrays `balances` and
 `bonuses`, and a `windows` map. An empty map is valid and unmeasured. Failure
@@ -737,12 +745,12 @@ JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
-Run both offline suites from this package directory with `pydantic` v2 and
-`hypothesis` installed. The `delegate-routing-plan-runtime` check runs the same
-suites.
+Run these suites with `pydantic` v2, `urllib3` and `hypothesis` installed. The
+`delegate-routing-plan-runtime` check runs them from this package directory.
 
 ```bash
 python3 checks/usage/runner/test_runner.py scripts
+python3 checks/usage/transport/test_transport.py scripts
 python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
 ```
 
