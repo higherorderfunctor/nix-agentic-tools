@@ -42,8 +42,9 @@ CREATE TABLE IF NOT EXISTS captures (
  credits REAL, context_usage_percentage REAL, input_tokens INTEGER,
  output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER
 );
-CREATE INDEX IF NOT EXISTS capture_session ON captures(json_extract(metadata_json, '$."kiro:conversation_id"'));
+CREATE INDEX IF NOT EXISTS capture_invocation ON captures(json_extract(metadata_json,'$.invocation'));
 CREATE INDEX IF NOT EXISTS capture_request_id ON captures(json_extract(response_json, '$.upstream_request_id'));
+CREATE INDEX IF NOT EXISTS capture_session ON captures(json_extract(metadata_json, '$."kiro:conversation_id"'));
 CREATE TABLE IF NOT EXISTS chunks (
  capture_id TEXT, seq INTEGER, utc_ns INTEGER, mono_ns INTEGER,
  entity_gzip BLOB, application_gzip BLOB,

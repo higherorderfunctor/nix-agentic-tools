@@ -146,17 +146,29 @@ later. After a timed-out wait, unfinished calls stay flagged as incomplete
 coverage. It then automatically refreshes the local disk index from
 `~/.kiro/sessions` when that directory exists. The summary reads no disk data;
 the refresh keeps `kiro-usage session` and `report --session`, which do,
-current. This exit scan reads the `session.json` of sessions changed since the
-launch, indexes the messages only of those linked to captures, and never prunes.
-Index failures warn and leave the child exit status intact; disk observations
-may then be stale. An explicit `kiro-usage index` holds a lock beside the
-database for its whole pass; the exit scan then skips with a one-line warning
-that disk observations were not refreshed instead of interleaving. Exit scans of
-concurrent launches do not skip each other; they queue on a second lock and run
-one at a time, since two scans of one session would index the same records.
-Rerun the index if that pass began before Kiro exited. Nested `kiro-usage exec`
-launches share the parent's marker and produce one summary when the outer launch
-exits.
+current. The exit refresh starts with the launches' captured conversation and
+root IDs and any `--resume-id`, including resumes with no captured calls. It
+looks up those session directories directly. To find descendants, it checks
+recorded lineage and looks for new session directories in workspaces whose
+timestamps changed since launch. It refreshes changed files in that scope
+without pruning. Run `kiro-usage index` for unrelated changes or for an in-place
+append to a never-indexed descendant in a workspace whose timestamp predates the
+launch. The first exit refresh after upgrading builds the four lineage indexes
+once over the indexed session rows if they are still missing.
+
+Tracked exits add their launch to a shared pending queue. A refresh covers the
+launches already queued when it reads the queue under the lock. On success it
+acknowledges that snapshot. A launch whose capture wait timed out stays queued
+for one more successful pass, which can pick up late captures. If a session's
+metadata or transcript cannot be read, the refresh warns with the session path
+and continues with the other sessions. If a transcript read fails, indexing that
+transcript again resumes from the last committed checkpoint.
+
+Index failures warn and leave the child exit status intact. If an explicit
+`kiro-usage index` holds the index lock, the exit leaves its launch queued and
+warns that disk observations were not refreshed. Rerun the index if that pass
+began before Kiro exited. Nested `kiro-usage exec` launches share the parent's
+marker and produce one summary when the outer launch exits.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
