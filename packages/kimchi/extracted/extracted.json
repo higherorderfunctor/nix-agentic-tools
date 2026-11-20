@@ -511,8 +511,8 @@
     ],
     "header": {
       "scan": {
-        "kimchiSourceHash": "sha256-mwwtN/Ss2DkcDhdxMQ4pgiBIiVAvoFpHVOZIJeh5In0=",
-        "kimchiVersion": "1.37.0",
+        "kimchiSourceHash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
+        "kimchiVersion": "1.37.2",
         "piVersion": "1.3.0",
         "scannerVersion": "2.0.0"
       }
@@ -925,7 +925,10 @@
         "value": "/changelog"
       },
       {
-        "files": ["pi/dist/bundle/chunks/chunk-H3QXYIF7.js"],
+        "files": [
+          "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+          "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
+        ],
         "value": "/chat/completions"
       },
       {
@@ -5467,7 +5470,7 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350,
+        "line": 357,
         "readBy": "kimchi",
         "targets": [
           {
@@ -5494,13 +5497,13 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593,
+        "line": 600,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/pr-cost-reporting/worker.ts:593",
+            "origin": "src/extensions/pr-cost-reporting/worker.ts:600",
             "value": "input"
           }
         ]
@@ -5509,7 +5512,7 @@
         "bundledModule": null,
         "file": "src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657,
+        "line": 664,
         "readBy": "kimchi",
         "targets": [
           {
@@ -5593,13 +5596,13 @@
         "bundledModule": null,
         "file": "src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190,
+        "line": 256,
         "readBy": "kimchi",
         "targets": [
           {
             "host": null,
             "kind": "argument",
-            "origin": "src/extensions/session-name.ts:190",
+            "origin": "src/extensions/session-name.ts:256",
             "value": "url"
           }
         ]
@@ -5638,7 +5641,7 @@
         "bundledModule": null,
         "file": "src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331,
+        "line": 351,
         "readBy": "kimchi",
         "targets": [
           {
@@ -10353,9 +10356,9 @@
       "property": null,
       "reason": null,
       "site": {
-        "column": 22,
+        "column": 23,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 589
+        "line": 603
       }
     },
     {
@@ -10419,7 +10422,7 @@
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 585
+        "line": 597
       },
       "kind": "caller",
       "property": null,
@@ -10427,7 +10430,7 @@
       "site": {
         "column": 18,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 646
+        "line": 667
       }
     },
     {
@@ -10443,7 +10446,7 @@
       "functionSite": {
         "column": 17,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 644
+        "line": 665
       },
       "kind": "boundary",
       "property": null,
@@ -10451,7 +10454,7 @@
       "site": {
         "column": 17,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 644
+        "line": 665
       }
     },
     {
@@ -10475,7 +10478,7 @@
       "site": {
         "column": 11,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 642
+        "line": 663
       }
     },
     {
@@ -10539,7 +10542,7 @@
       "functionSite": {
         "column": 10,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 633
+        "line": 654
       },
       "kind": "boundary",
       "property": null,
@@ -10547,7 +10550,7 @@
       "site": {
         "column": 10,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 633
+        "line": 654
       }
     },
     {
@@ -10835,7 +10838,7 @@
       "site": {
         "column": 11,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 642
+        "line": 663
       }
     },
     {
@@ -10899,7 +10902,7 @@
       "functionSite": {
         "column": 10,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 633
+        "line": 654
       },
       "kind": "boundary",
       "property": null,
@@ -10907,7 +10910,7 @@
       "site": {
         "column": 10,
         "file": "kimchi/src/cli-auth/oauth.ts",
-        "line": 633
+        "line": 654
       }
     },
     {
@@ -12842,16 +12845,16 @@
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 0,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       },
       "kind": "boundary",
       "property": null,
@@ -12859,23 +12862,23 @@
       "site": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 0,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       },
       "kind": "enclosing",
       "property": null,
@@ -12883,23 +12886,23 @@
       "site": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 1,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       },
       "kind": "callback",
       "property": "fetch",
@@ -12907,23 +12910,23 @@
       "site": {
         "column": 18,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 382
+        "line": 389
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 1,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 342
+        "line": 349
       },
       "kind": "caller",
       "property": null,
@@ -12931,23 +12934,23 @@
       "site": {
         "column": 28,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 405
+        "line": 412
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 2,
       "functionSite": {
         "column": 68,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 229
+        "line": 236
       },
       "kind": "callback",
       "property": null,
@@ -12955,23 +12958,23 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 229
+        "line": 236
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 3,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 222
+        "line": 229
       },
       "kind": "caller",
       "property": null,
@@ -12979,23 +12982,23 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 945
+        "line": 952
       }
     },
     {
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 4,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 889
+        "line": 896
       },
       "kind": "boundary",
       "property": null,
@@ -13010,16 +13013,16 @@
       "callSite": {
         "column": 28,
         "endColumn": 89,
-        "endLine": 350,
+        "endLine": 357,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 350
+        "line": 357
       },
       "distance": 4,
       "functionSite": {
         "column": 45,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       },
       "kind": "callback",
       "property": null,
@@ -13027,23 +13030,23 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 0,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 586
+        "line": 593
       },
       "kind": "boundary",
       "property": null,
@@ -13051,23 +13054,23 @@
       "site": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 586
+        "line": 593
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 0,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 586
+        "line": 593
       },
       "kind": "enclosing",
       "property": null,
@@ -13075,23 +13078,23 @@
       "site": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 586
+        "line": 593
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 1,
       "functionSite": {
         "column": 39,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 586
+        "line": 593
       },
       "kind": "callback",
       "property": "fetch",
@@ -13099,23 +13102,23 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 609
+        "line": 616
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 2,
       "functionSite": {
         "column": 68,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       },
       "kind": "callback",
       "property": null,
@@ -13123,23 +13126,23 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 3,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 536
+        "line": 543
       },
       "kind": "caller",
       "property": null,
@@ -13147,23 +13150,23 @@
       "site": {
         "column": 10,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 946
+        "line": 953
       }
     },
     {
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 4,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 889
+        "line": 896
       },
       "kind": "boundary",
       "property": null,
@@ -13178,16 +13181,16 @@
       "callSite": {
         "column": 31,
         "endColumn": 92,
-        "endLine": 593,
+        "endLine": 600,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 593
+        "line": 600
       },
       "distance": 4,
       "functionSite": {
         "column": 45,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       },
       "kind": "callback",
       "property": null,
@@ -13195,23 +13198,23 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       }
     },
     {
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 0,
       "functionSite": {
         "column": 7,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 651
+        "line": 658
       },
       "kind": "enclosing",
       "property": null,
@@ -13219,23 +13222,23 @@
       "site": {
         "column": 7,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 651
+        "line": 658
       }
     },
     {
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 1,
       "functionSite": {
         "column": 7,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 651
+        "line": 658
       },
       "kind": "callback",
       "property": null,
@@ -13243,23 +13246,23 @@
       "site": {
         "column": 14,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 649
+        "line": 656
       }
     },
     {
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 2,
       "functionSite": {
         "column": 68,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       },
       "kind": "callback",
       "property": null,
@@ -13267,23 +13270,23 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       }
     },
     {
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 3,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 536
+        "line": 543
       },
       "kind": "caller",
       "property": null,
@@ -13291,23 +13294,23 @@
       "site": {
         "column": 10,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 946
+        "line": 953
       }
     },
     {
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 4,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 889
+        "line": 896
       },
       "kind": "boundary",
       "property": null,
@@ -13322,16 +13325,16 @@
       "callSite": {
         "column": 21,
         "endColumn": 8,
-        "endLine": 671,
+        "endLine": 678,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
         "library": "fetch",
-        "line": 657
+        "line": 664
       },
       "distance": 4,
       "functionSite": {
         "column": 45,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       },
       "kind": "callback",
       "property": null,
@@ -13339,7 +13342,7 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       }
     },
     {
@@ -14587,7 +14590,7 @@
       "site": {
         "column": 24,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 1216
+        "line": 1479
       }
     },
     {
@@ -14627,7 +14630,7 @@
       "functionSite": {
         "column": 1,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 1079
+        "line": 1250
       },
       "kind": "boundary",
       "property": null,
@@ -14635,7 +14638,7 @@
       "site": {
         "column": 28,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 1023
+        "line": 1188
       }
     },
     {
@@ -14651,15 +14654,15 @@
       "functionSite": {
         "column": 1,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 1174
+        "line": 1437
       },
       "kind": "caller",
       "property": null,
       "reason": null,
       "site": {
-        "column": 42,
+        "column": 62,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 1095
+        "line": 1333
       }
     },
     {
@@ -14954,16 +14957,16 @@
       "callSite": {
         "column": 13,
         "endColumn": 44,
-        "endLine": 190,
+        "endLine": 256,
         "file": "kimchi/src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190
+        "line": 256
       },
       "distance": 0,
       "functionSite": {
         "column": 16,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 173
+        "line": 239
       },
       "kind": "enclosing",
       "property": null,
@@ -14971,23 +14974,23 @@
       "site": {
         "column": 16,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 173
+        "line": 239
       }
     },
     {
       "callSite": {
         "column": 13,
         "endColumn": 44,
-        "endLine": 190,
+        "endLine": 256,
         "file": "kimchi/src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190
+        "line": 256
       },
       "distance": 1,
       "functionSite": {
         "column": 16,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 173
+        "line": 239
       },
       "kind": "callback",
       "property": "fetchImpl",
@@ -14995,23 +14998,71 @@
       "site": {
         "column": 26,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 149
+        "line": 215
       }
     },
     {
       "callSite": {
         "column": 13,
         "endColumn": 44,
-        "endLine": 190,
+        "endLine": 256,
         "file": "kimchi/src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190
+        "line": 256
       },
       "distance": 2,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 116
+        "line": 168
+      },
+      "kind": "boundary",
+      "property": null,
+      "reason": "unreferenced",
+      "site": {
+        "column": 8,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 168
+      }
+    },
+    {
+      "callSite": {
+        "column": 13,
+        "endColumn": 44,
+        "endLine": 256,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "library": "fetch",
+        "line": 256
+      },
+      "distance": 2,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 172
+      },
+      "kind": "caller",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 16,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 169
+      }
+    },
+    {
+      "callSite": {
+        "column": 13,
+        "endColumn": 44,
+        "endLine": 256,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "library": "fetch",
+        "line": 256
+      },
+      "distance": 2,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 172
       },
       "kind": "caller",
       "property": null,
@@ -15019,23 +15070,23 @@
       "site": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 246
+        "line": 330
       }
     },
     {
       "callSite": {
         "column": 13,
         "endColumn": 44,
-        "endLine": 190,
+        "endLine": 256,
         "file": "kimchi/src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190
+        "line": 256
       },
       "distance": 3,
       "functionSite": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       },
       "kind": "boundary",
       "property": null,
@@ -15043,23 +15094,23 @@
       "site": {
         "column": 6,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       }
     },
     {
       "callSite": {
         "column": 13,
         "endColumn": 44,
-        "endLine": 190,
+        "endLine": 256,
         "file": "kimchi/src/extensions/session-name.ts",
         "library": "fetch",
-        "line": 190
+        "line": 256
       },
       "distance": 3,
       "functionSite": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       },
       "kind": "callback",
       "property": null,
@@ -15067,7 +15118,7 @@
       "site": {
         "column": 6,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       }
     },
     {
@@ -16034,16 +16085,16 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 0,
       "functionSite": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       },
       "kind": "boundary",
       "property": null,
@@ -16051,23 +16102,23 @@
       "site": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       }
     },
     {
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 0,
       "functionSite": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       },
       "kind": "enclosing",
       "property": null,
@@ -16075,23 +16126,23 @@
       "site": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       }
     },
     {
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 1,
       "functionSite": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       },
       "kind": "callback",
       "property": "fetch",
@@ -16099,23 +16150,23 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 414
+        "line": 434
       }
     },
     {
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 1,
       "functionSite": {
         "column": 37,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 326
+        "line": 346
       },
       "kind": "callback",
       "property": null,
@@ -16123,23 +16174,23 @@
       "site": {
         "column": 13,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 437
+        "line": 457
       }
     },
     {
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 2,
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 307
+        "line": 327
       },
       "kind": "caller",
       "property": null,
@@ -16154,10 +16205,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 3,
       "functionSite": {
@@ -16178,10 +16229,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -16202,10 +16253,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -16226,10 +16277,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -16250,10 +16301,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -16274,10 +16325,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -16298,10 +16349,10 @@
       "callSite": {
         "column": 26,
         "endColumn": 92,
-        "endLine": 331,
+        "endLine": 351,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
         "library": "fetch",
-        "line": 331
+        "line": 351
       },
       "distance": 4,
       "functionSite": {
@@ -22439,7 +22490,7 @@
       "site": {
         "column": 26,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 149
+        "line": 215
       }
     },
     {
@@ -22819,7 +22870,7 @@
       "site": {
         "column": 18,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 382
+        "line": 389
       }
     },
     {
@@ -22843,7 +22894,7 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 609
+        "line": 616
       }
     },
     {
@@ -22915,7 +22966,7 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 414
+        "line": 434
       }
     },
     {
@@ -23123,7 +23174,55 @@
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 116
+        "line": 168
+      },
+      "kind": "boundary",
+      "property": null,
+      "reason": "unreferenced",
+      "site": {
+        "column": 8,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 168
+      }
+    },
+    {
+      "callSite": {
+        "column": 27,
+        "endColumn": 59,
+        "endLine": 90,
+        "file": "kimchi/src/utils/http.ts",
+        "library": "fetch",
+        "line": 90
+      },
+      "distance": 2,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 172
+      },
+      "kind": "caller",
+      "property": null,
+      "reason": null,
+      "site": {
+        "column": 16,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 169
+      }
+    },
+    {
+      "callSite": {
+        "column": 27,
+        "endColumn": 59,
+        "endLine": 90,
+        "file": "kimchi/src/utils/http.ts",
+        "library": "fetch",
+        "line": 90
+      },
+      "distance": 2,
+      "functionSite": {
+        "column": 1,
+        "file": "kimchi/src/extensions/session-name.ts",
+        "line": 172
       },
       "kind": "caller",
       "property": null,
@@ -23131,7 +23230,7 @@
       "site": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 246
+        "line": 330
       }
     },
     {
@@ -24059,7 +24158,7 @@
       "functionSite": {
         "column": 68,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 229
+        "line": 236
       },
       "kind": "callback",
       "property": null,
@@ -24067,7 +24166,7 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 229
+        "line": 236
       }
     },
     {
@@ -24083,7 +24182,7 @@
       "functionSite": {
         "column": 68,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       },
       "kind": "callback",
       "property": null,
@@ -24091,7 +24190,7 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 543
+        "line": 550
       }
     },
     {
@@ -24107,7 +24206,7 @@
       "functionSite": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       },
       "kind": "boundary",
       "property": null,
@@ -24115,7 +24214,7 @@
       "site": {
         "column": 6,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       }
     },
     {
@@ -24131,7 +24230,7 @@
       "functionSite": {
         "column": 21,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       },
       "kind": "callback",
       "property": null,
@@ -24139,7 +24238,7 @@
       "site": {
         "column": 6,
         "file": "kimchi/src/extensions/session-name.ts",
-        "line": 235
+        "line": 316
       }
     },
     {
@@ -24563,7 +24662,7 @@
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/work-attribution/cost-sync.ts",
-        "line": 307
+        "line": 327
       },
       "kind": "caller",
       "property": null,
@@ -25167,7 +25266,7 @@
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 222
+        "line": 229
       },
       "kind": "caller",
       "property": null,
@@ -25175,7 +25274,7 @@
       "site": {
         "column": 22,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 945
+        "line": 952
       }
     },
     {
@@ -25191,7 +25290,7 @@
       "functionSite": {
         "column": 8,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 536
+        "line": 543
       },
       "kind": "caller",
       "property": null,
@@ -25199,7 +25298,7 @@
       "site": {
         "column": 10,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 946
+        "line": 953
       }
     },
     {
@@ -25215,7 +25314,7 @@
       "functionSite": {
         "column": 45,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       },
       "kind": "boundary",
       "property": null,
@@ -25223,7 +25322,7 @@
       "site": {
         "column": 9,
         "file": "kimchi/src/extensions/pr-cost-reporting/worker.ts",
-        "line": 913
+        "line": 920
       }
     },
     {
@@ -25955,7 +26054,7 @@
       "site": {
         "column": 25,
         "file": "kimchi/src/extensions/work-attribution/links.ts",
-        "line": 529
+        "line": 804
       }
     },
     {
