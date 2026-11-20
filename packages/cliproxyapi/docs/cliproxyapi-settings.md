@@ -76,19 +76,21 @@ unless requested. Validation and wire behavior are documented in
 `cliproxyapi-key-allowlist.md`.
 
 For `vendor = "opencode-go"` the credential likewise needs only its key. The
-defaults come from the `opencodeGo` fact (`cliproxyapi-extraction.md`): each
-catalog model goes in `apis.<api>.models` of its one native API, `messages` on
-`anthropic`, `chat-completions` on `chat`, `responses` on `responses`, and
-Gemini's `generate-content`, which has no API here, on `chat`. CPA translates
-every other protocol. Base URLs are the catalog's per API; the Anthropic one
-drops its trailing `/v1`, which CPA's claude executor appends. The defaults
-serve the whole pinned catalog; to keep a model off Go, narrow the credential's
-models, and to refuse overlap with another credential, set `exclusive` (see
-`cliproxyapi-client-keys.md`). The Responses API keeps Grok and Muse Spark.
-`toolAliases` and `codexShellArgCleanup` stay off. An API override replaces that
-API's whole default, so restate its `base-url`; the flake's
-`lib.cliproxyapi.providers.vendors.opencode-go.apis` holds the defaults to start
-from. Go refuses a request without a session header, so the vendor sets
+defaults select one transport per model from the `opencodeGo` fact
+(`cliproxyapi-extraction.md`). Models advertising `chat-completions`,
+`messages`, or `responses` go in the corresponding `chat`, `anthropic`, or
+`responses` model list. Gemini's `generate-content` uses the native chat models'
+base URL. When `gemini-4-argon` advertises both `generate-content` and
+`interactions`, the credential selects `generate-content` and keeps that chat
+route. CPA translates other protocols. Base URLs come from the catalog. The
+Anthropic base URL drops its trailing `/v1`, which CPA's claude executor
+appends. The defaults serve the whole pinned catalog; to keep a model off Go,
+narrow the credential's models, and to refuse overlap with another credential,
+set `exclusive` (see `cliproxyapi-client-keys.md`). The Responses API keeps Grok
+and Muse Spark. `toolAliases` and `codexShellArgCleanup` stay off. An API
+override replaces that API's whole default, so restate its `base-url`; the
+flake's `lib.cliproxyapi.providers.vendors.opencode-go.apis` holds the defaults
+to start from. Go refuses a request without a session header, so the vendor sets
 `x-opencode-session` to CPA's own session ID (`$CPA-SESSION-ID`) on every API.
 
 The measured Claude Code tier mapping and timeout remain extraction data. The

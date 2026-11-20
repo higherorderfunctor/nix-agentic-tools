@@ -1,5 +1,7 @@
-# OpenCode Go defaults and native-API placement, shared by credentials and synthetic checks.
+# OpenCode Go contributes extracted model identities to the catalog and maps selected offers
+# back to their native transport metadata for credential defaults and catalog checks.
 {lib}: let
+  inherit (import ../providers.nix {inherit lib;}) baseUrlType;
   # Read the measured Go catalog where its vendor defaults are built.
   facts = import ../../../../lib/extracted/facts.nix {inherit lib;};
   # Use CPA's aggregate so missing or divergent vendor facts fail at their source.
@@ -32,9 +34,7 @@
     models = identities;
     vendors.opencode-go.models = builtins.attrNames extracted;
   };
-  # OpenCode Go serves each catalog model on one native API. Each lands on
-  # that API only, so CPA translates every other protocol itself. A function
-  # of the catalog (`opencodeGo.models`) so checks can feed it malformed ones.
+  # Credentials and catalog checks use the measured models to build one CPA route per offer.
   opencodeGo = models: let
     # Gemini's generate-content has no API here; OpenCode serves every Go
     # text model on chat completions too, so it goes on chat.
@@ -44,16 +44,22 @@
       messages = "anthropic";
       responses = "responses";
     };
+    # Each catalog offer supplies one route for the credential. Even protocols the route
+    # does not use must advertise a valid URL.
     placed = lib.mapAttrsToList (id: entry: let
       natives = builtins.attrNames entry.api;
-      native = lib.head natives;
+      native =
+        if lib.length natives == 1
+        then lib.head natives
+        else if id == "gemini-4-argon" && natives == ["generate-content" "interactions"]
+        then "generate-content"
+        else throw "cliproxyapi opencode-go: catalog model `${id}` has unsupported native APIs ${builtins.toJSON natives}.";
+      invalidUrlApi = lib.findFirst (api: !(baseUrlType.check (entry.api.${api}.base_url or null))) null natives;
     in
-      if lib.length natives != 1
-      then throw "cliproxyapi opencode-go: catalog model `${id}` has ${toString (lib.length natives)} native APIs; expected exactly one."
-      else if !(apiOf ? ${native})
+      if !(apiOf ? ${native})
       then throw "cliproxyapi opencode-go: catalog model `${id}` has unknown native API `${native}`."
-      else if !(entry.api.${native} ? base_url)
-      then throw "cliproxyapi opencode-go: catalog model `${id}` has no base_url for native API `${native}`."
+      else if invalidUrlApi != null
+      then throw "cliproxyapi opencode-go: catalog model `${id}` requires a valid base_url for native API `${invalidUrlApi}`."
       else {
         inherit id native;
         api = apiOf.${native};
