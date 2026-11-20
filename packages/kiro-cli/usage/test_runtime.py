@@ -134,6 +134,18 @@ class SummaryTests(unittest.TestCase):
                 with self.subTest("WAL pushes the store above threshold"), contextlib.redirect_stderr(io.StringIO()) as output:
                     runtime.invocation_summary(root, "a" * 32, 1 << 20)
                     self.assertEqual(output.getvalue(), "Warning: the usage store is 2 MiB on disk, past the 1 MiB warning size; " + advice + no_calls)
+                database_bytes = database.stat().st_size
+                wal_bytes = database.with_name(f"{database.name}-wal").stat().st_size
+                store_bytes = database_bytes + wal_bytes
+                with self.subTest("only the combined size exceeds the threshold"), contextlib.redirect_stderr(io.StringIO()) as output:
+                    warn_bytes = store_bytes - 1
+                    self.assertLess(database_bytes, warn_bytes)
+                    self.assertLess(wal_bytes, warn_bytes)
+                    runtime.invocation_summary(root, "a" * 32, warn_bytes)
+                    self.assertIn("Warning: the usage store is ", output.getvalue())
+                with self.subTest("combined size equals the threshold"), contextlib.redirect_stderr(io.StringIO()) as output:
+                    runtime.invocation_summary(root, "a" * 32, store_bytes)
+                    self.assertEqual(output.getvalue(), no_calls)
 
     def test_summary_runs_without_counting_payload_bytes(self):
         """Refuse a store-wide payload count after collector startup and still render a captured call."""
