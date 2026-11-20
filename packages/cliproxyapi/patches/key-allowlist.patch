@@ -800,21 +800,16 @@ index a6d911a..d5f5243 100644
  	if clearedCooldowns && oldCooldownStore != nil {
  		m.mu.Lock()
 diff --git a/sdk/cliproxy/auth/conductor_execution.go b/sdk/cliproxy/auth/conductor_execution.go
-index 96bad50..0042a50 100644
 --- a/sdk/cliproxy/auth/conductor_execution.go
 +++ b/sdk/cliproxy/auth/conductor_execution.go
-@@ -343,7 +343,7 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
- 		}
- 		lastErr = errExec
+@@ -346,5 +346,5 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
  		if upstreamAttempted && m.isCodexAttemptFailure(errExec, roundAttempted) {
 -			eligibility := authSelectionEligibilityForRequest(ctx, opts)
 +			eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
  			pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
  			if _, okContinuity := m.canRunCodexContinuity(ctx, normalized); okContinuity &&
  				isPositiveQuotaRejectionError(errExec) {
-@@ -615,7 +615,7 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
- 		terminalRoundRejectedByScheduler = hasRoundEndedBySchedulerReject(errStream)
- 		lastErr = errStream
+@@ -623,5 +623,5 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
  		if upstreamAttempted && m.isCodexAttemptFailure(errStream, roundAttempted) {
 -			eligibility := authSelectionEligibilityForRequest(ctx, opts)
 +			eligibility := authSelectionEligibilityForRequest(ctx, opts, &m.keyAllowlist)
