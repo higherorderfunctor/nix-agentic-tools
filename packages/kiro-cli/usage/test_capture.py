@@ -514,21 +514,29 @@ class CaptureTests(unittest.TestCase):
 
     def test_wal_reuse_caps_retained_size_after_reader_releases_snapshot(self):
         """An oversized WAL shrinks to the retained limit once a reader releases and the still-open writer reuses it."""
-        wal_path = self.path.with_suffix(".sqlite3-wal")
-        with contextlib.closing(open_database(self.path)) as db:
-            db.execute("CREATE TABLE filler(payload BLOB)")
-            with contextlib.closing(sqlite3.connect(self.path)) as reader, capture.snapshot(reader):
-                reader.execute("SELECT count(*) FROM filler").fetchone()
-                for _ in range(8):
-                    with db:
-                        db.execute("INSERT INTO filler VALUES (zeroblob(?))", (4 * 1024 * 1024,))
-                self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+        for label, limited in (("writer default", True), ("unlimited control", False)):
+            with self.subTest(label):
+                path = self.path.with_name(f"{limited}.sqlite3")
+                wal_path = path.with_suffix(".sqlite3-wal")
+                with contextlib.closing(open_database(path)) as db:
+                    if not limited:
+                        db.execute("PRAGMA journal_size_limit=-1")
+                    db.execute("CREATE TABLE filler(payload BLOB)")
+                    with contextlib.closing(sqlite3.connect(path)) as reader, capture.snapshot(reader):
+                        reader.execute("SELECT count(*) FROM filler").fetchone()
+                        for _ in range(8):
+                            with db:
+                                db.execute("INSERT INTO filler VALUES (zeroblob(?))", (4 * 1024 * 1024,))
+                        self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
 
-            busy, frames, copied = db.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
-            self.assertEqual((busy, copied), (0, frames))
-            with db:
-                db.execute("INSERT INTO filler VALUES (X'00')")
-            self.assertLessEqual(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+                    busy, frames, copied = db.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+                    self.assertEqual((busy, copied), (0, frames))
+                    with db:
+                        db.execute("INSERT INTO filler VALUES (X'00')")
+                    if limited:
+                        self.assertLessEqual(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+                    else:
+                        self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
 
     def test_payload_warning_threshold_keeps_retaining(self):
         writer = Collector(self.path, warn_bytes=1)

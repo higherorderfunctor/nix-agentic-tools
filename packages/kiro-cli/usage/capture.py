@@ -1,4 +1,9 @@
-"""Private, independent Kiro calibration evidence store; no provider calls."""
+"""Store private Kiro calibration evidence for offline queries.
+
+The collector, sealer, disk index, and maintenance commands open WAL writers
+through open_database. Read-only reports, exit summaries, and payload exports
+open readers to consume the facts and retained evidence.
+"""
 
 import argparse
 import base64
