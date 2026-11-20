@@ -384,6 +384,8 @@
           { "names": ["--config", "-c"], "valueName": "key=value" },
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--disable"], "valueName": "FEATURE" },
+          { "names": ["--remote"], "valueName": "ADDR" },
+          { "names": ["--remote-auth-token-env"], "valueName": "ENV_VAR" },
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--image", "-i"], "valueName": "FILE" },
           { "names": ["--model", "-m"], "valueName": "MODEL" },
@@ -421,6 +423,8 @@
           { "names": ["--image", "-i"], "valueName": "FILE" },
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--disable"], "valueName": "FEATURE" },
+          { "names": ["--remote"], "valueName": "ADDR" },
+          { "names": ["--remote-auth-token-env"], "valueName": "ENV_VAR" },
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--model", "-m"], "valueName": "MODEL" },
           {
@@ -450,6 +454,8 @@
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--disable"], "valueName": "FEATURE" },
           { "names": ["--image", "-i"], "valueName": "FILE" },
+          { "names": ["--remote"], "valueName": "ADDR" },
+          { "names": ["--remote-auth-token-env"], "valueName": "ENV_VAR" },
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--model", "-m"], "valueName": "MODEL" },
           {
@@ -479,8 +485,10 @@
           { "names": ["--enable"], "valueName": "FEATURE" },
           { "names": ["--commit"], "valueName": "SHA" },
           { "names": ["--disable"], "valueName": "FEATURE" },
-          { "names": ["--strict-config"], "valueName": null },
+          { "names": ["--remote"], "valueName": "ADDR" },
           { "names": ["--title"], "valueName": "TITLE" },
+          { "names": ["--remote-auth-token-env"], "valueName": "ENV_VAR" },
+          { "names": ["--strict-config"], "valueName": null },
           { "names": ["--model", "-m"], "valueName": "MODEL" },
           {
             "names": ["--dangerously-bypass-approvals-and-sandbox"],
@@ -508,6 +516,8 @@
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--disable"], "valueName": "FEATURE" },
           { "names": ["--linux-sandbox-pid-namespace"], "valueName": "MODE" },
+          { "names": ["--linux-sandbox-transparent-tcp"], "valueName": null },
+          { "names": ["--tcp-upstream-proxy"], "valueName": "HOST:PORT" },
           { "names": ["--proxy-private-ips-via-upstream"], "valueName": null },
           { "names": ["--concurrent-requests"], "valueName": "COUNT" },
           { "names": ["--listen"], "valueName": "URL" },
@@ -543,6 +553,8 @@
           { "names": ["--strict-config"], "valueName": null },
           { "names": ["--disable"], "valueName": "FEATURE" },
           { "names": ["--linux-sandbox-pid-namespace"], "valueName": "MODE" },
+          { "names": ["--linux-sandbox-transparent-tcp"], "valueName": null },
+          { "names": ["--tcp-upstream-proxy"], "valueName": "HOST:PORT" },
           { "names": ["--proxy-private-ips-via-upstream"], "valueName": null },
           { "names": ["--remote"], "valueName": "URL" },
           { "names": ["--remote-transport"], "valueName": "REMOTE_TRANSPORT" },
@@ -968,13 +980,14 @@
             ],
             "x86_64-linux": [
               { "names": ["--config", "-c"], "valueName": "key=value" },
-              { "names": ["--sandbox-state-json"], "valueName": "JSON" },
+              { "names": ["--transparent-tcp"], "valueName": null },
               { "names": ["--enable"], "valueName": "FEATURE" },
+              { "names": ["--sandbox-state-json"], "valueName": "JSON" },
+              { "names": ["--disable"], "valueName": "FEATURE" },
               {
                 "names": ["--sandbox-state-readable-root"],
                 "valueName": "SANDBOX_STATE_READABLE_ROOT"
               },
-              { "names": ["--disable"], "valueName": "FEATURE" },
               {
                 "names": ["--sandbox-state-disable-network"],
                 "valueName": null
@@ -1103,6 +1116,7 @@
     { "maturity": "stable", "name": "browser_use" },
     { "maturity": "stable", "name": "browser_use_external" },
     { "maturity": "stable", "name": "browser_use_full_cdp_access" },
+    { "maturity": "under development", "name": "catalog_apps_instructions" },
     { "maturity": "under development", "name": "chronicle" },
     { "maturity": "stable", "name": "cli_daybreak" },
     { "maturity": "under development", "name": "cli_resume_account_check" },
@@ -1163,6 +1177,7 @@
     { "maturity": "under development", "name": "external_agent_memory_import" },
     { "maturity": "removed", "name": "external_migration" },
     { "maturity": "stable", "name": "fast_mode" },
+    { "maturity": "under development", "name": "file_backed_tool_audio" },
     { "maturity": "stable", "name": "gateway_setup_wizard" },
     { "maturity": "stable", "name": "gcp_setup_wizard" },
     { "maturity": "stable", "name": "goals" },
@@ -1184,6 +1199,10 @@
     {
       "maturity": "under development",
       "name": "guardian_native_multi_agent_history"
+    },
+    {
+      "maturity": "under development",
+      "name": "guardian_nested_approval_context"
     },
     {
       "maturity": "under development",
@@ -1237,6 +1256,7 @@
     { "maturity": "under development", "name": "mcp_connection_sharing" },
     { "maturity": "under development", "name": "mcp_lazy_stdio_startup" },
     { "maturity": "stable", "name": "mcp_oauth_refresh_coordination" },
+    { "maturity": "under development", "name": "mcp_shared_repl_cwd" },
     { "maturity": "under development", "name": "mcp_tool_list_changed" },
     { "maturity": "stable", "name": "memories" },
     { "maturity": "stable", "name": "mentions_v2" },
@@ -1256,6 +1276,7 @@
     },
     { "maturity": "under development", "name": "omit_skill_descriptions" },
     { "maturity": "under development", "name": "output_token_replay" },
+    { "maturity": "under development", "name": "per_environment_context" },
     { "maturity": "removed", "name": "personality" },
     { "maturity": "removed", "name": "plugin_discovery_prefetch" },
     { "maturity": "removed", "name": "plugin_hooks" },
@@ -1279,6 +1300,7 @@
     { "maturity": "experimental", "name": "respect_system_proxy" },
     { "maturity": "removed", "name": "responses_websockets" },
     { "maturity": "removed", "name": "responses_websockets_v2" },
+    { "maturity": "under development", "name": "restored_history_prewarm" },
     {
       "maturity": "under development",
       "name": "retain_client_developer_messages"
@@ -1287,6 +1309,7 @@
     { "maturity": "under development", "name": "rollout_budget" },
     { "maturity": "under development", "name": "runtime_agent_instances" },
     { "maturity": "under development", "name": "runtime_metrics" },
+    { "maturity": "under development", "name": "safe_image_decoder" },
     { "maturity": "removed", "name": "search_tool" },
     { "maturity": "stable", "name": "secret_auth_storage" },
     { "maturity": "removed", "name": "send_async_message" },
@@ -1326,9 +1349,9 @@
     { "maturity": "stable", "name": "tool_suggest" },
     { "maturity": "removed", "name": "transcript_v2" },
     { "maturity": "removed", "name": "tui_app_server" },
-    { "maturity": "under development", "name": "tui_extensions_statusline" },
+    { "maturity": "experimental", "name": "tui_extensions_statusline" },
     { "maturity": "under development", "name": "tui_multi_backend" },
-    { "maturity": "under development", "name": "tui_workspace" },
+    { "maturity": "stable", "name": "tui_workspace" },
     { "maturity": "stable", "name": "ultrafast_mode" },
     { "maturity": "removed", "name": "unavailable_dummy_tools" },
     { "maturity": "stable", "name": "unbounded_connection_retries" },
@@ -1342,6 +1365,7 @@
     { "maturity": "deprecated", "name": "use_legacy_landlock" },
     { "maturity": "removed", "name": "use_linux_sandbox_bwrap" },
     { "maturity": "under development", "name": "use_xaa" },
+    { "maturity": "under development", "name": "utc_environment_date" },
     { "maturity": "stable", "name": "view_image" },
     { "maturity": "under development", "name": "wake_on_agent_messages" },
     { "maturity": "deprecated", "name": "web_search_cached" },
