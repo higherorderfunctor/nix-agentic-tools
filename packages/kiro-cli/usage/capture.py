@@ -396,7 +396,7 @@ def framing_kind(response, rpc):
 # Synthetic 1 and 32 MiB requests: level 9 costs 1.8x level 6's CPU for 0.3% smaller BLOBs; level 1 is 3x
 # faster but 16% larger, reaching the payload warning sooner. Small chunks compress alike at every level.
 GZIP_LEVEL = 6
-WARN_BYTES = 5 * 1024 ** 3  # Retained payload bytes past which the collector and exit summary warn.
+WARN_BYTES = 5 * 1024 ** 3  # Retained payload bytes past which the collector warns.
 # Payload copies the queue may refuse while parsing still sees every byte; usage stays complete without them.
 OMISSIONS = {"request_payload_omitted", "response_payload_omitted"}
 # Streamed /v1/responses tool-argument and reasoning parts; a kind with any of these ignores its terminal copy.

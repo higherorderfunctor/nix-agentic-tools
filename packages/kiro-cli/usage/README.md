@@ -35,15 +35,17 @@ retained payload evidence, counting sealed compressed payloads, staged payloads
 awaiting their seal (request BLOBs, entity and application chunks, event frames
 and parsed event JSON), and retained usage summaries. Past the threshold the
 running collector logs one warning line to standard error and keeps capturing,
-and captures are not marked incomplete for it. Each tracked `kiro-usage exec`
-summary repeats the warning with the store's size while it stays above the
-threshold. On restart the retained bytes are counted again. This counts
-payloads, not the SQLite file size: indexes, metadata, page overhead, and
-accumulated records also consume disk. Temporary SQLite journal space is
-additional. Stopping capture and deleting an intentionally retired private
-database are operator decisions: stop the service, then archive or delete
-`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
-store.
+and captures are not marked incomplete for it. On restart the retained bytes are
+counted again. The collector counts payloads, not the SQLite file size: indexes,
+metadata, page overhead, and accumulated records also consume disk.
+
+Each tracked `kiro-usage exec` summary compares the same threshold with the
+store's size on disk instead, `usage.sqlite3` plus its `-wal` file, so it can
+warn before the collector does, even for a store with no captures. It reads two
+file sizes and never scans the database. Stopping capture and deleting an
+intentionally retired private database are operator decisions: stop the service,
+then archive or delete `usage.sqlite3` with its `-wal` and `-shm` files; the
+next start creates a new store.
 
 When `KIRO_USAGE_RETENTION_DAYS` is a positive integer, the sealer deletes the
 sealed request and response blobs of captures older than that many days. It runs
