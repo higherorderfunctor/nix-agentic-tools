@@ -591,10 +591,12 @@ class SummaryTests(unittest.TestCase):
             scandir = os.scandir
 
             def deny_classification(*_, **_options):
+                """Stand in for DirEntry.is_dir on the bad entry: always raise."""
                 raise OSError("private fixture details")
 
             @contextlib.contextmanager
             def scan_entries(path):
+                """Wrap os.scandir, replacing only the bad entry with one whose is_dir raises."""
                 with scandir(path) as entries:
                     yield (
                         SimpleNamespace(name=entry.name, path=entry.path, is_dir=deny_classification)
@@ -609,6 +611,36 @@ class SummaryTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT path FROM disk_sessions").fetchall(), [(str(good),)])
             self.assertEqual(output.getvalue(),
                              f"Warning: could not read Kiro session {bad}; disk observations may be stale.\n")
+
+    def test_exit_skips_a_workspace_that_cannot_be_listed(self):
+        """Keep indexing the healthy workspace and acknowledge the launch when another workspace's listing fails."""
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}, clear=True):
+            root = Path(directory)
+            state = root / "state"
+            database = state / "usage.sqlite3"
+            sessions = root / ".kiro/sessions"
+            bad_workspace, good = sessions / "broken", sessions / "workspace/sess_beta"
+            invocation = "a" * 32
+            Collector(database).close()
+            (bad_workspace / "sess_alpha").mkdir(parents=True)
+            (bad_workspace / "sess_alpha/session.json").write_text('{"parentSessionId":"sess_root"}')
+            good.mkdir(parents=True)
+            (good / "session.json").write_text('{"parentSessionId":"sess_root"}')
+            scandir = os.scandir
+
+            def scan_or_deny(path):
+                """Wrap os.scandir, refusing to list only the broken workspace."""
+                if str(path) == str(bad_workspace):
+                    raise PermissionError("private fixture details")
+                return scandir(path)
+
+            with patch.object(os, "scandir", scan_or_deny), contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.refresh_disk_index(state, 0, invocation, resume_id="sess_root")
+            with contextlib.closing(sqlite3.connect(database)) as db:
+                self.assertEqual(db.execute("SELECT invocation FROM disk_refresh_pending").fetchall(), [])
+                self.assertEqual(db.execute("SELECT path FROM disk_sessions").fetchall(), [(str(good),)])
+            self.assertEqual(output.getvalue(),
+                             f"Warning: could not read Kiro session {bad_workspace}; disk observations may be stale.\n")
 
     def test_resume_without_captures_refreshes_an_indexed_session(self):
         """Append inside an indexed session during a no-call resume and count the new record."""

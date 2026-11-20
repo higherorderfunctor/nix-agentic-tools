@@ -405,12 +405,16 @@ def exit_candidates(db, sessions, captured, cutoff):
         for name in sorted(captured):
             record_changed_session(workspace / name)
         if info.st_mtime_ns >= cutoff:
-            for session in directories(workspace, "sess_", skip=checked, on_entry_error=skip_unreadable_session):
-                # Indexed paths are checked only when their recorded lineage leads back to this launch.
-                if not db.execute(
-                    "SELECT 1 FROM disk_sessions WHERE path=?", (str(session),)
-                ).fetchone():
-                    record_changed_session(session, listed=True)
+            try:
+                for session in directories(workspace, "sess_", skip=checked, on_entry_error=skip_unreadable_session):
+                    # Indexed paths are checked only when their recorded lineage leads back to this launch.
+                    if not db.execute(
+                        "SELECT 1 FROM disk_sessions WHERE path=?", (str(session),)
+                    ).fetchone():
+                        record_changed_session(session, listed=True)
+            except OSError:
+                # One unlistable workspace must not stop the others; failing to list the session root still fails the pass.
+                warn_session_read(workspace)
 
     pending, visited = sorted(captured), set(captured)
     while pending:
