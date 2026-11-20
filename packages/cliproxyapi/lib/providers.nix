@@ -392,7 +392,7 @@
       '';
     }));
 in {
-  inherit apiKeys apis canonical clientKeyType credentialType literalHeader modelsOf normalizeCredential opencodeGo route rule served vendors;
+  inherit apiKeys apis baseUrlType canonical clientKeyType credentialType literalHeader modelsOf normalizeCredential opencodeGo route rule served vendors;
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
       blocks (lib.mapAttrs (_: literalHeader pkgs) (

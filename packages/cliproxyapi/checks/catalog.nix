@@ -1,4 +1,5 @@
-# Independent extracted-fact properties catch missing contributions and catalog-blind credential defaults.
+# The Home Manager and devenv harnesses render credential defaults from the merged catalog.
+# Both compare the rendered routes with the extracted vendor inventories.
 {
   harness,
   lib,
@@ -24,11 +25,10 @@
     messages = "anthropic";
     responses = "responses";
   };
-  # Gemini uses chat even when the catalog recommends interactions.
-  expectedNative = id:
-    if go.${id}.api ? generate-content
-    then "generate-content"
-    else lib.head (builtins.attrNames go.${id}.api);
+  # For placement and URL expectations, take the model ID’s first native API in sorted order.
+  # On the supported Gemini pair this selects generate-content.
+  expectedNative = id: lib.head (builtins.attrNames go.${id}.api);
+  # Map a model ID to its expected CPA family for offer and endpoint checks.
   expectedPlacement = id: nativeApi.${expectedNative id};
   # Expected per-API model sets are derived from the raw input inventory.
   expectedGo = lib.groupBy expectedPlacement eligible;
@@ -61,7 +61,7 @@
   };
   # Force placement and URL checks without evaluating a service derivation.
   builds = models: (builtins.tryEval (builtins.deepSeq (manual.opencodeGo models).apis true)).success;
-  # Each property names the malformed input its constructor must reject.
+  # Both backend checks use these named cases to verify placement and rejection of malformed offers.
   catalogShapes = {
     "conflicting base URLs accepted" = !(builds (shaped // {other = native "chat-completions" "https://elsewhere.example/v1";}));
     "Gemini pair placed outside native chat" =
@@ -70,6 +70,7 @@
         base-url = "https://go.example/openai/v1";
         models = ["chat" "gemini-4-argon"];
       };
+    "Gemini pair with malformed interactions URL accepted" = !(builds (shaped // {gemini-4-argon.api = gemini.api // {interactions.base_url = "not a url";};}));
     "Gemini pair with missing interactions URL accepted" = !(builds (shaped // {gemini-4-argon.api = gemini.api // {interactions = {};};}));
     "Gemini pair with unrelated model id accepted" = !(builds (shaped // {other = gemini;}));
     "interactions alone accepted" = !(builds (shaped // {gemini-4-argon.api = {inherit (gemini.api) interactions;};}));
@@ -260,7 +261,8 @@
       # Select named blocks rather than their incidental render order.
       blocks = value: family: vendor: lib.filter (entry: entry.name == vendor) (value.api-keys.${family} or []);
       block = value: family: vendor: lib.head (blocks value family vendor);
-      # Native base URLs are independently extracted; messages drops the executor's /v1 suffix.
+      # For each CPA family, derive the URL the rendered endpoint check expects from a native offer.
+      # The messages executor appends /v1 itself.
       expectedUrl = api: let
         ids = lib.filter (id: expectedPlacement id == api && !(go.${id}.api ? generate-content)) eligible;
         id = lib.head ids;
