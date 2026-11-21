@@ -864,18 +864,142 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
         def flow(header, client=connection):
             return SimpleNamespace(client_conn=client, request=SimpleNamespace(headers={"proxy-authorization": header}))
         marker = "a" * 32
-        valid = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
-        request = flow(valid)
+        credentials = base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
+        request = flow(f"Basic {credentials}")
         addon.http_connect(request)
-        self.assertEqual(addon.invocations, {"local-one": marker})
+        self.assertEqual(set(addon.invocations), {"local-one"})
         self.assertNotIn("proxy-authorization", request.request.headers)
-        for header in ("", "Basic !!!", "Bearer ignored", "Basic " + base64.b64encode(b"kiro-usage-bad:").decode(), "Basic " + base64.b64encode(f"kiro-usage-{marker}:password".encode()).decode()):
-            request = flow(header, SimpleNamespace(id="other"))
-            addon.http_connect(request)
-            self.assertNotIn("other", addon.invocations)
-            self.assertNotIn("proxy-authorization", request.request.headers)
+        cases = {
+            "empty header": "",
+            "invalid base64": "Basic !!!",
+            "wrong scheme": f"Bearer {credentials}",
+        }
+        for name, malformed in (
+            ("extra dot", f"kiro-usage-{marker}.{'b' * 32}.:"),
+            ("nonempty password", f"kiro-usage-{marker}:password"),
+            ("short marker", "kiro-usage-bad:"),
+            ("uppercase marker", f"kiro-usage-{marker.upper()}:"),
+        ):
+            cases[name] = "Basic " + base64.b64encode(malformed.encode()).decode()
+        for name, header in cases.items():
+            with self.subTest(case=name):
+                request = flow(header, SimpleNamespace(id="other"))
+                addon.http_connect(request)
+                self.assertNotIn("other", addon.invocations)
+                self.assertNotIn("proxy-authorization", request.request.headers)
         addon.client_disconnected(connection)
         self.assertEqual(addon.invocations, {})
+
+    def test_proxy_credentials_reach_capture_metadata(self):
+        """Exercise both proxy hooks and read attribution from finished fixture rows."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        database = root / "usage.sqlite3"
+        addon = UsageCapture()
+        with patch.dict(os.environ, {"KIRO_USAGE_DB": str(database)}, clear=True):
+            addon.load(None)
+
+        def flow(name, connection, credentials=None, rpc=False, selected=True):
+            headers = {"authorization": "Bearer fixture"}
+            if credentials is not None:
+                headers["proxy-authorization"] = "Basic " + base64.b64encode(credentials).decode()
+            if rpc:
+                headers["x-amz-target"] = "KiroRuntimeService.GenerateAssistantResponse"
+            body = {"conversationState": {"conversationId": name}} if rpc else {"metadata": {"kiro:conversation_id": name}}
+            request = SimpleNamespace(headers=headers, host="fixture.kiro.dev", method="POST",
+                                      path="/" if rpc else "/v1/responses" if selected else "/",
+                                      get_content=lambda strict: json.dumps(body).encode())
+            return SimpleNamespace(id=name, client_conn=SimpleNamespace(id=connection), request=request)
+
+        try:
+            tunnel = flow("connect", "tunnel", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:")
+            addon.http_connect(tunnel)
+            self.assertEqual(tunnel.request.headers, {"authorization": "Bearer fixture"})
+            cases = (
+                (flow("sess_rest", "tunnel"), ("a" * 32, "b" * 32)),
+                (flow("sess_rpc", "direct", b"kiro-usage-cccccccccccccccccccccccccccccccc.dddddddddddddddddddddddddddddddd:", rpc=True), ("c" * 32, "d" * 32)),
+                (flow("sess_legacy", "legacy", b"kiro-usage-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee:"), ("e" * 32, "e" * 32)),
+                (flow("sess_unmarked", "unmarked"), (None, None)),
+                (flow("sess_malformed", "malformed", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bad:"), (None, None)),
+            )
+            skipped = flow("skipped", "skipped", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:", selected=False)
+            addon.request(skipped)
+            self.assertEqual(skipped.request.headers, {"authorization": "Bearer fixture"})
+            for request, _ in cases:
+                addon.request(request)
+                self.assertNotIn("proxy-authorization", request.request.headers)
+                self.assertEqual(request.request.headers["authorization"], "Bearer fixture")
+                addon.response(request)
+            addon.client_disconnected(tunnel.client_conn)
+            reused = flow("sess_reused", "tunnel")
+            addon.request(reused)
+            addon.response(reused)
+        finally:
+            addon.done()
+
+        with contextlib.closing(sqlite3.connect(database)) as db:
+            metadata = [json.loads(row[0]) for row in db.execute("SELECT metadata_json FROM captures WHERE ended_utc_ns IS NOT NULL")]
+        rows = {row["kiro:conversation_id"]: row for row in metadata}
+        self.assertEqual(len(metadata), len(cases) + 1)
+        for request, expected in (*cases, (reused, (None, None))):
+            with self.subTest(request=request.id):
+                row = rows[request.id]
+                markers = ("invocation", "outermost_invocation")
+                self.assertEqual(tuple(row.get(key) for key in markers), expected)
+                self.assertEqual(tuple(key in row for key in markers), (expected[0] is not None,) * 2)
+                self.assertNotIn("proxy-authorization", json.dumps(row).lower())
+
+    def test_launch_environment_validates_markers_for_proxy_url(self):
+        """Check credential URLs and rejected inherited markers before a launch."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        ca = root / "ca"
+        ca.mkdir(mode=0o700)
+        (ca / "mitmproxy-ca-cert.pem").write_text("fixture")
+        process = {"KIRO_USAGE_INVOCATION": "a" * 32}
+        outer = {"KIRO_USAGE_OUTERMOST_INVOCATION": "b" * 32}
+        with patch.object(runtime.socket, "create_connection"):
+            for identity, url in (
+                ({**process, **outer}, "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:@127.0.0.1:19001"),
+                (process, "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:@127.0.0.1:19001"),
+                ({**process, "KIRO_USAGE_OUTERMOST_INVOCATION": ""},
+                 "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:@127.0.0.1:19001"),
+                ({}, "http://127.0.0.1:19001"),
+            ):
+                with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                    self.assertEqual(runtime.launch_environment(root, 19001)["HTTPS_PROXY"], url)
+            for identity in (outer, {"KIRO_USAGE_INVOCATION": "A" * 32}):
+                with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                    with self.assertRaises(ValueError):
+                        runtime.launch_environment(root, 19001)
+
+    def test_empty_inherited_markers_allow_launch(self):
+        """Environment mode omits credentials and tracked exec starts an outer launch."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        ca = root / "ca"
+        ca.mkdir(mode=0o700)
+        (ca / "mitmproxy-ca-cert.pem").write_text("fixture")
+        self.enterContext(patch.dict(os.environ, {
+            "KIRO_USAGE_INVOCATION": "",
+            "KIRO_USAGE_OUTERMOST_INVOCATION": "",
+        }, clear=True))
+        self.enterContext(patch.object(runtime.socket, "create_connection"))
+
+        with self.subTest(mode="environment"):
+            values = runtime.launch_environment(root, 19001)
+            self.assertEqual(values["HTTPS_PROXY"], "http://127.0.0.1:19001")
+
+        with (self.subTest(mode="exec"),
+              patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="c" * 32)),
+              patch.object(runtime, "wait_command", return_value=23) as wait,
+              patch.object(runtime, "settle_captures", return_value=True),
+              patch.object(runtime, "invocation_summary") as summary,
+              patch.object(os, "execvpe") as execute):
+            self.assertEqual(runtime.exec_command(root, 19001, 1 << 30, ["kiro-cli", "chat"]), 23)
+            execute.assert_not_called()
+            wait.assert_called_once()
+            values = wait.call_args.args[2]
+            self.assertEqual(values["KIRO_USAGE_INVOCATION"], "c" * 32)
+            self.assertEqual(values["HTTPS_PROXY"], "http://kiro-usage-cccccccccccccccccccccccccccccccc:@127.0.0.1:19001")
+            summary.assert_called_once_with(root, "c" * 32, 1 << 30, settled=True, theme=None)
 
     def test_report_alone_receives_the_summary_theme(self):
         script = Path(runtime.__file__).parent

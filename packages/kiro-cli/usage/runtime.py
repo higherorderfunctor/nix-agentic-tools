@@ -7,7 +7,6 @@ for captures on exit, check the store size and print a capture summary.
 
 import argparse
 import os
-import re
 import signal
 import sqlite3
 import subprocess
@@ -19,6 +18,8 @@ import shlex
 import socket
 import stat
 import sys
+
+from markers import InvocationMarkers
 
 
 PROXY_NAMES = (
@@ -58,6 +59,14 @@ def private_directory(path, create=False):
 
 
 def launch_environment(path, port, refuse_conflicts=True, invocation=None):
+    """Build the child environment with a validated proxy URL for usage tracking."""
+    inherited = os.environ.get("KIRO_USAGE_INVOCATION") or None
+    outermost = os.environ.get("KIRO_USAGE_OUTERMOST_INVOCATION") or None
+    if inherited is None and outermost is not None:
+        raise ValueError("KIRO_USAGE_OUTERMOST_INVOCATION requires KIRO_USAGE_INVOCATION")
+    if invocation is None:
+        invocation = inherited
+    markers = InvocationMarkers(invocation, invocation if outermost is None else outermost) if invocation is not None else None
     private_directory(path)
     ca_dir = path / "ca"
     private_directory(ca_dir)
@@ -69,15 +78,12 @@ def launch_environment(path, port, refuse_conflicts=True, invocation=None):
     # cannot cause a provider call.
     with socket.create_connection(("127.0.0.1", port), timeout=0.5):
         pass
-    invocation = invocation or os.environ.get("KIRO_USAGE_INVOCATION")
-    if invocation and not re.fullmatch(r"[0-9a-f]{32}", invocation):
-        raise ValueError("invalid KIRO_USAGE_INVOCATION marker")
-    credentials = f"kiro-usage-{invocation}:@" if invocation else ""
+    credentials = f"{markers.proxy_username}:@" if markers else ""
     url = f"http://{credentials}127.0.0.1:{port}"
     values = {name: url for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")}
     values["NODE_EXTRA_CA_CERTS"] = str(cert)
-    if invocation:
-        values["KIRO_USAGE_INVOCATION"] = invocation
+    if markers:
+        values["KIRO_USAGE_INVOCATION"] = markers.invocation
     for name in PROXY_NAMES:
         value = os.environ.get(name, "")
         if refuse_conflicts and value and value != values.get(name):
@@ -293,8 +299,9 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
             tail.insert(len(options), "--agent-engine=v3")
         tracked = not any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options) \
             and subcommand not in ADMINISTRATIVE_COMMANDS
-    nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
-    invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
+    inherited_invocation = os.environ.get("KIRO_USAGE_INVOCATION")
+    nested = bool(inherited_invocation)
+    invocation = (inherited_invocation or uuid.uuid4().hex) if tracked else None
     child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
     try:
         if not tracked or nested or quiet:
