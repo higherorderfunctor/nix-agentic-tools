@@ -4,6 +4,8 @@
   pkgs,
   ...
 }: let
+  inherit (pkgs.ai.generic) python-stack;
+  pacingPython = python-stack.withPackages (ps: [ps.hypothesis ps.pydantic]);
   cases = import ./eval/cases.nix {inherit harness lib pkgs;};
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
@@ -11,7 +13,7 @@ in {
     # Handwritten saved captures and properties reject clipped pace and unreadable evidence.
     delegate-routing-allowance-ranking =
       pkgs.runCommand "delegate-routing-allowance-ranking" {
-        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+        nativeBuildInputs = [pacingPython];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -38,7 +40,7 @@ in {
     # Saved captures retain routes and measured allowance when another component fails.
     delegate-routing-observation-normalize =
       pkgs.runCommand "delegate-routing-observation-normalize" {
-        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+        nativeBuildInputs = [pacingPython];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -121,7 +123,7 @@ in {
       );
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {
-        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic ps.urllib3]))];
+        nativeBuildInputs = [pkgs.bash (python-stack.withPackages (ps: [ps.hypothesis ps.pydantic ps.urllib3]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
