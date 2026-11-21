@@ -3603,7 +3603,7 @@
           }
         },
         "description": "Sparse mixture-of-experts reasoning model with 23B active parameters for coding and agentic workflows",
-        "family": "beam",
+        "family": "beam-free",
         "id": "beam-free",
         "knowledge": "2026-06-30",
         "last_updated": "2026-10-16",
@@ -4394,7 +4394,7 @@
           }
         },
         "description": "Tencent's lower-cost Hy4 tier for everyday agent and productivity tasks, with image understanding and a 1M-token context window.",
-        "family": "hy-flash",
+        "family": "hy-flash-free",
         "id": "hy4-flash-free",
         "last_updated": "2026-11-16",
         "limit": { "context": 1048576, "input": 983040, "output": 65536 },
@@ -4779,7 +4779,7 @@
           }
         },
         "description": "Meituan's multimodal reasoning model for long-horizon coding and agent tasks, with visual understanding and a 1M-token context window",
-        "family": "longcat",
+        "family": "longcat-free",
         "id": "longcat-2.5-free",
         "last_updated": "2026-11-02",
         "limit": { "context": 1000000, "output": 262144 },
