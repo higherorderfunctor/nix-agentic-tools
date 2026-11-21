@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 from itertools import permutations
-import runpy
 import sys
-import types
 import unittest
 from pathlib import Path
 from typing import Any
@@ -20,10 +18,12 @@ from hypothesis import given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel
 
 SCRIPTS = Path(sys.argv[1])
-sys.path.insert(0, str(SCRIPTS))
+sys.path[:0] = [str(SCRIPTS), str(Path(__file__).resolve().parent)]
 CASES = Path(sys.argv[2])
-P = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "pacing.py")))
-N = P.normalizer
+import pacing as P
+import usage_normalize as N
+from reader_fixture import reader_stdout
+
 NOW = 1794447300
 
 
@@ -86,7 +86,7 @@ def reader_window(remaining: int, duration: int, reset_in: int | None, *, enforc
 def typed_snapshot(pools: dict[str, dict[str, N.LimitSpec]], readers: dict[str, object], routes: list[N.Route]) -> N.Snapshot:
     """Assemble already typed test data without revalidating individual windows."""
     return N.Snapshot(
-        pools={name: N.Registration(limits=limits, readerPool="reader") for name, limits in pools.items()},
+        pools={name: N.SnapshotRegistration(limits=limits, readerPool="reader") for name, limits in pools.items()},
         readers=readers,
         routes=routes,
     )
@@ -94,8 +94,7 @@ def typed_snapshot(pools: dict[str, dict[str, N.LimitSpec]], readers: dict[str, 
 
 def captured_pool(windows: dict[str, object]) -> N.Capture:
     """Build one saved successful Reader command result."""
-    envelope = N.Envelope(pool="reader", windows=windows)
-    return N.Capture(exit=0, stdout=envelope.model_dump_json())
+    return N.Capture(exit=0, stdout=reader_stdout(windows))
 
 
 def ranked_entry(

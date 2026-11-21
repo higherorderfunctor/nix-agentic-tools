@@ -1,7 +1,7 @@
 """Check the catalog builds' installed manifests and exercise capture retention on their CPA routes."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 import re
 import sys
@@ -23,25 +23,32 @@ def packaged_manifest(skill: Path) -> str:
 
 
 def check_collection(raw: str, expected_routes: list[dict[str, object]]) -> None:
-    """Missing, ambiguous and failed Readers keep their own routes and do not affect siblings."""
+    """A wrong pin must discard all allowance, retain every route and preserve the sibling capture."""
     manifest = UsageManifest.model_validate_json(raw)
-    success = ReaderSuccess(datetime(2026, 11, 20, tzinfo=UTC), "fixture output")
-    for first_result in (success, CaptureFailure.REQUEST):
+    cases = Path(__file__).with_name("attribution")
+    inputs, expected = (json.loads((cases / f"{part}.json").read_text()) for part in ("input", "expected"))
+    for name, first_stdout in inputs["first"].items():
         calls: list[tuple[str, str, str | None, int]] = []
 
         def read(instance: str, credential: str, reader: CredentialReader):
             calls.append((instance, credential, reader.pin, reader.transport.retries))
-            if credential == "second":
-                return UnknownBinding.AMBIGUOUS
-            if first_result is CaptureFailure.REQUEST:
+            if first_stdout is None:
+                if credential == "second":
+                    return UnknownBinding.AMBIGUOUS
                 raise RequestFailure("private diagnostic")
-            return success
+            stdout = first_stdout if credential == "first" else inputs["second"]
+            return ReaderSuccess(datetime.fromisoformat(inputs["finished"][credential]), stdout)
 
         results = manifest.pacing.collect(read)
         assert calls == [("test", "first", "account-17", 3), ("test", "second", None, 0)]
-        assert [result.outcome for result in results] == [
-            first_result, first_result, UnknownBinding.AMBIGUOUS, UnknownBinding.AMBIGUOUS, MissingReader.NO_COMMAND
-        ]
+        first, _, second, _, missing = [result.outcome for result in results]
+        assert results[1].outcome is first and results[3].outcome is second and missing is MissingReader.NO_COMMAND
+        if first_stdout is None:
+            assert first is CaptureFailure.REQUEST and second is UnknownBinding.AMBIGUOUS
+        else:
+            for outcome, want in ((first, expected[name]), (second, expected["unpinned sibling"])):
+                actual = [outcome.observed_at, outcome.reason, {k: v.window.remainingPercent for k, v in outcome.windows.items()}]
+                assert actual == want, (name, actual, want)
         assert [result.route.model_dump() for result in results] == expected_routes
 
 

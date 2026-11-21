@@ -8,8 +8,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+from usage_normalize import CaptureEvidence, parse_reader_stdout
+
 from .cpa import UnknownBinding
-from .runner import MissingReader, ReaderCapture
+from .runner import MissingReader, ReaderCapture, ReaderFailure, ReaderSuccess
 from .scope import Nonempty, Registration, Route
 from .transport import FrozenModel, HttpPolicy, RequestFailure
 
@@ -18,7 +20,6 @@ class CredentialReader(Registration):
     """The collector passes the selected command, account and HTTP options to the Reader."""
 
     command: Nonempty | None
-    pin: Nonempty | None
     transport: HttpPolicy
 
 
@@ -36,8 +37,21 @@ class CaptureFailure(Enum):
     REQUEST = "Reader request failed"
 
 
-Outcome = ReaderCapture | UnknownBinding | CaptureFailure
+Outcome = CaptureEvidence | ReaderFailure | MissingReader | UnknownBinding | CaptureFailure
 ReadCredential = Callable[[str, str, CredentialReader], ReaderCapture | UnknownBinding]
+
+
+def collect_credential(
+    read: ReadCredential, instance: str, credential: str, reader: CredentialReader
+) -> Outcome:
+    """Attribute one successful capture before sharing its evidence with a credential's routes."""
+    try:
+        capture = read(instance, credential, reader)
+    except RequestFailure:
+        return CaptureFailure.REQUEST
+    if isinstance(capture, ReaderSuccess):
+        return parse_reader_stdout(capture.stdout, reader, int(capture.completed_at.timestamp()))
+    return capture
 
 
 @dataclass(frozen=True)
@@ -65,10 +79,7 @@ class CredentialUsage(FrozenModel):
             if reader is not None and reader.command is not None and instance is not None and credential is not None:
                 key = (instance, credential)
                 if key not in captures:
-                    try:
-                        captures[key] = read(instance, credential, reader)
-                    except RequestFailure:
-                        captures[key] = CaptureFailure.REQUEST
+                    captures[key] = collect_credential(read, instance, credential, reader)
                 outcome = captures[key]
             results.append(RouteCapture(route, outcome))
         return results

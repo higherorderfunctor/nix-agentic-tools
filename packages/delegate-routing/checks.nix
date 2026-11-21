@@ -7,7 +7,7 @@
   cases = import ./eval/cases.nix {inherit harness lib pkgs;};
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
-  checks = {
+  checks = rec {
     # Handwritten saved captures and properties reject clipped pace and unreadable evidence.
     delegate-routing-allowance-ranking =
       pkgs.runCommand "delegate-routing-allowance-ranking" {
@@ -83,6 +83,16 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         python ${./checks/usage-runtime.py} ${./scripts}
+        touch "$out"
+      '';
+    delegate-routing-usage-types =
+      pkgs.runCommand "delegate-routing-usage-types" {
+        nativeBuildInputs = [pkgs.pyright (pkgs.python3.withPackages (ps: [ps.pydantic ps.urllib3]))];
+        inherit delegate-routing-allowance-ranking delegate-routing-observation-normalize;
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        pyright --project ${./scripts} --pythonpath "$(command -v python3)"
         touch "$out"
       '';
   };

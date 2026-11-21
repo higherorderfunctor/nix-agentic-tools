@@ -7,9 +7,8 @@ construct inputs in memory.
 
 from __future__ import annotations
 
-import runpy
+import json
 import sys
-import types
 import unittest
 from pathlib import Path
 from typing import Any
@@ -18,9 +17,11 @@ from hypothesis import example, given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel, ValidationError
 
 SCRIPTS = Path(sys.argv[1])
-sys.path.insert(0, str(SCRIPTS))
+sys.path[:0] = [str(SCRIPTS), str(Path(__file__).resolve().parent)]
 CASES = Path(sys.argv[2])
-N = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "usage-normalize.py")))
+import usage_normalize as N
+from reader_fixture import reader_stdout
+
 NOW = 1794447300
 
 
@@ -67,11 +68,10 @@ def load_cases() -> list[tuple[str, Case, ExpectedOutput | RefusedConfiguration]
 
 def snapshot_with_windows(windows: dict[str, object]) -> N.Snapshot:
     """Build the smallest registered snapshot that carries the tested windows."""
-    envelope = N.Envelope(pool="reader", windows=windows)
-    captures = {"budget": N.Capture(exit=0, stdout=envelope.model_dump_json())}
+    captures = {"budget": N.Capture(exit=0, stdout=reader_stdout(windows))}
     return N.Snapshot(
         pools={
-            "budget": N.Registration(
+            "budget": N.SnapshotRegistration(
                 readerPool="reader",
                 limits={
                     "allowance": N.LimitSpec(
@@ -107,6 +107,15 @@ class WholeOutcomes(unittest.TestCase):
                 ).model_dump(mode="json")
                 self.assertEqual(actual, expected.root)
 
+    def test_reader_requires_balances_and_bonuses_arrays(self) -> None:
+        """Wrong: a missing or object-valued collection supplies usable Reader evidence."""
+        fixtures = Path(__file__).resolve().parent / "invalid-reader-arrays"
+        expected = json.loads((fixtures / "expected.json").read_text())
+        for name, stdout in json.loads((fixtures / "input.json").read_text()).items():
+            with self.subTest(case=name):
+                evidence = N.read_capture({"exit": 0, "stdout": stdout}, N.SnapshotRegistration(readerPool="reader", limits={}))
+                self.assertEqual(evidence._asdict(), expected)
+
     @example(remaining=0, breakage="quantities-total-not-100")
     @given(
         remaining=st.integers(min_value=0, max_value=100),
@@ -119,6 +128,7 @@ class WholeOutcomes(unittest.TestCase):
     ) -> None:
         """Wrong: a broken window leaks a positive allowance, or loses a reported zero."""
         window: dict[str, object] = {
+            "status": None,
             "remainingPercent": float(remaining),
             "usedPercent": float(100 - remaining),
             "resetsAt": "2026-11-19T01:35:00Z",
@@ -159,6 +169,7 @@ class WholeOutcomes(unittest.TestCase):
         }
         windows = {
             spec.window: {
+                "status": None,
                 "remainingPercent": 50.0,
                 "usedPercent": 50.0,
                 "resetsAt": "2026-11-19T01:35:00Z",
@@ -167,12 +178,12 @@ class WholeOutcomes(unittest.TestCase):
             for spec in limits.values()
         }
         snapshot = N.Snapshot(
-            pools={"budget": N.Registration(readerPool="reader", limits=limits)},
+            pools={"budget": N.SnapshotRegistration(readerPool="reader", limits=limits)},
             readers={} if capture_fails
             else {
                 "budget": N.Capture(
                     exit=0,
-                    stdout=N.Envelope(pool="reader", windows=windows).model_dump_json(),
+                    stdout=reader_stdout(windows),
                 )
             },
             routes=[N.Route(id="canonical-a", maker=None, model="served-fable")],

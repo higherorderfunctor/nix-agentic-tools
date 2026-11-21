@@ -1,0 +1,6 @@
+{
+  "balances-missing": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"bonuses\":[],\"pool\":\"reader\",\"windows\":{}}",
+  "balances-object": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":{},\"bonuses\":[],\"pool\":\"reader\",\"windows\":{}}",
+  "bonuses-missing": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"pool\":\"reader\",\"windows\":{}}",
+  "bonuses-object": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":{},\"pool\":\"reader\",\"windows\":{}}"
+}

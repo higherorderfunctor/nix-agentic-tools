@@ -27,6 +27,7 @@ class Registration(BaseModel):
     """Name the Reader pool and exact windows a configuration registers."""
 
     limits: dict[str, LimitSpec]
+    pin: Nonempty | None
     readerPool: Nonempty
 
     @model_validator(mode="after")
