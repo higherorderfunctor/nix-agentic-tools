@@ -50,8 +50,9 @@ On Linux Home Manager, enable the option in your personal configuration and
 apply it with your ordinary Home Manager activation command (for example,
 `home-manager switch`). The generated user service starts automatically with the
 managed user service lifecycle. Then run `kiro-cli` normally: the Home Manager
-launcher already tracks it. Use `systemctl --user status kiro-usage.service` to
-diagnose readiness failures.
+launcher sets up capture and starts Kiro directly, without an exit supervisor or
+summary. Use `systemctl --user status kiro-usage.service` to diagnose readiness
+failures.
 
 From a project that supplies its own Kiro through devenv, reuse that same Home
 Manager collector:
@@ -68,21 +69,22 @@ contributor project's configuration. Wrapping the already tracked Home Manager
 launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
-By default, after `kiro-usage exec kiro-cli` exits, the tool prints what that
-run captured to standard error: for each root session the run touched, model and
-conversation tables (requests, credits, input, output and cached tokens, cache
-hit). Kiro inherits the terminal's input and output directly; the summary leaves
-standard output, exit status, and signals intact. Tracked interactive chat runs
-as a child of the summary supervisor, with its own process ID and the same
-terminal descriptors. Explicit help, version, login, and administrative commands
-skip the summary, including when recognized global options precede them. Other
-commands run without a Kiro summary.
+When an outer interactive `kiro-usage exec kiro-cli` exits, it prints a card to
+standard error for each root session with calls from that Kiro process, ordered
+by first capture. `/clear` starts a new root, which gets its own card after its
+first captured call. Each card shows model and conversation usage. Kiro inherits
+the terminal's input and output directly, preserving standard output, exit
+status, and signals. Tracked interactive chat runs as a child of the summary
+supervisor, with its own process ID and the same terminal descriptors. Explicit
+help, version, login, and administrative commands skip the summary, including
+when recognized global options precede them. Other commands run without a Kiro
+summary.
 
-`kiro-usage exec` runs quiet Kiro launches directly with a fresh capture marker.
-This applies to `kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
-`--output-format stream-json` before Kiro's `--` separator. Nested launches run
-directly with their parent's marker. These launches skip the supervisor, capture
-wait, and exit card, and their requests still appear in usage history.
+`kiro-usage exec` runs quiet Kiro launches directly. This applies to
+`kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
+`--output-format stream-json` before Kiro's `--` separator. Nested launches also
+run directly. Both skip the supervisor, capture wait, and exit cards. Their
+requests still appear in usage history.
 
 Daemons and scripts that run tracked interactive launches without a person
 watching can use `kiro-usage exec --no-summary kiro-cli …` to skip the capture
@@ -107,20 +109,28 @@ ai.kiro.cli.usageTracking.summary = {
 [The collector notes](../usage/README.md) list the style elements, their
 defaults and the spec grammar.
 
-A local proxy marker identifies captures from this invocation, and their
-recorded conversation identities select the sessions to report. The tool does
-not parse Kiro's screen or guess a session from its process ID. Switching or
-forking a session with `/chat` inside one run touches several root sessions, so
-no single session view describes a run: the summary prints one block per root
-session, each counting only this run's captured calls whose root conversation
-ID, or else own conversation ID, names that root. Earlier runs of a resumed
-session, other runs and calls matched only through the disk index stay out. For
-a whole session, earlier runs included, run `kiro-usage report --session ID`,
-repeated for each root. Root conversation contains calls whose conversation ID
-matches the selected root; Other linked conversations have a different ID;
-Unknown has no recorded conversation ID. These are conversation groups, not
-caller roles: workflow steps and subagents carry their own conversation IDs and
-land in other linked conversations, which can also include helpers or forks.
+Every tracked Kiro process gets its own invocation marker and carries the marker
+of the outermost tracked launch. Captures record both. On the outermost launch
+both values are the same. Older captures with one marker use it for both. Native
+subagents and workflow steps keep the launching Kiro process's marker. A
+workflow that starts a new tracked `kiro-cli` gets a fresh process marker and
+keeps the outermost marker, just like any nested tracked Kiro launch.
+
+Each own card counts captures with that process's marker and the given root. The
+root is the recorded root conversation ID, falling back to the call's
+conversation ID. Switching or forking with `/chat` can also touch several roots.
+Earlier runs of a resumed session and disk matches stay out of these totals. For
+the whole session, run `kiro-usage report --session ID` for each root.
+
+The last own card adds **External runs** only when captures with the same
+outermost marker and a different process marker identify at least one root. The
+section shows the number of distinct external roots, Model and Conversation
+tables, and its own Total below the card's Total. In each card and in the
+external section, Main matches a call's conversation ID to its own root, Sub/WF
+groups other linked conversations, and Unknown counts calls with a known root
+and no conversation ID. Native delegates usually appear under Sub/WF, along with
+any other linked conversations.
+
 Disk turn credits never enter these captured-call totals. Requests,
 total/input/output/cached tokens, cache-hit token share, and credits are grouped
 by model and pool, with no per-delegate listing. Missing counters stay
@@ -154,9 +164,8 @@ identity, the tool reports that the summary is unavailable. Tracked exits do no
 session discovery or disk indexing. The capture summary waits up to two seconds
 for this launch's calls to finish and stay unchanged for 0.1 s. A call started
 just before Kiro exits can still persist after that quiet period. If the wait
-times out, unfinished calls stay flagged as incomplete coverage. Nested
-`kiro-usage exec` launches share the parent's marker and run directly. Only a
-supervised outer launch can print a summary.
+times out, unfinished calls stay flagged as incomplete coverage. If only
+external roots were captured, the tool points to the whole-session report.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
