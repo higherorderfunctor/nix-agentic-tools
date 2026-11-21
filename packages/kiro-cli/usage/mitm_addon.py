@@ -16,6 +16,7 @@ RESPONSES, RPC, GENERATE = "/v1/responses", "/", "KiroRuntimeService.GenerateAss
 
 class UsageCapture:
     def load(self, loader):
+        """Open the configured usage store on addon startup so selected requests can be captured."""
         self.active, self.collector, self.failed = {}, None, True
         self.invocations: dict[str, InvocationMarkers] = {}
         try:
@@ -38,12 +39,14 @@ class UsageCapture:
         return self.invocations.get(client.id)
 
     def http_connect(self, flow):
+        """Keep the CONNECT flow's launch markers for later requests on the tunnel."""
         self._client_markers(flow)
 
     def client_disconnected(self, client):
         self.invocations.pop(client.id, None)
 
     def request(self, flow):
+        """Start a capture for a selected Kiro request so response hooks can finish it."""
         markers = self._client_markers(flow)
         host = flow.request.host.lower()
         if not (host == "kiro.dev" or host.endswith(".kiro.dev")):

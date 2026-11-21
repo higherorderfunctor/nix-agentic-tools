@@ -73,19 +73,20 @@ FACTS = {"extra_chars": EXTRA_OUTPUT_CHARS,
         OR EXISTS(SELECT 1 FROM json_each(item.value,'$.content') part
           WHERE coalesce(json_extract(part.value,'$.type'),'')!='output_text'
           OR coalesce(json_type(part.value,'$.text'),'')!='text')))"""}
-CONVERSATION_POOL = """CASE WHEN nullif(json_extract({metadata},'$."kiro:conversation_id"'),'') IS NULL THEN 'unknown'
-    WHEN json_extract({metadata},'$."kiro:conversation_id"') IN ({roots}) THEN 'root_conversation'
+CONVERSATION_ID = """nullif(json_extract({table}.metadata_json,'$."kiro:conversation_id"'),'')"""
+CHOSEN_CONVERSATION = CONVERSATION_ID.format(table="chosen")
+CONVERSATION_POOL = """CASE WHEN {conversation} IS NULL THEN 'unknown'
+    WHEN {conversation} IN ({roots}) THEN 'root_conversation'
     ELSE 'other_linked_conversations' END"""
 CONVERSATION_POOLS = ("other_linked_conversations", "root_conversation", "unknown")
 STORE_CONVERSATION_POOL = CONVERSATION_POOL.format(
-    metadata="chosen.metadata_json", roots="""json_extract(chosen.metadata_json,'$."kiro:root_conversation_id"')""")
+    conversation=CHOSEN_CONVERSATION, roots="""json_extract(chosen.metadata_json,'$."kiro:root_conversation_id"')""")
 # Group keys over the chosen CTE. DAY is a call's local start day, in the process time zone (TZ).
 # Integer division: /1e9 rounds a call in the last microsecond before midnight into the next day.
 DAY = "date({}.started_utc_ns/1000000000,'unixepoch','localtime')"
 MODEL = "json_extract(chosen.metadata_json,'$.model')"
-# A call's run identity over captures c: its root conversation, else its own. The exec exit summary draws one block per value.
-RUN_ROOT = """coalesce(nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),''),
-    nullif(json_extract(c.metadata_json,'$."kiro:conversation_id"'),''))"""
+RUN_ROOT = f"""coalesce(nullif(json_extract(c.metadata_json,'$."kiro:root_conversation_id"'),''),
+    {CONVERSATION_ID.format(table="c")})"""
 SUMS = ",".join(f"sum({name}) AS {name},count({name}) AS {name}_known" for name in DIMENSIONS) + """,
     sum(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN input_tokens+output_tokens END) AS total_tokens,
     count(CASE WHEN input_tokens IS NOT NULL AND output_tokens IS NOT NULL THEN 1 END) AS total_tokens_known,
@@ -131,7 +132,7 @@ def window(since=None, until=None):
 def chosen_calls(where):
     """The chosen CTE: captures c matching where, with the columns aggregate, its groups and call_reports read."""
     columns = ",".join("c." + name for name in ("id", "metadata_json", "response_json", "started_utc_ns", "state", "completion_seen", *DIMENSIONS))
-    return f"""WITH chosen AS (SELECT {columns},json_extract(c.summary_json,'$.terminal') AS terminal,
+    return f"""WITH chosen AS (SELECT {columns},{RUN_ROOT} AS run_root,json_extract(c.summary_json,'$.terminal') AS terminal,
         json_extract(c.summary_json,'$.metering_events') AS metering_events FROM captures c WHERE {where}) """
 
 
@@ -156,16 +157,20 @@ def aggregate(db, chosen, parameters, partitions):
     return captures, groups
 
 
-def session_captures(db, session, chosen=None, parameters=()):
-    """A captures section around session's ID: the chosen calls' total, requested-model groups and conversation
-    pools, or an unavailable empty one without chosen."""
+def session_pool_partition(session):
+    """Match the selected session and its bare ID for own-run and history conversation pools."""
+    return CONVERSATION_POOL.format(conversation=CHOSEN_CONVERSATION, roots="?,?"), (session, session.removeprefix("sess_"))
+
+
+def session_captures(db, pool_partition, chosen=None, parameters=()):
+    """For run and history reports, return chosen usage by model and conversation pool, or an unavailable section."""
     captures = {"available": chosen is not None, **group(None),
                 "pools": {pool: group(None) for pool in CONVERSATION_POOLS}}
     if chosen is None:
         return captures
     total, groups = aggregate(db, chosen, parameters, {
         "models": (MODEL, ()),
-        "pools": (CONVERSATION_POOL.format(metadata="chosen.metadata_json", roots="?,?"), (session, session.removeprefix("sess_")))})
+        "pools": pool_partition})
     captures.update(total)
     captures["models"] = [{"requested_model": model, **source} for model, source in groups["models"].items()]
     captures["pools"].update(groups["pools"])
@@ -176,7 +181,7 @@ def launch_captures(db, invocation):
     """Return ordered capture IDs, process markers, roots, and states for exit polling and card selection."""
     return db.execute(f"""
         SELECT c.id,{CAPTURE_INVOCATION},{RUN_ROOT},c.state FROM captures c
-        WHERE {CAPTURE_INVOCATION}=? OR ({CAPTURE_OUTERMOST_INVOCATION}=? AND {CAPTURE_INVOCATION} IS NOT NULL)
+        WHERE {CAPTURE_INVOCATION}=? OR {CAPTURE_OUTERMOST_INVOCATION}=?
         ORDER BY c.started_utc_ns,c.id
     """, (invocation, invocation)).fetchall()
 
@@ -188,7 +193,25 @@ def run_report(db, invocation, session):
     chosen = chosen_calls(f"{CAPTURE_INVOCATION}=? AND {RUN_ROOT} IN (?,?)")
     with snapshot(db):
         return {"session": session, "scope": "this run",
-                "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
+                "captures": session_captures(db, session_pool_partition(session), chosen, (invocation, session, session.removeprefix("sess_")))}
+
+
+def bare_session_sql(expression):
+    """Strip an optional sess_ prefix in SQL so external roots and conversations compare by identity."""
+    return f"CASE WHEN substr({expression},1,5)='sess_' THEN substr({expression},6) ELSE {expression} END"
+
+
+def external_runs(db, invocation):
+    """Return the external root count and usage for the last own card, using the caller's exit snapshot."""
+    parameters = (invocation, invocation)
+    chosen = chosen_calls(f"""{CAPTURE_OUTERMOST_INVOCATION}=? AND {CAPTURE_INVOCATION}!=?
+        AND typeof({RUN_ROOT})='text'""")
+    root = bare_session_sql("chosen.run_root")
+    count = db.execute(chosen + f"SELECT count(DISTINCT {root}) FROM chosen", parameters).fetchone()[0]
+    if not count:
+        return None
+    pool = CONVERSATION_POOL.format(conversation=bare_session_sql(CHOSEN_CONVERSATION), roots=root)
+    return count, session_captures(db, (pool, ()), chosen, parameters)
 
 
 def history_reader(database: Path, sessions: tuple[str, ...], *, refresh: bool):
@@ -301,7 +324,8 @@ def query(db, session, scope="session", since=None, until=None):
                 SELECT model_id,count(*) AS sessions FROM disk_sessions WHERE path IN ({path_marks}) GROUP BY model_id
             """, paths)]
         report["disk"] = disk
-        captures = session_captures(db, session)
+        pool_partition = session_pool_partition(session)
+        captures = session_captures(db, pool_partition)
         if "captures" not in tables:
             captures["unavailable_reason"] = "No capture source has initialized this database."
         if "captures" in tables:
@@ -332,7 +356,7 @@ def query(db, session, scope="session", since=None, until=None):
             bounded, bounds = window(since, until)
             chosen = chosen_calls(f"""(json_extract(c.metadata_json,'$.\"kiro:conversation_id\"') IN ({placeholders}) {joins}) AND {bounded}""")
             parameters += bounds
-            captures.update(session_captures(db, session, chosen, parameters))
+            captures.update(session_captures(db, pool_partition, chosen, parameters))
             if scope == "tree":
                 report["sessions"] = sorted(selected | {
                     session_id(name)
@@ -585,14 +609,13 @@ def by_credits(models):
     return [(model["requested_model"], model) for model in sorted(models, key=order)]
 
 
-def summary_text(title, captures, caveats=(), theme=summary_theme.PLAIN):
-    """Store, session and run summaries: headline, model and conversation tables, then caveats."""
+def summary_section(captures, caveats, warning_icon, paint):
+    """Return the painted tables, caveats and rule positions for one section of a usage summary."""
     pools = captures["pools"]
     conversations = [(label, pools[pool]) for label, pool in (("Main", "root_conversation"), ("Sub/WF", "other_linked_conversations"), ("Unknown", "unknown"))
                      if label != "Unknown" or pools[pool]["observations"]]
     blocks = [("Model", "model", by_credits(captures["models"]), False), ("Conversation", "label", conversations, True)] if captures.get("available", True) else []
     n, credits = captures["observations"], captures["metrics"]["credits"]
-    headline = f"Kiro usage · {title} · {plural(n, 'request')} · {value(credits_text(credits['observed_sum']))} credits"
     show_discount = shows_discount(captures)
     def row(label, source):
         discount = source["credit_discount"]["percentage"]
@@ -617,36 +640,59 @@ def summary_text(title, captures, caveats=(), theme=summary_theme.PLAIN):
                *([f"tokens missing for {missing_tokens:,}"] if missing_tokens else []),
                *([plural(duplicates, "duplicate request ID")] if duplicates else []),
                *([plural(metered, "multi-metered call")] if metered else []), *caveats]
-    def lines(paint):
-        def cell(block, number, column, text):
-            # A Total block ends [rule, Total]; ~ cells are estimates whatever their column.
-            if column is None or number == 0:
-                return paint(("rule" if column is None else "header",), text)
-            element = (blocks[block][1] if column == 0 else "muted" if text == "—" else "estimate" if text.startswith("~")
-                       else {2: "credits", 5: "cached"}.get(column, "number"))
-            return paint(("total", element) if blocks[block][3] and number == len(rows[block]) else (element,), text)
-        tables_text = tables([([header, *columns], block_rows) for (header, *_), block_rows in zip(blocks, rows)],
-                             range(1, len(columns) + 1), cell) if blocks else []
-        return [paint(("headline",), theme["icons"]["headline"] + headline),
-                *(line for block in tables_text for line in ["", *block.split("\n")]),
-                *([paint(("warning",), theme["icons"]["warning"] + "; ".join(caveats))] if caveats else [])]
-    styled = lines(summary_theme.painter(theme))
+    def cell(block, number, column, text):
+        """Style a tables cell by its block, row and column, layering Total style on the final row of a block with totals."""
+        if column is None or number == 0:
+            return paint(("rule" if column is None else "header",), text)
+        element = (blocks[block][1] if column == 0 else "muted" if text == "—" else "estimate" if text.startswith("~")
+                   else {2: "credits", 5: "cached"}.get(column, "number"))
+        return paint(("total", element) if blocks[block][3] and number == len(rows[block]) else (element,), text)
+    tables_text = tables([([header, *columns], block_rows) for (header, *_), block_rows in zip(blocks, rows)],
+                         range(1, len(columns) + 1), cell) if blocks else []
+    lines, rules = [], set()
+    for block, block_rows in zip(tables_text, rows):
+        if RULE in block_rows:
+            rules.add(len(lines) + 2 + block_rows.index(RULE))
+        lines.extend(["", *block.split("\n")])
+    if caveats:
+        lines.append(paint(("warning",), warning_icon + "; ".join(caveats)))
+    return lines, rules
+
+
+def summary_text(title, captures, caveats=(), theme=summary_theme.PLAIN, *, external=None):
+    """Render a run or history summary in one card, with an optional external section for exit summaries."""
+    credits = value(credits_text(captures["metrics"]["credits"]["observed_sum"]))
+    requests = plural(captures["observations"], "request")
+    headline = f"{theme['icons']['headline']}Kiro usage · {title} · {requests} · {credits} credits"
+    warning_icon = theme["icons"]["warning"]
+
+    def card_lines(paint):
+        """Compose the card and its rule offsets with the supplied painter for plain widths or styled output."""
+        sections = [([paint(("headline",), headline)], captures, () if external else caveats)]
+        if external:
+            count, external_captures = external
+            heading = ["", paint(("header",), "External runs"), paint(("muted",), plural(count, "session"))]
+            sections.append((heading, external_captures, caveats))
+        lines, rules = [], set()
+        for heading, source, warnings in sections:
+            lines.extend(heading)
+            section, section_rules = summary_section(source, warnings, warning_icon, paint)
+            rules.update(index + len(lines) for index in section_rules)
+            lines.extend(section)
+        return lines, rules
+
+    styled, rules = card_lines(summary_theme.painter(theme))
     if not theme["border"]:
         return "\n".join(styled)
-    # Each table follows a blank line and opens with its header; a Total row's rule sits just above it.
-    rules, start = set(), 1
-    for block_rows, (*_, total) in zip(rows, blocks):
-        if total:
-            rules.add(start + len(block_rows))
-        start += 2 + len(block_rows)
-    return "\n".join(summary_theme.box(theme, lines(summary_theme.painter(summary_theme.PLAIN)), styled, rules))
+    plain, _ = card_lines(summary_theme.painter(summary_theme.PLAIN))
+    return "\n".join(summary_theme.box(theme, plain, styled, rules))
 
 
-def render_summary(report, caveats=(), theme=summary_theme.PLAIN):
-    """One session or run report's exit summary: a model table and a conversation table with a Total row."""
+def render_summary(report, caveats=(), theme=summary_theme.PLAIN, *, external=None):
+    """Render a session or exit report's capture tables, with optional external usage from the exit caller."""
     captures = report["captures"]
     return summary_text(f"{report['session'][:len('sess_') + 8]} · {report['scope']}", captures,
-                        [*([] if captures["available"] else ["capture unavailable"]), *caveats], theme)
+                        [*([] if captures["available"] else ["capture unavailable"]), *caveats], theme, external=external)
 
 
 def calculator_text(reports):

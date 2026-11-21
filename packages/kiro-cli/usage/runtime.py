@@ -134,10 +134,13 @@ def environment(path: Path, port: int, launcher_pid: int, launcher_parent_pid: i
     """Print shell settings for the managed launcher, keeping an immediate explicit exec's identity."""
     inherited = inherited_markers()
     kind, _, identity = os.environ.get(LAUNCH_HANDOFF, "").partition(":")
-    pid, _, start = identity.partition(":")
+    pid, separator, start = identity.partition(":")
     launcher = {"self": launcher_pid, "parent": launcher_parent_pid}.get(kind)
-    prepared = (inherited is not None and launcher is not None and pid == str(launcher)
-                and bool(start) and start == process_start_time(launcher))
+    prepared = False
+    if inherited is not None and launcher is not None and separator and pid == str(launcher):
+        actual_start = process_start_time(launcher)
+        # A reused PID is indistinguishable when either start time is unavailable.
+        prepared = not start or actual_start is None or start == actual_start
     markers = inherited if prepared else new_markers(inherited)
     values = launch_environment(path, port, markers, inherited=inherited)
     print(f"unset {LAUNCH_HANDOFF}")
@@ -180,7 +183,9 @@ SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to pers
 def read_only(path):
     """settle_captures and invocation_summary never create or write the store."""
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
-    return closing(sqlite3.connect(uri, uri=True, timeout=.1))
+    db = sqlite3.connect(uri, uri=True, timeout=.1)
+    db.row_factory = sqlite3.Row
+    return closing(db)
 
 
 def settle_captures(path, invocation):
@@ -219,7 +224,7 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """Print an exit card per root captured by this process, using the launch family's settle result and theme."""
     from capture import snapshot
     from disk_index import session_id
-    from query import launch_captures, render_summary, run_report
+    from query import external_runs, launch_captures, render_summary, run_report
     import summary_theme
     try:
         database = path / "usage.sqlite3"
@@ -243,11 +248,13 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
                 return
             theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
             reports = [run_report(db, invocation, session) for session in sessions]
+            external = external_runs(db, invocation)
         # A timed-out call can finish before the snapshot, so the wait outcome still matters.
         caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, _, state in rows) else []),
                    *(["calls with no conversation identity excluded"] if len(identified) < len(rows) else [])]
-        for report in reports:
-            print("\n" + render_summary(report, caveats if report is reports[-1] else (), theme), file=sys.stderr)
+        for report in reports[:-1]:
+            print("\n" + render_summary(report, theme=theme), file=sys.stderr)
+        print("\n" + render_summary(reports[-1], caveats, theme, external=external), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 
@@ -348,9 +355,9 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
     direct = not tracked or inherited is not None or quiet
     markers = new_markers(inherited) if tracked else inherited
     child_environment = launch_environment(path, port, markers, refuse_conflicts=False)
-    pid = os.getpid()
-    start = process_start_time(pid) if tracked else None
-    if start is not None:
+    if tracked:
+        pid = os.getpid()
+        start = process_start_time(pid) or ""
         child_environment[LAUNCH_HANDOFF] = f"{'self' if direct else 'parent'}:{pid}:{start}"
     else:
         child_environment.pop(LAUNCH_HANDOFF, None)

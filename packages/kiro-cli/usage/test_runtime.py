@@ -450,6 +450,82 @@ class HistoryRefreshTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_external_runs_on_last_card(self):
+        """Group nested processes by effective root and report their usage only on the last own card."""
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            outer = "a" * 32
+            collector = Collector(state / "usage.sqlite3")
+            self.addCleanup(collector.close)
+
+            def record(process, family, model, conversation, root, credits, request_id, usage, **response_fields):
+                """Record a fixture request and its terminal Responses event through the collector."""
+                metadata = {key: value for key, value in (
+                    ("kiro:conversation_id", conversation), ("kiro:root_conversation_id", root),
+                ) if value is not None}
+                ident = collector.begin({"invocation": process * 32, "outermost_invocation": family * 32},
+                                        json.dumps({"model": model, "metadata": metadata}).encode())
+                collector.headers(ident, {"content_type": "text/event-stream", "upstream_request_id": request_id})
+                terminal = {"type": "response.completed", "response": {
+                    **response_fields, "usage": {**usage, "kiro:credits": {"unit": "credit", "value": credits}},
+                }}
+                collector.chunk(ident, b"data: " + json.dumps(terminal).encode() + b"\n\n")
+                collector.finish(ident)
+
+            for process, family, model, conversation, root, credits, request_id in (
+                ("a", "a", "auto", "sess_first", None, 1, "own-first"),
+                ("a", "a", "auto", "sess_second", None, 2, "own-second"),
+                ("b", "a", "auto", "second", "sess_second", 3, "shared"),
+                ("c", "a", "auto", "sess_second", "second", 4, "repeat"),
+                ("d", "a", "opus", "sess_nested", None, 5, "shared"),
+                ("b", "a", "opus", "sess_nested", "second", 6, "delegate"),
+                ("d", "a", "auto", None, "nested", 7, "unknown"),
+                ("d", "a", "auto", None, None, 100, "unidentified"),
+                ("e", "e", "auto", "sess_second", "sess_nested", 100, "foreign"),
+            ):
+                usage = {"input_tokens": 20 if model == "opus" else 10, "output_tokens": 1,
+                         "input_tokens_details": {"cached_tokens": min(credits, 10)}}
+                record(process, family, model, conversation, root, credits, request_id, usage)
+            model = "claude-haiku-4.5"
+            record("d", "a", model, "sess_nested", None, .0003, "estimated",
+                   {"kiro:context_usage_percentage": .05},
+                   output=[{"type": "message", "content": [{"type": "output_text", "text": "pong"}]}])
+            record("d", "a", model, "sess_nested", None, 1, "unpaired",
+                   {"input_tokens": 100, "output_tokens": 2})
+            collector.close()
+            with contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(state, outer, 1 << 30)
+
+        text = output.getvalue()
+        self.assertEqual(text.count("External runs"), 1)
+        first, last = text.split("Kiro usage · ")[1:]
+        self.assertTrue(first.startswith("sess_first · this run · 1 request · 1.00 credits\n"))
+        self.assertTrue(last.startswith("sess_second · this run · 1 request · 2.00 credits\n"))
+        own, external = last.split("\nExternal runs\n")
+        self.assertEqual(first.rstrip().splitlines()[-1].split(), ["Total", "1", "1.00", "10", "1", "1", "~10%"])
+        self.assertEqual(own.rstrip().splitlines()[-1].split(), ["Total", "1", "2.00", "10", "1", "2", "~20%"])
+        count, blank, header, *lines = external.splitlines()
+        self.assertEqual((count, blank, header.split()),
+                         ("2 sessions", "", ["Model", "Requests", "Credits", "In", "Out", "Cached", "Cache", "hit"]))
+        expected_rows = [
+            ["auto", "3", "14.00", "30", "3", "14", "~47%"],
+            ["opus", "2", "11.00", "40", "2", "11", "~28%"],
+            ["claude-haiku-4.5", "2", "1.00", "~199", "~3", "~68", "~69%"],
+            ["Main", "5", "13.00", "~239", "~6", "~80", "~58%"],
+            ["Sub/WF", "1", "6.00", "20", "1", "6", "~30%"],
+            ["Unknown", "1", "7.00", "10", "1", "7", "~70%"],
+            ["Total", "7", "26.00", "~269", "~8", "~93", "~55%"],
+        ]
+        labels = [row[0] for row in expected_rows]
+        rows = [cells for line in lines if (cells := line.split()) and cells[0] in labels]
+        self.assertEqual([row[0] for row in rows], labels)
+        for actual, expected in zip(rows, expected_rows):
+            with self.subTest(row=expected[0]):
+                self.assertEqual(actual, expected)
+        self.assertTrue(external.endswith("⚠ 1 duplicate request ID; calls with no conversation identity excluded\n"))
+        self.assertEqual(text.count("calls with no conversation identity excluded"), 1)
+        self.assertEqual(text.count("duplicate request ID"), 1)
+
     def test_exact_sessions_and_unknown_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -534,12 +610,11 @@ class SummaryTests(unittest.TestCase):
             ))
 
     def test_run_without_captures_points_to_the_session_report(self):
-        """A foreign process marker and an outermost-only marker both leave the launch empty."""
+        """A call with a foreign process marker leaves the launch empty."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
-            for markers in ({"invocation": "b" * 32}, {"outermost_invocation": "a" * 32}):
-                collector.finish(collector.begin(markers, b'{"metadata":{"kiro:conversation_id":"sess_resumed"}}'))
+            collector.finish(collector.begin({"invocation": "b" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_resumed"}}'))
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
@@ -690,7 +765,7 @@ class SummaryTests(unittest.TestCase):
             self.assertNotIn("capture writer still has unfinished calls", output.getvalue())
 
     def test_settle_requires_quiet_period_before_deadline(self):
-        """Use a finished fixture capture to distinguish quiet polls before and after the deadline."""
+        """A finished capture settles only when the quiet poll precedes the deadline."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             invocation = "a" * 32
@@ -699,6 +774,7 @@ class SummaryTests(unittest.TestCase):
             collector.close()
             for label, quiet_poll, expected in (
                 ("after deadline", 2.03125, False),
+                ("at deadline", 2.0, False),
                 ("before deadline", 1.984375, True),
             ):
                 with (self.subTest(label),
@@ -753,31 +829,52 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("unavailable", output.getvalue())
             self.assertFalse((root / "usage.sqlite3").exists())
 
-    def test_stale_handoff_mints_a_fresh_marker(self):
-        """Simulate PID reuse between explicit exec and a managed launch."""
-        path = Path("/unused")
+    def test_supervised_handoff_preserves_capture_ownership(self):
+        """Close a supervised launch after recording a call with the managed child's exported markers."""
         port = 19001
-        outermost = "a" * 32
-        with (
-            patch.dict(os.environ, {runtime.INVOCATION: outermost}, clear=True),
-            patch.object(runtime, "process_start_time", create=True, return_value="100") as start_time,
-            patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="b" * 32)),
-            patch.object(runtime, "launch_environment", return_value={}) as launch,
-            patch.object(os, "execvpe") as execute,
-            contextlib.redirect_stdout(io.StringIO()),
+        supervisor = os.getpid()
+        card = "Kiro usage · sess_own · this run · 1 request"
+        for name, producer_start, receiver_start, process, expected in (
+            ("producer lookup fails", None, "100", "a", card),
+            ("receiver lookup fails", "100", None, "a", card),
+            ("stale handoff", "100", "200", "b", "no own root session was captured this run"),
         ):
-            runtime.exec_command(path, port, 1 << 30, ["kiro-cli", "chat"])
-            handoff = execute.call_args.args[2][runtime.LAUNCH_HANDOFF]
-            start_time.return_value = "200"
-            inherited = runtime.InvocationMarkers("b" * 32, outermost)
-            with patch.dict(os.environ, {
-                runtime.INVOCATION: inherited.invocation,
-                runtime.OUTERMOST_INVOCATION: inherited.outermost_invocation,
-                runtime.LAUNCH_HANDOFF: handoff,
-            }), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="c" * 32)):
-                runtime.environment(path, port, os.getpid(), os.getppid())
-            launch.assert_called_with(path, port, runtime.InvocationMarkers("c" * 32, outermost),
-                                      inherited=inherited)
+            with (
+                self.subTest(case=name), tempfile.TemporaryDirectory() as directory,
+                patch.dict(os.environ, {}, clear=True),
+                patch.object(socket, "create_connection"),
+                patch.object(runtime, "process_start_time", side_effect=(producer_start, receiver_start)),
+                patch.object(runtime, "uuid") as launch_uuid,
+                contextlib.redirect_stderr(io.StringIO()) as output,
+            ):
+                launch_uuid.uuid4.side_effect = (SimpleNamespace(hex="a" * 32), SimpleNamespace(hex="b" * 32))
+                root = Path(directory)
+                cert = root / "ca" / "mitmproxy-ca-cert.pem"
+                cert.parent.mkdir(mode=0o700)
+                cert.write_text("fixture CA")
+                captured = {}
+
+                def managed_child(_command, _arguments, values):
+                    """Apply the managed wrapper's exports to one fixture capture in place of running Kiro."""
+                    with patch.dict(os.environ, values, clear=True), contextlib.redirect_stdout(io.StringIO()) as exports:
+                        runtime.environment(root, port, supervisor + 1, supervisor)
+                    settings = dict(shlex.split(line)[1].split("=", 1) for line in exports.getvalue().splitlines()
+                                    if line.startswith("export "))
+                    captured.update(invocation=settings[runtime.INVOCATION],
+                                    outermost_invocation=settings[runtime.OUTERMOST_INVOCATION])
+                    collector = Collector(root / "usage.sqlite3")
+                    try:
+                        collector.finish(collector.begin(captured.copy(), b'{"metadata":{"kiro:conversation_id":"sess_own"}}'))
+                    finally:
+                        collector.close()
+                    return 0
+
+                with patch.object(runtime, "wait_command", side_effect=managed_child) as wait:
+                    self.assertEqual(runtime.exec_command(root, port, 1 << 30, ["kiro-cli", "chat"]), 0)
+                self.assertIn(expected, output.getvalue())
+                self.assertEqual(captured, {"invocation": process * 32, "outermost_invocation": "a" * 32})
+                self.assertEqual(wait.call_args.args[2][runtime.LAUNCH_HANDOFF],
+                                 f"parent:{supervisor}:{producer_start or ''}")
 
     def test_darwin_start_time_handoff(self):
         """Run the exec and environment handoff with literal Darwin ps output."""
@@ -788,18 +885,20 @@ class SummaryTests(unittest.TestCase):
         prepared = runtime.InvocationMarkers("b" * 32, outermost)
         timestamp = "Sat Nov  7 12:34:56 2026"
         handoff = f"self:{pid}:Sat Nov  7 12:34:56 2026"
+        ps_command = ["/bin/ps", "-o", "lstart=", "-p", str(pid)]
         cases = (
-            ("Darwin timestamp is preserved", timestamp + "\n", timestamp + "\n", handoff, "b"),
-            ("producer lookup fails", "", timestamp + "\n", None, "c"),
-            ("receiver lookup fails", timestamp + "\n", "", handoff, "c"),
+            ("Darwin timestamp is preserved", timestamp + "\n", timestamp + "\n", handoff),
+            ("producer lookup fails", "", timestamp + "\n", f"self:{pid}:"),
+            ("receiver lookup fails", timestamp + "\n", "", handoff),
         )
-        for name, producer_output, receiver_output, expected_handoff, expected_marker in cases:
+        for name, producer_output, receiver_output, expected_handoff in cases:
             with (
                 self.subTest(case=name),
                 patch.dict(os.environ, {
                     runtime.INVOCATION: "d" * 32,
                     runtime.OUTERMOST_INVOCATION: outermost,
                     runtime.LAUNCH_HANDOFF: f"self:{pid}:stale",
+                    "LC_ALL": "POSIX",
                 }, clear=True),
                 patch.object(sys, "platform", "darwin"),
                 patch.object(subprocess, "check_output", return_value=producer_output) as ps,
@@ -811,18 +910,20 @@ class SummaryTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()),
             ):
                 runtime.exec_command(path, port, 1 << 30, ["kiro-cli", "chat"])
+                ps.assert_called_once_with(ps_command, env=os.environ | {"LC_ALL": "C"},
+                                           stderr=subprocess.DEVNULL, text=True)
                 launch.assert_called_once_with(path, port, prepared, refuse_conflicts=False)
                 child_environment = execute.call_args.args[2]
                 self.assertEqual(child_environment.get(runtime.LAUNCH_HANDOFF), expected_handoff)
+                ps.reset_mock()
                 ps.return_value = receiver_output
                 with patch.dict(os.environ, child_environment | {
                     runtime.INVOCATION: prepared.invocation,
                 }, clear=True):
                     runtime.environment(path, port, pid, os.getppid())
-                launch.assert_called_with(
-                    path, port, runtime.InvocationMarkers(expected_marker * 32, outermost),
-                    inherited=prepared,
-                )
+                    ps.assert_called_once_with(ps_command, env=os.environ | {"LC_ALL": "C"},
+                                               stderr=subprocess.DEVNULL, text=True)
+                launch.assert_called_with(path, port, prepared, inherited=prepared)
 
     def test_darwin_start_time_unavailable(self):
         """Require an unavailable Darwin ps timestamp to return None to launchers."""
@@ -835,9 +936,11 @@ class SummaryTests(unittest.TestCase):
             with (
                 self.subTest(case=name),
                 patch.object(sys, "platform", "darwin"),
-                patch.object(subprocess, "check_output", return_value="", side_effect=error),
+                patch.object(subprocess, "check_output", return_value="", side_effect=error) as ps,
             ):
                 self.assertIsNone(runtime.process_start_time(4321))
+                ps.assert_called_once_with(["/bin/ps", "-o", "lstart=", "-p", "4321"],
+                                           env=os.environ | {"LC_ALL": "C"}, stderr=subprocess.DEVNULL, text=True)
 
     def test_linux_start_time_skips_parentheses_in_command(self):
         """Require the Linux stat reader to find field 22 after the full command name."""
@@ -1188,6 +1291,7 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             self.assertEqual(runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", "chat"]), 23)
 
     def test_marker_parser_strips_headers_and_cleans_connections(self):
+        """Check that CONNECT strips proxy credentials and disconnect drops the stored marker."""
         addon = UsageCapture()
         addon.invocations = {}
         connection = SimpleNamespace(id="local-one")

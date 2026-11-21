@@ -126,10 +126,12 @@ def run(mitmdump, addon):
                         raise AssertionError("offline router did not load: " + log_path.read_text())
                     time.sleep(.05)
                 marker = "a" * 32
-                authorization = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
+                outermost = "b" * 32
                 for (path, target), (request_entity, request_encoding, _, _, entity) in routes.items():
                     if target == limits:
                         releases[path, target].set()  # unselected: mitmproxy buffers it, so no first-byte ordering
+                    markers = f"{marker}.{outermost}" if target == generate else marker
+                    authorization = "Basic " + base64.b64encode(f"kiro-usage-{markers}:".encode()).decode()
                     client = HTTPConnection("127.0.0.1", proxy_port, timeout=3)
                     client.set_tunnel("runtime.us-east-1.kiro.dev", 443, headers={"Proxy-Authorization": authorization})
                     client.request("POST", path + "?ignored=private-query",
@@ -182,7 +184,9 @@ def run(mitmdump, addon):
             assert request == request_body
             assert row["request_sha256"] == hashlib.sha256(request_body).hexdigest()
             assert row["response_sha256"] == hashlib.sha256(body).hexdigest()
-            assert json.loads(row["metadata_json"])["invocation"] == "a" * 32 and "target" not in json.loads(row["metadata_json"])
+            metadata = json.loads(row["metadata_json"])
+            assert (metadata["invocation"], metadata["outermost_invocation"]) == ("a" * 32, "a" * 32), metadata
+            assert "target" not in metadata
             metadata = row["metadata_json"] + row["response_json"]
             assert "private-" not in metadata, metadata
             assert "synthetic-upstream-request" in metadata
@@ -199,7 +203,8 @@ def run(mitmdump, addon):
             assert request == stream_request
             assert row["response_sha256"] == hashlib.sha256(b"".join(frames)).hexdigest()
             metadata = json.loads(row["metadata_json"])
-            assert (metadata["invocation"], metadata["target"], metadata["kiro:conversation_id"], metadata["model"]) == ("a" * 32, generate, "sess_stream", "synthetic-model"), metadata
+            assert (metadata["invocation"], metadata["outermost_invocation"]) == ("a" * 32, "b" * 32), metadata
+            assert (metadata["target"], metadata["kiro:conversation_id"], metadata["model"]) == (generate, "sess_stream", "synthetic-model"), metadata
             assert b"".join(c.application for c in chunks) == b"".join(frames)
             assert [e.name for e in events] == ["meteringEvent", "contextUsageEvent", "assistantResponseEvent", "metadataEvent"], [e.name for e in events]
             assert [e.frame for e in events] == frames
