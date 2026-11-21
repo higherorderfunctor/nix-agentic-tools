@@ -1172,18 +1172,19 @@ pace and enforces the strong/frontier review floor. Configure
 example, `runtimes.codex.sessionPool = "codex"` when `pools.codex` exists); null
 warns that the session buffer cannot be certified. With no pools it reports
 fit-only budget uncertainty. Output is JSON plus canonical routing
-specifications; the command never launches delegates. Pool drain and Review use
-this helper as the canonical decision, retaining role fit/trial checks. All
-roles accept unordered exact-family `avoid` and `exclude` lists: exclude removes
-routes with "excluded by caller" and wins overlap; avoid never removes a route
-by itself. Non-avoided routes precede avoided ones, with measured preference
-within each partition and session pace compared globally. Avoided routes retain
-disclosed fallback metadata and advance their resolved base to the next
-supported effort, keeping the top unchanged or intentional null. Try shared
-fallback before reporting no qualified route; never lower floors. Reviewers
-avoid the writer family; cut judges avoid writer and proposer families, using
-fresh separate evaluators. After a failed delegate launch rerun with that family
-in the role's exclude list, retaining other evidence. Unknown
+specifications; the command never launches delegates. Pool drain points to
+Choose execution for launches and Routing helper for the caller contract. See
+the [routing decisions](packages/delegate-routing/docs/routing-helper.md) for
+Reader failures, incomplete windows and session selection. All roles accept
+unordered exact-family `avoid` and `exclude` lists: exclude removes routes with
+"excluded by caller" and wins overlap; avoid never removes a route by itself.
+Non-avoided routes precede avoided ones, with measured preference within each
+partition and session pace compared globally. Avoided routes retain disclosed
+fallback metadata and advance their resolved base to the next supported effort,
+keeping the top unchanged or intentional null. Try shared fallback before
+reporting no qualified route; never lower floors. Reviewers avoid the writer
+family; cut judges avoid writer and proposer families, using fresh separate
+evaluators. Choose execution sets retries by failure type. Unknown
 interactive/headless status never blocks Reader collection or tier/pace policy;
 external launches remain unresolved until the caller supplies mode evidence. See
 the

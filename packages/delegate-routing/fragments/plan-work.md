@@ -23,9 +23,9 @@ The planner reads the resolved routing/workflow policy and task source once,
 then returns a saved JSON plan and prepared human-readable launch briefs in the
 working-data directory the orchestrator provided. Never invent a scratch
 location. Save the full numbered rubric before writing any implementation brief.
-Every worker and every reviewer brief must include its complete text verbatim,
-not a summary or pointer. The orchestrator passes the prepared paths without
-loading every brief into the interactive context.
+Every worker and reviewer brief follows the Rubric step’s verbatim rule. The
+orchestrator passes the prepared paths without loading every brief into the
+interactive context.
 
 Use this JSON contract (paths to rubric and briefs are relative to the saved
 plan; writer file ownership is repository-relative):
@@ -44,14 +44,13 @@ plan; writer file ownership is repository-relative):
   candidate's complete `launch` object), `line` (that same candidate's exact
   pinned routing line), and `brief` (prepared artifact path). Prepare a base
   brief for every reviewer launch, including second-check and judge, before
-  returning the plan; preserve the full rubric and relevant review policy,
-  leaving earlier-check inputs for the orchestrator to add after those checks
-  return. Include every finder, first-check, second-check and judge that will
-  run; the helper's floor never proves fit, trial eligibility or independence.
-  Each record fixes one launch's technique, model and effort; a dynamic
-  workflow's planner may replace them after a fresh helper run. The helper's
-  picker applies avoidFor guidance itself; honor the Review step's trial
-  restrictions.
+  returning the plan; preserve relevant review policy, leaving earlier-check
+  inputs for the orchestrator to add after those checks return. Include every
+  finder, first-check, second-check and judge that will run; the helper's floor
+  never proves fit, trial eligibility or independence. Each record fixes one
+  launch's technique, model and effort; a dynamic workflow's planner may replace
+  them after a fresh helper run. The helper's picker applies avoidFor guidance
+  itself; honor the Review step's trial restrictions.
 - `waves`: ordered lists of unit ids. Put at most ten simultaneous delegates in
   a wave, honoring lower host/user caps. Each unit contributes one concurrent
   delegate because its worker and reviewers run in sequence. Writers in one wave
@@ -88,11 +87,9 @@ plan/check using that runtime's rendered helper and session pool, even if a
 planner in another harness prepares it. The helper validates specifications and
 reads registered Readers; it never executes a delegate or probe.
 
-Execution constraints remain compulsory: Choose execution owns launch selection,
-supervision, retries, isolation and named fallbacks; Work owns hard-rules
-briefs; Review owns independence and trial limits; Validate the result owns
-receipts and evidence. Attach the relevant resolved execution policy to each
-prepared brief. Every external-launch brief says the delegate is non-interactive
-and reports to an orchestrator, not a person; a non-interactive delegate never
-launches external delegates. The orchestrator enforces these constraints before
-launching and checks the working tree after every delegate with shell access.
+Attach the relevant resolved execution policy to each prepared brief. Choose
+execution owns launch selection, supervision, retries, isolation and named
+fallbacks; Work owns hard-rules briefs; Review owns independence and trial
+limits; Validate the result owns receipts and evidence. The orchestrator
+enforces those policies and checks the working tree after every shell-capable
+delegate.

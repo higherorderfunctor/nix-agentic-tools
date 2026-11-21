@@ -27,6 +27,20 @@ retry it or reword it to get past the filter. Check whether a model answers only
 with a tool-less probe agent or a direct API call, never with an ordinary
 workflow agent.
 
+Treat a pool that answers with rate-limit errors as depleted for the rest of the
+session: add its families to each role's `exclude` list in every later launch
+context instead of retrying it per launch.
+
+When a runtime’s root agent runs its own subagents, hand it a unit’s or a PR’s
+whole loop (write, review, fix and fix review) as one job instead of launching
+each step separately. Its brief carries the Work and Review steps without
+weakening them.
+
+When local validation cannot run, such as a held shared lock or an unreachable
+cache, push the reviewed unit or branch and let CI run its checks instead of
+working around the block. CI's result is that unit's check: dependent work still
+waits for it.
+
 Use a tool that exists in this session's mode. A single self-contained task
 needs one delegate. Use a workflow where the runtime has one, otherwise native
 subagents, when the work has dependent steps, loops or parallel parts. With
@@ -39,9 +53,9 @@ use separate worktrees when they need different bases.
 Choose the launch path by what this session shows it can do, never by runtime
 name. Observed tools and configuration decide availability: use a technique only
 when it is in your tool list or its command is on PATH. Report what you observed
-in the helper's launch context. Every launch fixes technique, model and effort
-from one helper line, bound exactly. Before dispatch, rerun the helper before
-every launch (each subagent call or new workflow).
+in the helper’s launch context. Every launch fixes technique, model and effort
+from one helper line, bound exactly; a named user request wins. Rerun the helper
+before every launch (each subagent call or new workflow).
 
 - **Native subagents only:** you invoke the helper, then bind the returned fixed
   technique, model and effort in each subagent call.

@@ -1,6 +1,6 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-19 — native picker schema and bounded repairs
+> **Last verified:** 2026-11-21 — native picker schema and bounded repairs
 > preserve logged sessions and executable-tool removal; shared avoid/exclude
 > fallback and all-technique machine defaults preserve floors, session gates and
 > intentional null omission; failure warnings and the fallback notice reach
@@ -17,7 +17,8 @@
 > a "Tune these rules" entry, the Review step holds the one review rule, the
 > Work and review workflow builds a branch as units each reviewed by one check
 > before the next starts (all three checks at the branch-level review when the
-> PR goes ready), the usage helpers share one schema with UTC reset times,
+> PR goes ready), unit checks stay local to each unit and broad validation runs
+> once per branch, the usage helpers share one schema with UTC reset times,
 > portable pools resolve usage readers and label family reaches on both
 > backends, proxy-accounted-usage reads a Manager+ accounted monthly budget, and
 > the always-on stub names the source for steering its rules; OpenCode Go joins
@@ -1006,7 +1007,7 @@ artifact without reading all of it into the interactive context. The planner
 prepares a base brief for every reviewer launch, including second-check and
 judge, before returning the plan. The orchestrator adds earlier-check inputs
 after those checks return, using the neutral, role-specific input rules in the
-shared Work step. Check-plan therefore validates existing base briefs, not
+shared Review step. Check-plan therefore validates existing base briefs, not
 future artifacts.
 
 Invoke the same rendered executable with
