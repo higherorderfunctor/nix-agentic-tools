@@ -6,6 +6,29 @@ Unix-second `now` always produce the same result. Collecting Reader output,
 deciding what a vendor means by its status, and ranking candidates are separate
 layers.
 
+## Register a credential Reader
+
+Set `ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"` in
+Home Manager or devenv. Pass the same `credentialUsage` to `mkSkill`. The
+packaged manifest keeps every model the selected CPA client can serve, including
+offers without a Reader.
+
+```nix
+credentialUsage."office/work" = {
+  usage = { runtime = "claude"; technique = "usage"; };
+  readerPool = "claude";
+  pin = "account-17";
+  limits.week = { capacity = 100; models = ["model-a"]; role = "pace"; window = "7d"; };
+  transport = { retries = 1; timeout = 30; };
+};
+```
+
+`pin` is CPA's auth index. Omit it to let the Reader discover a single eligible
+account. `readerPool` must match the envelope label. Each limit names its Reader
+window, capacity and role (`gate` or `pace`). Omit `models` to cover all models
+this credential offers the client. HTTP requests default to a 75-second timeout
+and zero retries.
+
 ## Input and output
 
 A snapshot has three parts:
