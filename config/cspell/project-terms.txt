@@ -179,6 +179,7 @@ disablewf
 disjointness
 docbook
 docsite
+docstrings
 dogfood
 dotglob
 drvs

@@ -59,6 +59,9 @@
           // {
             # This release includes the pytest compatibility change.
             patches = builtins.filter (patch: (patch.name or "") != "pytest-9.1-compat.patch") (old.patches or []);
+            # 2.14 runs pydantic-core's tests here; the docstring examples need
+            # pytest-examples, which depends on pydantic, so that file is left out.
+            disabledTestPaths = (old.disabledTestPaths or []) ++ ["tests/pydantic_core/test_docstrings.py"];
           });
         pydantic-core = (prev.pydantic-core.override {inherit rustPlatform;}).overridePythonAttrs (finalAttrs: old: {
           inherit (pinFor "pydantic-core") version;
