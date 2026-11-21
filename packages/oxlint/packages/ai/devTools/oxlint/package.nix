@@ -22,12 +22,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "209f078ba8572400fbf75e59cbd48fa8c291e71a";
+  rev = "32798b3050b04770d0da959158d058d61d1bc9ec";
   unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-rVtFhsVH9rIJ0MqB9gOBoGqwSeMpPC35UANlH4/IxJA=";
+    hash = "sha256-Tq7YgaG0w3nooiGZWO2Y5x45frCtuY4pyrnBM9nPxgs=";
   };
   # Keep pnpm responsible for patching every peer variant. A name-only key
   # follows upstream versions; context application and the behavioral probe
