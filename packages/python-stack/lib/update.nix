@@ -2,6 +2,7 @@
 # release and its dependency pins before building the two Cargo vendor sets.
 # cspell:ignore maturin
 {
+  fixRustToolchain,
   packageLib,
   pinFile,
   pkgs,
@@ -68,6 +69,7 @@
   rustUpdateExtract = pkgs.writeShellScript "fix-python-stack-cargo-hashes" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    ${fixRustToolchain}
     ${fixCargoHash "pydantic-core" "pkgs.pydantic-core.cargoDeps"}
     ${fixCargoHash "maturin" "maturinCargoDeps"}
   '';

@@ -31,22 +31,23 @@
     };
   };
 
+  # The core crate owns the compiler used by both sides of the wheel build.
+  rustPlatform = packageLib.mkRustPlatform {
+    inherit pkgs;
+    pname = "python-stack.pkgs.pydantic-core";
+    sourceRoot = "pydantic-core";
+    sources = pinFor "pydantic-core";
+    sourcesFile = repoPath (pinFile "pydantic-core");
+    override = "latest";
+  };
   maturin =
-    pkgs.buildPackages.maturin.overrideAttrs (old:
+    (pkgs.buildPackages.maturin.override {inherit rustPlatform;}).overrideAttrs (old:
       pinnedRelease old // {cargoHash = (pinFor "maturin").cargoHash or lib.fakeHash;});
 
-  # The hook brings its own maturin onto PATH alongside cargo and rustc.
-  rustPlatform =
-    pkgs.rustPlatform
-    // {
-      maturinBuildHook = pkgs.rustPlatform.maturinBuildHook.overrideAttrs (old: {
-        propagatedBuildInputs = builtins.map (dep:
-          if dep == pkgs.buildPackages.maturin
-          then maturin
-          else dep)
-        old.propagatedBuildInputs;
-      });
-    };
+  # nixpkgs' hook takes its tools from the host package set.
+  maturinBuildHook = rustPlatform.maturinBuildHook.overrideAttrs {
+    propagatedBuildInputs = lib.unique [maturin rustPlatform.rust.cargo rustPlatform.rust.rustc];
+  };
 
   python = python3.override {
     self = python;
@@ -64,7 +65,7 @@
             # so they stay out of this build, as nixpkgs keeps them out of other builds.
             disabledTestPaths = (old.disabledTestPaths or []) ++ ["tests/pydantic_core"];
           });
-        pydantic-core = (prev.pydantic-core.override {inherit rustPlatform;}).overridePythonAttrs (finalAttrs: old: {
+        pydantic-core = (prev.pydantic-core.override {rustPlatform = rustPlatform // {inherit maturinBuildHook;};}).overridePythonAttrs (finalAttrs: old: {
           inherit (pinFor "pydantic-core") version;
           inherit (final.pydantic) src;
           sourceRoot = "${finalAttrs.src.name}/pydantic-core";
@@ -90,6 +91,9 @@ in
   python.overrideAttrs (old: {
     passthru =
       old.passthru
-      // (import ../../../../lib/update.nix {inherit packageLib pinFile pkgs repoPath;})
+      // (import ../../../../lib/update.nix {
+        inherit packageLib pinFile pkgs repoPath;
+        inherit (rustPlatform.passthru) fixRustToolchain;
+      })
       // {maturinCargoDeps = maturin.cargoDeps;};
   })
