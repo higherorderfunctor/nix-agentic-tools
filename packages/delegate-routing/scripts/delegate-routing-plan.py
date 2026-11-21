@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 import fnmatch
+from functools import cache
 from graphlib import TopologicalSorter
 import json
 import math
@@ -21,6 +22,15 @@ import uuid
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from usage.runner import (
+    MissingReader,
+    ReaderFailure,
+    ReaderPolicy,
+    capture_readers,
+    reader_registrations,
+    run_reader,
+)
 
 # Tier is a floor, never evidence of semantic fit, trial status or independence.
 ROLE_TIERS = {
@@ -79,8 +89,6 @@ class ReviewPolicy(PolicyModel):
         return self.roles[role].tiers if role in self.roles else ROLE_TIERS[role]
 
 
-READER_RETRY_DELAY = 2
-READER_TIMEOUT = 10
 TASK_SUMMARY_LIMIT = 65536
 # JSON escapes can expand each summary byte sixfold; reserve the same bound
 # again for instructions, role requests and family guidance.
@@ -506,51 +514,24 @@ def measure(stream, now):
     return result
 
 
-def run_reader(argv, **kwargs):
-    # Timeout must reap the reader's shell children as well as the shell itself.
-    timeout = kwargs.pop("timeout")
-    with subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True) as process:
+def collect(readers, now, shell, run=run_reader, *, policy=ReaderPolicy()):
+    """Measure each shared capture once and return the existing pool records."""
+
+    # Aliases share a capture object. Separate invocations with identical output have distinct cache keys.
+    @cache
+    def measured_pool(capture):
+        """Translate one shared capture into a pool measurement or a safe reason."""
+        if capture is MissingReader.NO_COMMAND:
+            return {"reason": capture.value, "status": "unmeasured"}
+        if isinstance(capture, ReaderFailure):
+            return {"reason": capture.reason, "status": "unreachable"}
         try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.communicate()
-            raise
-        return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+            return measure(capture.stdout, now)
+        except (KeyError, TypeError, ValueError):
+            return {"reason": "invalid Reader output", "status": "unreachable"}
 
-
-def collect(readers, now, shell, run=run_reader):
-    # Only this inventory reaches subprocess: candidate command guidance is data.
-    commands, results = {}, {}
-    for reader in readers:
-        command = reader["command"]
-        if command is None:
-            result = {"reason": "no registered Reader", "status": "unmeasured"}
-        elif command in commands:
-            result = commands[command]
-        else:
-            try:
-                argv = [shell, "-euETo", "pipefail", "-c", "shopt -s inherit_errexit 2>/dev/null || :\n" + command]
-                try:
-                    proc = run(argv, capture_output=True, text=True, timeout=READER_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    proc = None
-                if proc is None or proc.returncode:
-                    time.sleep(READER_RETRY_DELAY)
-                    proc = run(argv, capture_output=True, text=True, timeout=READER_TIMEOUT)
-                if proc.returncode:
-                    result = {"reason": f"Reader exited {proc.returncode}", "status": "unreachable"}
-                else:
-                    result = measure(proc.stdout, now)
-            except subprocess.TimeoutExpired:
-                result = {"reason": "Reader timed out", "status": "unreachable"}
-            except OSError:
-                result = {"reason": "Reader could not execute", "status": "unreachable"}
-            except (KeyError, TypeError, ValueError):
-                result = {"reason": "invalid Reader output", "status": "unreachable"}
-            commands[command] = result
-        results[reader["name"]] = result
-    return results
+    captures = capture_readers(readers, shell, policy, run=run)
+    return {name: measured_pool(capture) for name, capture in captures.items()}
 
 
 def warning(message, *, failure=True):
@@ -561,8 +542,8 @@ def warning(message, *, failure=True):
 
 def pool_diagnostics(readers, pools):
     failures, warnings = {}, []
-    for reader in sorted(readers, key=lambda reader: reader["name"]):
-        name, command = reader["name"], reader["command"]
+    for reader in sorted(readers, key=lambda reader: reader.name):
+        name, command = reader.name, reader.command
         pool = pools[name]
         if pool["status"] == "unreachable":
             failures.setdefault(command, []).append(name)
@@ -636,9 +617,9 @@ class InvalidRequest(ValueError):
 MANIFEST_KEYS = ("effortLevels", "familyNames", "manualRoutes", "pickerEntries", "poolFamilies", "readers", "routes", "runtime", "runtimes", "sessionPool")
 
 
-def request_errors(manifest, context, roles):
-    """Collect every refusal in argv roles, manifest and launch context; a context needs its manifest."""
-    errors, name_lists = [], {}
+def validate_request(manifest, context, roles):
+    """Return request errors and the parsed registrations used by collection."""
+    errors, name_lists, readers = [], {}, []
 
     def refuse(path, message):
         errors.append({"path": path, "message": message})
@@ -690,27 +671,35 @@ def request_errors(manifest, context, roles):
     if manifest is not None:
         if not isinstance(manifest, dict):
             refuse("manifest", f"{CONFIGURATION_FAULT}must be an object")
-            return errors
+            return errors, readers
         missing = [key for key in MANIFEST_KEYS if key not in manifest]
         for key in missing:
             refuse(f"manifest.{key}", f"{CONFIGURATION_FAULT}required key is missing")
         if missing:
-            return errors
-        readers = manifest["readers"]
-        if not isinstance(readers, list):
-            refuse("manifest.readers", f"{CONFIGURATION_FAULT}must be a list")
-            return errors
-        for index, reader in enumerate(readers):
-            if not isinstance(reader, dict):
-                refuse(f"manifest.readers[{index}]", f"{CONFIGURATION_FAULT}must be an object")
-                continue
-            if "command" not in reader:
-                refuse(f"manifest.readers[{index}].command", f"{CONFIGURATION_FAULT}required key is missing; null marks a pool with no reader")
-            if not isinstance(reader.get("name"), str) or not reader["name"].strip():
-                refuse(f"manifest.readers[{index}].name", f"{CONFIGURATION_FAULT}must be a non-empty string")
-        if errors and any(error["path"].startswith("manifest.readers") for error in errors):
-            return errors
-        pool_names = sorted(reader["name"] for reader in manifest["readers"])
+            return errors, readers
+        try:
+            readers = reader_registrations.validate_python(manifest["readers"])
+        except ValidationError as error:
+            for issue in error.errors(include_input=False, include_url=False):
+                loc = issue["loc"]
+                path = "manifest.readers" + "".join(
+                    f"[{key}]" if isinstance(key, int) else f".{key}" for key in loc
+                )
+                if not loc:
+                    message = "must be a list"
+                elif len(loc) == 1:
+                    message = "must be an object"
+                elif loc[-1] == "name":
+                    message = "must be a non-empty string"
+                elif issue["type"] == "missing":
+                    message = (
+                        "required key is missing; null marks a pool with no reader"
+                    )
+                else:
+                    message = "must be a string or null"
+                refuse(path, CONFIGURATION_FAULT + message)
+            return errors, readers
+        pool_names = sorted(reader.name for reader in readers)
         session = manifest["sessionPool"]
         pool_fault = f"{CONFIGURATION_FAULT}unregistered pool %s; registered: {allowed(pool_names)}"
         if session is not None and session not in pool_names:
@@ -775,10 +764,10 @@ def request_errors(manifest, context, roles):
             if isinstance(entry.get("command"), str) and not entry["command"].strip():
                 refuse(f"manifest.pickerEntries[{index}].command", f"{CONFIGURATION_FAULT}must be a non-empty string")
     if context is None:
-        return errors
+        return errors, readers
     if not isinstance(context, dict):
         refuse("launchContext", "must be an object")
-        return errors
+        return errors, readers
     families = sorted(name_lists["familyNames"]) if "familyNames" in name_lists else None
     efforts = name_lists.get("effortLevels")
     closed("launchContext", context, {"nonInteractive", "proposerFamily", "roles", "taskSummary", "techniques"})
@@ -828,7 +817,7 @@ def request_errors(manifest, context, roles):
             if efforts is not None and request.get("effort") is not None:
                 named(f"{path}.effort", request["effort"], efforts, "effort")
             closed(path, request, {"avoid", "effort", "exclude"})
-    return errors
+    return errors, readers
 
 
 def plan(manifest, context, roles, now, shell, run=run_reader, check=None):
@@ -837,7 +826,7 @@ def plan(manifest, context, roles, now, shell, run=run_reader, check=None):
     A saved check artifact, when supplied, is validated against this fresh result.
     """
 
-    errors = request_errors(manifest, context, roles)
+    errors, readers = validate_request(manifest, context, roles)
     try:
         policy = ReviewPolicy.model_validate(manifest.get("reviewPolicy", {}) if isinstance(manifest, dict) else {})
     except ValidationError as error:
@@ -845,8 +834,8 @@ def plan(manifest, context, roles, now, shell, run=run_reader, check=None):
     if errors:
         raise InvalidRequest(errors)
     session = manifest["sessionPool"]
-    pools = collect(manifest["readers"], now, shell, run)
-    warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(manifest["readers"], pools)
+    pools = collect(readers, now, shell, run)
+    warnings = ["provider-vendor identity is provisional; trial/maker independence remain caller assessments"] + pool_diagnostics(readers, pools)
     # A Reader scope matches an exact family name in that pool, not a model glob.
     # The inventory includes bindings outside automatic and manual launch reach.
     family_paces, invalid_families = {}, set()
@@ -1117,7 +1106,7 @@ def main():
             now_errors = [{"path": "argv.--now", "message": f"{args.now}: {error}"}]
     if manifest_errors or context_errors or saved_errors or now_errors:
         loaded = not manifest_errors
-        found = request_errors(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
+        found, _ = validate_request(manifest if loaded else None, context if loaded and not context_errors else None, args.role)
         return invalid_request(found + now_errors + saved_errors + manifest_errors + context_errors)
     try:
         check = (saved, Path(args.check_plan).resolve().parent, args.max_concurrency) if args.check_plan else None

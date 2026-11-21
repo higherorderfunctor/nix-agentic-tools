@@ -1,0 +1,90 @@
+{
+  "description": "Each case supplies an OAuth provider, whether to discover configured keys, a pin, ordered CPA replies and an optional request name.",
+  "instance": "http://cpa.test",
+  "discovery_base": "https://vendor.test/go",
+  "requests": {
+    "elsewhere": { "method": "GET", "url": "https://elsewhere.test/usage" },
+    "usage": {
+      "method": "POST",
+      "url": "https://vendor.test/usage",
+      "headers": { "Accept": "text/plain", "authorization": "private" },
+      "body": "query"
+    }
+  },
+  "surfaces": ["claude", "codex"],
+  "replies": {
+    "accounts": [
+      200,
+      {
+        "files": [
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "one" },
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "two" },
+          { "provider": "codex", "account_type": "oauth", "auth_index": "alt" },
+          {
+            "provider": "kiro",
+            "account_type": "oauth",
+            "auth_index": "disabled",
+            "disabled": true
+          }
+        ]
+      }
+    ],
+    "denied": [200, { "body": "private", "status_code": 403 }],
+    "duplicate": [
+      200,
+      [
+        {
+          "base-url": "https://vendor.test/go/v1",
+          "keys": [{ "api-key": "private-key", "auth_index": "one" }]
+        },
+        {
+          "base-url": "https://vendor.test/gopher",
+          "keys": [{ "api-key": "other-secret", "auth_index": "other" }]
+        },
+        {
+          "base-url": "https://elsewhere.test/go",
+          "keys": [{ "api-key": "elsewhere-key", "auth_index": "away" }]
+        }
+      ]
+    ],
+    "key": [
+      200,
+      [
+        {
+          "base-url": "https://vendor.test/go",
+          "keys": [{ "api-key": "private-key", "auth_index": "two" }]
+        }
+      ]
+    ],
+    "malformed": [200, { "body": "private", "status_code": "200" }],
+    "missing": [404, "private management error"],
+    "offline": [503, { "body": "private", "status_code": 200 }],
+    "ok": [200, { "body": "usage", "status_code": 200 }],
+    "single": [
+      200,
+      {
+        "files": [
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "two" }
+        ]
+      }
+    ]
+  },
+  "direct": { "private network exception": "synthetic-secret" },
+  "cases": {
+    "ambiguous discovery": ["kiro", false, null, ["accounts"]],
+    "correct pin sent": ["kiro", false, "two", ["accounts", "ok"]],
+    "cross-origin key": [null, true, "away", ["missing", "duplicate", "ok"]],
+    "cross-origin quota": [null, false, "two", ["ok"], "elsewhere"],
+    "crossed endpoint pin": [null, true, "other", ["missing", "duplicate"]],
+    "crossed provider pin refused": ["kiro", false, "alt", ["accounts"]],
+    "disabled pin refused": ["kiro", false, "disabled", ["accounts"]],
+    "duplicate keys": [null, true, null, ["key", "duplicate", "ok"]],
+    "malformed auth files": ["kiro", false, null, ["malformed"]],
+    "invalid reply": ["kiro", false, "two", ["accounts", "malformed"]],
+    "management HTTP failure": ["kiro", false, "two", ["accounts", "offline"]],
+    "mixed sources skip I/O": ["kiro", true, null, ["accounts"]],
+    "registered pin skips discovery": [null, false, "two", ["ok"]],
+    "single provider login": ["kiro", false, null, ["single", "ok"]],
+    "vendor HTTP failure": ["kiro", false, "two", ["accounts", "denied"]]
+  }
+}

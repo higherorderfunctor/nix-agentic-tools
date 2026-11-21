@@ -1,0 +1,72 @@
+{
+  "description": "The offline runner check feeds these pool registrations and per-command process results to its fake shell.",
+  "attempts": {
+    "fails": [2, 1, 3],
+    "late": [7, 2, 0],
+    "sibling": [0]
+  },
+  "policy": {
+    "retries": 2,
+    "retry_delay": 0.75,
+    "timeout": 3.5
+  },
+  "readers": [
+    {
+      "command": "late",
+      "name": "late-success",
+      "pool": {
+        "description": "",
+        "usage": {
+          "runtime": "codex",
+          "technique": "late"
+        },
+        "window": null
+      }
+    },
+    {
+      "command": "late",
+      "name": "shared-command",
+      "pool": {
+        "description": "",
+        "usage": {
+          "runtime": "codex",
+          "technique": "late"
+        },
+        "window": null
+      }
+    },
+    {
+      "command": "fails",
+      "name": "repeated-failure",
+      "pool": {
+        "description": "",
+        "usage": {
+          "runtime": "codex",
+          "technique": "fails"
+        },
+        "window": null
+      }
+    },
+    {
+      "command": null,
+      "name": "absent-command",
+      "pool": {
+        "description": "",
+        "usage": null,
+        "window": null
+      }
+    },
+    {
+      "command": "sibling",
+      "name": "healthy-sibling",
+      "pool": {
+        "description": "",
+        "usage": {
+          "runtime": "codex",
+          "technique": "sibling"
+        },
+        "window": null
+      }
+    }
+  ]
+}
