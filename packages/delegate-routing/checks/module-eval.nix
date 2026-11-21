@@ -544,6 +544,11 @@
       failures = lib.filter (item: !item.assertion && lib.hasInfix expected item.message) evaluation.config.assertions;
     in
       failures != [] && builtins.trace (builtins.head failures).message true;
+    credentialReader = override:
+      usage (lib.recursiveUpdate (lib.recursiveUpdate usageSelected {
+          ai.programs.delegate-routing.credentialUsage."main/login" = (builtins.fromJSON (builtins.readFile ./usage/config/input.json))."test/second";
+        })
+        override);
     poolReaderFails = settings:
       poolFailsWith (poolChange settings) "pools.measured.usage.technique: reference an enabled usage technique with a non-empty command.";
     poolWindowFails = window:
@@ -755,6 +760,7 @@
         script = wrapper.read_text()
         manifest_path = re.search(r"--manifest (/nix/store/[^\s]+)", script)[1]
         manifest = json.loads(Path(manifest_path).read_text())
+        assert manifest["pacing"] == {"readers": {}, "routes": []}, "native launch invented a CPA credential"
         assert manifest["reviewPolicy"]["planCheck"] == {"requireRubric": False, "requireSize": False, "requiredReviewRoles": [], "workerRoles": ["planner"]}
         assert manifest["reviewPolicy"]["roles"]["judge"]["tiers"] == ["mid"]
         assert manifest["effortLevels"] == ["minimal", "low", "medium", "high", "xhigh", "max"]
@@ -1378,6 +1384,10 @@
           programs.delegate-routing = poolConfig;
         };
       }) "pools.measured.usage.runtime: the reader runtime must be enabled"
+      && (poolFailsWith (credentialReader {ai.claude.enable = lib.mkForce false;}) ''credentialUsage."main/login".usage.runtime: the reader runtime must be enabled''
+        || throw "disabled Claude runtime accepted for credentialUsage.main/login")
+      && (poolFailsWith (credentialReader {ai.programs.delegate-routing.credentialUsage."main/login".usage.technique = "missing";}) ''credentialUsage."main/login".usage.technique: reference an enabled usage technique with a non-empty command.''
+        || throw "missing technique accepted for credentialUsage.main/login")
       && poolFailsWith (poolChange {pools.empty = {};}) "pools.empty: set usage or window"
     );
     "module-delegate-routing-${name}-pools-reader-environment" = mkTest "delegate-routing-${name}-pools-reader-environment" (

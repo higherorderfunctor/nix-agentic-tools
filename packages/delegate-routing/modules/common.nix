@@ -6,7 +6,8 @@
   ...
 }: let
   # Copilot's sizing controls are not established.
-  supportedRuntimes = ["claude" "codex" "kimchi" "kiro"];
+  inherit (vocabulary) supportedRuntimes;
+  readerOptions = import ../lib/reader-options.nix {inherit lib;};
   # This flake's build unless the overlay is applied (ai.internal.roots).
   defaults = config.ai.internal.roots.delegate-routing-content;
   portable = config.ai.programs.delegate-routing;
@@ -69,7 +70,7 @@
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   requiredTargets = runtime:
     lib.unique ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates);
-  poolReaders = map (pool: pool.usage.runtime) (lib.filter (pool: pool.usage != null) (builtins.attrValues portable.pools));
+  poolReaders = map (pool: pool.usage.runtime) (lib.filter (pool: pool.usage != null) (builtins.attrValues portable.pools ++ builtins.attrValues portable.credentialUsage));
   redact = import ../../../lib/redact {inherit lib;};
   usageFor = runtime: let
     # The runtime's selection already carries the root fields it inherits.
@@ -149,7 +150,7 @@
   runtimeSkill = runtime:
     defaults.passthru.mkSkill {
       inherit catalog cpaRoutes runtime models techniques resolvedAgentFiles servedModels;
-      inherit (portable) families pools;
+      inherit (portable) credentialUsage families pools;
       inherit (portable) reviewPolicy;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
@@ -236,6 +237,7 @@ in {
   options.ai.programs.delegate-routing =
     entryOptions
     // {
+      inherit (readerOptions) credentialUsage;
       families = lib.mkOption {
         type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
           options = {
@@ -311,22 +313,7 @@ in {
               default = "";
               description = "Budget description shown in consumer {pools} table entries.";
             };
-            usage = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                options = {
-                  runtime = lib.mkOption {
-                    type = lib.types.enum supportedRuntimes;
-                    description = "Enabled runtime whose usage technique reads this pool.";
-                  };
-                  technique = lib.mkOption {
-                    type = lib.types.str;
-                    description = "Enabled usage technique with a non-empty command for this pool.";
-                  };
-                };
-              });
-              default = null;
-              description = "Canonical usage reader for this budget, resolved from the runtime's techniques.";
-            };
+            inherit (readerOptions) usage;
             window = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
                 options = {
@@ -508,28 +495,27 @@ in {
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";
         }
       ]
-      ++ lib.concatLists (lib.mapAttrsToList (name: pool: let
-          path = "ai.programs.delegate-routing.pools.${lib.strings.escapeNixIdentifier name}";
-          reader = pool.usage;
-          node =
-            if reader == null
-            then null
-            else techniques.${reader.runtime}.${reader.technique} or null;
-        in [
-          {
-            assertion = reader != null || pool.window != null;
-            message = "${path}: set usage or window for this pool.";
-          }
-          {
-            assertion = reader == null || runtimeEnabled reader.runtime;
-            message = "${path}.usage.runtime: the reader runtime must be enabled through ai.<runtime>.enable.";
-          }
-          {
-            assertion = reader == null || (node != null && node.enable && node.kind == "usage" && node.command != null && lib.trim node.command != "");
-            message = "${path}.usage.technique: reference an enabled usage technique with a non-empty command.";
-          }
-        ])
-        portable.pools)
+      ++ lib.mapAttrsToList (name: pool: {
+        assertion = pool.usage != null || pool.window != null;
+        message = "ai.programs.delegate-routing.pools.${lib.strings.escapeNixIdentifier name}: set usage or window for this pool.";
+      })
+      portable.pools
+      ++ lib.concatMap (inventory:
+        lib.concatLists (lib.mapAttrsToList (name: settings: let
+            path = "ai.programs.delegate-routing.${inventory}.${lib.strings.escapeNixIdentifier name}.usage";
+            reader = settings.usage;
+            node = techniques.${reader.runtime}.${reader.technique} or null;
+          in [
+            {
+              assertion = reader == null || runtimeEnabled reader.runtime;
+              message = "${path}.runtime: the reader runtime must be enabled through ai.<runtime>.enable.";
+            }
+            {
+              assertion = reader == null || (node != null && node.enable && node.kind == "usage" && node.command != null && lib.trim node.command != "");
+              message = "${path}.technique: reference an enabled usage technique with a non-empty command.";
+            }
+          ])
+          portable.${inventory})) ["credentialUsage" "pools"]
       ++ [
         {
           assertion = portable.opencodeGo.plan == null || portable.opencodeGo.pool != null;

@@ -19,6 +19,17 @@ in {
         python3 -I -B ${./checks/pacing}/test_allowance.py ${./scripts} ${./checks/pacing/ranking-cases}
         touch "$out"
       '';
+    delegate-routing-cpa-routes = let
+      skills = import ./checks/catalog-routes.nix {inherit harness lib;};
+    in
+      pkgs.runCommand "delegate-routing-cpa-routes" {
+        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.pydantic ps.urllib3]))];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        python3 -I -B ${./checks/usage/config}/test_config.py ${./scripts} ${lib.escapeShellArgs skills}
+        touch "$out"
+      '';
     # Validates every case and renders its fixture and launch plan with no
     # harness on PATH and no login: the suite's --dry-run, nothing launched.
     delegate-routing-eval-structure =
@@ -75,7 +86,7 @@ in {
         touch "$out"
       '';
   };
-  imports = [./checks/catalog-routes.nix ./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
+  imports = [./checks/module-eval.nix ./checks/reminder-runtime.nix ./checks/workflow-resume-runtime.nix];
   testing.moduleProbes = [
     {
       ai = {

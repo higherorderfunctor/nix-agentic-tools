@@ -20,6 +20,7 @@ from hypothesis import given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel
 
 SCRIPTS = Path(sys.argv[1])
+sys.path.insert(0, str(SCRIPTS))
 CASES = Path(sys.argv[2])
 P = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "pacing.py")))
 N = P.normalizer

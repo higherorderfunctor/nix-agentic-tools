@@ -18,6 +18,7 @@ from hypothesis import example, given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel, ValidationError
 
 SCRIPTS = Path(sys.argv[1])
+sys.path.insert(0, str(SCRIPTS))
 CASES = Path(sys.argv[2])
 N = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "usage-normalize.py")))
 NOW = 1794447300

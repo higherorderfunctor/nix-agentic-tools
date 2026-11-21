@@ -15,16 +15,14 @@ from pydantic import (
     StrictBool,
     StrictInt,
     StrictStr,
-    StringConstraints,
     ValidationError,
     model_validator,
 )
 
 
-Amount = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
-Nonempty = Annotated[StrictStr, StringConstraints(min_length=1)]
+from usage.scope import Amount, LimitSpec as LimitSpec, LimitValues, Nonempty, Positive, Registration, Route
+
 Percent = Annotated[Amount, Field(le=100)]
-Positive = Annotated[Amount, Field(gt=0)]
 
 
 def parse_iso_timestamp(raw: object) -> dt.datetime:
@@ -121,43 +119,6 @@ def window_observation(
     if observation.remaining is not None and observation.remaining > 0:
         observation.remaining = None
     return observation
-
-
-class LimitValues(BaseModel):
-    """Carry the capacity, routes, and role shared by input and output limits."""
-
-    capacity: Positive
-    models: Annotated[list[Nonempty], Field(min_length=1)]
-    role: Literal["gate", "pace"]
-
-
-class LimitSpec(LimitValues, extra="forbid"):
-    """Bind a Reader window to one configured limit."""
-
-    window: Nonempty
-
-
-class Registration(BaseModel):
-    """Name the Reader pool and exact windows a configuration registers."""
-
-    limits: dict[str, LimitSpec]
-    readerPool: Nonempty
-
-    @model_validator(mode="after")
-    def unique_windows(self) -> Self:
-        """Refuse two limits that claim the same Reader window."""
-        windows = {spec.window for spec in self.limits.values()}
-        if len(windows) != len(self.limits):
-            raise ValueError("duplicate-window-registration")
-        return self
-
-
-class Route(BaseModel):
-    """Carry one configured model identity into ranking."""
-
-    id: Nonempty
-    maker: StrictStr | None
-    model: Nonempty
 
 
 class Snapshot(BaseModel):
