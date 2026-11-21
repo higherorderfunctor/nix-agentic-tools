@@ -4,6 +4,5 @@ To change any rule in this skill for yourself, set
 runtime. An entry takes `enable`, `always`, `before`, `after`, and `text` or
 `source`. A workflow step such as Review lives under
 `workflows.<workflow>.steps.<step>` in the same two scopes and takes the same
-fields except `always`. For a rule everyone should share, propose the change to
-the delegate-routing package. Record a steer in one of these places only, never
-in memory, a house rule or a rendered file.
+fields except `always`. Follow Load delegate-routing before changing or
+recording a rule.

@@ -1,26 +1,24 @@
-For finder, first-check, second-check and judge, use the rendered
-`delegate-routing-plan` command with observed techniques in its launch context.
-It enforces the strong/frontier floor before pool ranking; never step down a
-tier. Try the shared avoided-family fallback before reporting a loop failure if
-no qualified route remains. A tier pass does not establish task fit, trial
-eligibility or cross-maker independence; provider-vendor identity is provisional
-for aggregator routes. Honor those exclusions before launch.
+For finder, first-check, second-check and judge, use the rendered helper with
+observed techniques. It enforces the Routing helper’s tier, fallback and
+exclusion rules. A tier pass does not establish task fit, trial eligibility or
+independence; aggregator identity is provisional.
 
-Review every change with all three checks below, each in a fresh context. The
-first check, the second check and the judge each put the writer family in their
-role's `avoid` list. Use different models for the two checks only when both fit
-the role at strong or frontier tier. Otherwise run the best-fitting model again
-in a fresh context; never trade fit or tier for variety. Report disagreements
-only. Hand the whole review as one job to a delegate on a runtime that runs its
-own subagents (the rendered technique notes' "runs own subagents" fact), ideally
-one whose models are not the writer's family. If that fact is unknown, probe it
-in the intended launcher before relying on it. It runs all three checks itself
-and returns each issue's outcome with evidence. When no such runtime is
-reachable, split the roles from this session through any tools that pin model
-and effort, whether a subagent call, a workflow agent call or an external
-launcher. An avoided-family fallback still uses a fresh separate evaluator,
-never self-evaluation; disclose its fallback metadata and launch effort. If no
-qualified route survives shared fallback, report a loop failure.
+Use the review count this section provides: all three checks when the change is
+ready, and one fresh check in the exception below. The first check, the second
+check and the judge each put the writer family in their role's `avoid` list. Use
+different models for the two checks only when both fit the role at strong or
+frontier tier. Otherwise run the best-fitting model again in a fresh context;
+never trade fit or tier for variety. Report disagreements only. Hand the whole
+review as one job to a delegate on a runtime that runs its own subagents (the
+rendered technique notes' "runs own subagents" fact), ideally one whose models
+are not the writer's family. If that fact is unknown, probe it in the intended
+launcher before relying on it. It runs all three checks itself and returns each
+issue's outcome with evidence. When no such runtime is reachable, split the
+roles from this session through any tools that pin model and effort, whether a
+subagent call, a workflow agent call or an external launcher. An avoided-family
+fallback still uses a fresh separate evaluator, never self-evaluation; disclose
+its fallback metadata and launch effort. If no qualified route survives shared
+fallback, report a loop failure.
 
 One exception, on any forge (GitHub pull requests, GitLab merge requests or
 others): a change inside a stack of pull or merge requests, a unit of a branch
@@ -29,8 +27,11 @@ a fix after any review each get one fresh reviewer whose role avoids the writer
 family, following the first check below; that reviewer's supported issues are
 accepted findings for the loop. The change gets all three checks when it becomes
 ready to merge into the default branch; a fix after that review is reviewed as a
-fix. A pure rebase or restack of the stack gets no review; rework done during a
-rebase is a change, and the rules above apply to it.
+fix, except a nit or low-severity fix the orchestrator judges simple, which
+needs no further review. A rebase or restack gets no review, including a
+conflict resolved mechanically or by keeping both sides. A conflict that needs a
+non-trivial hand merge, and any other rework done during a rebase, gets one
+fresh reviewer on that change.
 
 When the draft exceeds the Size row, the reviewer also names each specific cut
 or collapse with evidence: what breaks if it is deleted and the simpler form.
@@ -48,15 +49,12 @@ remains the final spot-check and is not consulted about cuts.
 **First check:** gets the draft, the description's guarantee claims (never its
 review history or the writer's notes) and the rubric file verbatim. The
 orchestrator reads the first unit's diff itself before trusting any report about
-it. For each code unit, the reviewer applies R1-R6 first; if one fails, it stops
-for that unit and reports only those failures. Only after that unit passes
-readability does the reviewer examine E1-E4, the rubric rows for other
-artifacts, and the guarantee claims. Every engineering or guarantee question not
-yet examined is unknown, not passed. A guarantee with no enforcing line in this
-diff is an issue of at least medium severity. For each fail or issue, returns
-its location, the row or requirement it breaks, evidence, whether it holds, and
-a proposed severity; if uncertain, returns the open question that would settle
-it.
+it. Apply the Rubric’s Review order row first; then examine its other rows and
+the guarantee claims. Every engineering or guarantee question not yet examined
+is unknown, not passed. A guarantee with no enforcing line in this diff is an
+issue of at least medium severity. For each fail or issue, returns its location,
+the row or requirement it breaks, evidence, whether it holds, and a proposed
+severity; if uncertain, returns the open question that would settle it.
 
 The reviewer, not the writer, searches for dead code: removed names, dead
 branches, checks pinning removed behavior, stale prose and shims. It lists what

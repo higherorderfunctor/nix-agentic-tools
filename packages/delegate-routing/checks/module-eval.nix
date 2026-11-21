@@ -68,7 +68,7 @@
       };
     };
   };
-  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
+  hasLoadInstruction = text: lib.hasInfix "load delegate-routing in every turn" (lib.toLower (lib.replaceStrings ["\n" "`"] [" " ""] text));
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
   # Manifest bytes may change while the compared prose stays identical.
   withoutHelperPath = text: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" text));
@@ -850,31 +850,31 @@
       passes sessionDelivery
       && lib.all (runtime: lib.hasInfix "Runtime: ${runtime}; session pool: ${sessionPools.${runtime}}." (readSkill sessionDelivery runtime)) runtimes
     );
-    # Rejects manual Reader discovery/arithmetic, runtime-specific shared rules,
-    # lost buffer/unknown policy, an under-tier review fallback or unnamed launches.
+    # Check the always-on pointer and the caller contract delivered in each skill.
+    # Reader failures, windows and session-buffer decisions have runtime tests.
     "module-delegate-routing-${name}-helper-policy-contract" = mkTest "delegate-routing-${name}-helper-policy-contract" (
       lib.all (text: hasProse text stub || throw "missing router policy: ${text}") [
-        "invoke the absolute `delegate-routing-plan` command rendered in this runtime's skill"
-        "Use its decision as canonical"
-        "run the Reader of every registered pool"
-        "worst-window pace"
-        "a monthly pool is paced against its month, not the week"
-        "minimum remaining share across applicable windows is strictly more than a fifth"
-        "every other fitting measured pool is behind or level in pace"
-        "unknown session identity cannot certify it"
-        "With no selectable measured candidate, use fit alone"
-        "unreachable for this invocation; they never supply fit-only routes"
-        "Valid remaining shares survive bad pace"
-        "JSON includes all warnings; stderr includes failure warnings and the fallback notice; advisory notes stay JSON-only."
-        "Never treat exhaustion as unmeasured"
+        "run the `delegate-routing-plan` helper and use its decision"
+        "never compute pace or pick a pool by hand"
+        "Rerun it before every launch"
         "Aim for every pool to reach its reset near empty"
-        "Do not report pool numbers unless asked"
-        "Try the shared avoided-family fallback before reporting a loop failure"
-        "never step down a tier"
-        "avoid never removes a route by itself"
-        "measured preference applies within each partition"
-        "Session pace still compares all otherwise fitting measured candidates"
-        "excluded by caller"
+        "drain the session pool last"
+        "do not report pool numbers unless asked"
+        "The skill's \"Routing helper\" section has the launch-context and fallback details."
+      ]
+      && lib.all (needle: hasProse needle (builtins.readFile ../docs/development.md)) [
+        "reader inventory resolves every registered pool independently of launch targets"
+        "minimum unscoped pace and remaining share"
+        "reported calendar-month durations remain intact"
+      ]
+      && lib.all (needle: hasProse needle (builtins.readFile ../docs/routing-helper.md)) [
+        "all pools sharing the command are unreachable for this invocation, even for fit-only selection"
+        "JSON contains all warnings. Failure warnings and fallback notices also go to stderr."
+        "A bad pace leaves a readable remaining share intact."
+        "zero sets pace and buffer to zero and keeps the pool measured"
+        "every other fitting measured pool is behind or level in effective pace"
+        "smallest unscoped remaining share is strictly over one fifth"
+        "Unknown identity prevents certification."
       ]
       && !(lib.hasInfix "remaining share divided by" stub)
       && !(lib.hasInfix "/bin/delegate-routing-plan" stub)
@@ -884,9 +884,15 @@
         sessionDelivery.config.ai.${runtime}.rules.delegate-routing-router.text
         == sessionDelivery.config.ai.claude.rules.delegate-routing-router.text
         && lib.hasInfix "/bin/delegate-routing-plan --role <role> --launch-context <json-path>" text
-        && (hasProse "It enforces the strong/frontier floor before pool ranking" text || throw "missing ${runtime} review floor")
-        && hasProse "Try the shared avoided-family fallback before reporting a loop failure" text
         && lib.all (needle: hasProse needle text) [
+          "Planner and review roles require strong or frontier tiers"
+          "try shared fallback before reporting no qualified route"
+          "avoid never removes a route by itself"
+          "with measured preference and pace ordering within each partition"
+          "Session pace still compares all otherwise fitting measured candidates"
+          "excluded by caller"
+          "For a fit-only selection, report budget and session uncertainty"
+          "If no reachable candidate survives, retain the exclusions and report a loop failure"
           "never step down a tier"
           "Resolve each candidate's base effort from a non-null role override"
           "defaultEffort"
@@ -898,7 +904,7 @@
           "WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user."
           "Failed Readers and dropped windows print warnings ending \"Report this failure to the user.\""
           "fresh separate agents with neutral briefs"
-          "After a failed launch, rerun"
+          "when the failure makes the family unusable, add it to `exclude` and rerun the helper"
         ]
         && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
           "runs its own subagents"
@@ -2217,11 +2223,11 @@
       # units remain subject to the opening three-check rule, or the
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude
-      && hasProse "Each unit is reviewed by one fresh separate check whose role avoids the writer family, using the shared fallback when needed, before the next unit starts." claude
-      && hasProse "the fix's diff plus what it touches, one check, never the whole branch again." claude
+      && hasProse "Each unit gets the Review step’s required fresh separate check before the next unit starts." claude
+      && hasProse "a fix round reviews only the fix's diff plus what it touches." claude
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
-      && hasProse "all three checks when the PR is going ready, one check in any earlier state." claude
+      && hasProse "all three checks when the change is ready, and one fresh check in the exception below." claude
       # Fails if any runtime loses the two-gate rubric or regains consumer house rules.
       && lib.all (runtime:
         lib.hasInfix "1. **Review order.**" (readSkill result runtime)
@@ -2345,7 +2351,7 @@
           "a planner delegate returns the plan and the caller that launches the workflow builds it from that plan with fixed values."
           "the planner reruns the helper between steps and fixes every dispatch's values from that fresh result."
           "use a technique only when it is in your tool list or its command is on PATH"
-          "rerun the helper before every launch (each subagent call or new workflow)"
+          "Rerun the helper before every launch (each subagent call or new workflow)"
           "A static workflow's picks stay fixed for that run and the next launch reruns the helper."
           "A saved plan is not permission to skip the helper"
           "An unknown non-null proposer is refused; missing or null proposer identity skips the picker."

@@ -2,14 +2,11 @@ I want this session kept interactive: hand off assigned work or questions you
 cannot answer quickly before gathering quick facts; send sweeps, including
 design, to a workflow when available, otherwise to native subagents.
 
-Task source is the code or documents the work will change. Reading what the user
-pointed at, such as a board or issue, to triage and write the brief is fine
-before handoff. Hand off before investigating task source; gather quick facts in
-this session only while that delegate runs. Loading delegate-routing and running
-its usage reads before the launch are part of the handoff, not quick facts. A
-sweep is the deep check or investigation; design work, such as choosing a new
-setting, is a sweep however little code it needs. Keep this session for talking
-with the user, deciding, and checking results.
+Task source is what the work will change. Hand off before reading it, except to
+triage what the user pointed at and write the brief. While a delegate runs,
+gather only quick facts; loading this skill and usage reads is handoff, not
+quick facts. A sweep is deep checking or investigation; design is a sweep
+however small. Keep this session for talking, deciding, and checking results.
 
 Hand bulk reading, searching, measuring, tracing, edit-and-test loops, file
 moves and document writing to delegates. Give each delegate one task: one part
