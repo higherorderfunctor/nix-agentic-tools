@@ -5,30 +5,27 @@ The result retains that snapshot and adds ordered entries; it never advances
 observations or infers a refill from elapsed time.
 """
 
-from pathlib import Path
-import runpy
-import types
 from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
-# Share the normalizer's boundary types without an installed Python package.
-normalizer = types.SimpleNamespace(**runpy.run_path(str(Path(__file__).with_name("usage-normalize.py"))))
+from usage.scope import Amount, Positive, Route
+from usage_normalize import Normalized, Observation
 
 
 class RankingPolicy(BaseModel, extra="forbid"):
     """Parse pool preferences and the fallback pace for idle windows."""
 
-    idleBaseline: normalizer.Positive = 1.0
-    weights: dict[str, normalizer.Amount] = Field(default_factory=dict)
+    idleBaseline: Positive = 1.0
+    weights: dict[str, Amount] = Field(default_factory=dict)
 
 
-class Entry(normalizer.Route):
+class Entry(Route):
     """Expose readiness and weighted pace for one route and credential alternative."""
 
-    pace: normalizer.Amount | None
+    pace: Amount | None
     pool: str | None
-    score: normalizer.Amount
+    score: Amount
     state: Literal["out", "ready"]
 
 
@@ -37,18 +34,18 @@ class PoolLimits(NamedTuple):
 
     pool: str | None
     resolved: bool
-    limits: list[normalizer.Observation]
+    limits: list[Observation]
 
 
 class Ranking(NamedTuple):
     """Retain the trusted snapshot alongside computed entries without revalidation."""
 
-    snapshot: normalizer.Normalized
+    snapshot: Normalized
     entries: list[Entry]
 
 
 def allowance(
-    limits: list[normalizer.Observation], resolved: bool, now: int, idle_baseline: float
+    limits: list[Observation], resolved: bool, now: int, idle_baseline: float
 ) -> tuple[float | None, bool]:
     """Return a route's pace in one pool (the lowest of its pace limits) and whether it is ready.
 
@@ -56,7 +53,8 @@ def allowance(
     zero, even when other evidence is unknown; otherwise unknown evidence leaves
     the pace unknown and the route out.
     """
-    paces, blocked, uncertain = [], False, not resolved
+    paces: list[float] = []
+    blocked, uncertain = False, not resolved
     for limit in limits:
         valid = limit.status == "valid" and limit.enforced is True
         if limit.remaining == 0:
@@ -74,6 +72,8 @@ def allowance(
             limit.naturalResetAt is None or limit.naturalResetAt <= now
         ):
             paces.append(idle_baseline)
+        elif limit.remaining is None or limit.windowSeconds is None or limit.naturalResetAt is None:
+            uncertain = True
         else:
             paces.append(
                 limit.remaining / limit.capacity * limit.windowSeconds / (limit.naturalResetAt - now)
@@ -87,12 +87,12 @@ def allowance(
     return pace, pace is not None and pace > 0 and not blocked and not uncertain
 
 
-def rank(snapshot: normalizer.Normalized, policy: RankingPolicy | None = None) -> Ranking:
+def rank(snapshot: Normalized, policy: RankingPolicy | None = None) -> Ranking:
     """Keep every offer and applicable pool, sorting ready scores by preference."""
     ranking_policy = policy or RankingPolicy()
     if ranking_policy.weights.keys() - snapshot.pools.keys():
         raise ValueError("unknown-policy-pool")
-    entries = []
+    entries: list[Entry] = []
     for offer in snapshot.routes:
         applicable = [
             PoolLimits(pool, evidence.scopeResolved, [limit for limit in evidence.limits if offer.id in limit.models])
@@ -102,6 +102,9 @@ def rank(snapshot: normalizer.Normalized, policy: RankingPolicy | None = None) -
         applicable = [item for item in applicable if item.limits] or [PoolLimits(None, False, [])]
         for pool, resolved, limits in applicable:
             pace, ready = allowance(limits, resolved, snapshot.asOf, ranking_policy.idleBaseline)
+            score = 0.0
+            if ready and pace is not None and pool is not None:
+                score = pace * ranking_policy.weights.get(pool, 1)
             # Entry's finite score constraint refuses overflow of otherwise finite factors.
             entries.append(
                 Entry(
@@ -110,7 +113,7 @@ def rank(snapshot: normalizer.Normalized, policy: RankingPolicy | None = None) -
                     model=offer.model,
                     pace=pace,
                     pool=pool,
-                    score=pace * ranking_policy.weights.get(pool, 1) if ready else 0,
+                    score=score,
                     state="ready" if ready else "out",
                 )
             )

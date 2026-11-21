@@ -6,6 +6,29 @@ Unix-second `now` always produce the same result. Collecting Reader output,
 deciding what a vendor means by its status, and ranking candidates are separate
 layers.
 
+## Register a credential Reader
+
+Set `ai.programs.delegate-routing.credentialUsage."<instance>/<credential>"` in
+Home Manager or devenv. Pass the same `credentialUsage` to `mkSkill`. The
+packaged manifest keeps every model the selected CPA client can serve, including
+offers without a Reader.
+
+```nix
+credentialUsage."office/work" = {
+  usage = { runtime = "claude"; technique = "usage"; };
+  readerPool = "claude";
+  pin = "account-17";
+  limits.week = { capacity = 100; models = ["model-a"]; role = "pace"; window = "7d"; };
+  transport = { retries = 1; timeout = 30; };
+};
+```
+
+`pin` is CPA's auth index. Omit it to let the Reader discover a single eligible
+account. `readerPool` must match the envelope label. Each limit names its Reader
+window, capacity and role (`gate` or `pace`). Omit `models` to cover all models
+this credential offers the client. HTTP requests default to a 75-second timeout
+and zero retries.
+
 ## Input and output
 
 A snapshot has three parts:
@@ -18,15 +41,17 @@ A snapshot has three parts:
   the exact Reader `window` key that supplies it. Two limits in one pool cannot
   claim the same window.
 - `readers`: a map keyed by pool name. Each value is one saved command result:
-  an integer `exit` and the Reader's JSON `stdout`. On success, that JSON names
-  its `pool` and carries a `windows` map.
+  an integer `exit`, the Reader's JSON `stdout`, and an optional ISO 8601
+  `finishedAt` with an offset. Successful output names its `pool` and includes
+  one `account` object, `balances` and `bonuses` arrays and a `windows` map. The
+  account requires `auth_index`, `name` and `plan`, each a string or null.
 
 A window carries `remainingPercent` and `usedPercent`, which must be finite
 percentages between 0 and 100 and together total 100; a positive
-`windowSeconds`; an optional `enforced` boolean; and `resetsAt`, which is an ISO
-8601 timestamp with an offset or null. Null is valid only for an idle window or
-a gate with remaining allowance above zero. An idle window is exactly 0 used and
-100 remaining.
+`windowSeconds`; a descriptive string or null `status`, an optional boolean or
+null `enforced`; and `resetsAt`, which is an ISO 8601 timestamp with an offset
+or null. Null is valid only for an idle window or a gate with remaining
+allowance above zero. An idle window is exactly 0 used and 100 remaining.
 
 `normalize` returns a `Normalized` object:
 
@@ -38,8 +63,10 @@ a gate with remaining allowance above zero. An idle window is exactly 0 used and
   registrations.
 - Each limit keeps `capacity`, `models`, and `role`; adds its configured id; and
   supplies `remaining`, `windowSeconds`, `enforced`, `naturalResetAt` as Unix
-  seconds, `status`, and a nullable `reason`. The input `window` key is not
-  copied.
+  seconds, `status`, and a nullable `reason`. `observedAt` records the command
+  completion time in Unix seconds. Older captures without `finishedAt` have an
+  unknown observation time. Their serialized observations omit `observedAt`. The
+  input `window` key is not copied.
 
 The status is `valid`, `stale`, `invalid`, or `missing`. A valid enforced limit
 has no reason. Other results carry a local reason code so a maintainer can see
@@ -108,7 +135,7 @@ This small input has one 40-unit pace limit with half its allowance left:
     "readers": {
       "budget": {
         "exit": 0,
-        "stdout": "{\"pool\":\"reader\",\"windows\":{\"7d\":{\"enforced\":true,\"remainingPercent\":50,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"usedPercent\":50,\"windowSeconds\":604800}}}"
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d\":{\"enforced\":true,\"status\":\"ok\",\"remainingPercent\":50,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"usedPercent\":50,\"windowSeconds\":604800}}}"
       }
     },
     "routes": [{ "id": "canonical-a", "maker": null, "model": "served-fable" }]
