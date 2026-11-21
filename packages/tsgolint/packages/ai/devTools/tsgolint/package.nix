@@ -1,6 +1,6 @@
 # tsgolint — HEAD-tracked type-aware linting backend for oxlint.
-# Thin overrideAttrs of nixpkgs' tsgolint: swap src (main rev, submodules),
-# version, and vendorHash; inherit the typescript-go submodule patch dance.
+# Override nixpkgs' tsgolint for oxlint and the standalone package. Use the
+# pinned tsgolint source for both the typescript-go submodule and its patches.
 {
   pkgs,
   packageLib,
@@ -26,14 +26,30 @@
     fetchSubmodules = true;
   };
 in
-  (toolchain.overridePackage pkgs.tsgolint).overrideAttrs (_finalAttrs: prev: {
+  (toolchain.overridePackage pkgs.tsgolint).overrideAttrs (finalAttrs: prev: {
     version = vu.mkVersion {
       upstream = "0.25.0-unstable"; # newest tag base from Step 1
       inherit rev;
     };
     inherit src;
-    # nixpkgs' own patches apply here too, so they take the shared strict flags.
     inherit (packageLib) patchFlags;
+    patches = [];
+    # nixpkgs enters typescript-go before patching and copies collections out
+    # afterward. Discover the series here once stdenv has unpacked the source.
+    prePatch =
+      prev.prePatch
+      + ''
+        (
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          shopt -s failglob
+          export LC_ALL=C
+          for patchFile in ../patches/*.patch; do
+            echo "applying patch $patchFile"
+            patch ${pkgs.lib.escapeShellArgs finalAttrs.patchFlags} < "$patchFile"
+          done
+        )
+      '';
     passthru = (prev.passthru or {}) // toolchain.passthru;
     vendorHash = "sha256-Xt3Coh+Q2VneVz+PfnT80sN9FAlMZbvPWxYWQUuGXYo=";
   })

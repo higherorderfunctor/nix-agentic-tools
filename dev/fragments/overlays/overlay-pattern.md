@@ -12,10 +12,10 @@
 > - **Do not build the exported overlay on the consumer's `final` again.** #2197
 >   (D11) tried it and D12 reverted it on 2026-10-03: a devenv consumer
 >   (kimchi-kb, nixpkgs `34ca302a`) lost every cachix hit for the guards' rumdl,
->   and recipes that borrow nixpkgs recipe text, patches or fetchers (tsgolint's
->   patch list, kiro-cli, bruno, beads, the pnpm fetchers, Go `vendorHash`,
->   git-branchless) can fail outright on a foreign nixpkgs. `follows` is the
->   supported way to rebuild on your own nixpkgs.
+>   and recipes that borrow nixpkgs recipe text, patches or fetchers (kiro-cli,
+>   bruno, beads, the pnpm fetchers, Go `vendorHash`, git-branchless) can fail
+>   outright on a foreign nixpkgs. `follows` is the supported way to rebuild on
+>   your own nixpkgs.
 > - **Do not forward the consumer's license config into this flake's nixpkgs.**
 >   The first D12 cut copied a fixed list of 14 check-meta keys (`gateKeys`)
 >   into a per-consumer instantiation and gated it with a scan of nixpkgs'
@@ -50,6 +50,10 @@ source sidecars, patches, extraction helpers, and declarative registrations with
 the owner. `registry.nix` declares update/doc entries;
 `repoPath ./relative/path` derives mutable paths from their actual location. See
 the package-ownership fragment for the native composition boundaries.
+
+tsgolint applies the selected source's `patches/*.patch` in filename order
+inside the `typescript-go` submodule. The nixpkgs hooks still enter the
+submodule before patching and copy the collections package afterward.
 
 ### Who builds a package: `buildOverlay` and the exported overlay
 
