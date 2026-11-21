@@ -177,24 +177,6 @@ def service(args, path):
 SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
 
 
-def invocation_captures(db, invocation, timeout):
-    """(rows, settled): this invocation's (RUN_ROOT, state) marker rows, and whether they went quiet and finished
-    before the deadline."""
-    from query import RUN_ROOT
-    deadline = time.monotonic() + timeout
-    previous_rows, settled = None, time.monotonic()
-    while True:
-        rows = db.execute(f"SELECT {RUN_ROOT},state FROM captures c WHERE json_extract(c.metadata_json,'$.invocation')=?",
-                          (invocation,)).fetchall()
-        if rows != previous_rows:
-            previous_rows, settled = rows, time.monotonic()
-        if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
-            return rows, True
-        if time.monotonic() >= deadline:
-            return rows, False
-        time.sleep(.05)
-
-
 def read_only(path):
     """settle_captures and invocation_summary never create or write the store."""
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
@@ -202,10 +184,23 @@ def read_only(path):
 
 
 def settle_captures(path, invocation):
-    """Tell the exit card whether this invocation's captures had time to finish writing."""
+    """Tell the exit summary whether captures for the launch family finished and went quiet before timeout."""
+    from query import launch_captures
+
+    deadline = time.monotonic() + SETTLE_TIMEOUT
+    previous_rows = None
     try:
         with read_only(path) as db:
-            return invocation_captures(db, invocation, SETTLE_TIMEOUT)[1]
+            while True:
+                rows = launch_captures(db, invocation)
+                now = time.monotonic()
+                if now >= deadline:
+                    return False
+                if rows != previous_rows:
+                    previous_rows, quiet_since = rows, now
+                if rows and all(state != "recording" for _, _, _, state in rows) and now - quiet_since >= .1:
+                    return True
+                time.sleep(.05)
     except (OSError, ValueError, sqlite3.Error):
         return False  # invocation_summary reports the same failure.
 
@@ -221,9 +216,10 @@ def store_size_bytes(database):
 
 
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
-    """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
-    earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
-    from query import render_summary, run_report
+    """Print an exit card per root captured by this process, using the launch family's settle result and theme."""
+    from capture import snapshot
+    from disk_index import session_id
+    from query import launch_captures, render_summary, run_report
     import summary_theme
     try:
         database = path / "usage.sqlite3"
@@ -232,24 +228,26 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
             # The collector warns on retained payload bytes, which omit SQLite pages and the WAL.
             print(f"Warning: the usage store is {size / 2**20:,.0f} MiB on disk, past the {warn_bytes / 2**20:,.0f} MiB warning size; "
                   f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.", file=sys.stderr)
-        with read_only(path) as db:
-            rows = invocation_captures(db, invocation, 0)[0]
+        with read_only(path) as db, snapshot(db):
+            rows = launch_captures(db, invocation)
             if not rows:  # e.g. resumed and exited without a turn
                 print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
                 return
-            identities = [name for name, _ in rows]
-            sessions = sorted({name if name.startswith("sess_") else "sess_" + name
-                               for name in identities if isinstance(name, str)})
-            if not sessions:
+            identified = [(process, root) for _, process, root, _ in rows if isinstance(root, str)]
+            if not identified:
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
-            # The exit path's wait outcome counts even if a call finished after it timed out. These describe the
-            # invocation, not one session, so only the last block carries them.
-            caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
-                       *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
+            sessions = dict.fromkeys(session_id(root) for process, root in identified if process == invocation)
+            if not sessions:
+                print("Kiro usage: no own root session was captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
+                return
             theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
-            for session in sessions:
-                print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
+            reports = [run_report(db, invocation, session) for session in sessions]
+        # A timed-out call can finish before the snapshot, so the wait outcome still matters.
+        caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, _, state in rows) else []),
+                   *(["calls with no conversation identity excluded"] if len(identified) < len(rows) else [])]
+        for report in reports:
+            print("\n" + render_summary(report, caveats if report is reports[-1] else (), theme), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 

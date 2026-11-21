@@ -465,33 +465,107 @@ class SummaryTests(unittest.TestCase):
             self.assertNotIn("sess_other", output.getvalue())
             self.assertIn("\n⚠ credits unknown for 1/1 request; 1 incomplete; tokens missing for 1; calls with no conversation identity excluded\n", output.getvalue())
 
-    def test_run_counts_only_its_own_captures_per_root(self):
-        # One run that switched or forked: two roots, each also captured by an earlier run that must stay out.
+    def test_own_cards_follow_first_capture(self):
+        """Exit cards follow capture start and ID order and count only their own process's requests."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            outer = "a" * 32
+            own = {"invocation": outer, "outermost_invocation": outer}
+            external = {"invocation": "b" * 32, "outermost_invocation": outer}
+            foreign = {"invocation": "c" * 32, "outermost_invocation": "c" * 32}
+            for label, a_start, a_id, z_id in (
+                ("start time", 20, "1", "2"),
+                ("capture ID tie break", 10, "2", "1"),
+            ):
+                with self.subTest(label):
+                    state = root / label
+                    collector = Collector(state / "usage.sqlite3")
+                    self.addCleanup(collector.close)
+                    for start, ident, markers, conversation, ancestor in (
+                        (a_start, a_id, own, "sess_a-root-001", None),
+                        (30, "3", own, "sess_z-root-001", None),
+                        (40, "4", own, "sess_delegate", "z-root-001"),
+                        (10, z_id, {"invocation": outer}, "z-root-001", None),
+                        (5, "5", foreign, "sess_a-root-001", None),
+                        (4, "6", external, "sess_a-root-001", None),
+                        (6, "7", external, "sess_external", None),
+                    ):
+                        metadata = {"kiro:conversation_id": conversation}
+                        if ancestor:
+                            metadata["kiro:root_conversation_id"] = ancestor
+                        request = json.dumps({"model": "auto", "metadata": metadata}).encode()
+                        with (patch.object(capture.time, "time_ns", return_value=start),
+                              patch.object(capture.uuid, "uuid4", return_value=SimpleNamespace(hex=ident * 32))):
+                            collector.finish(collector.begin(dict(markers), request))
+                    collector.close()
+                    with contextlib.redirect_stderr(io.StringIO()) as output:
+                        runtime.invocation_summary(state, outer, 1 << 30)
+                    cards = output.getvalue().split("Kiro usage · ")[1:]
+                    self.assertEqual([card.split(" · — credits")[0] for card in cards], [
+                        "sess_z-root-0 · this run · 3 requests", "sess_a-root-0 · this run · 1 request",
+                    ])
+                    self.assertRegex(cards[0], r"Main\s+2\s.*\n.*Sub/WF\s+1\s")
+                    self.assertRegex(cards[1], r"Main\s+1\s.*\n.*Sub/WF\s+0\s")
+
+    def test_single_root_exit_card_matches_parent_stderr(self):
+        """Check the entire stderr card for one root against the parent revision's output."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            invocation = "a" * 32
             collector = Collector(root / "usage.sqlite3")
-            for invocation, conversation, ancestor in (("a" * 32, "sess_first", None), ("a" * 32, "sess_helper", "first"),
-                                                       ("a" * 32, "sess_fork", None), ("b" * 32, "sess_first", None),
-                                                       ("b" * 32, "sess_first", None), ("b" * 32, "sess_fork", None)):
-                request = {"metadata": {"kiro:conversation_id": conversation, "kiro:root_conversation_id": ancestor}}
-                collector.finish(collector.begin({"invocation": invocation}, json.dumps(request).encode()))
+            request = b'{"model":"auto","metadata":{"kiro:conversation_id":"sess_root"}}'
+            collector.finish(collector.begin({"invocation": invocation, "outermost_invocation": invocation}, request))
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "a" * 32, 1 << 30)
-            text = output.getvalue()
-            self.assertEqual((text.count("Kiro usage · sess_first · this run · 2 requests"), text.count("Kiro usage · sess_fork · this run · 1 request ")), (1, 1))
-            self.assertEqual(text.count("Kiro usage ·"), 2)
-            self.assertRegex(text, r"Main\s+1\s.*\n.*Sub/WF\s+1\s")
+                runtime.invocation_summary(root, invocation, 1 << 30)
+            # Captured with this fixture using runtime.py and query.py from 98a58dcc.
+            self.assertEqual(output.getvalue(), (
+                "\nKiro usage · sess_root · this run · 1 request · — credits\n"
+                "\n"
+                "Model         Requests  Credits  In  Out  Cached  Cache hit\n"
+                "auto                 1        —   —    —       —          —\n"
+                "\n"
+                "Conversation  Requests  Credits  In  Out  Cached  Cache hit\n"
+                "Main                 1        —   —    —       —          —\n"
+                "Sub/WF               0        —   —    —       —          —\n"
+                "-----------------------------------------------------------\n"
+                "Total                1        —   —    —       —          —\n"
+                "⚠ credits unknown for 1/1 request; 1 incomplete; tokens missing for 1\n"
+            ))
 
     def test_run_without_captures_points_to_the_session_report(self):
+        """A foreign process marker and an outermost-only marker both leave the launch empty."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
-            collector.finish(collector.begin({"invocation": "b" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_resumed"}}'))
+            for markers in ({"invocation": "b" * 32}, {"outermost_invocation": "a" * 32}):
+                collector.finish(collector.begin(markers, b'{"metadata":{"kiro:conversation_id":"sess_resumed"}}'))
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
             self.assertEqual(output.getvalue(), "Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.\n")
+
+    def test_family_without_own_root_reports_why(self):
+        """Exit explains missing roots without adding a card, even before the writer adds the index."""
+        outer = "a" * 32
+        for label, metadata, expected in (
+            ("missing identities", {}, "Kiro usage summary unavailable: no captured conversation identity for this invocation.\n"),
+            ("external identity", {"kiro:conversation_id": "sess_external"},
+             "Kiro usage: no own root session was captured this run; kiro-usage report --session ID shows a whole session.\n"),
+        ):
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                database = root / "usage.sqlite3"
+                collector = Collector(database)
+                collector.finish(collector.begin({"invocation": outer}, b'{"metadata":{}}'))
+                external = {"invocation": "b" * 32, "outermost_invocation": outer}
+                collector.finish(collector.begin(external, json.dumps({"metadata": metadata}).encode()))
+                collector.close()
+                with contextlib.closing(open_database(database)) as db:
+                    db.execute("DROP INDEX capture_outermost_invocation")
+                with contextlib.redirect_stderr(io.StringIO()) as output:
+                    runtime.invocation_summary(root, outer, 1 << 30)
+                self.assertEqual(output.getvalue(), expected)
 
     def test_invocation_caveats_print_once_across_sessions(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -615,16 +689,40 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("Kiro usage · sess_late · this run · 1 request", output.getvalue())
             self.assertNotIn("capture writer still has unfinished calls", output.getvalue())
 
+    def test_settle_requires_quiet_period_before_deadline(self):
+        """Use a finished fixture capture to distinguish quiet polls before and after the deadline."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            invocation = "a" * 32
+            collector = Collector(root / "usage.sqlite3")
+            collector.finish(collector.begin({"invocation": invocation}, b'{"metadata":{"kiro:conversation_id":"sess_root"}}'))
+            collector.close()
+            for label, quiet_poll, expected in (
+                ("after deadline", 2.03125, False),
+                ("before deadline", 1.984375, True),
+            ):
+                with (self.subTest(label),
+                      patch.object(runtime, "SETTLE_TIMEOUT", 2),
+                      patch.object(runtime.time, "monotonic", side_effect=(0, 1.875, 1.9375, quiet_poll)),
+                      patch.object(runtime.time, "sleep")):
+                    self.assertIs(runtime.settle_captures(root, invocation), expected)
+
     def test_unsettled_wait_flags_unfinished_calls(self):
+        """Wait for an identity-less family child and ignore an unrelated recording call."""
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
             self.addCleanup(collector.close)
-            collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": "sess_open"}}).encode())
-            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), patch.object(runtime, "SETTLE_TIMEOUT", .3), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()) as output:
+            outer = "a" * 32
+            collector.finish(collector.begin({"invocation": outer}, b'{"metadata":{"kiro:conversation_id":"sess_own"}}'))
+            child = collector.begin({"invocation": "b" * 32, "outermost_invocation": outer}, b'{"metadata":{}}')
+            collector.begin({"invocation": "c" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_unrelated"}}')
+            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex=outer)), patch.object(runtime, "SETTLE_TIMEOUT", .3), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()) as output:
                 self.assertEqual(runtime.exec_command(root, 19001, 1 << 30, ["kiro-cli", "chat"]), 0)
-            self.assertIn("capture writer still has unfinished calls", output.getvalue())
             self.assertFalse(summary.call_args.kwargs["settled"])
+            self.assertIn("capture writer still has unfinished calls; calls with no conversation identity excluded", output.getvalue())
+            collector.finish(child)
+            self.assertTrue(runtime.settle_captures(root, outer))
 
     def test_call_finishing_after_wait_timeout_keeps_unfinished_warning(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):

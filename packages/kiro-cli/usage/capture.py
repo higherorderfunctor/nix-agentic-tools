@@ -30,7 +30,10 @@ import zlib
 # Keep room to reuse pages across several 4 MiB capture batches.
 WAL_RETAINED_BYTES = 16 * 1024 * 1024
 
-SCHEMA = """
+CAPTURE_INVOCATION = "json_extract(metadata_json,'$.invocation')"
+CAPTURE_OUTERMOST_INVOCATION = "json_extract(metadata_json,'$.outermost_invocation')"
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS capture_meta (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS captures (
  id TEXT PRIMARY KEY, started_utc_ns INTEGER, started_mono_ns INTEGER,
@@ -43,7 +46,8 @@ CREATE TABLE IF NOT EXISTS captures (
  credits REAL, context_usage_percentage REAL, input_tokens INTEGER,
  output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER
 );
-CREATE INDEX IF NOT EXISTS capture_invocation ON captures(json_extract(metadata_json,'$.invocation'));
+CREATE INDEX IF NOT EXISTS capture_invocation ON captures({CAPTURE_INVOCATION});
+CREATE INDEX IF NOT EXISTS capture_outermost_invocation ON captures({CAPTURE_OUTERMOST_INVOCATION});
 CREATE INDEX IF NOT EXISTS capture_request_id ON captures(json_extract(response_json, '$.upstream_request_id'));
 CREATE INDEX IF NOT EXISTS capture_session ON captures(json_extract(metadata_json, '$."kiro:conversation_id"'));
 CREATE TABLE IF NOT EXISTS chunks (

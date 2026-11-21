@@ -1,4 +1,7 @@
-"""Read observed usage for an explicit Kiro session; exact counters win, ~estimates fill only their gaps."""
+"""Read capture and disk usage for history commands and capture usage for launch exit cards.
+
+Reports aggregate observed counters first and use estimates to fill gaps.
+"""
 # cspell:words unixepoch
 
 import argparse
@@ -11,7 +14,7 @@ import sqlite3
 import sys
 
 import credit_discount
-from capture import snapshot
+from capture import CAPTURE_INVOCATION, CAPTURE_OUTERMOST_INVOCATION, snapshot
 from disk_index import LINKS, refresh_history, session_id
 from display import RULE, table, tables, value
 import summary_theme
@@ -169,11 +172,20 @@ def session_captures(db, session, chosen=None, parameters=()):
     return captures
 
 
+def launch_captures(db, invocation):
+    """Return ordered capture IDs, process markers, roots, and states for exit polling and card selection."""
+    return db.execute(f"""
+        SELECT c.id,{CAPTURE_INVOCATION},{RUN_ROOT},c.state FROM captures c
+        WHERE {CAPTURE_INVOCATION}=? OR ({CAPTURE_OUTERMOST_INVOCATION}=? AND {CAPTURE_INVOCATION} IS NOT NULL)
+        ORDER BY c.started_utc_ns,c.id
+    """, (invocation, invocation)).fetchall()
+
+
 def run_report(db, invocation, session):
     """render_summary's report for one root session of a kiro-usage exec run: only the invocation's marked captures
     whose RUN_ROOT is session, with or without sess_. Earlier runs, other roots and disk observations stay out."""
     db.row_factory = sqlite3.Row
-    chosen = chosen_calls(f"json_extract(c.metadata_json,'$.invocation')=? AND {RUN_ROOT} IN (?,?)")
+    chosen = chosen_calls(f"{CAPTURE_INVOCATION}=? AND {RUN_ROOT} IN (?,?)")
     with snapshot(db):
         return {"session": session, "scope": "this run",
                 "captures": session_captures(db, session, chosen, (invocation, session, session.removeprefix("sess_")))}
