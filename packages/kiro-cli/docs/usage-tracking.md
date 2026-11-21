@@ -68,15 +68,27 @@ contributor project's configuration. Wrapping the already tracked Home Manager
 launcher is also supported: the identical proxy and CA environment passes its
 conflict checks. No second collector starts.
 
-After `kiro-usage exec kiro-cli` exits, the tool prints what that run captured
-to standard error: for each root session the run touched, model and conversation
-tables (requests, credits, input, output and cached tokens, cache hit). Kiro
-inherits the terminal's input and output directly; the summary leaves standard
-output, exit status, and signals intact. Tracked chat runs as a child of the
-summary supervisor, with its own process ID and the same terminal descriptors.
-Explicit help, version, login, and administrative commands skip the summary,
-including when recognized global options precede them. Other commands run
-without a Kiro summary.
+By default, after `kiro-usage exec kiro-cli` exits, the tool prints what that
+run captured to standard error: for each root session the run touched, model and
+conversation tables (requests, credits, input, output and cached tokens, cache
+hit). Kiro inherits the terminal's input and output directly; the summary leaves
+standard output, exit status, and signals intact. Tracked interactive chat runs
+as a child of the summary supervisor, with its own process ID and the same
+terminal descriptors. Explicit help, version, login, and administrative commands
+skip the summary, including when recognized global options precede them. Other
+commands run without a Kiro summary.
+
+`kiro-usage exec` runs quiet Kiro launches directly with a fresh capture marker.
+This applies to `kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
+`--output-format stream-json` before Kiro's `--` separator. Nested launches run
+directly with their parent's marker. These launches skip the supervisor, capture
+wait, and exit card, and their requests still appear in usage history.
+
+Daemons and scripts that run tracked interactive launches without a person
+watching can use `kiro-usage exec --no-summary kiro-cli …` to skip the capture
+wait and card for a launch that would otherwise print a card. That launch keeps
+its supervisor and preserves the child's exit status and signals. Quiet and
+nested launches run directly with or without `--no-summary`.
 
 `usageTracking.summary` styles that summary. Null options keep the runtime
 defaults (`color = "auto"`: styled only on a terminal without `NO_COLOR`;
@@ -143,8 +155,8 @@ session discovery or disk indexing. The capture summary waits up to two seconds
 for this launch's calls to finish and stay unchanged for 0.1 s. A call started
 just before Kiro exits can still persist after that quiet period. If the wait
 times out, unfinished calls stay flagged as incomplete coverage. Nested
-`kiro-usage exec` launches share the parent's marker. The outer launch prints
-the summary.
+`kiro-usage exec` launches share the parent's marker and run directly. Only a
+supervised outer launch can print a summary.
 
 `exec` preserves arguments. It sets proxy and Node CA variables and clears
 bypass variables only for that invocation and its descendants, replacing
@@ -284,14 +296,14 @@ run; it never stops sealing or capture. A manual `mitmdump -s` run without
 `KIRO_USAGE_RETENTION_DAYS` keeps payloads forever.
 
 `payloadWarnBytes` supplies the `--warn-bytes` threshold, which defaults to 5
-GiB. At each tracked `exec` exit, the summary warns when the combined on-disk
-size of `usage.sqlite3` and its `-wal` file exceeds that threshold. The
-collector uses the same threshold for retained payload bytes and logs one
-warning to its service journal while capture continues. It counts sealed
-captures' compressed blobs, gzip copies of captures not yet sealed, and usage
-summaries. Capture never deletes capture rows. To retire a store, stop the
-`kiro-usage` service and archive or delete `usage.sqlite3` with its `-wal` and
-`-shm` files. The next start creates a new store.
+GiB. The exit summary warns when the combined on-disk size of `usage.sqlite3`
+and its `-wal` file exceeds that threshold. The collector uses the same
+threshold for retained payload bytes and logs one warning to its service journal
+while capture continues. It counts sealed captures' compressed blobs, gzip
+copies of captures not yet sealed, and usage summaries. Capture never deletes
+capture rows. To retire a store, stop the `kiro-usage` service and archive or
+delete `usage.sqlite3` with its `-wal` and `-shm` files. The next start creates
+a new store.
 
 The collector seals each capture once it finishes, on its own thread, into a
 compact form the reports and `kiro-usage unpack` read as before. Each start also

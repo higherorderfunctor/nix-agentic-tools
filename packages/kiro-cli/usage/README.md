@@ -419,23 +419,36 @@ entry (no cache split) or no context window (no ~tokens), when any. `--json`
 writes the store report, or the list of session reports, instead.
 `kiro-usage report` passes the configured theme.
 
-The managed `kiro-usage exec kiro-cli` command also prints a short summary of
-what that run captured to standard error after Kiro exits: per root session the
-run touched, a headline with its request count and credits, a model table of
-requests, credits to two decimals, rounded input, output and cached token counts
-and cache-hit share sorted by credits, and a conversation table splitting the
-main conversation from subagents and workflows. One `⚠` line appears only when
-totals are suspect: capture unavailable, unknown credits, incomplete or
-unfinished calls, calls without a conversation identity, duplicate request IDs,
-or calls with several metering events. `kiro-usage session` keeps the full
-report, and `kiro-usage report --session ID` the whole session's summary. A
-local proxy marker links the invocation's captures to their recorded session
-identities. Kiro uses inherited terminal input and output directly; no screen
-parsing or process-ID guess selects the session. Standard output, exit status,
-and signals are preserved. Tracked chat runs as a child of the summary
-supervisor, retaining the terminal descriptors with its own process ID. Explicit
-help, version, login, and administrative commands skip the summary, including
-after recognized global options. Other commands have no automatic Kiro summary.
+By default, the managed `kiro-usage exec kiro-cli` command prints a short
+summary of what that run captured to standard error after Kiro exits: per root
+session the run touched, a headline with its request count and credits, a model
+table of requests, credits to two decimals, rounded input, output and cached
+token counts and cache-hit share sorted by credits, and a conversation table
+splitting the main conversation from subagents and workflows. One `⚠` line
+appears only when totals are suspect: capture unavailable, unknown credits,
+incomplete or unfinished calls, calls without a conversation identity, duplicate
+request IDs, or calls with several metering events. `kiro-usage session` keeps
+the full report, and `kiro-usage report --session ID` the whole session's
+summary. A local proxy marker links the invocation's captures to their recorded
+session identities. Kiro uses inherited terminal input and output directly; no
+screen parsing or process-ID guess selects the session. Standard output, exit
+status, and signals are preserved. Tracked interactive chat runs as a child of
+the summary supervisor, retaining the terminal descriptors with its own process
+ID. Explicit help, version, login, and administrative commands skip the summary,
+including after recognized global options. Other commands have no automatic Kiro
+summary.
+
+`kiro-usage exec` runs quiet Kiro launches directly with a fresh capture marker.
+This applies to `kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
+`--output-format stream-json` before Kiro's `--` separator. Nested launches run
+directly with their parent's marker. These launches skip the supervisor, capture
+wait, and exit card, and their requests still appear in usage history.
+
+Daemons and scripts that run tracked interactive launches without a person
+watching can use `kiro-usage exec --no-summary kiro-cli …` to skip the capture
+wait and card for a launch that would otherwise print a card. That launch keeps
+its supervisor and preserves the child's exit status and signals. Quiet and
+nested launches run directly with or without `--no-summary`.
 
 `ai.kiro.cli.usageTracking.summary` styles that summary: the module writes it to
 a JSON file and passes it to the runtime's `cli --summary-theme FILE`. Every key
@@ -510,7 +523,7 @@ indexing. The capture summary waits at most two seconds for this launch's calls
 to finish and stay unchanged for 0.1 s. A call started just before Kiro exits
 can still persist after that quiet period. A timed-out wait flags unfinished
 calls in the summary. Nested `kiro-usage exec` launches reuse the parent's
-marker. The outer launch prints the summary.
+marker and run directly. Only a supervised outer launch can print a summary.
 
 `kiro-usage session` and `kiro-usage report --session` refresh disk history
 before reading, once per command even with several IDs. They may take longer
@@ -553,13 +566,19 @@ request model for a captured call. A shared conversation ID alone does not
 establish whether a request is the parent or a delegate. Missing lineage must
 stay unknown.
 
-Run the synthetic offline suite without mitmproxy or provider credentials:
-
-The suite takes the measured top-level value options from the environment, so no
-option list is written by hand; one single-attribute `nix eval` supplies it:
+Run the synthetic offline suite from the repository root without mitmproxy or
+provider credentials. Export both measured value-option tables for the tests:
 
 ```bash
-KIRO_LAUNCH_VALUE_OPTIONS="$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake (toString ./.)).inputs.nixpkgs.lib; in lib.concatStringsSep "," (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')" \
+kiro_value_options="$(nix eval --impure --raw --expr '
+  let
+    lib = (builtins.getFlake (toString ./.)).inputs.nixpkgs.lib;
+    chat = (import ./packages/kiro-cli/lib/cliOptions.nix {inherit lib;}).chatValueOptions;
+    launch = (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured;
+  in lib.concatStringsSep " " (map (lib.concatStringsSep ",") [chat launch])
+')" &&
+  read -r KIRO_CHAT_VALUE_OPTIONS KIRO_LAUNCH_VALUE_OPTIONS <<< "$kiro_value_options" &&
+  export KIRO_CHAT_VALUE_OPTIONS KIRO_LAUNCH_VALUE_OPTIONS &&
   python -m unittest discover -s packages/kiro-cli/usage -p 'test_*.py' -v
 ```
 

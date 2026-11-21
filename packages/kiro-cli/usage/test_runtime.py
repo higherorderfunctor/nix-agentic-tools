@@ -30,20 +30,18 @@ import query
 import report
 import runtime
 
-# The top-level options that take a value, as the packaged tool is handed them: the check exports the list measured from the binary's help.
-def _launch_value_options():
-    measured = os.environ.get("KIRO_LAUNCH_VALUE_OPTIONS")
+def _measured_value_options(variable):
+    """Read a comma-separated option table exported by the offline check."""
+    measured = os.environ.get(variable)
     if not measured:
         raise RuntimeError(
-            "KIRO_LAUNCH_VALUE_OPTIONS is unset. Export the measured list, comma separated, e.g. "
-            "KIRO_LAUNCH_VALUE_OPTIONS=\"$(nix eval --impure --raw --expr 'let lib = (builtins.getFlake (toString ./.)).inputs.nixpkgs.lib; "
-            "in lib.concatStringsSep \",\" (import ./packages/kiro-cli/lib/launchValueOptions.nix {inherit lib;}).measured')\" "
-            "(see packages/kiro-cli/usage/README.md)"
+            f"{variable} is unset. Export the measured list as shown in packages/kiro-cli/usage/README.md."
         )
-    return tuple(measured.split(","))
+    return measured
 
 
-LAUNCH_VALUE_OPTIONS = _launch_value_options()
+CHAT_VALUE_OPTIONS_ARG = "--chat-value-options=" + _measured_value_options("KIRO_CHAT_VALUE_OPTIONS")
+LAUNCH_VALUE_OPTIONS = tuple(_measured_value_options("KIRO_LAUNCH_VALUE_OPTIONS").split(","))
 
 
 class HistoryRefreshTests(unittest.TestCase):
@@ -98,22 +96,20 @@ class HistoryRefreshTests(unittest.TestCase):
     def test_exit_does_no_disk_index_work(self):
         """A simulated tracked exit renders the capture card without probing or writing the disk index."""
         self.write_session()
-        for arguments in (("chat",), ("chat", "--no-interactive")):
-            with (self.subTest(arguments=arguments),
-                  patch.object(os, "scandir", wraps=os.scandir) as scandir,
-                  patch.object(os, "stat", wraps=os.stat) as file_stat,
-                  patch.object(capture, "lock_beside", wraps=capture.lock_beside) as lock,
-                  patch.object(disk_index, "lock_beside", wraps=disk_index.lock_beside) as index_lock,
-                  patch.object(disk_index, "open_database", wraps=disk_index.open_database) as writer,
-                  patch.object(disk_index, "index_tree", wraps=disk_index.index_tree) as index):
-                output = self.run_exec(*arguments)
-                self.assertIn("Kiro usage · sess_root · this run · 1 request", output)
-                scandir.assert_not_called()
-                index_lock.assert_not_called()
-                writer.assert_not_called()
-                self.assertEqual((index.call_count, lock.call_count,
-                                  [str(call.args[0]) for call in file_stat.call_args_list
-                                   if str(call.args[0]).startswith(str(self.sessions.parent))]), (0, 0, []))
+        with (patch.object(os, "scandir", wraps=os.scandir) as scandir,
+              patch.object(os, "stat", wraps=os.stat) as file_stat,
+              patch.object(capture, "lock_beside", wraps=capture.lock_beside) as lock,
+              patch.object(disk_index, "lock_beside", wraps=disk_index.lock_beside) as index_lock,
+              patch.object(disk_index, "open_database", wraps=disk_index.open_database) as writer,
+              patch.object(disk_index, "index_tree", wraps=disk_index.index_tree) as index):
+            output = self.run_exec("chat")
+            self.assertIn("Kiro usage · sess_root · this run · 1 request", output)
+            scandir.assert_not_called()
+            index_lock.assert_not_called()
+            writer.assert_not_called()
+            self.assertEqual((index.call_count, lock.call_count,
+                              [str(call.args[0]) for call in file_stat.call_args_list
+                               if str(call.args[0]).startswith(str(self.sessions.parent))]), (0, 0, []))
 
     def test_session_refreshes_changed_root_and_new_descendant(self):
         """A session tree read includes appended root turns and newly linked children."""
@@ -650,26 +646,119 @@ class SummaryTests(unittest.TestCase):
             self.assertFalse((root / "usage.sqlite3").exists())
 
     def test_nested_launch_reuses_marker_and_skips_summary(self):
-        with patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}) as environment, patch.object(os, "execvpe") as execute, patch.object(runtime, "invocation_summary") as summary:
-            runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", "chat"])
-            environment.assert_called_once_with(Path("/unused"), 19001, refuse_conflicts=False, invocation="a" * 32)
-            execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", "chat"], {})
-            summary.assert_not_called()
+        for arguments in (["chat"], ["chat", "--no-interactive"]):
+            with (self.subTest(arguments=arguments),
+                  patch.dict(os.environ, KIRO_USAGE_INVOCATION="a" * 32, clear=True),
+                  patch.object(runtime, "launch_environment", return_value={}) as environment,
+                  patch.object(os, "execvpe") as execute,
+                  patch.object(runtime, "wait_command") as wait,
+                  patch.object(runtime, "settle_captures") as settle,
+                  patch.object(runtime, "invocation_summary") as summary):
+                runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
+                environment.assert_called_once_with(Path("/unused"), 19001, refuse_conflicts=False, invocation="a" * 32)
+                execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", *arguments], {})
+                wait.assert_not_called()
+                settle.assert_not_called()
+                summary.assert_not_called()
+
+    def test_only_quiet_launches_exec_with_a_fresh_marker(self):
+        cases = (
+            ("headless chat", ["kiro-cli", "chat", "--no-interactive"], ["--v3", "chat", "--no-interactive"]),
+            ("headless ACP", ["kiro-cli", "acp"], ["--v3", "acp", "--agent-engine=v3"]),
+            ("headless ACP with --no-summary", ["--no-summary", "kiro-cli", "acp"],
+             ["--v3", "acp", "--agent-engine=v3"]),
+            ("stream JSON separate value", ["kiro-cli", "chat", "--output-format", "stream-json"],
+             ["--v3", "chat", "--output-format", "stream-json"]),
+            ("stream JSON attached value", ["kiro-cli", "chat", "--output-format=stream-json"],
+             ["--v3", "chat", "--output-format=stream-json"]),
+            ("text output", ["kiro-cli", "chat", "--output-format", "text"], None),
+            ("agent value", ["kiro-cli", "chat", "--agent", "--no-interactive"], None),
+            ("chat long option value", ["kiro-cli", "chat", "--format", "--no-interactive"], None),
+            ("chat short option value", ["kiro-cli", "chat", "-vf", "--no-interactive"], None),
+            ("attached short value before flag", ["kiro-cli", "chat", "-vf=json", "--no-interactive"],
+             ["--v3", "chat", "-vf=json", "--no-interactive"]),
+            ("stream JSON spelling used as another value",
+             ["kiro-cli", "chat", "--agent", "--output-format=stream-json"], None),
+            ("stream JSON spelling after command separator",
+             ["kiro-cli", "chat", "--", "--output-format=stream-json"], None),
+            ("after command separator", ["kiro-cli", "chat", "--", "--no-interactive"], None),
+            ("exec flag belongs to child", ["kiro-cli", "chat", "--", "--no-summary"], None),
+            ("interactive chat", ["kiro-cli", "chat"], None),
+        )
+        markers = set()
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            cert = state / "ca" / "mitmproxy-ca-cert.pem"
+            cert.parent.mkdir(mode=0o700)
+            cert.write_text("fixture certificate")
+            for name, arguments, direct in cases:
+                argv = ["runtime.py", "cli", "--state-dir", str(state), "--port", "19001",
+                        "--warn-bytes", str(1 << 30), CHAT_VALUE_OPTIONS_ARG,
+                        "--launch-value-options=" + ",".join(LAUNCH_VALUE_OPTIONS), "--", "exec", *arguments]
+                with (self.subTest(name=name),
+                      patch.dict(os.environ, {}, clear=True),
+                      patch.object(sys, "argv", argv),
+                      patch.object(runtime.socket, "create_connection"),
+                      patch.object(os, "execvpe") as execute,
+                      patch.object(runtime, "wait_command", return_value=23) as wait,
+                      patch.object(runtime, "settle_captures", return_value=True) as settle,
+                      patch.object(runtime, "invocation_summary") as summary):
+                    result = runtime.main()
+                    if direct is None:
+                        self.assertEqual(result, 23)
+                        execute.assert_not_called()
+                        wait.assert_called_once()
+                        self.assertEqual(wait.call_args.args[:2], ("kiro-cli", ["--v3", *arguments[1:]]))
+                        settle.assert_called_once()
+                        summary.assert_called_once()
+                    else:
+                        execute.assert_called_once()
+                        command, argv, environment = execute.call_args.args
+                        self.assertEqual((command, argv), ("kiro-cli", ["kiro-cli", *direct]))
+                        marker = environment["KIRO_USAGE_INVOCATION"]
+                        self.assertRegex(marker, r"^[0-9a-f]{32}$")
+                        self.assertNotIn(marker, markers)
+                        markers.add(marker)
+                        self.assertEqual(environment["HTTPS_PROXY"], f"http://kiro-usage-{marker}:@127.0.0.1:19001")
+                        self.assertEqual(environment["NODE_EXTRA_CA_CERTS"], str(cert))
+                        wait.assert_not_called()
+                        settle.assert_not_called()
+                        summary.assert_not_called()
 
     def test_supervised_child_status_stdout_and_signals(self):
+        self._check_supervised_child_status_stdout_and_signals()
+
+    def test_no_summary_supervises_without_settling_or_printing(self):
+        self._check_supervised_child_status_stdout_and_signals(no_summary=True)
+
+    def _check_supervised_child_status_stdout_and_signals(self, no_summary=False):
+        """Run fixture children to distinguish supervised exits from direct exec."""
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "kiro-cli"
+            arguments = ["exec", *(["--no-summary"] if no_summary else []), str(executable), "chat"]
+            script = f"""
+import runtime
+from pathlib import Path
+
+runtime.launch_environment = lambda *args, **kwargs: dict(runtime.os.environ)
+runtime.settle_captures = lambda *args: print("settle", file=runtime.sys.stderr)
+runtime.invocation_summary = lambda *args, **kwargs: print("summary", file=runtime.sys.stderr)
+def unexpected_exec(*args):
+    raise AssertionError("expected supervision, got direct exec")
+
+runtime.os.execvpe = unexpected_exec
+raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30))
+"""
             for body, expected in (("print('machine stdout'); raise SystemExit(23)", 23), ("import os, signal; os.kill(os.getpid(), signal.SIGTERM)", -signal.SIGTERM), ("import os, signal; os.kill(os.getpid(), signal.SIGKILL)", -signal.SIGKILL)):
-                executable.write_text(f"#!{sys.executable}\n" + body + "\n")
-                executable.chmod(0o700)
-                script = f"import runtime; from pathlib import Path; runtime.launch_environment=lambda *a, **kw: dict(runtime.os.environ); runtime.invocation_summary=lambda *a, **kw: print('summary', file=runtime.sys.stderr); raise SystemExit(runtime.exec_command(Path('/unused'), 19001, 1 << 30, [{str(executable)!r}]))"
-                env = dict(os.environ)
-                env.pop("KIRO_USAGE_INVOCATION", None)
-                result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, expected, result.stderr)
-                self.assertEqual(result.stderr, "summary\n")
-                if expected == 23:
-                    self.assertEqual(result.stdout, "machine stdout\n")
+                with self.subTest(expected=expected):
+                    executable.write_text(f"#!{sys.executable}\n" + body + "\n")
+                    executable.chmod(0o700)
+                    env = dict(os.environ)
+                    env.pop("KIRO_USAGE_INVOCATION", None)
+                    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertEqual(result.stderr, "" if no_summary else "settle\nsummary\n")
+                    self.assertEqual(result.stdout, "machine stdout\n" if expected == 23 else "")
 
     def test_terminal_descriptors_and_interrupt(self):
         self._check_terminal(False)
@@ -810,9 +899,12 @@ class SummaryTests(unittest.TestCase):
             execute.assert_called_once_with(sys.executable, [sys.executable, str(script / "capture.py"), "--db", "/state/usage.sqlite3", *arguments])
 
     def test_main_returns_child_status(self):
-        with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--launch-value-options=--agent,--repo", "--", "exec", "kiro-cli"]), patch.object(runtime, "cli", return_value=23) as cli:
+        with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1",
+                                       "--chat-value-options=--format,-f", "--launch-value-options=--agent,--repo",
+                                       "--", "exec", "--no-summary", "kiro-cli"]), patch.object(runtime, "cli", return_value=23) as cli:
             self.assertEqual(runtime.main(), 23)
-        self.assertEqual(cli.call_args.args[-1], ["--agent", "--repo"])
+        self.assertEqual(cli.call_args.args[1], ["--", "exec", "--no-summary", "kiro-cli"])
+        self.assertEqual(cli.call_args.args[-2:], (["--agent", "--repo"], ["--format", "-f"]))
 
     def test_cli_refuses_to_start_without_the_launch_value_options(self):
         with patch.object(sys, "argv", ["runtime.py", "cli", "--port", "19001", "--warn-bytes", "1", "--", "exec", "kiro-cli"]), \
