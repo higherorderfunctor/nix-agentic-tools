@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 import pty
 import select
+import shlex
+import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -42,6 +45,13 @@ def _measured_value_options(variable):
 
 CHAT_VALUE_OPTIONS_ARG = "--chat-value-options=" + _measured_value_options("KIRO_CHAT_VALUE_OPTIONS")
 LAUNCH_VALUE_OPTIONS = tuple(_measured_value_options("KIRO_LAUNCH_VALUE_OPTIONS").split(","))
+
+
+def supervised_fixture_environment():
+    """Give supervised subprocess fixtures a fresh launch environment."""
+    launch_settings = {runtime.INVOCATION, runtime.LAUNCH_HANDOFF, runtime.OUTERMOST_INVOCATION,
+                       *runtime.PROXY_NAMES}
+    return {name: value for name, value in os.environ.items() if name not in launch_settings}
 
 
 class HistoryRefreshTests(unittest.TestCase):
@@ -645,18 +655,241 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("unavailable", output.getvalue())
             self.assertFalse((root / "usage.sqlite3").exists())
 
-    def test_nested_launch_reuses_marker_and_skips_summary(self):
+    def test_stale_handoff_mints_a_fresh_marker(self):
+        """Simulate PID reuse between explicit exec and a managed launch."""
+        path = Path("/unused")
+        port = 19001
+        outermost = "a" * 32
+        with (
+            patch.dict(os.environ, {runtime.INVOCATION: outermost}, clear=True),
+            patch.object(runtime, "process_start_time", create=True, return_value="100") as start_time,
+            patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="b" * 32)),
+            patch.object(runtime, "launch_environment", return_value={}) as launch,
+            patch.object(os, "execvpe") as execute,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            runtime.exec_command(path, port, 1 << 30, ["kiro-cli", "chat"])
+            handoff = execute.call_args.args[2][runtime.LAUNCH_HANDOFF]
+            start_time.return_value = "200"
+            inherited = runtime.InvocationMarkers("b" * 32, outermost)
+            with patch.dict(os.environ, {
+                runtime.INVOCATION: inherited.invocation,
+                runtime.OUTERMOST_INVOCATION: inherited.outermost_invocation,
+                runtime.LAUNCH_HANDOFF: handoff,
+            }), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="c" * 32)):
+                runtime.environment(path, port, os.getpid(), os.getppid())
+            launch.assert_called_with(path, port, runtime.InvocationMarkers("c" * 32, outermost),
+                                      inherited=inherited)
+
+    def test_darwin_start_time_handoff(self):
+        """Run the exec and environment handoff with literal Darwin ps output."""
+        path = Path("/unused")
+        port = 19001
+        pid = os.getpid()
+        outermost = "a" * 32
+        prepared = runtime.InvocationMarkers("b" * 32, outermost)
+        timestamp = "Sat Nov  7 12:34:56 2026"
+        handoff = f"self:{pid}:Sat Nov  7 12:34:56 2026"
+        cases = (
+            ("Darwin timestamp is preserved", timestamp + "\n", timestamp + "\n", handoff, "b"),
+            ("producer lookup fails", "", timestamp + "\n", None, "c"),
+            ("receiver lookup fails", timestamp + "\n", "", handoff, "c"),
+        )
+        for name, producer_output, receiver_output, expected_handoff, expected_marker in cases:
+            with (
+                self.subTest(case=name),
+                patch.dict(os.environ, {
+                    runtime.INVOCATION: "d" * 32,
+                    runtime.OUTERMOST_INVOCATION: outermost,
+                    runtime.LAUNCH_HANDOFF: f"self:{pid}:stale",
+                }, clear=True),
+                patch.object(sys, "platform", "darwin"),
+                patch.object(subprocess, "check_output", return_value=producer_output) as ps,
+                patch.object(runtime.uuid, "uuid4", side_effect=(
+                    SimpleNamespace(hex="b" * 32), SimpleNamespace(hex="c" * 32),
+                )),
+                patch.object(runtime, "launch_environment", return_value=dict(os.environ)) as launch,
+                patch.object(os, "execvpe") as execute,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                runtime.exec_command(path, port, 1 << 30, ["kiro-cli", "chat"])
+                launch.assert_called_once_with(path, port, prepared, refuse_conflicts=False)
+                child_environment = execute.call_args.args[2]
+                self.assertEqual(child_environment.get(runtime.LAUNCH_HANDOFF), expected_handoff)
+                ps.return_value = receiver_output
+                with patch.dict(os.environ, child_environment | {
+                    runtime.INVOCATION: prepared.invocation,
+                }, clear=True):
+                    runtime.environment(path, port, pid, os.getppid())
+                launch.assert_called_with(
+                    path, port, runtime.InvocationMarkers(expected_marker * 32, outermost),
+                    inherited=prepared,
+                )
+
+    def test_darwin_start_time_unavailable(self):
+        """Require an unavailable Darwin ps timestamp to return None to launchers."""
+        cases = (
+            ("empty output", None),
+            ("missing executable", FileNotFoundError()),
+            ("nonzero exit", subprocess.CalledProcessError(1, "/bin/ps")),
+        )
+        for name, error in cases:
+            with (
+                self.subTest(case=name),
+                patch.object(sys, "platform", "darwin"),
+                patch.object(subprocess, "check_output", return_value="", side_effect=error),
+            ):
+                self.assertIsNone(runtime.process_start_time(4321))
+
+    def test_linux_start_time_skips_parentheses_in_command(self):
+        """Require the Linux stat reader to find field 22 after the full command name."""
+        stat_record = (
+            b"4321 (kiro) (worker) S 1 4321 4321 0 -1 4194304 123 0 0 0 1 2 0 0 20 0 1 0 "
+            b"7654321 123456 42 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 "
+            b"0 0 0 0 0 0 0\n"
+        )
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(Path, "read_bytes", autospec=True, return_value=stat_record) as read,
+        ):
+            self.assertEqual(runtime.process_start_time(4321), "7654321")
+        read.assert_called_once_with(Path("/proc/4321/stat"))
+
+    def test_launch_marker_lineage(self):
+        """Run the environment CLI in a fixture Bash launcher and observe the final executable."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="kiro usage 'fixture' ")))
+        state_home = root / "state"
+        state = state_home / "kiro-cli/usage"
+        state.mkdir(mode=0o700, parents=True)
+        ca = state / "ca"
+        ca.mkdir(mode=0o700)
+        cert = ca / "mitmproxy-ca-cert.pem"
+        cert.write_text("fixture")
+        listener = self.enterContext(socket.socket())
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(32)
+        port = listener.getsockname()[1]
+        home = root / "home"
+        home.mkdir()
+        project = root / "project/kiro-cli"
+        managed = root / "managed/kiro-cli"
+        for executable in (project, managed):
+            executable.parent.mkdir()
+            executable.touch(mode=0o700)
+        project.write_text(f"""#!{sys.executable}
+import json, os, subprocess, sys
+
+keys = ("HTTP_PROXY", "HTTPS_PROXY", "KIRO_USAGE_HANDOFF", "KIRO_USAGE_INVOCATION",
+        "KIRO_USAGE_OUTERMOST_INVOCATION", "NODE_EXTRA_CA_CERTS", "http_proxy", "https_proxy")
+print(json.dumps({{key: os.environ.get(key) for key in keys}}), flush=True)
+for argv, identity in json.loads(sys.argv[-1]):
+    subprocess.run(argv, env=os.environ | {{"FIXTURE_ID": identity}}, check=True)
+""")
+        # Sharing a fixture UUID between entry points would hide a second mint.
+        entry = [sys.executable, "-c", """
+import os, runtime, sys
+from types import SimpleNamespace
+
+runtime.uuid.uuid4 = lambda: SimpleNamespace(hex=os.environ["FIXTURE_ID"] * 31 +
+                                            ("a" if sys.argv[1] == "cli" else "b"))
+sys.exit(runtime.main())
+"""]
+        bootstrap = shlex.join([*entry, "environment", "--port", str(port)])
+        managed.write_text(f"""#!{shutil.which('bash')}
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+nat_usage_environment="$({bootstrap} --launcher-pid "$$" --launcher-parent-pid "$PPID")"
+eval "$nat_usage_environment"
+unset nat_usage_environment
+exec -a "$0" {shlex.quote(str(project))} "$@"
+""")
+        tool = [*entry, "cli", "--port", str(port), "--warn-bytes", "1073741824",
+                "--launch-value-options=" + ",".join(LAUNCH_VALUE_OPTIONS), CHAT_VALUE_OPTIONS_ARG, "--", "exec"]
+
+        def command(executable, *children, explicit=False, quiet=False):
+            """Build a fixture launch and the subprocess plan read by fake Kiro."""
+            prefix = [*tool, *(["--no-summary"] if not quiet else []), "--"] if explicit else []
+            return [*prefix, str(executable), "chat", *(["--no-interactive"] if quiet else []), json.dumps(children)]
+
+        def run(argv, selected=managed, **inherited):
+            """Start one scenario with a clean environment and a fixture PATH."""
+            return subprocess.run(argv, env={"HOME": str(home), "XDG_STATE_HOME": str(state_home),
+                                             "PATH": str(selected.parent), "FIXTURE_ID": "1",
+                                             "PYTHONDONTWRITEBYTECODE": "1", **inherited},
+                                  cwd=Path(__file__).parent, capture_output=True, text=True, timeout=10)
+
+        def marker(digit, mode):
+            """Spell the fixture UUID chosen by each launch mode."""
+            return digit * 31 + mode
+
+        def check(result, *identities):
+            """Check ordered per-process credentials, shell quoting, and quiet output."""
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+            rows = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(len(rows), len(identities))
+            for row, (process, outer) in zip(rows, identities, strict=True):
+                self.assertEqual(row["KIRO_USAGE_INVOCATION"], process)
+                self.assertEqual(row["KIRO_USAGE_OUTERMOST_INVOCATION"], outer)
+                username = process if process == outer else f"{process}.{outer}"
+                for setting in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                    self.assertEqual(row[setting], f"http://kiro-usage-{username}:@127.0.0.1:{port}", setting)
+                self.assertEqual(row["NODE_EXTRA_CA_CERTS"], str(cert))
+            return rows
+
+        outer = marker("1", "b")
+        child = marker("2", "b")
+        grandchild = marker("3", "b")
+        sibling = marker("4", "a")
+        nested_explicit = command(project, explicit=True)
+        nested_managed = command(managed, (command(managed), "3"))
+        with self.subTest(launch="nested managed, sibling explicit, grandchild"):
+            rows = check(run(command(managed, (nested_managed, "2"), (nested_explicit, "4"))),
+                         (outer, outer), (child, outer), (grandchild, outer), (sibling, outer))
+            self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows[:3]))
+
+        explicit = marker("1", "a")
+        for quiet in (False, True):
+            with self.subTest(launch="explicit PATH to managed", quiet=quiet):
+                rows = check(run(command("kiro-cli", (nested_managed, "2"), explicit=True, quiet=quiet)),
+                             (explicit, explicit), (child, explicit), (grandchild, explicit))
+                self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows))
+            with self.subTest(launch="explicit PATH to project", quiet=quiet):
+                replacement = command(managed, explicit=True)
+                rows = check(run(command("kiro-cli", (nested_managed, "2"), (replacement, "4"),
+                                         explicit=True, quiet=quiet), selected=project),
+                             (explicit, explicit), (child, explicit), (grandchild, explicit), (sibling, explicit))
+                self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows[1:]))
+
+        legacy = "f" * 32
+        with self.subTest(launch="managed with matching legacy proxy"):
+            check(run(command(managed), KIRO_USAGE_INVOCATION=legacy, NODE_EXTRA_CA_CERTS=str(cert),
+                      HTTPS_PROXY=f"http://kiro-usage-{legacy}:@127.0.0.1:{port}"), (outer, legacy))
+        for setting, value in (("HTTPS_PROXY", "http://invalid.invalid:1"),
+                               ("NODE_EXTRA_CA_CERTS", str(root / "unrelated.pem"))):
+            with self.subTest(conflict=setting):
+                result = run(command(managed), **{setting: value})
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"inherited {setting} conflicts", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_nested_launch_rotates_marker_and_skips_summary(self):
+        """Require both nested chat variants to replace the process without waiting or printing."""
         for arguments in (["chat"], ["chat", "--no-interactive"]):
             with (self.subTest(arguments=arguments),
                   patch.dict(os.environ, KIRO_USAGE_INVOCATION="a" * 32, clear=True),
+                  patch.object(runtime, "process_start_time", return_value="100"),
+                  patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="b" * 32)),
                   patch.object(runtime, "launch_environment", return_value={}) as environment,
                   patch.object(os, "execvpe") as execute,
                   patch.object(runtime, "wait_command") as wait,
                   patch.object(runtime, "settle_captures") as settle,
                   patch.object(runtime, "invocation_summary") as summary):
                 runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
-                environment.assert_called_once_with(Path("/unused"), 19001, refuse_conflicts=False, invocation="a" * 32)
-                execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", *arguments], {})
+                environment.assert_called_once_with(Path("/unused"), 19001,
+                                                    runtime.InvocationMarkers("b" * 32, "a" * 32), refuse_conflicts=False)
+                execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", *arguments],
+                                                {"KIRO_USAGE_HANDOFF": f"self:{os.getpid()}:100"})
                 wait.assert_not_called()
                 settle.assert_not_called()
                 summary.assert_not_called()
@@ -753,9 +986,8 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
                 with self.subTest(expected=expected):
                     executable.write_text(f"#!{sys.executable}\n" + body + "\n")
                     executable.chmod(0o700)
-                    env = dict(os.environ)
-                    env.pop("KIRO_USAGE_INVOCATION", None)
-                    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=env, capture_output=True, text=True)
+                    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent,
+                                            env=supervised_fixture_environment(), capture_output=True, text=True)
                     self.assertEqual(result.returncode, expected, result.stderr)
                     self.assertEqual(result.stderr, "" if no_summary else "settle\nsummary\n")
                     self.assertEqual(result.stdout, "machine stdout\n" if expected == 23 else "")
@@ -819,7 +1051,8 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
         for arguments, expected in cases:
             with self.subTest(arguments=arguments), patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
                 runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments], launch_value_options=LAUNCH_VALUE_OPTIONS)
-                execute.assert_called_once_with("kiro-cli", ["kiro-cli", *expected], {})
+                self.assertEqual(execute.call_args.args[:2], ("kiro-cli", ["kiro-cli", *expected]))
+                execute.assert_called_once()
 
     def test_other_commands_get_no_engine_selector(self):
         with patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
@@ -842,10 +1075,9 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             script = f"import runtime; from pathlib import Path; runtime.launch_environment=lambda *a, **kw: dict(runtime.os.environ); runtime.wait_command=lambda *a: {status}; runtime.invocation_summary=lambda *a, **kw: print('summary',file=runtime.sys.stderr); raise SystemExit(runtime.exec_command(Path('/unused'), 19001, 1 << 30, ['kiro-cli','chat']))"
             reader, writer = os.pipe()
             os.close(reader)
-            environment = dict(os.environ)
-            environment.pop("KIRO_USAGE_INVOCATION", None)
             try:
-                result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=environment, stderr=writer, stdout=subprocess.PIPE)
+                result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent,
+                                        env=supervised_fixture_environment(), stderr=writer, stdout=subprocess.PIPE)
                 self.assertEqual(result.returncode, expected)
                 self.assertEqual(result.stdout, b"")
             finally:
@@ -948,31 +1180,25 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
                 self.assertEqual(tuple(key in row for key in markers), (expected[0] is not None,) * 2)
                 self.assertNotIn("proxy-authorization", json.dumps(row).lower())
 
-    def test_launch_environment_validates_markers_for_proxy_url(self):
-        """Check credential URLs and rejected inherited markers before a launch."""
-        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        ca = root / "ca"
-        ca.mkdir(mode=0o700)
-        (ca / "mitmproxy-ca-cert.pem").write_text("fixture")
+    def test_inherited_markers_accept_legacy_and_refuse_invalid_ancestry(self):
+        """Check legacy defaults and malformed inherited identities before a launch."""
         process = {"KIRO_USAGE_INVOCATION": "a" * 32}
         outer = {"KIRO_USAGE_OUTERMOST_INVOCATION": "b" * 32}
-        with patch.object(runtime.socket, "create_connection"):
-            for identity, url in (
-                ({**process, **outer}, "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:@127.0.0.1:19001"),
-                (process, "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:@127.0.0.1:19001"),
-                ({**process, "KIRO_USAGE_OUTERMOST_INVOCATION": ""},
-                 "http://kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:@127.0.0.1:19001"),
-                ({}, "http://127.0.0.1:19001"),
-            ):
-                with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
-                    self.assertEqual(runtime.launch_environment(root, 19001)["HTTPS_PROXY"], url)
-            for identity in (outer, {"KIRO_USAGE_INVOCATION": "A" * 32}):
-                with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
-                    with self.assertRaises(ValueError):
-                        runtime.launch_environment(root, 19001)
+        for identity, expected in (
+            ({**process, **outer}, runtime.InvocationMarkers("a" * 32, "b" * 32)),
+            (process, runtime.InvocationMarkers("a" * 32, "a" * 32)),
+            ({**process, "KIRO_USAGE_OUTERMOST_INVOCATION": ""}, runtime.InvocationMarkers("a" * 32, "a" * 32)),
+            ({}, None),
+        ):
+            with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                self.assertEqual(runtime.inherited_markers(), expected)
+        for identity in (outer, {"KIRO_USAGE_INVOCATION": "A" * 32}):
+            with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                with self.assertRaises(ValueError):
+                    runtime.inherited_markers()
 
     def test_empty_inherited_markers_allow_launch(self):
-        """Environment mode omits credentials and tracked exec starts an outer launch."""
+        """Treat empty marker variables as absent and supervise a new outer launch."""
         root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         ca = root / "ca"
         ca.mkdir(mode=0o700)
@@ -982,10 +1208,6 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             "KIRO_USAGE_OUTERMOST_INVOCATION": "",
         }, clear=True))
         self.enterContext(patch.object(runtime.socket, "create_connection"))
-
-        with self.subTest(mode="environment"):
-            values = runtime.launch_environment(root, 19001)
-            self.assertEqual(values["HTTPS_PROXY"], "http://127.0.0.1:19001")
 
         with (self.subTest(mode="exec"),
               patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="c" * 32)),
@@ -998,6 +1220,7 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             wait.assert_called_once()
             values = wait.call_args.args[2]
             self.assertEqual(values["KIRO_USAGE_INVOCATION"], "c" * 32)
+            self.assertEqual(values["KIRO_USAGE_OUTERMOST_INVOCATION"], "c" * 32)
             self.assertEqual(values["HTTPS_PROXY"], "http://kiro-usage-cccccccccccccccccccccccccccccccc:@127.0.0.1:19001")
             summary.assert_called_once_with(root, "c" * 32, 1 << 30, settled=True, theme=None)
 

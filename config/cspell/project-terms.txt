@@ -230,6 +230,7 @@ getconf
 getdents
 getkimchi
 getpid
+getppid
 gitbook
 gitdir
 gitfile
@@ -332,6 +333,7 @@ lockdown
 lockfiles
 logind
 logname
+lstart
 ltrimstr
 manpages
 materializer

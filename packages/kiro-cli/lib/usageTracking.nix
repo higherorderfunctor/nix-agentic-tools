@@ -123,9 +123,10 @@ in {
         exec ${pkgs.python3}/bin/python3 ${runtime} cli ${lib.escapeShellArgs (toolArgs cfg)} -- "$@"
       '';
     };
+  # wrapPackage passes Bash's PID and parent PID so the helper can match direct and supervised exec handoffs.
   launcherBlock = cfg:
     lib.optionalString cfg.enable ''
-      nat_usage_environment="$(${pkgs.python3}/bin/python3 ${runtime} environment ${lib.escapeShellArgs (["--port" (toString cfg.port)] ++ stateArgs cfg)})"
+      nat_usage_environment="$(${pkgs.python3}/bin/python3 ${runtime} environment ${lib.escapeShellArgs (["--port" (toString cfg.port)] ++ stateArgs cfg)} --launcher-pid "$$" --launcher-parent-pid "$PPID")"
       eval "$nat_usage_environment"
       unset nat_usage_environment
     '';
