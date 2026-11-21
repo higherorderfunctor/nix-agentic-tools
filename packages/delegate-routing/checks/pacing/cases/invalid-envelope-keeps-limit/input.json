@@ -17,7 +17,7 @@
     "readers": {
       "budget": {
         "exit": 0,
-        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"windows\":{}}"
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":17,\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{}}"
       }
     },
     "routes": [

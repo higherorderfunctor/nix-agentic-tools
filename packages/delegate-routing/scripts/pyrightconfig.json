@@ -1,0 +1,4 @@
+{
+  "include": ["pacing.py", "usage", "usage_normalize.py"],
+  "typeCheckingMode": "strict"
+}

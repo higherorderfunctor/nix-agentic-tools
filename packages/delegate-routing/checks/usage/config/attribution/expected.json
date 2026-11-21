@@ -1,0 +1,6 @@
+{
+  "contradictory pin": [1795132800, "account-mismatch", {}],
+  "matching pin": [1795132800, null, { "daily": 75, "weekly": 0 }],
+  "nullable identity": [1795132800, null, { "daily": 75, "weekly": 0 }],
+  "unpinned sibling": [1795133100, null, { "daily": 75, "weekly": 0 }]
+}

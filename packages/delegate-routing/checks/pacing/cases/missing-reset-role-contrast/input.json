@@ -23,7 +23,7 @@
     "readers": {
       "budget": {
         "exit": 0,
-        "stdout": "{\"pool\":\"reader\",\"windows\":{\"7d:gate\":{\"enforced\":true,\"remainingPercent\":25.0,\"resetsAt\":null,\"usedPercent\":75.0,\"windowSeconds\":604800},\"7d:pace\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":null,\"usedPercent\":25.0,\"windowSeconds\":604800}}}"
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d:gate\":{\"enforced\":true,\"remainingPercent\":25.0,\"resetsAt\":null,\"status\":null,\"usedPercent\":75.0,\"windowSeconds\":604800},\"7d:pace\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":null,\"status\":null,\"usedPercent\":25.0,\"windowSeconds\":604800}}}"
       }
     },
     "routes": [
