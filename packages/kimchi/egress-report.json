@@ -150,7 +150,7 @@
       "micromatch": "^4.0.8",
       "natural": "link:shims/natural",
       "open": "^10.2.0",
-      "pi-mcp-adapter": "5.3.1",
+      "pi-mcp-adapter": "5.3.2",
       "pptxgenjs": "4.0.1",
       "proper-lockfile": "^4.1.2",
       "quickjs-wasi": "3.6.2",
@@ -216,8 +216,8 @@
       "callSites": [
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
-        "src/extensions/memory/backend.ts:119",
-        "src/models.ts:224",
+        "src/extensions/memory/backend.ts:130",
+        "src/models.ts:254",
         "src/utils/http.ts:90"
       ],
       "consumerOverridable": true,
@@ -307,8 +307,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
-      "kimchiVersion": "1.37.2",
+      "kimchiSourceHash": "sha256-Ro2bCk/vXZKo4SSkQZDiHZQL7VhZjPsWm/eT3rfIQuk=",
+      "kimchiVersion": "1.37.5",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -326,8 +326,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-tJxOQCsJ1LeHKO81why6P4JeUqv+DAJf6/1KzBT4vCg=",
-      "kimchiVersion": "1.37.2",
+      "kimchiSourceHash": "sha256-Ro2bCk/vXZKo4SSkQZDiHZQL7VhZjPsWm/eT3rfIQuk=",
+      "kimchiVersion": "1.37.5",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -919,8 +919,8 @@
       "callSites": [
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
-        "src/extensions/memory/backend.ts:119",
-        "src/models.ts:224",
+        "src/extensions/memory/backend.ts:130",
+        "src/models.ts:254",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -930,8 +930,8 @@
       "callSites": [
         "src/extensions/billing/status.ts:189",
         "src/extensions/billing/status.ts:225",
-        "src/extensions/memory/backend.ts:119",
-        "src/models.ts:224",
+        "src/extensions/memory/backend.ts:130",
+        "src/models.ts:254",
         "src/utils/http.ts:90"
       ],
       "files": ["src/regions.ts"],
@@ -3557,7 +3557,7 @@
       "bundledModule": null,
       "file": "src/extensions/memory/backend.ts",
       "library": "fetch",
-      "line": 119,
+      "line": 130,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3584,13 +3584,13 @@
       "bundledModule": null,
       "file": "src/extensions/memory/backend.ts",
       "library": "fetch",
-      "line": 171,
+      "line": 185,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/memory/backend.ts:171",
+          "origin": "src/extensions/memory/backend.ts:185",
           "value": "input"
         }
       ]
@@ -3599,13 +3599,13 @@
       "bundledModule": null,
       "file": "src/extensions/memory/backend.ts",
       "library": "fetch",
-      "line": 186,
+      "line": 225,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/memory/backend.ts:186",
+          "origin": "src/extensions/memory/backend.ts:225",
           "value": "input"
         }
       ]
@@ -3614,13 +3614,13 @@
       "bundledModule": null,
       "file": "src/extensions/memory/backend.ts",
       "library": "fetch",
-      "line": 187,
+      "line": 226,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/memory/backend.ts:187",
+          "origin": "src/extensions/memory/backend.ts:226",
           "value": "input"
         }
       ]
@@ -3629,13 +3629,28 @@
       "bundledModule": null,
       "file": "src/extensions/memory/backend.ts",
       "library": "fetch",
-      "line": 192,
+      "line": 235,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "argument",
-          "origin": "src/extensions/memory/backend.ts:192",
+          "origin": "src/extensions/memory/backend.ts:235",
+          "value": "input"
+        }
+      ]
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "library": "fetch",
+      "line": 236,
+      "readBy": "kimchi",
+      "targets": [
+        {
+          "host": null,
+          "kind": "argument",
+          "origin": "src/extensions/memory/backend.ts:236",
           "value": "input"
         }
       ]
@@ -3887,7 +3902,7 @@
       "bundledModule": null,
       "file": "src/models.ts",
       "library": "fetch",
-      "line": 224,
+      "line": 254,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3980,7 +3995,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/index.ts:1165",
+          "origin": "src/extensions/agents/index.ts:1195",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -5511,7 +5526,7 @@
       "file": "src/extensions/memory/backend.ts",
       "guards": [],
       "library": "fetch",
-      "line": 119,
+      "line": 130,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5520,7 +5535,7 @@
       "file": "src/extensions/memory/backend.ts",
       "guards": [],
       "library": "fetch",
-      "line": 171,
+      "line": 185,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5529,7 +5544,7 @@
       "file": "src/extensions/memory/backend.ts",
       "guards": [],
       "library": "fetch",
-      "line": 186,
+      "line": 225,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5538,7 +5553,7 @@
       "file": "src/extensions/memory/backend.ts",
       "guards": [],
       "library": "fetch",
-      "line": 187,
+      "line": 226,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5547,7 +5562,16 @@
       "file": "src/extensions/memory/backend.ts",
       "guards": [],
       "library": "fetch",
-      "line": 192,
+      "line": 235,
+      "readBy": "kimchi",
+      "status": "no modeled local guard"
+    },
+    {
+      "bundledModule": null,
+      "file": "src/extensions/memory/backend.ts",
+      "guards": [],
+      "library": "fetch",
+      "line": 236,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5637,7 +5661,7 @@
       "file": "src/models.ts",
       "guards": [],
       "library": "fetch",
-      "line": 224,
+      "line": 254,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -6133,11 +6157,27 @@
       "value": "/api/installer/releases"
     },
     {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/job"
+    },
+    {
       "files": [
         "pi/dist/bundle/chunks/chunk-66G7ITPS.js",
         "pi/dist/utils/version-check.js"
       ],
       "value": "/api/latest-version"
+    },
+    {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/queue"
+    },
+    {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/recall"
+    },
+    {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/recalls"
     },
     {
       "files": ["kimchi/src/sandbox/worker/secrets.ts"],
@@ -6154,6 +6194,14 @@
     {
       "files": ["kimchi/tests/e2e/tui/support/fake-ollama-server.ts"],
       "value": "/api/tags"
+    },
+    {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/trace"
+    },
+    {
+      "files": ["kimchi/src/extensions/memory/dashboard.ts"],
+      "value": "/api/traces"
     },
     {
       "files": ["pi/dist/bundle/chunks/chunk-66G7ITPS.js"],
@@ -6273,6 +6321,7 @@
       "files": [
         "kimchi/src/extensions/daemon/spawn.ts",
         "kimchi/src/extensions/hook-adapters/adapter.ts",
+        "kimchi/src/extensions/memory/dashboard.ts",
         "pi/dist/bundle/chunks/chunk-WJUNYZC5.js"
       ],
       "value": "/c"
@@ -6450,6 +6499,7 @@
     {
       "files": [
         "kimchi/src/extensions/memory/backend.ts",
+        "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
         "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
       ],
       "value": "/embeddings"
@@ -6756,6 +6806,7 @@
     {
       "files": [
         "kimchi/src/oauth-config.ts",
+        "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
         "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
       ],
       "value": "/oauth/token"
@@ -6804,6 +6855,7 @@
     {
       "files": [
         "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+        "kimchi/tests/e2e/tui/support/oauth-refresh.ts",
         "kimchi/tests/e2e/tui/support/wire-requests.ts"
       ],
       "value": "/openai/v1/chat/completions"
@@ -7152,6 +7204,7 @@
     {
       "files": [
         "kimchi/tests/e2e/mcp/fixture-server.mjs",
+        "kimchi/tests/e2e/tui/support/oauth-refresh.ts",
         "pi/dist/bundle/chunks/bedrock-converse-stream.js",
         "pi/dist/bundle/chunks/chunk-2LOB3CBH.js",
         "pi/dist/bundle/chunks/chunk-DOST5PQW.js"
