@@ -3,16 +3,19 @@
 # cspell:ignore maturin
 {
   lib,
+  packageLib,
   pkgs,
   python3,
+  repoPath,
 }: let
-  pinFor = name: let
+  pinFile = name: let
     file =
       if name == "pydantic"
       then "sources.json"
       else "${name}-sources.json";
   in
-    builtins.fromJSON (builtins.readFile (../../../../. + "/${file}"));
+    ../../../../. + "/${file}";
+  pinFor = name: builtins.fromJSON (builtins.readFile (pinFile name));
 
   pinnedRelease = old: let
     pin = pinFor old.pname;
@@ -71,7 +74,9 @@
                 };
             };
           cargoDeps = rustPlatform.fetchCargoVendor {
-            inherit (finalAttrs) pname version src sourceRoot;
+            # A new Pydantic tag can change Cargo.lock at the same core version.
+            pname = "pydantic-${final.pydantic.version}-core";
+            inherit (finalAttrs) version src sourceRoot;
             hash = (pinFor "pydantic-core").cargoHash or lib.fakeHash;
           };
         });
@@ -79,5 +84,8 @@
   };
 in
   python.overrideAttrs (old: {
-    passthru = old.passthru // {maturinCargoDeps = maturin.cargoDeps;};
+    passthru =
+      old.passthru
+      // (import ../../../../lib/update.nix {inherit packageLib pinFile pkgs repoPath;})
+      // {maturinCargoDeps = maturin.cargoDeps;};
   })
