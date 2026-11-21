@@ -19,7 +19,7 @@
   # Each credential offers two APIs; the client route must pick exactly one.
   key = models: {
     apiKey = {
-      key = redact.file "/run/secrets/upstream";
+      key = redact.concat ["synthetic-private-upstream-" (redact.file "/run/secrets/upstream")];
       inherit models;
       apis = {
         anthropic = {
@@ -115,6 +115,7 @@
       };
       runtimes = {
         claude = {
+          techniques.usage.command = "fixture-reader";
           models = [{families = ["alpha"];}];
         };
         codex = {
@@ -169,6 +170,22 @@
     manual = content.mkSkill args;
     text = builtins.readFile "${manual}/SKILL.md";
     moduleText = builtins.readFile "${config.ai.claude.skills.delegate-routing}/SKILL.md";
+    # Read the actual skill from each builder; its wrapper points to the shipped manifest.
+    credentialUsage = builtins.fromJSON (builtins.readFile ./usage/config/input.json);
+    registered = change {
+      ai.programs.delegate-routing = {inherit credentialUsage;};
+      ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkAfter (map (credential: {
+        inherit credential;
+        api = "chat";
+      }) ["second" "second" "filtered"]);
+    };
+    delivered = runtime: let
+      skill = content.mkSkill (args
+        // {
+          inherit credentialUsage runtime;
+          cpaRoutes = project registered;
+        });
+    in ["${registered.ai.${runtime}.skills.delegate-routing}/SKILL.md" "${skill}/SKILL.md"];
     # Compare prose independently of the manifest's store context.
     withoutHelper = value: lib.concatStringsSep "<helper>" (builtins.filter builtins.isString (builtins.split "/nix/store/[a-z0-9]+-delegate-routing-plan/bin/delegate-routing-plan" value));
     properties =
@@ -291,8 +308,7 @@
           == "short";
       };
   in
-    lib.all (name: properties.${name} || throw "delegate-routing CPA routes: ${name}") (builtins.attrNames properties);
-in {
-  # The combined owner check exercises production options on each backend.
-  checks.delegate-routing-cpa-routes = harness.mkTest "delegate-routing-cpa-routes" (check true backends.hm && check false backends.devenv);
-}
+    assert lib.all (name: properties.${name} || throw "delegate-routing CPA routes: ${name}") (builtins.attrNames properties);
+      lib.concatMap delivered ["claude" "codex"];
+in
+  check true backends.hm ++ check false backends.devenv

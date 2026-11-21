@@ -24,6 +24,7 @@ settings.register_profile("ranking", database=None, deadline=None, max_examples=
 settings.load_profile("ranking")
 
 SCRIPTS = Path(sys.argv[1])
+sys.path.insert(0, str(SCRIPTS))
 CASES = Path(sys.argv[2])
 P = types.SimpleNamespace(**runpy.run_path(str(SCRIPTS / "pacing.py")))
 N = P.normalizer

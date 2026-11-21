@@ -1,0 +1,27 @@
+{
+  "test/first": {
+    "limits": {
+      "specific": {
+        "capacity": 40,
+        "models": ["test-alpha-1"],
+        "role": "gate",
+        "window": "daily"
+      }
+    },
+    "pin": "account-17",
+    "readerPool": "measured",
+    "transport": { "retries": 3, "timeout": 11 },
+    "usage": { "runtime": "claude", "technique": "usage" }
+  },
+  "test/second": {
+    "limits": {
+      "weekly": {
+        "capacity": 10,
+        "role": "pace",
+        "window": "weekly"
+      }
+    },
+    "readerPool": "discovered",
+    "usage": { "runtime": "claude", "technique": "usage" }
+  }
+}

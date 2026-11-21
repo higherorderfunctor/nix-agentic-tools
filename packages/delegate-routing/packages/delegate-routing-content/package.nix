@@ -129,15 +129,34 @@
       manualExternalDelegates = args.manualExternalDelegates or [];
     };
     pools = args.pools or {};
+    credentialUsage =
+      (lib.evalModules {
+        modules = [
+          {
+            options = {inherit (import ../../lib/reader-options.nix {inherit lib;}) credentialUsage;};
+            config.credentialUsage = args.credentialUsage or {};
+          }
+        ];
+      }).config.credentialUsage;
+    pacing = import ../../lib/pacing.nix {
+      inherit lib credentialUsage techniques;
+      inherit (args) runtime;
+      cpaRoutes = args.cpaRoutes or {};
+    };
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
       if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
       then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
-      else view // {inherit (args) runtime sessionPool reviewPolicy;}
+      else
+        view
+        // {
+          inherit pacing;
+          inherit (args) runtime sessionPool reviewPolicy;
+        }
     ));
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
       text = ''
-        exec ${pkgs.ai.generic.python-stack.withPackages (ps: [ps.pydantic])}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+        exec ${pkgs.ai.generic.python-stack.withPackages (ps: [ps.pydantic ps.urllib3])}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';
     };
     helperCommand = lib.getExe helper;
@@ -158,7 +177,7 @@
             # as a dependency of the delivered file, including its manifest.
             body =
               builtins.appendContext
-              (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["opencodeGo" "picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
+              (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["credentialUsage" "opencodeGo" "picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
               (builtins.getContext helperInstruction);
           };
         };
