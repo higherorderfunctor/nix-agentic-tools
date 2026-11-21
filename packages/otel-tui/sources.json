@@ -1,9 +1,9 @@
 {
-  "version": "0.7.5",
+  "version": "0.7.6",
   "src": {
-    "url": "https://github.com/ymtdzzz/otel-tui/archive/v0.7.5.tar.gz",
-    "hash": "sha256-m+3yVFlB4cSJMiuBdbPZ7oEFLw32980bbZ0KUpb5FSY="
+    "url": "https://github.com/ymtdzzz/otel-tui/archive/v0.7.6.tar.gz",
+    "hash": "sha256-0H/9BxrxYLnFhJ03+GcW+fsQyf1+3jxHG1pLUZun/7g="
   },
-  "goFloor": "1.26.0",
-  "vendorHash": "sha256-6MINrP1RMLievsVfkU4vSQ5SV4s9NQoKRp8LdUWkmn0="
+  "goFloor": "1.26.9",
+  "vendorHash": "sha256-Wo9zKOMKIUc52Y3Z/fhuVJqbQ1uykr1cfC9x7Hh3DpQ="
 }
