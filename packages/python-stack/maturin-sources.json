@@ -1,0 +1,8 @@
+{
+  "cargoHash": "sha256-Ch2FOMk7KkZrb+iqJeUI0NfHltEI2sXpGkT0m6jnbp0=",
+  "version": "1.16.0",
+  "src": {
+    "url": "https://github.com/PyO3/maturin/archive/v1.16.0.tar.gz",
+    "hash": "sha256-Bqqq+oVivqrpbEXoWRwMQ6slefnPcEGSnLRXy5SIyys="
+  }
+}
