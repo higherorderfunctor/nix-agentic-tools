@@ -1,12 +1,11 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-11-19 — all three carried patches apply to CPA 8.0.78
-> with no fuzz or offset; loading rejects duplicate client keys and startup
-> exits 1 on refusal. Hot reload can briefly serve a retired config credential
-> under newly widened rules, so rotation that also widens access requires a
-> restart or an `ids` rule. Named instance client routes derive secret OAuth
-> account rules or API base-URL rules. Model catalogs use selection's
-> eligibility predicate.
+> **Last verified:** 2026-11-19 — loading rejects duplicate client keys and
+> startup exits 1 on refusal. Hot reload can briefly serve a retired config
+> credential under newly widened rules, so rotation that also widens access
+> requires a restart or an `ids` rule. Named instance client routes derive
+> secret OAuth account rules or API base-URL rules. Model catalogs use
+> selection's eligibility predicate.
 
 ## Why selection lives in CPA
 
@@ -153,9 +152,9 @@ revocation and could fail open, so that reorder was rejected.
 ## Credential tool shims
 
 `patches/zhipuai-tool-shims.patch` adds two opt-in credential settings for the
-pinned CPA 8.0.78. They repair measured Z.ai compatibility failures without
-changing credential selection. Named credentials with `vendor = "zhipuai"`
-default both on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
+pinned CPA. They repair measured Z.ai compatibility failures without changing
+credential selection. Named credentials with `vendor = "zhipuai"` default both
+on: `apiKey.toolAliases = {ToolSearch = "ToolSearch_";}` and
 `apiKey.codexShellArgCleanup = true`. Set them to `{}` and `false` to disable
 them; other vendors default both off.
 
@@ -222,12 +221,15 @@ Manager and devenv.
 
 ## Bumping CPA
 
-The package applies `patches/key-allowlist.patch`, then
-`patches/zhipuai-tool-shims.patch`, to the pinned source with `-p1 --fuzz=0`;
-extraction and the Go checks read that same patched source. Fetch the version
-from `sources.json` into scratch, verify its unpacked NAR hash, apply the patch
-with `patch --dry-run -p1 --fuzz=0`, and inspect every changed
-candidate-selection loop before regenerating the diff. Offset-only moves may
-apply; changed context fails. The Go check covers behavior; the loop scan misses
-the shapes listed above. Regenerate the extracted settings facts after a schema
-change, then run the module assertions and Go check in CI.
+The package applies `patches/key-allowlist.patch`,
+`patches/zhipuai-tool-shims.patch`, and `patches/passthrough-provider.patch` in
+that order. All three apply to CPA 8.0.79 and 8.0.80 with zero fuzz. Extraction
+and the Go checks read that same patched source.
+
+Fetch the version from `sources.json` into scratch and verify its unpacked NAR
+hash. Check each patch with `patch --dry-run -p1 --fuzz=0`, then apply it before
+checking the next one. Offset-only moves may apply. Changed context fails.
+Inspect every changed candidate-selection loop before regenerating the diff. The
+Go check covers behavior, and the loop scan misses the shapes listed above.
+Regenerate the extracted settings facts after a schema change, then run the
+module assertions and Go check in CI.
