@@ -1,0 +1,97 @@
+{
+  "claude": {
+    "readers": {
+      "test/first": {
+        "command": "fixture-reader",
+        "limits": {
+          "specific": {
+            "capacity": 40,
+            "models": ["test-alpha-1"],
+            "role": "gate",
+            "window": "daily"
+          }
+        },
+        "pin": "account-17",
+        "readerPool": "measured",
+        "transport": { "retries": 3, "timeout": 11 }
+      },
+      "test/second": {
+        "command": "fixture-reader",
+        "limits": {
+          "weekly": {
+            "capacity": 10,
+            "models": ["test-alpha-1"],
+            "role": "pace",
+            "window": "weekly"
+          }
+        },
+        "pin": null,
+        "readerPool": "discovered",
+        "transport": { "retries": 0, "timeout": 75 }
+      }
+    },
+    "routes": [
+      {
+        "credential": "first",
+        "id": "test-alpha-1",
+        "instance": "test",
+        "maker": "alpha",
+        "model": "test-alpha-1",
+        "runtime": "claude"
+      },
+      {
+        "credential": "first",
+        "id": "test-unknown-1",
+        "instance": "test",
+        "maker": null,
+        "model": "test-unknown-1",
+        "runtime": "claude"
+      },
+      {
+        "credential": "second",
+        "id": "test-alpha-1",
+        "instance": "test",
+        "maker": "alpha",
+        "model": "test-alpha-1",
+        "runtime": "claude"
+      },
+      {
+        "credential": "second",
+        "id": "test-alpha-1",
+        "instance": "test",
+        "maker": "alpha",
+        "model": "test-alpha-1",
+        "runtime": "claude"
+      },
+      {
+        "credential": "filtered",
+        "id": "test-beta-1",
+        "instance": "test",
+        "maker": "beta",
+        "model": "test-beta-1",
+        "runtime": "claude"
+      }
+    ]
+  },
+  "codex": {
+    "readers": {
+      "test/first": {
+        "command": null,
+        "limits": {},
+        "pin": "account-17",
+        "readerPool": "measured",
+        "transport": { "retries": 3, "timeout": 11 }
+      }
+    },
+    "routes": [
+      {
+        "credential": "first",
+        "id": "test-beta-1",
+        "instance": "test",
+        "maker": "beta",
+        "model": "test-beta-1",
+        "runtime": "codex"
+      }
+    ]
+  }
+}

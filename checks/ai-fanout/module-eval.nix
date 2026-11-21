@@ -466,6 +466,7 @@ in {
           runtimes;
       in
         programParity "delegate-routing" {
+          credentialUsage = "attribute set of (submodule)";
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
           opencodeGo.plan = ''null or one of "go", "go-plus", "go-teams"'';
