@@ -121,11 +121,13 @@ in {
       );
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {
-        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic]))];
+        nativeBuildInputs = [pkgs.bash (pkgs.python3.withPackages (ps: [ps.hypothesis ps.pydantic ps.urllib3]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${./checks/routing-plan-runtime.py} ${./scripts/delegate-routing-plan.py} ${./checks/fixtures/routing-readers.json} ${./checks/fixtures/codex-models-cache.json}
+        python3 -I -B ${./checks/usage/runner}/test_runner.py ${./scripts}
+        python3 -I -B ${./checks/usage/transport}/test_transport.py ${./scripts}
+        python3 ${./checks/routing-plan-runtime.py} ${./scripts}/delegate-routing-plan.py ${./checks/fixtures/routing-readers.json} ${./checks/fixtures/codex-models-cache.json}
         touch "$out"
       '';
     delegate-routing-usage-runtime =
