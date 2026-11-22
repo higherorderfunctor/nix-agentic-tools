@@ -39,7 +39,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   nix-update:
-    url: github:Mic92/nix-update/613fabb0e331c1dfc8efc94ec920c526e85b0f15
+    url: github:Mic92/nix-update/cfd5a600f21407748daa7b38cd5e370d868ce10e
     inputs:
       nixpkgs:
         follows: nixpkgs
