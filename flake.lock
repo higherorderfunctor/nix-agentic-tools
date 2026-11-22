@@ -406,15 +406,14 @@
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
-        ],
-        "treefmt-nix": "treefmt-nix_3"
+        ]
       },
       "locked": {
-        "lastModified": 1794723193,
-        "narHash": "sha256-r6qJJ3T4GbU0q25aO4GWFr9I3mAnoN3EMUTor0eOG90=",
+        "lastModified": 1795349612,
+        "narHash": "sha256-7yYSS1gWxrr5DlNDYFimkzd88jgY9L7ev1YB69+WIH8=",
         "owner": "Mic92",
         "repo": "nix-update",
-        "rev": "c4973b3d743562ea5896dda7fc3d944f59bac4c9",
+        "rev": "613fabb0e331c1dfc8efc94ec920c526e85b0f15",
         "type": "github"
       },
       "original": {
@@ -546,7 +545,7 @@
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-stable": "nixpkgs-stable",
         "rust-overlay": "rust-overlay_2",
-        "treefmt-nix": "treefmt-nix_4"
+        "treefmt-nix": "treefmt-nix_3"
       }
     },
     "rust-overlay": {
@@ -665,27 +664,6 @@
       }
     },
     "treefmt-nix_3": {
-      "inputs": {
-        "nixpkgs": [
-          "nix-update",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1791885023,
-        "narHash": "sha256-C3alQ2MEt0zVrUSho5NUDo3jmhbff72++bfwoqT9Omo=",
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "rev": "0d6d739a833ba9a9c93034862e4a7b061a062a1c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "treefmt-nix",
-        "type": "github"
-      }
-    },
-    "treefmt-nix_4": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
