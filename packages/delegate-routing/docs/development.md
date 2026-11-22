@@ -758,7 +758,13 @@ family/runtime deterministically.
 The live helper above reads Reader windows directly. For saved Reader output,
 `normalize(snapshot, now)` returns one allowance per configured limit. See
 [saved Reader observations](pacing.md) for the input and output shapes and for
-test-case instructions.
+test-case instructions. Build `delegate-routing-usage-types` to check the usage
+modules, normalization and ranking with strict Pyright and run both
+saved-capture suites.
+
+```bash
+flock /tmp/nat-vm-spike.lock systemd-run --user --scope -q -p CPUQuota=200% -p MemoryMax=6G nix build --max-jobs 1 --cores 2 --no-link .#checks.x86_64-linux.delegate-routing-usage-types
+```
 
 JSON goes to stdout and canonical lines to stderr. JSON includes all warnings;
 stderr includes failure warnings and the fallback notice; advisory notes stay

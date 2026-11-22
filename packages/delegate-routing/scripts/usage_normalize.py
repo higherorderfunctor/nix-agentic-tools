@@ -5,26 +5,32 @@ from __future__ import annotations
 import datetime as dt
 import math
 from dataclasses import dataclass
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, NamedTuple, Self, cast
 
 from pydantic import (
     AwareDatetime,
     BaseModel,
     BeforeValidator,
     Field,
+    JsonValue,
     StrictBool,
     StrictInt,
     StrictStr,
-    StringConstraints,
     ValidationError,
     model_validator,
 )
 
+from usage.scope import (
+    Amount,
+    LimitSpec,
+    LimitValues,
+    Nonempty,
+    Positive,
+    Registration,
+    Route,
+)
 
-Amount = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
-Nonempty = Annotated[StrictStr, StringConstraints(min_length=1)]
 Percent = Annotated[Amount, Field(le=100)]
-Positive = Annotated[Amount, Field(gt=0)]
 
 
 def parse_iso_timestamp(raw: object) -> dt.datetime:
@@ -41,40 +47,63 @@ def normalize(snapshot: Snapshot, now: int) -> Normalized:
     """Keep every configured limit and explain allowance the ranking cannot use."""
     pools: dict[str, PoolEvidence] = {}
     for name, registration in sorted(snapshot.pools.items()):
-        windows, capture_reason = read_capture(snapshot.readers.get(name), registration.readerPool)
+        capture = read_capture(snapshot.readers.get(name), registration)
         limits = [
-            window_observation(identifier, spec, windows.get(spec.window), capture_reason, now)
+            window_observation(identifier, spec, capture, now)
             for identifier, spec in sorted(registration.limits.items())
         ]
-        unregistered = len(set(windows) - {spec.window for spec in registration.limits.values()})
-        scope_resolved = capture_reason is None and not unregistered
+        unregistered = len(set(capture.windows) - {spec.window for spec in registration.limits.values()})
+        scope_resolved = capture.reason is None and not unregistered
         pools[name] = PoolEvidence(limits=limits, scopeResolved=scope_resolved)
     return Normalized(asOf=now, pools=pools, routes=snapshot.routes)
 
 
-def read_capture(raw: object, reader_pool: str) -> tuple[dict[str, WindowParseResult], str | None]:
-    """Return matching Reader windows, or the reason every pool limit is unusable."""
+class CaptureEvidence(NamedTuple):
+    """Pass the saved completion time and each validated window to the normalizer."""
+
+    observed_at: int | None
+    windows: dict[str, WindowParseResult]
+    reason: str | None
+
+
+def read_capture(raw: object, registration: Registration) -> CaptureEvidence:
+    """Read a saved command and validate its single account before using its windows."""
     if raw is None:
-        return {}, "missing-capture"
+        return CaptureEvidence(None, {}, "missing-capture")
     try:
         capture = Capture.model_validate(raw)
-        if capture.exit != 0:
-            return {}, "exit-nonzero"
-        payload = Envelope.model_validate_json(capture.stdout)
+    except ValidationError:
+        return CaptureEvidence(None, {}, "invalid-envelope")
+
+    observed_at = int(capture.finishedAt.timestamp()) if capture.finishedAt else None
+    if capture.exit != 0:
+        return CaptureEvidence(observed_at, {}, "exit-nonzero")
+    return parse_reader_stdout(capture.stdout, registration, observed_at)
+
+
+def parse_reader_stdout(
+    stdout: str, registration: Registration, observed_at: int | None
+) -> CaptureEvidence:
+    """Give replay and credential collection only the windows attributable to their registration."""
+    try:
+        envelope = Envelope.model_validate_json(stdout)
     except ValidationError as error:
-        failures = error.errors(include_url=False)
-        json_error = any(item["type"].startswith("json_invalid") for item in failures)
-        return {}, "invalid-json" if json_error else "invalid-envelope"
-    if payload.pool != reader_pool:
-        return {}, "pool-mismatch"
-    return {key: parse_window(value) for key, value in payload.windows.items()}, None
+        invalid_json = any(
+            item["type"] == "json_invalid" for item in error.errors(include_input=False)
+        )
+        return CaptureEvidence(observed_at, {}, "invalid-json" if invalid_json else "invalid-envelope")
+    if envelope.pool != registration.readerPool:
+        return CaptureEvidence(observed_at, {}, "pool-mismatch")
+    auth_index = envelope.account.auth_index
+    if registration.pin is not None and auth_index is not None and registration.pin != auth_index:
+        return CaptureEvidence(observed_at, {}, "account-mismatch")
+    return CaptureEvidence(observed_at, envelope.windows, None)
 
 
 def window_observation(
     identifier: str,
     spec: LimitSpec,
-    outcome: WindowParseResult | None,
-    capture_reason: str | None,
+    capture: CaptureEvidence,
     now: int,
 ) -> Observation:
     """Return one configured limit's allowance, preserving proven exhaustion.
@@ -82,11 +111,16 @@ def window_observation(
     The reason tells the caller why an unusable allowance cannot be ranked, and
     whether the saved capture or this window supplied the failed evidence.
     """
-    observation = Observation.model_construct(
-        capacity=spec.capacity, id=identifier, models=spec.models, role=spec.role
+    observation = Observation(
+        capacity=spec.capacity,
+        id=identifier,
+        models=spec.models,
+        observedAt=capture.observed_at,
+        role=spec.role,
     )
+    outcome = capture.windows.get(spec.window)
     if outcome is None:
-        return observation.model_copy(update={"reason": capture_reason or "missing-window"})
+        return observation.model_copy(update={"reason": capture.reason or "missing-window"})
 
     if outcome.window is None:
         observation.status = "invalid"
@@ -118,46 +152,15 @@ def window_observation(
             observation.reason = "not-enforced"
         return observation
 
-    if observation.remaining is not None and observation.remaining > 0:
+    if observation.remaining > 0:
         observation.remaining = None
     return observation
 
 
-class LimitValues(BaseModel):
-    """Carry the capacity, routes, and role shared by input and output limits."""
+class SnapshotRegistration(Registration):
+    """Older saved snapshots identify only the pool, with no credential pin."""
 
-    capacity: Positive
-    models: Annotated[list[Nonempty], Field(min_length=1)]
-    role: Literal["gate", "pace"]
-
-
-class LimitSpec(LimitValues, extra="forbid"):
-    """Bind a Reader window to one configured limit."""
-
-    window: Nonempty
-
-
-class Registration(BaseModel):
-    """Name the Reader pool and exact windows a configuration registers."""
-
-    limits: dict[str, LimitSpec]
-    readerPool: Nonempty
-
-    @model_validator(mode="after")
-    def unique_windows(self) -> Self:
-        """Refuse two limits that claim the same Reader window."""
-        windows = {spec.window for spec in self.limits.values()}
-        if len(windows) != len(self.limits):
-            raise ValueError("duplicate-window-registration")
-        return self
-
-
-class Route(BaseModel):
-    """Carry one configured model identity into ranking."""
-
-    id: Nonempty
-    maker: StrictStr | None
-    model: Nonempty
+    pin: Nonempty | None = None
 
 
 class Snapshot(BaseModel):
@@ -169,7 +172,7 @@ class Snapshot(BaseModel):
     a bad configuration from being hidden by a failed or misleading capture.
     """
 
-    pools: dict[str, Registration]
+    pools: dict[str, SnapshotRegistration]
     readers: dict[str, object]
     routes: list[Route]
 
@@ -193,6 +196,7 @@ class Window(BaseModel):
     enforced: StrictBool | None = None
     remainingPercent: Percent
     resetsAt: Timestamp | None
+    status: StrictStr | None
     usedPercent: Percent
     windowSeconds: Positive
 
@@ -223,23 +227,35 @@ def parse_window(raw: object) -> WindowParseResult:
         proven_zero = (
             isinstance(raw, dict)
             and "remainingPercent" not in failures
-            and raw.get("remainingPercent") == 0
+            and cast(dict[str, object], raw).get("remainingPercent") == 0
         )
         reason = ", ".join(sorted(failures)) or "window"
         return WindowParseResult(None, proven_zero, f"invalid-window: {reason}")
 
 
+class Account(BaseModel):
+    """Require the three identity fields a Reader supplies even for anonymous usage."""
+
+    auth_index: StrictStr | None
+    name: StrictStr | None
+    plan: StrictStr | None
+
+
 class Envelope(BaseModel):
     """Bind independently validated windows to the Reader pool that reported them."""
 
+    account: Account
+    balances: list[JsonValue]
+    bonuses: list[JsonValue]
     pool: Nonempty
-    windows: dict[Nonempty, object]
+    windows: dict[Nonempty, Annotated[WindowParseResult, BeforeValidator(parse_window)]]
 
 
 class Capture(BaseModel):
     """Read one saved command result without executing its Reader."""
 
     exit: StrictInt
+    finishedAt: Timestamp | None = None
     stdout: StrictStr
 
 
@@ -249,6 +265,9 @@ class Observation(LimitValues):
     enforced: bool | None = None
     id: str
     naturalResetAt: int | None = None
+    observedAt: int | None = Field(
+        default=None, exclude_if=lambda timestamp: timestamp is None
+    )
     reason: str | None = None
     remaining: Amount | None = None
     status: Literal["invalid", "missing", "stale", "valid"] = "missing"

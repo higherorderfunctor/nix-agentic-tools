@@ -10,6 +10,12 @@
             "role": "pace",
             "window": "7d:enforced"
           },
+          "invalid-status-and-enforcement": {
+            "capacity": 40.0,
+            "models": ["canonical-a"],
+            "role": "pace",
+            "window": "7d:invalid"
+          },
           "not-enforced": {
             "capacity": 40.0,
             "models": ["canonical-a"],
@@ -29,7 +35,8 @@
     "readers": {
       "budget": {
         "exit": 0,
-        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d:enforced\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":25.0,\"windowSeconds\":604800},\"7d:not-enforced\":{\"enforced\":false,\"remainingPercent\":50.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":50.0,\"windowSeconds\":604800},\"7d:unknown-enforced\":{\"remainingPercent\":25.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":null,\"usedPercent\":75.0,\"windowSeconds\":604800}}}"
+        "finishedAt": "2026-11-12T01:34:00Z",
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d:enforced\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":25.0,\"windowSeconds\":604800},\"7d:invalid\":{\"enforced\":1,\"remainingPercent\":80,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":true,\"usedPercent\":20,\"windowSeconds\":604800},\"7d:not-enforced\":{\"enforced\":false,\"remainingPercent\":50.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":50.0,\"windowSeconds\":604800},\"7d:unknown-enforced\":{\"remainingPercent\":25.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":null,\"usedPercent\":75.0,\"windowSeconds\":604800}}}"
       }
     },
     "routes": [
