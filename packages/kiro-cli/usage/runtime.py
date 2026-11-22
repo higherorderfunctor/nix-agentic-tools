@@ -1,7 +1,7 @@
-"""Run the private capture service and supervise tracked Kiro launches.
+"""Run the private capture service and set up tracked Kiro launches.
 
-On exit, wait for the launch's captures, check the store size and print the
-launch's capture summary.
+The CLI gives each launch a proxy environment. Supervised launches can wait
+for captures on exit, check the store size and print a capture summary.
 """
 # cspell:words getpgrp tcgetpgrp
 
@@ -27,7 +27,8 @@ PROXY_NAMES = (
 )
 
 
-USAGE = ("usage: kiro-usage {exec COMMAND [ARG ...]|index --sessions DIR|session ID [--scope tree] [--json]"
+EXEC_USAGE = "exec [--no-summary] [--] COMMAND [ARG ...]"
+USAGE = (f"usage: kiro-usage {{{EXEC_USAGE}|index --sessions DIR|session ID [--scope tree] [--json]"
          "|report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--session ID ...] [--json]|list|unpack ID MODE}")
 
 
@@ -239,27 +240,35 @@ def launch_options(arguments):
     return arguments[:arguments.index("--")] if "--" in arguments else arguments
 
 
-def launch_subcommand(options, value_options):
-    """Find the first positional subcommand so exec can select tracked launches."""
-    remaining = iter(options)
+def words_skipping_option_values(remaining, value_options):
+    """Yield argv words for launch classification, folding separate values into long options."""
     for option in remaining:
         flag, separator, _ = option.partition("=")
-        if flag == "--resume-id" or flag in value_options:
-            if not separator:
-                next(remaining, None)
-        elif not option.startswith("-"):
-            return option
-    return None
+        if not separator and flag in value_options:
+            value = next(remaining, None)
+            if flag.startswith("--") and value is not None:
+                option = f"{flag}={value}"
+        elif not separator and flag.startswith("-") and not flag.startswith("--"):
+            for index, short in enumerate(flag[1:], 1):
+                if f"-{short}" in value_options:
+                    if index == len(flag) - 1:
+                        next(remaining, None)
+                    break
+        yield option
 
 
-def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=()):
-    """Launch the CLI's child, marking tracked Kiro requests for a per-run card while preserving the exit status."""
+def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=(), chat_value_options=()):
+    """Run an exec request with the capture proxy and return the status of a supervised child."""
+    no_summary = arguments[:1] == ["--no-summary"]
+    if no_summary:
+        arguments = arguments[1:]
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
-        raise ValueError("usage: kiro-usage exec [--] COMMAND [ARG ...]")
+        raise ValueError(f"usage: kiro-usage {EXEC_USAGE}")
     command, *tail = arguments
     tracked = Path(command).name == "kiro-cli"
+    quiet = False
     if tracked:
         # Pin the v3 engine as the managed launcher does: prepend `--v3` unless
         # an option before argv's `--` boundary already is one. The configured
@@ -268,7 +277,16 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
         if "--v3" not in launch_options(tail):
             tail.insert(0, "--v3")
         options = launch_options(tail)
-        subcommand = launch_subcommand(options, launch_value_options)
+        remaining = iter(options)
+        top_value_options = set(launch_value_options)
+        top_words = words_skipping_option_values(remaining, top_value_options)
+        subcommand = next((word for word in top_words if not word.startswith("-")), None)
+        quiet = subcommand == "acp" or (
+            subcommand == "chat" and any(
+                word in ("--no-interactive", "--output-format=stream-json")
+                for word in words_skipping_option_values(remaining, top_value_options.union(chat_value_options))
+            )
+        )
         # `acp` ignores the global `--v3`; it resolves its engine from its own
         # `--agent-engine`, so name it before `--` unless the caller already did.
         if subcommand == "acp" and not any(option.partition("=")[0] == "--agent-engine" for option in options):
@@ -279,10 +297,11 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
     invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
     child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
     try:
-        if not tracked or nested:
+        if not tracked or nested or quiet:
             os.execvpe(command, [command, *tail], child_environment)
-        else:
-            result = wait_command(command, tail, child_environment)
+            return
+        result = wait_command(command, tail, child_environment)
+        if not no_summary:
             previous = {number: signal.signal(number, signal.SIG_IGN)
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
@@ -302,19 +321,19 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
             finally:
                 for number, handler in previous.items():
                     signal.signal(number, handler)
-            if result < 0:
-                if -result not in (signal.SIGKILL, signal.SIGSTOP):
-                    signal.signal(-result, signal.SIG_DFL)
-                os.kill(os.getpid(), -result)
-            return result
+        if result < 0:
+            if -result not in (signal.SIGKILL, signal.SIGSTOP):
+                signal.signal(-result, signal.SIG_DFL)
+            os.kill(os.getpid(), -result)
+        return result
     except FileNotFoundError as error:
         raise CommandError(f"command not found: {command}; check PATH or pass an executable path") from error
     except OSError as error:
         raise CommandError(f"cannot execute {command}: {error.strerror}; check the executable path and permissions") from error
 
 
-def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
-    """Dispatch wrapper arguments against the configured store, returning the exec status or replacing the process."""
+def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=(), chat_value_options=()):
+    """Dispatch the parsed usage command from main and return any supervised child's exit status."""
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -323,7 +342,7 @@ def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
     script = Path(__file__).parent
     db_args = ["--db", str(path / "usage.sqlite3")]
     if command == "exec":
-        return exec_command(path, port, warn_bytes, tail, theme, launch_value_options)
+        return exec_command(path, port, warn_bytes, tail, theme, launch_value_options, chat_value_options)
     if command == "session" and tail:
         invocation = [str(script / "query.py"), *db_args, "--refresh-history", "--session", tail[0], *tail[1:]]
     elif command == "report":
@@ -341,6 +360,7 @@ def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
 
 
 def main():
+    """Parse wrapper arguments and option tables, dispatch the selected mode, and return its status."""
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="mode", required=True)
     for mode in ("cli", "environment", "service"):
@@ -351,8 +371,9 @@ def main():
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")
-            # The launcher's top-level options that take a value, comma-separated: `exec` skips their values to find the subcommand.
-            child.add_argument("--launch-value-options", required=True, type=lambda names: [name for name in names.split(",") if name])
+            for option, required in (("--chat-value-options", False), ("--launch-value-options", True)):
+                child.add_argument(option, required=required, default=(),
+                                   type=lambda names: [name for name in names.split(",") if name])
             child.add_argument("arguments", nargs=argparse.REMAINDER)
         if mode == "service":
             child.add_argument("--mitmdump", required=True)
@@ -362,7 +383,8 @@ def main():
     try:
         path = state_directory(args.state_dir)
         if args.mode == "cli":
-            return cli(path, args.arguments, args.port, args.warn_bytes, args.summary_theme, args.launch_value_options)
+            return cli(path, args.arguments, args.port, args.warn_bytes, args.summary_theme,
+                       args.launch_value_options, args.chat_value_options)
         elif args.mode == "service":
             service(args, path)
         else:

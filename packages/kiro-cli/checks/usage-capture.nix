@@ -6,6 +6,7 @@
   checks.kiro-usage-capture = pkgs.runCommandLocal "kiro-usage-capture-check" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    export KIRO_CHAT_VALUE_OPTIONS=${lib.escapeShellArg (lib.concatStringsSep "," (import ../lib/cliOptions.nix {inherit lib;}).chatValueOptions)}
     export KIRO_LAUNCH_VALUE_OPTIONS=${lib.escapeShellArg (lib.concatStringsSep "," (import ../lib/launchValueOptions.nix {inherit lib;}).measured)}
     cp -r ${../usage} usage
     chmod -R u+w usage

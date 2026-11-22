@@ -129,6 +129,8 @@
 in {
   inherit classification reportOf;
 
+  chatValueOptions = (import ./launchValueOptions.nix {inherit lib;}).valueOptions tables.chat;
+
   # `ai.kiro.cli.<tier>.<name>` options, every one `nullOr` with default null.
   options = lib.mapAttrs (_: tier: tier.options) generated;
 
