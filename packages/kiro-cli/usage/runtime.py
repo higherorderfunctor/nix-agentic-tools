@@ -7,7 +7,6 @@ for captures on exit, check the store size and print a capture summary.
 
 import argparse
 import os
-import re
 import signal
 import sqlite3
 import subprocess
@@ -20,11 +19,16 @@ import socket
 import stat
 import sys
 
+from markers import InvocationMarkers
+
 
 PROXY_NAMES = (
     "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS",
     "all_proxy", "http_proxy", "https_proxy", "no_proxy",
 )
+INVOCATION = "KIRO_USAGE_INVOCATION"
+LAUNCH_HANDOFF = "KIRO_USAGE_HANDOFF"
+OUTERMOST_INVOCATION = "KIRO_USAGE_OUTERMOST_INVOCATION"
 
 
 EXEC_USAGE = "exec [--no-summary] [--] COMMAND [ARG ...]"
@@ -57,7 +61,52 @@ def private_directory(path, create=False):
         raise ValueError(f"usage directory must be owned by this user, not a symlink, and mode 0700: {path}")
 
 
-def launch_environment(path, port, refuse_conflicts=True, invocation=None):
+def inherited_markers() -> InvocationMarkers | None:
+    """Read the parent identity for either launcher, defaulting legacy ancestry to its process."""
+    invocation = os.environ.get(INVOCATION)
+    outermost = os.environ.get(OUTERMOST_INVOCATION)
+    if invocation:
+        return InvocationMarkers(invocation, outermost or invocation)
+    if outermost:
+        raise ValueError(f"{OUTERMOST_INVOCATION} requires {INVOCATION}")
+    return None
+
+
+def new_markers(inherited: InvocationMarkers | None) -> InvocationMarkers:
+    """Mint a tracked process identity for either launcher and carry its ancestry forward."""
+    invocation = uuid.uuid4().hex
+    return InvocationMarkers(invocation, inherited.outermost_invocation if inherited else invocation)
+
+
+def process_start_time(pid: int) -> str | None:
+    """Give both launchers a start time to distinguish successive processes with the same PID."""
+    try:
+        if sys.platform == "linux":
+            # The command name can contain spaces and closing parentheses.
+            fields = Path(f"/proc/{pid}/stat").read_bytes().rsplit(b")", 1)[1].split()
+            return fields[22 - 3].decode("ascii")
+        return subprocess.check_output(
+            ["/bin/ps", "-o", "lstart=", "-p", str(pid)],
+            env=os.environ | {"LC_ALL": "C"}, stderr=subprocess.DEVNULL, text=True,
+        ).strip() or None
+    except (IndexError, OSError, subprocess.CalledProcessError):
+        return None
+
+
+def proxy_settings(port: int, cert: Path, markers: InvocationMarkers | None) -> dict[str, str]:
+    """Give launch_environment the proxy and trust settings for an identity."""
+    credentials = f"{markers.proxy_username}:@" if markers else ""
+    url = f"http://{credentials}127.0.0.1:{port}"
+    return dict.fromkeys(("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"), url) | {
+        "NODE_EXTRA_CA_CERTS": str(cert),
+    }
+
+
+def launch_environment(
+    path: Path, port: int, markers: InvocationMarkers | None, *,
+    inherited: InvocationMarkers | None = None, refuse_conflicts: bool = True,
+) -> dict[str, str]:
+    """Validate proxy readiness and incoming settings, then build either launcher's child environment."""
     private_directory(path)
     ca_dir = path / "ca"
     private_directory(ca_dir)
@@ -69,30 +118,37 @@ def launch_environment(path, port, refuse_conflicts=True, invocation=None):
     # cannot cause a provider call.
     with socket.create_connection(("127.0.0.1", port), timeout=0.5):
         pass
-    invocation = invocation or os.environ.get("KIRO_USAGE_INVOCATION")
-    if invocation and not re.fullmatch(r"[0-9a-f]{32}", invocation):
-        raise ValueError("invalid KIRO_USAGE_INVOCATION marker")
-    credentials = f"kiro-usage-{invocation}:@" if invocation else ""
-    url = f"http://{credentials}127.0.0.1:{port}"
-    values = {name: url for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")}
-    values["NODE_EXTRA_CA_CERTS"] = str(cert)
-    if invocation:
-        values["KIRO_USAGE_INVOCATION"] = invocation
-    for name in PROXY_NAMES:
-        value = os.environ.get(name, "")
-        if refuse_conflicts and value and value != values.get(name):
-            raise ValueError(f"inherited {name} conflicts with usage tracking; unset it for this Kiro launch")
+    if refuse_conflicts:
+        expected = proxy_settings(port, cert, inherited)
+        for name in PROXY_NAMES:
+            value = os.environ.get(name)
+            if value and value != expected.get(name):
+                raise ValueError(f"inherited {name} conflicts with usage tracking; unset it for this Kiro launch")
+    values = proxy_settings(port, cert, markers)
+    if markers:
+        values.update({INVOCATION: markers.invocation, OUTERMOST_INVOCATION: markers.outermost_invocation})
     return {**{name: value for name, value in os.environ.items() if name not in PROXY_NAMES}, **values}
 
 
-def environment(path, port):
-    values = launch_environment(path, port)
-    for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy"):
-        print(f"unset {name}")
-    for name, value in sorted(values.items()):
-        if name not in PROXY_NAMES:
-            continue
-        print(f"export {name}={shlex.quote(value)}")
+def environment(path: Path, port: int, launcher_pid: int, launcher_parent_pid: int) -> None:
+    """Print shell settings for the managed launcher, keeping an immediate explicit exec's identity."""
+    inherited = inherited_markers()
+    kind, _, identity = os.environ.get(LAUNCH_HANDOFF, "").partition(":")
+    pid, separator, start = identity.partition(":")
+    launcher = {"self": launcher_pid, "parent": launcher_parent_pid}.get(kind)
+    prepared = False
+    if inherited is not None and launcher is not None and separator and pid == str(launcher):
+        actual_start = process_start_time(launcher)
+        # A reused PID is indistinguishable when either start time is unavailable.
+        prepared = not start or actual_start is None or start == actual_start
+    markers = inherited if prepared else new_markers(inherited)
+    values = launch_environment(path, port, markers, inherited=inherited)
+    print(f"unset {LAUNCH_HANDOFF}")
+    for name in sorted((*PROXY_NAMES, INVOCATION, OUTERMOST_INVOCATION)):
+        if name in values:
+            print(f"export {name}={shlex.quote(values[name])}")
+        else:
+            print(f"unset {name}")
 
 
 def service(args, path):
@@ -124,35 +180,32 @@ def service(args, path):
 SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
 
 
-def invocation_captures(db, invocation, timeout):
-    """(rows, settled): this invocation's (RUN_ROOT, state) marker rows, and whether they went quiet and finished
-    before the deadline."""
-    from query import RUN_ROOT
-    deadline = time.monotonic() + timeout
-    previous_rows, settled = None, time.monotonic()
-    while True:
-        rows = db.execute(f"SELECT {RUN_ROOT},state FROM captures c WHERE json_extract(c.metadata_json,'$.invocation')=?",
-                          (invocation,)).fetchall()
-        if rows != previous_rows:
-            previous_rows, settled = rows, time.monotonic()
-        if rows and all(state != "recording" for _, state in rows) and time.monotonic() - settled >= .1:
-            return rows, True
-        if time.monotonic() >= deadline:
-            return rows, False
-        time.sleep(.05)
-
-
 def read_only(path):
     """settle_captures and invocation_summary never create or write the store."""
     uri = (path / "usage.sqlite3").resolve().as_uri() + "?mode=ro"
-    return closing(sqlite3.connect(uri, uri=True, timeout=.1))
+    db = sqlite3.connect(uri, uri=True, timeout=.1)
+    db.row_factory = sqlite3.Row
+    return closing(db)
 
 
 def settle_captures(path, invocation):
-    """Tell the exit card whether this invocation's captures had time to finish writing."""
+    """Tell the exit summary whether captures for the launch family finished and went quiet before timeout."""
+    from query import launch_captures
+
+    deadline = time.monotonic() + SETTLE_TIMEOUT
+    previous_rows = None
     try:
         with read_only(path) as db:
-            return invocation_captures(db, invocation, SETTLE_TIMEOUT)[1]
+            while True:
+                rows = launch_captures(db, invocation)
+                now = time.monotonic()
+                if now >= deadline:
+                    return False
+                if rows != previous_rows:
+                    previous_rows, quiet_since = rows, now
+                if rows and all(state != "recording" for _, _, _, state in rows) and now - quiet_since >= .1:
+                    return True
+                time.sleep(.05)
     except (OSError, ValueError, sqlite3.Error):
         return False  # invocation_summary reports the same failure.
 
@@ -168,9 +221,10 @@ def store_size_bytes(database):
 
 
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
-    """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
-    earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
-    from query import render_summary, run_report
+    """Print an exit card per root captured by this process, using the launch family's settle result and theme."""
+    from capture import snapshot
+    from disk_index import session_id
+    from query import external_runs, launch_captures, render_summary, run_report
     import summary_theme
     try:
         database = path / "usage.sqlite3"
@@ -179,24 +233,28 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
             # The collector warns on retained payload bytes, which omit SQLite pages and the WAL.
             print(f"Warning: the usage store is {size / 2**20:,.0f} MiB on disk, past the {warn_bytes / 2**20:,.0f} MiB warning size; "
                   f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.", file=sys.stderr)
-        with read_only(path) as db:
-            rows = invocation_captures(db, invocation, 0)[0]
+        with read_only(path) as db, snapshot(db):
+            rows = launch_captures(db, invocation)
             if not rows:  # e.g. resumed and exited without a turn
                 print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
                 return
-            identities = [name for name, _ in rows]
-            sessions = sorted({name if name.startswith("sess_") else "sess_" + name
-                               for name in identities if isinstance(name, str)})
-            if not sessions:
+            identified = [(process, root) for _, process, root, _ in rows if isinstance(root, str)]
+            if not identified:
                 print("Kiro usage summary unavailable: no captured conversation identity for this invocation.", file=sys.stderr)
                 return
-            # The exit path's wait outcome counts even if a call finished after it timed out. These describe the
-            # invocation, not one session, so only the last block carries them.
-            caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
-                       *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
+            sessions = dict.fromkeys(session_id(root) for process, root in identified if process == invocation)
+            if not sessions:
+                print("Kiro usage: no own root session was captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
+                return
             theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
-            for session in sessions:
-                print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
+            reports = [run_report(db, invocation, session) for session in sessions]
+            external = external_runs(db, invocation)
+        # A timed-out call can finish before the snapshot, so the wait outcome still matters.
+        caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, _, _, state in rows) else []),
+                   *(["calls with no conversation identity excluded"] if len(identified) < len(rows) else [])]
+        for report in reports[:-1]:
+            print("\n" + render_summary(report, theme=theme), file=sys.stderr)
+        print("\n" + render_summary(reports[-1], caveats, theme, external=external), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
         print(f"Kiro usage summary unavailable: {error}.", file=sys.stderr)
 
@@ -258,7 +316,7 @@ def words_skipping_option_values(remaining, value_options):
 
 
 def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=(), chat_value_options=()):
-    """Run an exec request with the capture proxy and return the status of a supervised child."""
+    """Prepare tracking for an explicit CLI launch, replacing the process or returning the child's status."""
     no_summary = arguments[:1] == ["--no-summary"]
     if no_summary:
         arguments = arguments[1:]
@@ -293,11 +351,18 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
             tail.insert(len(options), "--agent-engine=v3")
         tracked = not any(option in ("--help", "--help-all", "--version", "-h", "-V") for option in options) \
             and subcommand not in ADMINISTRATIVE_COMMANDS
-    nested = bool(os.environ.get("KIRO_USAGE_INVOCATION"))
-    invocation = (os.environ.get("KIRO_USAGE_INVOCATION") or uuid.uuid4().hex) if tracked else None
-    child_environment = launch_environment(path, port, refuse_conflicts=False, invocation=invocation)
+    inherited = inherited_markers()
+    direct = not tracked or inherited is not None or quiet
+    markers = new_markers(inherited) if tracked else inherited
+    child_environment = launch_environment(path, port, markers, refuse_conflicts=False)
+    if tracked:
+        pid = os.getpid()
+        start = process_start_time(pid) or ""
+        child_environment[LAUNCH_HANDOFF] = f"{'self' if direct else 'parent'}:{pid}:{start}"
+    else:
+        child_environment.pop(LAUNCH_HANDOFF, None)
     try:
-        if not tracked or nested or quiet:
+        if direct:
             os.execvpe(command, [command, *tail], child_environment)
             return
         result = wait_command(command, tail, child_environment)
@@ -306,8 +371,8 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    settled = settle_captures(path, invocation)
-                    invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
+                    settled = settle_captures(path, markers.invocation)
+                    invocation_summary(path, markers.invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
                     # Only a failed summary sink is silenced. Redirect its fd so
@@ -367,6 +432,9 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
+        if mode == "environment":
+            child.add_argument("--launcher-parent-pid", type=int, required=True)
+            child.add_argument("--launcher-pid", type=int, required=True)
         if mode in ("cli", "service"):
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
@@ -388,7 +456,7 @@ def main():
         elif args.mode == "service":
             service(args, path)
         else:
-            environment(path, args.port)
+            environment(path, args.port, args.launcher_pid, args.launcher_parent_pid)
     except CommandError as error:
         print(f"Kiro usage command failed: {error}.", file=sys.stderr)
         return 1

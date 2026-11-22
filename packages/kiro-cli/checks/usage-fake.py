@@ -27,15 +27,22 @@ if "--listen-host" in sys.argv:
             connection, _ = server.accept()
             connection.close()
 else:
+    markers = {
+        "invocation": os.environ.get("KIRO_USAGE_INVOCATION"),
+        "outermost_invocation": os.environ.get("KIRO_USAGE_OUTERMOST_INVOCATION"),
+    }
     if os.environ.get("KIRO_USAGE_TEST_AUTO_INDEX"):
         session = Path(os.environ["HOME"]) / ".kiro/sessions/workspace/sess_auto_index"
         session.mkdir(parents=True, exist_ok=True)
         (session / "session.json").write_text(json.dumps({"modelId": "synthetic-auto-index"}))
         (session / "messages.jsonl").write_text(json.dumps({"payload": {"type": "usage_summary", "promptTurnSummaries": [{"usage": .75, "unit": "credit"}]}}) + "\n")
-        # One finished call of this run, marked as the collector marks it: by the proxy credentials' invocation.
-        invocation = urlsplit(os.environ["HTTPS_PROXY"]).username.removeprefix("kiro-usage-")
+        invocation, _, outermost = urlsplit(os.environ["HTTPS_PROXY"]).username.removeprefix("kiro-usage-").partition(".")
+        metadata = {"invocation": invocation, "outermost_invocation": outermost or invocation,
+                    "kiro:conversation_id": "sess_auto_index"}
         with sqlite3.connect(Path(os.environ["XDG_STATE_HOME"]) / "kiro-cli/usage/usage.sqlite3") as db:
             db.execute("INSERT INTO captures(id,started_utc_ns,metadata_json,state,completion_seen,credits) VALUES (?,?,?,'complete',1,.5)",
-                       (invocation, time.time_ns(), json.dumps({"invocation": invocation, "kiro:conversation_id": "sess_auto_index"})))
+                       (invocation, time.time_ns(), json.dumps(metadata)))
         db.close()
-    print(json.dumps({"argv": sys.argv[1:], "proxy": os.environ.get("HTTPS_PROXY"), "ca": os.environ.get("NODE_EXTRA_CA_CERTS"), "bypass": {name: os.environ[name] for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy") if name in os.environ}}))
+    print(json.dumps({"argv": sys.argv[1:], "proxy": os.environ.get("HTTPS_PROXY"), "ca": os.environ.get("NODE_EXTRA_CA_CERTS"),
+                      "bypass": {name: os.environ[name] for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy") if name in os.environ},
+                      **markers}))

@@ -419,30 +419,36 @@ entry (no cache split) or no context window (no ~tokens), when any. `--json`
 writes the store report, or the list of session reports, instead.
 `kiro-usage report` passes the configured theme.
 
-By default, the managed `kiro-usage exec kiro-cli` command prints a short
-summary of what that run captured to standard error after Kiro exits: per root
-session the run touched, a headline with its request count and credits, a model
-table of requests, credits to two decimals, rounded input, output and cached
-token counts and cache-hit share sorted by credits, and a conversation table
-splitting the main conversation from subagents and workflows. One `⚠` line
-appears only when totals are suspect: capture unavailable, unknown credits,
-incomplete or unfinished calls, calls without a conversation identity, duplicate
-request IDs, or calls with several metering events. `kiro-usage session` keeps
-the full report, and `kiro-usage report --session ID` the whole session's
-summary. A local proxy marker links the invocation's captures to their recorded
-session identities. Kiro uses inherited terminal input and output directly; no
-screen parsing or process-ID guess selects the session. Standard output, exit
-status, and signals are preserved. Tracked interactive chat runs as a child of
-the summary supervisor, retaining the terminal descriptors with its own process
-ID. Explicit help, version, login, and administrative commands skip the summary,
-including after recognized global options. Other commands have no automatic Kiro
-summary.
+When an outer interactive `kiro-usage exec kiro-cli` exits, it prints one card
+to standard error for each root session with calls from its Kiro process,
+ordered by first capture. `/clear` starts a new root, which gets its own card
+after its first captured call. Each card shows a request and credit headline.
+The Model table sorts by credits, and both the Model and Conversation tables
+show requests, credits to two decimals, rounded input, output and cached token
+counts, and cache-hit share. One `⚠` line appears only when totals are suspect:
+capture unavailable, unknown credits, incomplete or unfinished calls, calls
+without a conversation identity, duplicate request IDs, or calls with several
+metering events. `kiro-usage session` keeps the full report, and
+`kiro-usage report --session ID` the whole session's summary. Kiro uses
+inherited terminal input and output directly. Standard output, exit status, and
+signals are preserved. Tracked interactive chat runs as a child of the summary
+supervisor, retaining the terminal descriptors with its own process ID. Explicit
+help, version, login, and administrative commands skip the summary, including
+after recognized global options. Other commands have no automatic Kiro summary.
 
-`kiro-usage exec` runs quiet Kiro launches directly with a fresh capture marker.
-This applies to `kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
+The managed launcher on its own sets up capture and starts Kiro directly. With
+`kiro-usage exec`, quiet launches also run directly. This applies to
+`kiro-cli acp` and to `kiro-cli chat` with `--no-interactive` or
 `--output-format stream-json` before Kiro's `--` separator. Nested launches run
-directly with their parent's marker. These launches skip the supervisor, capture
-wait, and exit card, and their requests still appear in usage history.
+directly too. These launches skip the supervisor, capture wait, and exit cards.
+Their requests still appear in usage history.
+
+Every tracked Kiro process gets its own `invocation` marker, and captures also
+record `outermost_invocation` for the outermost tracked launch. At the top both
+markers are equal. Older captures with only `invocation` use it for both. Native
+subagents and workflow steps share the launching Kiro process's marker. A
+workflow or shell that starts a new tracked `kiro-cli` gets a fresh process
+marker and keeps the outermost marker.
 
 Daemons and scripts that run tracked interactive launches without a person
 watching can use `kiro-usage exec --no-summary kiro-cli …` to skip the capture
@@ -489,24 +495,24 @@ ai.kiro.cli.usageTracking.summary = {
 };
 ```
 
-These are run totals, not session totals: switching or forking a session with
-`/chat` inside one run touches several roots, so each block counts only this
-invocation's marked captures whose root conversation ID, else own conversation
-ID, names its root, without an on-disk index. Earlier runs of a resumed session,
-other runs and disk request-ID matches stay out;
-`kiro-usage report --session ID` replays a whole session tree. Root-linked
-lineage may include forks as well as subagents. Captured requests and credits
-are counted once; disk credits never enter the total. The exit summary has a
-model table and a conversation table with the same columns, where In includes
-Cached. Its Main row is the pool whose conversation ID matches the selected root
-ID; Sub/WF is every other linked conversation; Total closes the table below a
-rule; an Unknown row, for calls lacking a conversation ID, appears only when
-nonzero. The partition does not prove caller roles: workflow steps and subagents
-carry their own conversation IDs and land in other linked conversations, which
-may also include helpers or forks. Requests, credits, and tokens are grouped by
-model and pool rather than listing individual delegates. Exact counters are used
-when observed; cells that add estimates for calls lacking the exact counter
-carry `~`, and missing values show an em dash (see
+Each own card counts captures with the outer Kiro process's marker and the given
+root. The root is the recorded root conversation ID, falling back to the call's
+conversation ID. Switching or forking with `/chat` can also touch several roots.
+Earlier runs and disk matches stay out of these totals, as do disk turn credits.
+`kiro-usage report --session ID` shows the whole session tree.
+
+**External runs** appears below the tables on the last own card only when
+captures with the same outermost marker and a different process marker identify
+at least one root. Its count is the number of distinct external roots, even if
+several processes use the same root. Its Model and Conversation tables combine
+usage across those roots and have a separate Total.
+
+In both places, Main counts calls whose conversation ID matches their own root.
+Sub/WF groups other conversations under that root, including native delegates
+and any linked helpers or forks. Unknown appears when a call has a known root
+and no conversation ID. In includes Cached. Exact counters are used when
+observed; cells that add estimates for calls lacking the exact counter carry
+`~`, and missing values show an em dash (see
 [Token estimates](#token-estimates)). Summary cells omit coverage marks,
 including in `kiro-usage report` and `report --session`; the caveat line adds
 `tokens missing for N` when N requests lack input or output counts after
@@ -522,8 +528,8 @@ an explicit unavailable summary. Tracked exits do no session discovery or disk
 indexing. The capture summary waits at most two seconds for this launch's calls
 to finish and stay unchanged for 0.1 s. A call started just before Kiro exits
 can still persist after that quiet period. A timed-out wait flags unfinished
-calls in the summary. Nested `kiro-usage exec` launches reuse the parent's
-marker and run directly. Only a supervised outer launch can print a summary.
+calls in the summary. If only external roots were captured, the tool points to
+the whole-session report.
 
 `kiro-usage session` and `kiro-usage report --session` refresh disk history
 before reading, once per command even with several IDs. They may take longer

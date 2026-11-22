@@ -1006,7 +1006,7 @@ class RuntimeTests(unittest.TestCase):
             inherited = {"PATH": "/project/bin", "KEEP": "yes", **{name: "conflict" for name in runtime.PROXY_NAMES}}
             with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
-                    runtime.launch_environment(state, 19001)
+                    runtime.launch_environment(state, 19001, None)
                 runtime.exec_command(state, 19001, 1 << 30, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])
                 command, arguments, environment = wait.call_args.args
                 self.assertEqual(command, "kiro-cli")

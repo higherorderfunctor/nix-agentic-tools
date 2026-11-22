@@ -1,15 +1,13 @@
-"""Load with mitmdump -s /absolute/path/mitm_addon.py; no mitmproxy import required."""
+"""Pass selected Kiro requests and responses from mitmdump hooks to Collector."""
 
-import base64
-import binascii
 import os
-import re
 import sqlite3
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from capture import WARN_BYTES, CaptureCapacityError, Collector
+from markers import InvocationMarkers
 
 # Root turns call CreateResponse (REST). Workflow steps, subagents and titles call GenerateAssistantResponse over AWS
 # JSON 1.0 RPC: POST / naming the operation in x-amz-target, beside other KiroRuntimeService operations on the same path.
@@ -18,8 +16,9 @@ RESPONSES, RPC, GENERATE = "/v1/responses", "/", "KiroRuntimeService.GenerateAss
 
 class UsageCapture:
     def load(self, loader):
+        """Open the configured usage store on addon startup so selected requests can be captured."""
         self.active, self.collector, self.failed = {}, None, True
-        self.invocations = {}
+        self.invocations: dict[str, InvocationMarkers] = {}
         try:
             retention = os.environ.get("KIRO_USAGE_RETENTION_DAYS")
             self.collector = Collector(os.environ["KIRO_USAGE_DB"], warn_bytes=int(os.environ.get("KIRO_USAGE_WARN_BYTES", WARN_BYTES)),
@@ -29,26 +28,26 @@ class UsageCapture:
         else:
             self.failed = False
 
-    def _invocation(self, flow):
-        # Proxy credentials are local correlation only, never provider auth.
+    def _client_markers(self, flow) -> InvocationMarkers | None:
+        """Strip local proxy credentials and return the flow's connection markers."""
         authorization = getattr(flow.request, "headers", {}).pop("proxy-authorization", "")
-        try:
-            scheme, encoded = authorization.split(" ", 1)
-            decoded = base64.b64decode(encoded, validate=True).decode("ascii")
-        except (ValueError, UnicodeError, binascii.Error):
-            return
-        match = re.fullmatch(r"kiro-usage-([0-9a-f]{32}):", decoded)
-        if scheme.lower() == "basic" and match:
-            self.invocations[flow.client_conn.id] = match[1]
+        client = getattr(flow, "client_conn", None)
+        if client is None:
+            return None
+        if authorization and (markers := InvocationMarkers.from_proxy_authorization(authorization)):
+            self.invocations[client.id] = markers
+        return self.invocations.get(client.id)
 
     def http_connect(self, flow):
-        self._invocation(flow)
+        """Keep the CONNECT flow's launch markers for later requests on the tunnel."""
+        self._client_markers(flow)
 
     def client_disconnected(self, client):
         self.invocations.pop(client.id, None)
 
     def request(self, flow):
-        self._invocation(flow)
+        """Start a capture for a selected Kiro request so response hooks can finish it."""
+        markers = self._client_markers(flow)
         host = flow.request.host.lower()
         if not (host == "kiro.dev" or host.endswith(".kiro.dev")):
             return
@@ -63,10 +62,9 @@ class UsageCapture:
         metadata = {"host": host, "method": flow.request.method, "path": path}
         if target:
             metadata["target"] = target
-        client = getattr(flow, "client_conn", None)
-        invocation = self.invocations.get(client.id) if client else None
-        if invocation:
-            metadata["invocation"] = invocation
+        if markers:
+            metadata["invocation"] = markers.invocation
+            metadata["outermost_invocation"] = markers.outermost_invocation
         try:
             body = flow.request.get_content(strict=True)
         except ValueError:

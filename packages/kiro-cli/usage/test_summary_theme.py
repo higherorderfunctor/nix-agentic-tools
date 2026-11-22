@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 import query
+import report
 import summary_theme
 import test_query
 
@@ -91,6 +92,32 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(lines[rule + 1][0], tee)  # the plain dash rule, one line down below the top edge
                 self.assertTrue(lines[1].startswith(vertical + " \uf080 Kiro usage"))
                 self.assertTrue(lines[-2].startswith(vertical + " \uf071 credits unknown"))
+
+    def test_external_runs_share_the_card_border(self):
+        """One colored box has a rule above each Total, with the same content as the plain card."""
+        captures = self.report["captures"]
+        external = (1, {**captures, "credit_discount": {**captures["credit_discount"], "eligible": 1, "percentage": 25}})
+        plain = query.render_summary(self.report, external=external)
+        theme = load({"border": "rounded", "color": "always", "styles": {"muted": "cyan"}})
+        colored = query.render_summary(self.report, theme=theme, external=external)
+        lines = SGR.sub("", colored).splitlines()
+        self.assertIn("\x1b[1mExternal runs\x1b[0m", colored)
+        self.assertIn("\x1b[36m1 session\x1b[0m", colored)
+        self.assertEqual(len({len(line) for line in lines}), 1)
+        self.assertEqual([line[0] + line[-1] for line in lines if line[0] != "│"],
+                         ["╭╮", "├┤", "├┤", "╰╯"])
+        self.assertEqual([lines[index - 1][0] for index, line in enumerate(lines) if line.startswith("│ Total")],
+                         ["├", "├"])
+        self.assertEqual([line[2:-2].rstrip() for line in lines if line[0] == "│"],
+                         [line for line in plain.splitlines() if set(line) != {"-"}])
+        self.assertIn("\nExternal runs\n1 session\n\nModel ", plain)
+        own, nested = plain.split("\nExternal runs\n")
+        self.assertNotIn("Discount", own)
+        self.assertEqual(nested.count("Discount"), 2)
+        self.assertRegex(nested, r"\nTotal .* ~25%\n")
+        history = report.render({"since": None, "until": None, "captures": self.report["captures"]})
+        self.assertEqual(history.splitlines()[1:], self.plain.splitlines()[1:])
+        self.assertTrue(history.startswith("Kiro usage · all captures · 2 requests · 1.00 credits\n"))
 
     def test_estimated_error_cells_keep_alignment_in_a_box(self):
         """± is part of an estimated Cached or Cache hit cell's text, so colored and bordered rows stay aligned."""

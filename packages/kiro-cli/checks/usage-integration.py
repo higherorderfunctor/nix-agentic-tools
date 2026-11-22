@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import sqlite3
 import subprocess
@@ -10,12 +11,25 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
+def assert_outer_identity(body, cert):
+    """Require a standalone tracked Kiro to receive a single identity in its markers and proxy."""
+    proxy = urlsplit(body["proxy"])
+    assert (proxy.scheme, proxy.hostname, proxy.port, proxy.password) == ("http", "127.0.0.1", 18091, ""), body
+    invocation = body["invocation"]
+    assert invocation and re.fullmatch(r"[0-9a-f]{32}", invocation), body
+    assert body["outermost_invocation"] == invocation and proxy.username == f"kiro-usage-{invocation}", body
+    assert body["ca"] == str(cert), body
+
+
 package, service, disabled = sys.argv[1:]
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
-    environment = {key: value for key, value in os.environ.items() if key.lower() not in ("all_proxy", "http_proxy", "https_proxy", "no_proxy", "node_extra_ca_certs")}
+    environment = {key: value for key, value in os.environ.items()
+                   if key.lower() not in ("all_proxy", "http_proxy", "https_proxy", "no_proxy", "node_extra_ca_certs")
+                   and not key.startswith("KIRO_USAGE_")}
     environment.update(HOME=str(root), XDG_STATE_HOME=str(root / "state with spaces"))
     state = root / "state with spaces/kiro-cli/usage"
+    cert = state / "ca/mitmproxy-ca-cert.pem"
     def launch(binary, env=environment, arguments=None):
         if arguments is None:
             arguments = ["chat", "synthetic"]
@@ -37,8 +51,7 @@ with tempfile.TemporaryDirectory() as directory:
             time.sleep(0.05)
         assert result.returncode == 0, result.stderr
         body = json.loads(result.stdout)
-        assert body["proxy"] == "http://127.0.0.1:18091", body
-        assert body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
+        assert_outer_identity(body, cert)
         assert (state.stat().st_mode & 0o777) == 0o700
         recorded = json.loads((state / "service.json").read_text())
         assert (recorded["payload_retention_days"], recorded["warn_bytes"]) == ("90", "5368709120")
@@ -78,10 +91,7 @@ with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([tool, "exec", "--", "kiro-cli", "chat", "synthetic spaced argument", "--", "--v3"], env=inherited, text=True, capture_output=True)
             assert result.returncode == 0, result.stderr
             body = json.loads(result.stdout)
-            proxy = urlsplit(body["proxy"])
-            assert (proxy.scheme, proxy.hostname, proxy.port) == ("http", "127.0.0.1", 18091), body
-            assert proxy.username.startswith("kiro-usage-") and len(proxy.username) == len("kiro-usage-") + 32, body
-            assert proxy.password == "" and body["ca"] == str(state / "ca/mitmproxy-ca-cert.pem"), body
+            assert_outer_identity(body, cert)
             # Only this run's call: neither the unmarked capture above nor the previous iteration's run joins it.
             assert result.stderr.count("Kiro usage · sess_auto_ind · this run · 1 request · 0.50 credits") == 1, result.stderr
             assert not body["bypass"], body
@@ -94,7 +104,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert result.returncode == 0, result.stderr
         assert result.stderr.count("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.") == 1, result.stderr
         assert "Kiro usage ·" not in result.stderr, result.stderr
-        (state / "ca/mitmproxy-ca-cert.pem").unlink()
+        cert.unlink()
         result = launch("kiro-cli")
         assert result.returncode != 0, result
     finally:

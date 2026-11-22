@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 import pty
 import select
+import shlex
+import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -42,6 +45,13 @@ def _measured_value_options(variable):
 
 CHAT_VALUE_OPTIONS_ARG = "--chat-value-options=" + _measured_value_options("KIRO_CHAT_VALUE_OPTIONS")
 LAUNCH_VALUE_OPTIONS = tuple(_measured_value_options("KIRO_LAUNCH_VALUE_OPTIONS").split(","))
+
+
+def supervised_fixture_environment():
+    """Give supervised subprocess fixtures a fresh launch environment."""
+    launch_settings = {runtime.INVOCATION, runtime.LAUNCH_HANDOFF, runtime.OUTERMOST_INVOCATION,
+                       *runtime.PROXY_NAMES}
+    return {name: value for name, value in os.environ.items() if name not in launch_settings}
 
 
 class HistoryRefreshTests(unittest.TestCase):
@@ -440,6 +450,82 @@ class HistoryRefreshTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_external_runs_on_last_card(self):
+        """Group nested processes by effective root and report their usage only on the last own card."""
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            outer = "a" * 32
+            collector = Collector(state / "usage.sqlite3")
+            self.addCleanup(collector.close)
+
+            def record(process, family, model, conversation, root, credits, request_id, usage, **response_fields):
+                """Record a fixture request and its terminal Responses event through the collector."""
+                metadata = {key: value for key, value in (
+                    ("kiro:conversation_id", conversation), ("kiro:root_conversation_id", root),
+                ) if value is not None}
+                ident = collector.begin({"invocation": process * 32, "outermost_invocation": family * 32},
+                                        json.dumps({"model": model, "metadata": metadata}).encode())
+                collector.headers(ident, {"content_type": "text/event-stream", "upstream_request_id": request_id})
+                terminal = {"type": "response.completed", "response": {
+                    **response_fields, "usage": {**usage, "kiro:credits": {"unit": "credit", "value": credits}},
+                }}
+                collector.chunk(ident, b"data: " + json.dumps(terminal).encode() + b"\n\n")
+                collector.finish(ident)
+
+            for process, family, model, conversation, root, credits, request_id in (
+                ("a", "a", "auto", "sess_first", None, 1, "own-first"),
+                ("a", "a", "auto", "sess_second", None, 2, "own-second"),
+                ("b", "a", "auto", "second", "sess_second", 3, "shared"),
+                ("c", "a", "auto", "sess_second", "second", 4, "repeat"),
+                ("d", "a", "opus", "sess_nested", None, 5, "shared"),
+                ("b", "a", "opus", "sess_nested", "second", 6, "delegate"),
+                ("d", "a", "auto", None, "nested", 7, "unknown"),
+                ("d", "a", "auto", None, None, 100, "unidentified"),
+                ("e", "e", "auto", "sess_second", "sess_nested", 100, "foreign"),
+            ):
+                usage = {"input_tokens": 20 if model == "opus" else 10, "output_tokens": 1,
+                         "input_tokens_details": {"cached_tokens": min(credits, 10)}}
+                record(process, family, model, conversation, root, credits, request_id, usage)
+            model = "claude-haiku-4.5"
+            record("d", "a", model, "sess_nested", None, .0003, "estimated",
+                   {"kiro:context_usage_percentage": .05},
+                   output=[{"type": "message", "content": [{"type": "output_text", "text": "pong"}]}])
+            record("d", "a", model, "sess_nested", None, 1, "unpaired",
+                   {"input_tokens": 100, "output_tokens": 2})
+            collector.close()
+            with contextlib.redirect_stderr(io.StringIO()) as output:
+                runtime.invocation_summary(state, outer, 1 << 30)
+
+        text = output.getvalue()
+        self.assertEqual(text.count("External runs"), 1)
+        first, last = text.split("Kiro usage · ")[1:]
+        self.assertTrue(first.startswith("sess_first · this run · 1 request · 1.00 credits\n"))
+        self.assertTrue(last.startswith("sess_second · this run · 1 request · 2.00 credits\n"))
+        own, external = last.split("\nExternal runs\n")
+        self.assertEqual(first.rstrip().splitlines()[-1].split(), ["Total", "1", "1.00", "10", "1", "1", "~10%"])
+        self.assertEqual(own.rstrip().splitlines()[-1].split(), ["Total", "1", "2.00", "10", "1", "2", "~20%"])
+        count, blank, header, *lines = external.splitlines()
+        self.assertEqual((count, blank, header.split()),
+                         ("2 sessions", "", ["Model", "Requests", "Credits", "In", "Out", "Cached", "Cache", "hit"]))
+        expected_rows = [
+            ["auto", "3", "14.00", "30", "3", "14", "~47%"],
+            ["opus", "2", "11.00", "40", "2", "11", "~28%"],
+            ["claude-haiku-4.5", "2", "1.00", "~199", "~3", "~68", "~69%"],
+            ["Main", "5", "13.00", "~239", "~6", "~80", "~58%"],
+            ["Sub/WF", "1", "6.00", "20", "1", "6", "~30%"],
+            ["Unknown", "1", "7.00", "10", "1", "7", "~70%"],
+            ["Total", "7", "26.00", "~269", "~8", "~93", "~55%"],
+        ]
+        labels = [row[0] for row in expected_rows]
+        rows = [cells for line in lines if (cells := line.split()) and cells[0] in labels]
+        self.assertEqual([row[0] for row in rows], labels)
+        for actual, expected in zip(rows, expected_rows):
+            with self.subTest(row=expected[0]):
+                self.assertEqual(actual, expected)
+        self.assertTrue(external.endswith("⚠ 1 duplicate request ID; calls with no conversation identity excluded\n"))
+        self.assertEqual(text.count("calls with no conversation identity excluded"), 1)
+        self.assertEqual(text.count("duplicate request ID"), 1)
+
     def test_exact_sessions_and_unknown_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -455,25 +541,76 @@ class SummaryTests(unittest.TestCase):
             self.assertNotIn("sess_other", output.getvalue())
             self.assertIn("\n⚠ credits unknown for 1/1 request; 1 incomplete; tokens missing for 1; calls with no conversation identity excluded\n", output.getvalue())
 
-    def test_run_counts_only_its_own_captures_per_root(self):
-        # One run that switched or forked: two roots, each also captured by an earlier run that must stay out.
+    def test_own_cards_follow_first_capture(self):
+        """Exit cards follow capture start and ID order and count only their own process's requests."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            outer = "a" * 32
+            own = {"invocation": outer, "outermost_invocation": outer}
+            external = {"invocation": "b" * 32, "outermost_invocation": outer}
+            foreign = {"invocation": "c" * 32, "outermost_invocation": "c" * 32}
+            for label, a_start, a_id, z_id in (
+                ("start time", 20, "1", "2"),
+                ("capture ID tie break", 10, "2", "1"),
+            ):
+                with self.subTest(label):
+                    state = root / label
+                    collector = Collector(state / "usage.sqlite3")
+                    self.addCleanup(collector.close)
+                    for start, ident, markers, conversation, ancestor in (
+                        (a_start, a_id, own, "sess_a-root-001", None),
+                        (30, "3", own, "sess_z-root-001", None),
+                        (40, "4", own, "sess_delegate", "z-root-001"),
+                        (10, z_id, {"invocation": outer}, "z-root-001", None),
+                        (5, "5", foreign, "sess_a-root-001", None),
+                        (4, "6", external, "sess_a-root-001", None),
+                        (6, "7", external, "sess_external", None),
+                    ):
+                        metadata = {"kiro:conversation_id": conversation}
+                        if ancestor:
+                            metadata["kiro:root_conversation_id"] = ancestor
+                        request = json.dumps({"model": "auto", "metadata": metadata}).encode()
+                        with (patch.object(capture.time, "time_ns", return_value=start),
+                              patch.object(capture.uuid, "uuid4", return_value=SimpleNamespace(hex=ident * 32))):
+                            collector.finish(collector.begin(dict(markers), request))
+                    collector.close()
+                    with contextlib.redirect_stderr(io.StringIO()) as output:
+                        runtime.invocation_summary(state, outer, 1 << 30)
+                    cards = output.getvalue().split("Kiro usage · ")[1:]
+                    self.assertEqual([card.split(" · — credits")[0] for card in cards], [
+                        "sess_z-root-0 · this run · 3 requests", "sess_a-root-0 · this run · 1 request",
+                    ])
+                    self.assertRegex(cards[0], r"Main\s+2\s.*\n.*Sub/WF\s+1\s")
+                    self.assertRegex(cards[1], r"Main\s+1\s.*\n.*Sub/WF\s+0\s")
+
+    def test_single_root_exit_card_matches_parent_stderr(self):
+        """Check the entire stderr card for one root against the parent revision's output."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            invocation = "a" * 32
             collector = Collector(root / "usage.sqlite3")
-            for invocation, conversation, ancestor in (("a" * 32, "sess_first", None), ("a" * 32, "sess_helper", "first"),
-                                                       ("a" * 32, "sess_fork", None), ("b" * 32, "sess_first", None),
-                                                       ("b" * 32, "sess_first", None), ("b" * 32, "sess_fork", None)):
-                request = {"metadata": {"kiro:conversation_id": conversation, "kiro:root_conversation_id": ancestor}}
-                collector.finish(collector.begin({"invocation": invocation}, json.dumps(request).encode()))
+            request = b'{"model":"auto","metadata":{"kiro:conversation_id":"sess_root"}}'
+            collector.finish(collector.begin({"invocation": invocation, "outermost_invocation": invocation}, request))
             collector.close()
             with contextlib.redirect_stderr(io.StringIO()) as output:
-                runtime.invocation_summary(root, "a" * 32, 1 << 30)
-            text = output.getvalue()
-            self.assertEqual((text.count("Kiro usage · sess_first · this run · 2 requests"), text.count("Kiro usage · sess_fork · this run · 1 request ")), (1, 1))
-            self.assertEqual(text.count("Kiro usage ·"), 2)
-            self.assertRegex(text, r"Main\s+1\s.*\n.*Sub/WF\s+1\s")
+                runtime.invocation_summary(root, invocation, 1 << 30)
+            # Captured with this fixture using runtime.py and query.py from 98a58dcc.
+            self.assertEqual(output.getvalue(), (
+                "\nKiro usage · sess_root · this run · 1 request · — credits\n"
+                "\n"
+                "Model         Requests  Credits  In  Out  Cached  Cache hit\n"
+                "auto                 1        —   —    —       —          —\n"
+                "\n"
+                "Conversation  Requests  Credits  In  Out  Cached  Cache hit\n"
+                "Main                 1        —   —    —       —          —\n"
+                "Sub/WF               0        —   —    —       —          —\n"
+                "-----------------------------------------------------------\n"
+                "Total                1        —   —    —       —          —\n"
+                "⚠ credits unknown for 1/1 request; 1 incomplete; tokens missing for 1\n"
+            ))
 
     def test_run_without_captures_points_to_the_session_report(self):
+        """A call with a foreign process marker leaves the launch empty."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
@@ -482,6 +619,28 @@ class SummaryTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()) as output:
                 runtime.invocation_summary(root, "a" * 32, 1 << 30)
             self.assertEqual(output.getvalue(), "Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.\n")
+
+    def test_family_without_own_root_reports_why(self):
+        """Exit explains missing roots without adding a card, even before the writer adds the index."""
+        outer = "a" * 32
+        for label, metadata, expected in (
+            ("missing identities", {}, "Kiro usage summary unavailable: no captured conversation identity for this invocation.\n"),
+            ("external identity", {"kiro:conversation_id": "sess_external"},
+             "Kiro usage: no own root session was captured this run; kiro-usage report --session ID shows a whole session.\n"),
+        ):
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                database = root / "usage.sqlite3"
+                collector = Collector(database)
+                collector.finish(collector.begin({"invocation": outer}, b'{"metadata":{}}'))
+                external = {"invocation": "b" * 32, "outermost_invocation": outer}
+                collector.finish(collector.begin(external, json.dumps({"metadata": metadata}).encode()))
+                collector.close()
+                with contextlib.closing(open_database(database)) as db:
+                    db.execute("DROP INDEX capture_outermost_invocation")
+                with contextlib.redirect_stderr(io.StringIO()) as output:
+                    runtime.invocation_summary(root, outer, 1 << 30)
+                self.assertEqual(output.getvalue(), expected)
 
     def test_invocation_caveats_print_once_across_sessions(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -605,16 +764,41 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("Kiro usage · sess_late · this run · 1 request", output.getvalue())
             self.assertNotIn("capture writer still has unfinished calls", output.getvalue())
 
+    def test_settle_requires_quiet_period_before_deadline(self):
+        """A finished capture settles only when the quiet poll precedes the deadline."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            invocation = "a" * 32
+            collector = Collector(root / "usage.sqlite3")
+            collector.finish(collector.begin({"invocation": invocation}, b'{"metadata":{"kiro:conversation_id":"sess_root"}}'))
+            collector.close()
+            for label, quiet_poll, expected in (
+                ("after deadline", 2.03125, False),
+                ("at deadline", 2.0, False),
+                ("before deadline", 1.984375, True),
+            ):
+                with (self.subTest(label),
+                      patch.object(runtime, "SETTLE_TIMEOUT", 2),
+                      patch.object(runtime.time, "monotonic", side_effect=(0, 1.875, 1.9375, quiet_poll)),
+                      patch.object(runtime.time, "sleep")):
+                    self.assertIs(runtime.settle_captures(root, invocation), expected)
+
     def test_unsettled_wait_flags_unfinished_calls(self):
+        """Wait for an identity-less family child and ignore an unrelated recording call."""
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             root = Path(directory)
             collector = Collector(root / "usage.sqlite3")
             self.addCleanup(collector.close)
-            collector.begin({"invocation": "a" * 32}, json.dumps({"metadata": {"kiro:conversation_id": "sess_open"}}).encode())
-            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="a" * 32)), patch.object(runtime, "SETTLE_TIMEOUT", .3), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()) as output:
+            outer = "a" * 32
+            collector.finish(collector.begin({"invocation": outer}, b'{"metadata":{"kiro:conversation_id":"sess_own"}}'))
+            child = collector.begin({"invocation": "b" * 32, "outermost_invocation": outer}, b'{"metadata":{}}')
+            collector.begin({"invocation": "c" * 32}, b'{"metadata":{"kiro:conversation_id":"sess_unrelated"}}')
+            with patch.object(runtime, "launch_environment", return_value={}), patch.object(runtime, "wait_command", return_value=0), patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex=outer)), patch.object(runtime, "SETTLE_TIMEOUT", .3), patch.object(runtime, "invocation_summary", wraps=runtime.invocation_summary) as summary, contextlib.redirect_stderr(io.StringIO()) as output:
                 self.assertEqual(runtime.exec_command(root, 19001, 1 << 30, ["kiro-cli", "chat"]), 0)
-            self.assertIn("capture writer still has unfinished calls", output.getvalue())
             self.assertFalse(summary.call_args.kwargs["settled"])
+            self.assertIn("capture writer still has unfinished calls; calls with no conversation identity excluded", output.getvalue())
+            collector.finish(child)
+            self.assertTrue(runtime.settle_captures(root, outer))
 
     def test_call_finishing_after_wait_timeout_keeps_unfinished_warning(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
@@ -645,18 +829,268 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("unavailable", output.getvalue())
             self.assertFalse((root / "usage.sqlite3").exists())
 
-    def test_nested_launch_reuses_marker_and_skips_summary(self):
+    def test_supervised_handoff_preserves_capture_ownership(self):
+        """Close a supervised launch after recording a call with the managed child's exported markers."""
+        port = 19001
+        supervisor = os.getpid()
+        card = "Kiro usage · sess_own · this run · 1 request"
+        for name, producer_start, receiver_start, process, expected in (
+            ("producer lookup fails", None, "100", "a", card),
+            ("receiver lookup fails", "100", None, "a", card),
+            ("stale handoff", "100", "200", "b", "no own root session was captured this run"),
+        ):
+            with (
+                self.subTest(case=name), tempfile.TemporaryDirectory() as directory,
+                patch.dict(os.environ, {}, clear=True),
+                patch.object(socket, "create_connection"),
+                patch.object(runtime, "process_start_time", side_effect=(producer_start, receiver_start)),
+                patch.object(runtime, "uuid") as launch_uuid,
+                contextlib.redirect_stderr(io.StringIO()) as output,
+            ):
+                launch_uuid.uuid4.side_effect = (SimpleNamespace(hex="a" * 32), SimpleNamespace(hex="b" * 32))
+                root = Path(directory)
+                cert = root / "ca" / "mitmproxy-ca-cert.pem"
+                cert.parent.mkdir(mode=0o700)
+                cert.write_text("fixture CA")
+                captured = {}
+
+                def managed_child(_command, _arguments, values):
+                    """Apply the managed wrapper's exports to one fixture capture in place of running Kiro."""
+                    with patch.dict(os.environ, values, clear=True), contextlib.redirect_stdout(io.StringIO()) as exports:
+                        runtime.environment(root, port, supervisor + 1, supervisor)
+                    settings = dict(shlex.split(line)[1].split("=", 1) for line in exports.getvalue().splitlines()
+                                    if line.startswith("export "))
+                    captured.update(invocation=settings[runtime.INVOCATION],
+                                    outermost_invocation=settings[runtime.OUTERMOST_INVOCATION])
+                    collector = Collector(root / "usage.sqlite3")
+                    try:
+                        collector.finish(collector.begin(captured.copy(), b'{"metadata":{"kiro:conversation_id":"sess_own"}}'))
+                    finally:
+                        collector.close()
+                    return 0
+
+                with patch.object(runtime, "wait_command", side_effect=managed_child) as wait:
+                    self.assertEqual(runtime.exec_command(root, port, 1 << 30, ["kiro-cli", "chat"]), 0)
+                self.assertIn(expected, output.getvalue())
+                self.assertEqual(captured, {"invocation": process * 32, "outermost_invocation": "a" * 32})
+                self.assertEqual(wait.call_args.args[2][runtime.LAUNCH_HANDOFF],
+                                 f"parent:{supervisor}:{producer_start or ''}")
+
+    def test_darwin_start_time_handoff(self):
+        """Run the exec and environment handoff with literal Darwin ps output."""
+        path = Path("/unused")
+        port = 19001
+        pid = os.getpid()
+        outermost = "a" * 32
+        prepared = runtime.InvocationMarkers("b" * 32, outermost)
+        timestamp = "Sat Nov  7 12:34:56 2026"
+        handoff = f"self:{pid}:Sat Nov  7 12:34:56 2026"
+        ps_command = ["/bin/ps", "-o", "lstart=", "-p", str(pid)]
+        cases = (
+            ("Darwin timestamp is preserved", timestamp + "\n", timestamp + "\n", handoff),
+            ("producer lookup fails", "", timestamp + "\n", f"self:{pid}:"),
+            ("receiver lookup fails", timestamp + "\n", "", handoff),
+        )
+        for name, producer_output, receiver_output, expected_handoff in cases:
+            with (
+                self.subTest(case=name),
+                patch.dict(os.environ, {
+                    runtime.INVOCATION: "d" * 32,
+                    runtime.OUTERMOST_INVOCATION: outermost,
+                    runtime.LAUNCH_HANDOFF: f"self:{pid}:stale",
+                    "LC_ALL": "POSIX",
+                }, clear=True),
+                patch.object(sys, "platform", "darwin"),
+                patch.object(subprocess, "check_output", return_value=producer_output) as ps,
+                patch.object(runtime.uuid, "uuid4", side_effect=(
+                    SimpleNamespace(hex="b" * 32), SimpleNamespace(hex="c" * 32),
+                )),
+                patch.object(runtime, "launch_environment", return_value=dict(os.environ)) as launch,
+                patch.object(os, "execvpe") as execute,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                runtime.exec_command(path, port, 1 << 30, ["kiro-cli", "chat"])
+                ps.assert_called_once_with(ps_command, env=os.environ | {"LC_ALL": "C"},
+                                           stderr=subprocess.DEVNULL, text=True)
+                launch.assert_called_once_with(path, port, prepared, refuse_conflicts=False)
+                child_environment = execute.call_args.args[2]
+                self.assertEqual(child_environment.get(runtime.LAUNCH_HANDOFF), expected_handoff)
+                ps.reset_mock()
+                ps.return_value = receiver_output
+                with patch.dict(os.environ, child_environment | {
+                    runtime.INVOCATION: prepared.invocation,
+                }, clear=True):
+                    runtime.environment(path, port, pid, os.getppid())
+                    ps.assert_called_once_with(ps_command, env=os.environ | {"LC_ALL": "C"},
+                                               stderr=subprocess.DEVNULL, text=True)
+                launch.assert_called_with(path, port, prepared, inherited=prepared)
+
+    def test_darwin_start_time_unavailable(self):
+        """Require an unavailable Darwin ps timestamp to return None to launchers."""
+        cases = (
+            ("empty output", None),
+            ("missing executable", FileNotFoundError()),
+            ("nonzero exit", subprocess.CalledProcessError(1, "/bin/ps")),
+        )
+        for name, error in cases:
+            with (
+                self.subTest(case=name),
+                patch.object(sys, "platform", "darwin"),
+                patch.object(subprocess, "check_output", return_value="", side_effect=error) as ps,
+            ):
+                self.assertIsNone(runtime.process_start_time(4321))
+                ps.assert_called_once_with(["/bin/ps", "-o", "lstart=", "-p", "4321"],
+                                           env=os.environ | {"LC_ALL": "C"}, stderr=subprocess.DEVNULL, text=True)
+
+    def test_linux_start_time_skips_parentheses_in_command(self):
+        """Require the Linux stat reader to find field 22 after the full command name."""
+        stat_record = (
+            b"4321 (kiro) (worker) S 1 4321 4321 0 -1 4194304 123 0 0 0 1 2 0 0 20 0 1 0 "
+            b"7654321 123456 42 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 "
+            b"0 0 0 0 0 0 0\n"
+        )
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(Path, "read_bytes", autospec=True, return_value=stat_record) as read,
+        ):
+            self.assertEqual(runtime.process_start_time(4321), "7654321")
+        read.assert_called_once_with(Path("/proc/4321/stat"))
+
+    def test_launch_marker_lineage(self):
+        """Run the environment CLI in a fixture Bash launcher and observe the final executable."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="kiro usage 'fixture' ")))
+        state_home = root / "state"
+        state = state_home / "kiro-cli/usage"
+        state.mkdir(mode=0o700, parents=True)
+        ca = state / "ca"
+        ca.mkdir(mode=0o700)
+        cert = ca / "mitmproxy-ca-cert.pem"
+        cert.write_text("fixture")
+        listener = self.enterContext(socket.socket())
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(32)
+        port = listener.getsockname()[1]
+        home = root / "home"
+        home.mkdir()
+        project = root / "project/kiro-cli"
+        managed = root / "managed/kiro-cli"
+        for executable in (project, managed):
+            executable.parent.mkdir()
+            executable.touch(mode=0o700)
+        project.write_text(f"""#!{sys.executable}
+import json, os, subprocess, sys
+
+keys = ("HTTP_PROXY", "HTTPS_PROXY", "KIRO_USAGE_HANDOFF", "KIRO_USAGE_INVOCATION",
+        "KIRO_USAGE_OUTERMOST_INVOCATION", "NODE_EXTRA_CA_CERTS", "http_proxy", "https_proxy")
+print(json.dumps({{key: os.environ.get(key) for key in keys}}), flush=True)
+for argv, identity in json.loads(sys.argv[-1]):
+    subprocess.run(argv, env=os.environ | {{"FIXTURE_ID": identity}}, check=True)
+""")
+        # Sharing a fixture UUID between entry points would hide a second mint.
+        entry = [sys.executable, "-c", """
+import os, runtime, sys
+from types import SimpleNamespace
+
+runtime.uuid.uuid4 = lambda: SimpleNamespace(hex=os.environ["FIXTURE_ID"] * 31 +
+                                            ("a" if sys.argv[1] == "cli" else "b"))
+sys.exit(runtime.main())
+"""]
+        bootstrap = shlex.join([*entry, "environment", "--port", str(port)])
+        managed.write_text(f"""#!{shutil.which('bash')}
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+nat_usage_environment="$({bootstrap} --launcher-pid "$$" --launcher-parent-pid "$PPID")"
+eval "$nat_usage_environment"
+unset nat_usage_environment
+exec -a "$0" {shlex.quote(str(project))} "$@"
+""")
+        tool = [*entry, "cli", "--port", str(port), "--warn-bytes", "1073741824",
+                "--launch-value-options=" + ",".join(LAUNCH_VALUE_OPTIONS), CHAT_VALUE_OPTIONS_ARG, "--", "exec"]
+
+        def command(executable, *children, explicit=False, quiet=False):
+            """Build a fixture launch and the subprocess plan read by fake Kiro."""
+            prefix = [*tool, *(["--no-summary"] if not quiet else []), "--"] if explicit else []
+            return [*prefix, str(executable), "chat", *(["--no-interactive"] if quiet else []), json.dumps(children)]
+
+        def run(argv, selected=managed, **inherited):
+            """Start one scenario with a clean environment and a fixture PATH."""
+            return subprocess.run(argv, env={"HOME": str(home), "XDG_STATE_HOME": str(state_home),
+                                             "PATH": str(selected.parent), "FIXTURE_ID": "1",
+                                             "PYTHONDONTWRITEBYTECODE": "1", **inherited},
+                                  cwd=Path(__file__).parent, capture_output=True, text=True, timeout=10)
+
+        def marker(digit, mode):
+            """Spell the fixture UUID chosen by each launch mode."""
+            return digit * 31 + mode
+
+        def check(result, *identities):
+            """Check ordered per-process credentials, shell quoting, and quiet output."""
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+            rows = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(len(rows), len(identities))
+            for row, (process, outer) in zip(rows, identities, strict=True):
+                self.assertEqual(row["KIRO_USAGE_INVOCATION"], process)
+                self.assertEqual(row["KIRO_USAGE_OUTERMOST_INVOCATION"], outer)
+                username = process if process == outer else f"{process}.{outer}"
+                for setting in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                    self.assertEqual(row[setting], f"http://kiro-usage-{username}:@127.0.0.1:{port}", setting)
+                self.assertEqual(row["NODE_EXTRA_CA_CERTS"], str(cert))
+            return rows
+
+        outer = marker("1", "b")
+        child = marker("2", "b")
+        grandchild = marker("3", "b")
+        sibling = marker("4", "a")
+        nested_explicit = command(project, explicit=True)
+        nested_managed = command(managed, (command(managed), "3"))
+        with self.subTest(launch="nested managed, sibling explicit, grandchild"):
+            rows = check(run(command(managed, (nested_managed, "2"), (nested_explicit, "4"))),
+                         (outer, outer), (child, outer), (grandchild, outer), (sibling, outer))
+            self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows[:3]))
+
+        explicit = marker("1", "a")
+        for quiet in (False, True):
+            with self.subTest(launch="explicit PATH to managed", quiet=quiet):
+                rows = check(run(command("kiro-cli", (nested_managed, "2"), explicit=True, quiet=quiet)),
+                             (explicit, explicit), (child, explicit), (grandchild, explicit))
+                self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows))
+            with self.subTest(launch="explicit PATH to project", quiet=quiet):
+                replacement = command(managed, explicit=True)
+                rows = check(run(command("kiro-cli", (nested_managed, "2"), (replacement, "4"),
+                                         explicit=True, quiet=quiet), selected=project),
+                             (explicit, explicit), (child, explicit), (grandchild, explicit), (sibling, explicit))
+                self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows[1:]))
+
+        legacy = "f" * 32
+        with self.subTest(launch="managed with matching legacy proxy"):
+            check(run(command(managed), KIRO_USAGE_INVOCATION=legacy, NODE_EXTRA_CA_CERTS=str(cert),
+                      HTTPS_PROXY=f"http://kiro-usage-{legacy}:@127.0.0.1:{port}"), (outer, legacy))
+        for setting, value in (("HTTPS_PROXY", "http://invalid.invalid:1"),
+                               ("NODE_EXTRA_CA_CERTS", str(root / "unrelated.pem"))):
+            with self.subTest(conflict=setting):
+                result = run(command(managed), **{setting: value})
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"inherited {setting} conflicts", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_nested_launch_rotates_marker_and_skips_summary(self):
+        """Require both nested chat variants to replace the process without waiting or printing."""
         for arguments in (["chat"], ["chat", "--no-interactive"]):
             with (self.subTest(arguments=arguments),
                   patch.dict(os.environ, KIRO_USAGE_INVOCATION="a" * 32, clear=True),
+                  patch.object(runtime, "process_start_time", return_value="100"),
+                  patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="b" * 32)),
                   patch.object(runtime, "launch_environment", return_value={}) as environment,
                   patch.object(os, "execvpe") as execute,
                   patch.object(runtime, "wait_command") as wait,
                   patch.object(runtime, "settle_captures") as settle,
                   patch.object(runtime, "invocation_summary") as summary):
                 runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments])
-                environment.assert_called_once_with(Path("/unused"), 19001, refuse_conflicts=False, invocation="a" * 32)
-                execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", *arguments], {})
+                environment.assert_called_once_with(Path("/unused"), 19001,
+                                                    runtime.InvocationMarkers("b" * 32, "a" * 32), refuse_conflicts=False)
+                execute.assert_called_once_with("kiro-cli", ["kiro-cli", "--v3", *arguments],
+                                                {"KIRO_USAGE_HANDOFF": f"self:{os.getpid()}:100"})
                 wait.assert_not_called()
                 settle.assert_not_called()
                 summary.assert_not_called()
@@ -753,9 +1187,8 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
                 with self.subTest(expected=expected):
                     executable.write_text(f"#!{sys.executable}\n" + body + "\n")
                     executable.chmod(0o700)
-                    env = dict(os.environ)
-                    env.pop("KIRO_USAGE_INVOCATION", None)
-                    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=env, capture_output=True, text=True)
+                    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent,
+                                            env=supervised_fixture_environment(), capture_output=True, text=True)
                     self.assertEqual(result.returncode, expected, result.stderr)
                     self.assertEqual(result.stderr, "" if no_summary else "settle\nsummary\n")
                     self.assertEqual(result.stdout, "machine stdout\n" if expected == 23 else "")
@@ -819,7 +1252,8 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
         for arguments, expected in cases:
             with self.subTest(arguments=arguments), patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
                 runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", *arguments], launch_value_options=LAUNCH_VALUE_OPTIONS)
-                execute.assert_called_once_with("kiro-cli", ["kiro-cli", *expected], {})
+                self.assertEqual(execute.call_args.args[:2], ("kiro-cli", ["kiro-cli", *expected]))
+                execute.assert_called_once()
 
     def test_other_commands_get_no_engine_selector(self):
         with patch.dict(os.environ, {"KIRO_USAGE_INVOCATION": "a" * 32}), patch.object(runtime, "launch_environment", return_value={}), patch.object(os, "execvpe") as execute:
@@ -842,10 +1276,9 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             script = f"import runtime; from pathlib import Path; runtime.launch_environment=lambda *a, **kw: dict(runtime.os.environ); runtime.wait_command=lambda *a: {status}; runtime.invocation_summary=lambda *a, **kw: print('summary',file=runtime.sys.stderr); raise SystemExit(runtime.exec_command(Path('/unused'), 19001, 1 << 30, ['kiro-cli','chat']))"
             reader, writer = os.pipe()
             os.close(reader)
-            environment = dict(os.environ)
-            environment.pop("KIRO_USAGE_INVOCATION", None)
             try:
-                result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent, env=environment, stderr=writer, stdout=subprocess.PIPE)
+                result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).parent,
+                                        env=supervised_fixture_environment(), stderr=writer, stdout=subprocess.PIPE)
                 self.assertEqual(result.returncode, expected)
                 self.assertEqual(result.stdout, b"")
             finally:
@@ -858,24 +1291,140 @@ raise SystemExit(runtime.cli(Path({directory!r}), {arguments!r}, 19001, 1 << 30)
             self.assertEqual(runtime.exec_command(Path("/unused"), 19001, 1 << 30, ["kiro-cli", "chat"]), 23)
 
     def test_marker_parser_strips_headers_and_cleans_connections(self):
+        """Check that CONNECT strips proxy credentials and disconnect drops the stored marker."""
         addon = UsageCapture()
         addon.invocations = {}
         connection = SimpleNamespace(id="local-one")
         def flow(header, client=connection):
             return SimpleNamespace(client_conn=client, request=SimpleNamespace(headers={"proxy-authorization": header}))
         marker = "a" * 32
-        valid = "Basic " + base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
-        request = flow(valid)
+        credentials = base64.b64encode(f"kiro-usage-{marker}:".encode()).decode()
+        request = flow(f"Basic {credentials}")
         addon.http_connect(request)
-        self.assertEqual(addon.invocations, {"local-one": marker})
+        self.assertEqual(set(addon.invocations), {"local-one"})
         self.assertNotIn("proxy-authorization", request.request.headers)
-        for header in ("", "Basic !!!", "Bearer ignored", "Basic " + base64.b64encode(b"kiro-usage-bad:").decode(), "Basic " + base64.b64encode(f"kiro-usage-{marker}:password".encode()).decode()):
-            request = flow(header, SimpleNamespace(id="other"))
-            addon.http_connect(request)
-            self.assertNotIn("other", addon.invocations)
-            self.assertNotIn("proxy-authorization", request.request.headers)
+        cases = {
+            "empty header": "",
+            "invalid base64": "Basic !!!",
+            "wrong scheme": f"Bearer {credentials}",
+        }
+        for name, malformed in (
+            ("extra dot", f"kiro-usage-{marker}.{'b' * 32}.:"),
+            ("nonempty password", f"kiro-usage-{marker}:password"),
+            ("short marker", "kiro-usage-bad:"),
+            ("uppercase marker", f"kiro-usage-{marker.upper()}:"),
+        ):
+            cases[name] = "Basic " + base64.b64encode(malformed.encode()).decode()
+        for name, header in cases.items():
+            with self.subTest(case=name):
+                request = flow(header, SimpleNamespace(id="other"))
+                addon.http_connect(request)
+                self.assertNotIn("other", addon.invocations)
+                self.assertNotIn("proxy-authorization", request.request.headers)
         addon.client_disconnected(connection)
         self.assertEqual(addon.invocations, {})
+
+    def test_proxy_credentials_reach_capture_metadata(self):
+        """Exercise both proxy hooks and read attribution from finished fixture rows."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        database = root / "usage.sqlite3"
+        addon = UsageCapture()
+        with patch.dict(os.environ, {"KIRO_USAGE_DB": str(database)}, clear=True):
+            addon.load(None)
+
+        def flow(name, connection, credentials=None, rpc=False, selected=True):
+            headers = {"authorization": "Bearer fixture"}
+            if credentials is not None:
+                headers["proxy-authorization"] = "Basic " + base64.b64encode(credentials).decode()
+            if rpc:
+                headers["x-amz-target"] = "KiroRuntimeService.GenerateAssistantResponse"
+            body = {"conversationState": {"conversationId": name}} if rpc else {"metadata": {"kiro:conversation_id": name}}
+            request = SimpleNamespace(headers=headers, host="fixture.kiro.dev", method="POST",
+                                      path="/" if rpc else "/v1/responses" if selected else "/",
+                                      get_content=lambda strict: json.dumps(body).encode())
+            return SimpleNamespace(id=name, client_conn=SimpleNamespace(id=connection), request=request)
+
+        try:
+            tunnel = flow("connect", "tunnel", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:")
+            addon.http_connect(tunnel)
+            self.assertEqual(tunnel.request.headers, {"authorization": "Bearer fixture"})
+            cases = (
+                (flow("sess_rest", "tunnel"), ("a" * 32, "b" * 32)),
+                (flow("sess_rpc", "direct", b"kiro-usage-cccccccccccccccccccccccccccccccc.dddddddddddddddddddddddddddddddd:", rpc=True), ("c" * 32, "d" * 32)),
+                (flow("sess_legacy", "legacy", b"kiro-usage-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee:"), ("e" * 32, "e" * 32)),
+                (flow("sess_unmarked", "unmarked"), (None, None)),
+                (flow("sess_malformed", "malformed", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bad:"), (None, None)),
+            )
+            skipped = flow("skipped", "skipped", b"kiro-usage-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:", selected=False)
+            addon.request(skipped)
+            self.assertEqual(skipped.request.headers, {"authorization": "Bearer fixture"})
+            for request, _ in cases:
+                addon.request(request)
+                self.assertNotIn("proxy-authorization", request.request.headers)
+                self.assertEqual(request.request.headers["authorization"], "Bearer fixture")
+                addon.response(request)
+            addon.client_disconnected(tunnel.client_conn)
+            reused = flow("sess_reused", "tunnel")
+            addon.request(reused)
+            addon.response(reused)
+        finally:
+            addon.done()
+
+        with contextlib.closing(sqlite3.connect(database)) as db:
+            metadata = [json.loads(row[0]) for row in db.execute("SELECT metadata_json FROM captures WHERE ended_utc_ns IS NOT NULL")]
+        rows = {row["kiro:conversation_id"]: row for row in metadata}
+        self.assertEqual(len(metadata), len(cases) + 1)
+        for request, expected in (*cases, (reused, (None, None))):
+            with self.subTest(request=request.id):
+                row = rows[request.id]
+                markers = ("invocation", "outermost_invocation")
+                self.assertEqual(tuple(row.get(key) for key in markers), expected)
+                self.assertEqual(tuple(key in row for key in markers), (expected[0] is not None,) * 2)
+                self.assertNotIn("proxy-authorization", json.dumps(row).lower())
+
+    def test_inherited_markers_accept_legacy_and_refuse_invalid_ancestry(self):
+        """Check legacy defaults and malformed inherited identities before a launch."""
+        process = {"KIRO_USAGE_INVOCATION": "a" * 32}
+        outer = {"KIRO_USAGE_OUTERMOST_INVOCATION": "b" * 32}
+        for identity, expected in (
+            ({**process, **outer}, runtime.InvocationMarkers("a" * 32, "b" * 32)),
+            (process, runtime.InvocationMarkers("a" * 32, "a" * 32)),
+            ({**process, "KIRO_USAGE_OUTERMOST_INVOCATION": ""}, runtime.InvocationMarkers("a" * 32, "a" * 32)),
+            ({}, None),
+        ):
+            with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                self.assertEqual(runtime.inherited_markers(), expected)
+        for identity in (outer, {"KIRO_USAGE_INVOCATION": "A" * 32}):
+            with self.subTest(identity=identity), patch.dict(os.environ, identity, clear=True):
+                with self.assertRaises(ValueError):
+                    runtime.inherited_markers()
+
+    def test_empty_inherited_markers_allow_launch(self):
+        """Treat empty marker variables as absent and supervise a new outer launch."""
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        ca = root / "ca"
+        ca.mkdir(mode=0o700)
+        (ca / "mitmproxy-ca-cert.pem").write_text("fixture")
+        self.enterContext(patch.dict(os.environ, {
+            "KIRO_USAGE_INVOCATION": "",
+            "KIRO_USAGE_OUTERMOST_INVOCATION": "",
+        }, clear=True))
+        self.enterContext(patch.object(runtime.socket, "create_connection"))
+
+        with (self.subTest(mode="exec"),
+              patch.object(runtime.uuid, "uuid4", return_value=SimpleNamespace(hex="c" * 32)),
+              patch.object(runtime, "wait_command", return_value=23) as wait,
+              patch.object(runtime, "settle_captures", return_value=True),
+              patch.object(runtime, "invocation_summary") as summary,
+              patch.object(os, "execvpe") as execute):
+            self.assertEqual(runtime.exec_command(root, 19001, 1 << 30, ["kiro-cli", "chat"]), 23)
+            execute.assert_not_called()
+            wait.assert_called_once()
+            values = wait.call_args.args[2]
+            self.assertEqual(values["KIRO_USAGE_INVOCATION"], "c" * 32)
+            self.assertEqual(values["KIRO_USAGE_OUTERMOST_INVOCATION"], "c" * 32)
+            self.assertEqual(values["HTTPS_PROXY"], "http://kiro-usage-cccccccccccccccccccccccccccccccc:@127.0.0.1:19001")
+            summary.assert_called_once_with(root, "c" * 32, 1 << 30, settled=True, theme=None)
 
     def test_report_alone_receives_the_summary_theme(self):
         script = Path(runtime.__file__).parent
