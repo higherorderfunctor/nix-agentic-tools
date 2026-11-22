@@ -7,7 +7,6 @@
   proxyNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "NODE_EXTRA_CA_CERTS" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
   retentionArgs = cfg: lib.optionals (cfg.payloadRetentionDays != null) ["--payload-retention-days" (toString cfg.payloadRetentionDays)];
   stateArgs = cfg: lib.optionals (cfg.dataDirectory != null) ["--state-dir" cfg.dataDirectory];
-  # The collector warns once past it; the tool's exec summary repeats the warning.
   warnArgs = cfg: ["--warn-bytes" (toString cfg.payloadWarnBytes)];
   # Set keys only: summary_theme.py owns the defaults, so unset options add no flag and no store file.
   # A direct wrapPackage usageTracking set may predate summary.
@@ -52,7 +51,7 @@ in {
     payloadWarnBytes = lib.mkOption {
       type = lib.types.ints.positive;
       default = 5368709120;
-      description = "Compressed payload bytes past which usage capture warns: sealed captures' compressed blobs, the gzip copies of captures not yet sealed, and usage summaries. Once they exceed this, the collector logs one warning per run and each tracked exec summary repeats it; SQLite metadata and WAL are not counted.";
+      description = "Warning threshold in bytes. Each tracked exec summary compares it with the combined on-disk size of usage.sqlite3 and its WAL file. The collector compares it with retained payload bytes and logs one warning per run while capture continues.";
     };
     port = lib.mkOption {
       type = lib.types.port;

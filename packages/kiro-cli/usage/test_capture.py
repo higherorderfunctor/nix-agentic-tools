@@ -512,6 +512,32 @@ class CaptureTests(unittest.TestCase):
         with contextlib.closing(open_database(self.path)) as db:
             self.assertEqual(db.execute("PRAGMA synchronous").fetchone()[0], 1)  # NORMAL
 
+    def test_wal_reuse_caps_retained_size_after_reader_releases_snapshot(self):
+        """An oversized WAL shrinks to the retained limit once a reader releases and the still-open writer reuses it."""
+        for label, limited in (("writer default", True), ("unlimited control", False)):
+            with self.subTest(label):
+                path = self.path.with_name(f"{limited}.sqlite3")
+                wal_path = path.with_suffix(".sqlite3-wal")
+                with contextlib.closing(open_database(path)) as db:
+                    if not limited:
+                        db.execute("PRAGMA journal_size_limit=-1")
+                    db.execute("CREATE TABLE filler(payload BLOB)")
+                    with contextlib.closing(sqlite3.connect(path)) as reader, capture.snapshot(reader):
+                        reader.execute("SELECT count(*) FROM filler").fetchone()
+                        for _ in range(8):
+                            with db:
+                                db.execute("INSERT INTO filler VALUES (zeroblob(?))", (4 * 1024 * 1024,))
+                        self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+
+                    busy, frames, copied = db.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+                    self.assertEqual((busy, copied), (0, frames))
+                    with db:
+                        db.execute("INSERT INTO filler VALUES (X'00')")
+                    if limited:
+                        self.assertLessEqual(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+                    else:
+                        self.assertGreater(wal_path.stat().st_size, capture.WAL_RETAINED_BYTES)
+
     def test_payload_warning_threshold_keeps_retaining(self):
         writer = Collector(self.path, warn_bytes=1)
         identifiers = []
@@ -978,7 +1004,7 @@ class RuntimeTests(unittest.TestCase):
             runtime.private_directory(state / "ca", create=True)
             (state / "ca/mitmproxy-ca-cert.pem").write_text("fake CA")
             inherited = {"PATH": "/project/bin", "KEEP": "yes", **{name: "conflict" for name in runtime.PROXY_NAMES}}
-            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "refresh_disk_index", return_value=False), patch.object(runtime, "invocation_summary"):
+            with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001)
                 runtime.exec_command(state, 19001, 1 << 30, ["--", "kiro-cli", "chat", "spaced argument", "--", "--agent-engine=v2"])

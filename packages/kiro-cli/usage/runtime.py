@@ -1,4 +1,8 @@
-"""Start the private capture service and fail closed before a tracked launch."""
+"""Run the private capture service and supervise tracked Kiro launches.
+
+On exit, wait for the launch's captures, check the store size and print the
+launch's capture summary.
+"""
 # cspell:words getpgrp tcgetpgrp
 
 import argparse
@@ -116,31 +120,6 @@ def service(args, path):
     ])
 
 
-def refresh_disk_index(path, since):
-    """Read only sessions changed since the launch (UTC ns); others are only stat-checked. The run's exit summary
-    reads no disk data: this keeps kiro-usage session and report --session, which do, current after a launch."""
-    from capture import lock_beside, open_database
-    from disk_index import INDEX_LOCK, REFRESH_LOCK, index_tree
-    try:
-        sessions = Path.home() / ".kiro/sessions"
-        if not sessions.exists():
-            return
-        with closing(open_database(path / "usage.sqlite3")) as db:
-            lock = lock_beside(path / "usage.sqlite3", INDEX_LOCK, shared=True)
-            try:
-                queue = lock_beside(path / "usage.sqlite3", REFRESH_LOCK, blocking=True)
-                try:
-                    index_tree(db, sessions, since)
-                finally:
-                    os.close(queue)
-            finally:
-                os.close(lock)
-    except BlockingIOError:
-        print("Warning: a full Kiro session index is running; disk observations were not refreshed (rerun kiro-usage index if it began before Kiro exited).", file=sys.stderr)
-    except (OSError, ValueError, sqlite3.Error) as error:
-        print(f"Warning: automatic Kiro session indexing failed: {error}; disk observations may be stale.", file=sys.stderr)
-
-
 SETTLE_TIMEOUT = 2.0  # Seconds the exit path waits for the async writer to persist this invocation.
 
 
@@ -169,7 +148,7 @@ def read_only(path):
 
 
 def settle_captures(path, invocation):
-    """True once this invocation's captures are persisted and finished; disk indexing scopes from them."""
+    """Tell the exit card whether this invocation's captures had time to finish writing."""
     try:
         with read_only(path) as db:
             return invocation_captures(db, invocation, SETTLE_TIMEOUT)[1]
@@ -177,19 +156,29 @@ def settle_captures(path, invocation):
         return False  # invocation_summary reports the same failure.
 
 
+def store_size_bytes(database):
+    """Return the database and WAL size in bytes for the exit warning without opening SQLite."""
+    size = os.stat(database).st_size
+    try:
+        size += os.stat(f"{database}-wal").st_size
+    except FileNotFoundError:
+        pass
+    return size
+
+
 def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
     """What this run captured: per root session it touched, only this invocation's marked captures, never the session's
     earlier runs. The exit path settles them first. theme is the --summary-theme JSON path."""
     from query import render_summary, run_report
-    from store import payload_bytes
     import summary_theme
     try:
+        database = path / "usage.sqlite3"
+        size = store_size_bytes(database)
+        if size > warn_bytes:
+            # The collector warns on retained payload bytes, which omit SQLite pages and the WAL.
+            print(f"Warning: the usage store is {size / 2**20:,.0f} MiB on disk, past the {warn_bytes / 2**20:,.0f} MiB warning size; "
+                  f"stop the kiro-usage service, then archive or delete {database} and its -wal/-shm files to start a new store.", file=sys.stderr)
         with read_only(path) as db:
-            retained = payload_bytes(db)
-            if retained > warn_bytes:
-                # Capture never stops for size; this is the operator's only prompt to retire the store.
-                print(f"Warning: the usage store retains {retained / 2**20:,.0f} MiB of payloads, past the {warn_bytes / 2**20:,.0f} MiB warning; "
-                      f"stop the kiro-usage service, then archive or delete {path / 'usage.sqlite3'} and its -wal/-shm files to start a new store.", file=sys.stderr)
             rows = invocation_captures(db, invocation, 0)[0]
             if not rows:  # e.g. resumed and exited without a turn
                 print("Kiro usage: no calls were captured this run; kiro-usage report --session ID shows a whole session.", file=sys.stderr)
@@ -204,7 +193,7 @@ def invocation_summary(path, invocation, warn_bytes, settled=True, theme=None):
             # invocation, not one session, so only the last block carries them.
             caveats = [*(["capture writer still has unfinished calls"] if not settled or any(state == "recording" for _, state in rows) else []),
                        *(["calls with no conversation identity excluded"] if any(not name for name in identities) else [])]
-            theme = summary_theme.load(theme)  # after the payload warning, which a refused theme must not hide
+            theme = summary_theme.load(theme)  # after the size warning, which a refused theme must not hide
             for session in sessions:
                 print("\n" + render_summary(run_report(db, invocation, session), caveats if session == sessions[-1] else (), theme), file=sys.stderr)
     except (OSError, ValueError, sqlite3.Error) as error:  # JSONDecodeError is a ValueError
@@ -251,18 +240,20 @@ def launch_options(arguments):
 
 
 def launch_subcommand(options, value_options):
-    """The first token that is not an option or an option's value, or None for a bare launch. `value_options` are the
-    launcher options that take the next token (measured from the binary's help); any other option takes none."""
-    leading = iter(options)
-    for option in leading:
-        if option in value_options:
-            next(leading, None)
+    """Find the first positional subcommand so exec can select tracked launches."""
+    remaining = iter(options)
+    for option in remaining:
+        flag, separator, _ = option.partition("=")
+        if flag == "--resume-id" or flag in value_options:
+            if not separator:
+                next(remaining, None)
         elif not option.startswith("-"):
             return option
     return None
 
 
 def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_options=()):
+    """Launch the CLI's child, marking tracked Kiro requests for a per-run card while preserving the exit status."""
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -291,15 +282,12 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
         if not tracked or nested:
             os.execvpe(command, [command, *tail], child_environment)
         else:
-            started = time.time_ns()
             result = wait_command(command, tail, child_environment)
             previous = {number: signal.signal(number, signal.SIG_IGN)
                         for number in (signal.SIGINT, signal.SIGQUIT)}
             try:
                 try:
-                    # Refresh scopes from persisted captures, so settle them first.
                     settled = settle_captures(path, invocation)
-                    refresh_disk_index(path, started)
                     invocation_summary(path, invocation, warn_bytes, settled=settled, theme=theme)
                     sys.stderr.flush()
                 except (OSError, ValueError):
@@ -326,6 +314,7 @@ def exec_command(path, port, warn_bytes, arguments, theme=None, launch_value_opt
 
 
 def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
+    """Dispatch wrapper arguments against the configured store, returning the exec status or replacing the process."""
     if arguments[:1] == ["--"]:
         arguments = arguments[1:]
     if not arguments:
@@ -336,10 +325,10 @@ def cli(path, arguments, port, warn_bytes, theme=None, launch_value_options=()):
     if command == "exec":
         return exec_command(path, port, warn_bytes, tail, theme, launch_value_options)
     if command == "session" and tail:
-        invocation = [str(script / "query.py"), *db_args, "--session", tail[0], *tail[1:]]
+        invocation = [str(script / "query.py"), *db_args, "--refresh-history", "--session", tail[0], *tail[1:]]
     elif command == "report":
         # The report alone renders the exit summary's look outside exec; the full session report has no styles.
-        invocation = [str(script / "report.py"), *db_args, *tail, *(["--summary-theme", str(theme)] if theme else [])]
+        invocation = [str(script / "report.py"), *db_args, "--refresh-history", *tail, *(["--summary-theme", str(theme)] if theme else [])]
     elif command == "index":
         invocation = [str(script / "disk_index.py"), *db_args, *tail]
     elif command in ("list", "unpack"):
@@ -358,7 +347,7 @@ def main():
         child = sub.add_parser(mode)
         child.add_argument("--state-dir")
         child.add_argument("--port", type=int, required=True)
-        if mode in ("cli", "service"):  # the collector warns past it; the cli's exit summary repeats it
+        if mode in ("cli", "service"):
             child.add_argument("--warn-bytes", type=int, required=True)
         if mode == "cli":  # read by the exec summary and report only
             child.add_argument("--summary-theme")

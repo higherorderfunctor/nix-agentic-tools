@@ -100,7 +100,7 @@ def response_rows(db, capture_id):
 def payload_bytes(db, capture_id=None):
     """Compressed payload bytes the store keeps, staged or sealed, plus usage summaries; one capture's when given.
 
-    The collector's startup count and the exit summary's warning; a seal changes it by the delta seal returns."""
+    The collector's startup count and per-capture accounting; a seal changes it by the delta seal returns."""
     where, parameters = ("", ()) if capture_id is None else (" WHERE {}=?", (capture_id,))
     with snapshot(db):
         present = tables(db)

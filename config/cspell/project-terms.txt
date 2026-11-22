@@ -1,4 +1,5 @@
 apikey
+autocheckpoint
 AUTOUPDATER
 AUTOUPDATES
 AWSLAMBDA
@@ -453,6 +454,7 @@ reimplementation
 reinit
 relitigate
 remediations
+reparses
 replayable
 repoint
 repointed
@@ -615,6 +617,7 @@ ymtdzzz
 zdiff
 zebrafish
 zereight
+zeroblob
 zhipuai
 zstd
 gnupatch

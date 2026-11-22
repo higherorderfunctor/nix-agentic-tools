@@ -1,5 +1,6 @@
 """Offline fixtures only: no Kiro, credentials, home paths or network."""
 
+import contextlib
 import io
 import json
 import os
@@ -14,6 +15,7 @@ from unittest.mock import patch
 
 import capture
 import disk_index
+import query
 
 
 def encoded(payload, **fields):
@@ -52,7 +54,8 @@ class DiskIndexTests(unittest.TestCase):
     @staticmethod
     def captured(db, conversation, root=None, started=0):
         db.executescript(capture.SCHEMA)
-        metadata = {"kiro:conversation_id": conversation, **({"kiro:root_conversation_id": root} if root else {})}
+        metadata = {"invocation": "a" * 32, "kiro:conversation_id": conversation,
+                    **({"kiro:root_conversation_id": root} if root else {})}
         db.execute("INSERT INTO captures(id,started_utc_ns,metadata_json) VALUES (?,?,?)",
                    (conversation + str(started), started, json.dumps(metadata)))
         db.commit()
@@ -279,7 +282,7 @@ class DiskIndexTests(unittest.TestCase):
 
     def test_cli_full_pass_waits_for_index_lock(self):
         self.messages.write_bytes(usage())
-        held = capture.lock_beside(self.path, disk_index.INDEX_LOCK, shared=True)  # a post-exit refresh mid-scan
+        held = capture.lock_beside(self.path, disk_index.INDEX_LOCK, shared=True)
         try:
             process = subprocess.Popen([sys.executable, disk_index.__file__, "--db", str(self.path),
                                         "--sessions", str(self.sessions)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -473,29 +476,166 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(self.ids(old))
         self.assertEqual(self.count(), 1)
 
-    def test_since_reads_only_recent_sessions_and_keeps_older_scope(self):
+    def test_history_discovers_never_indexed_descendant_in_an_old_workspace(self):
+        """An in-place append leaves the workspace mtime unchanged but still appears in history."""
         self.messages.write_bytes(usage())
-        step = self.child("sess_step", {"ownerSessionId": "sess_synthetic"}, usage(2))
-        self.scan()
+        self.child("sess_step", {"ownerSessionId": "sess_synthetic"}, usage(2))
         old = 10**18
-        recent = old + 10 * disk_index.MTIME_SLACK_NS
-        for path in (self.messages, self.metadata, step / "session.json", step / "messages.jsonl"):
-            with path.open("ab") as stream:
-                stream.write(usage(5) if path.suffix == ".jsonl" else b" ")
-            os.utime(path, ns=(old, old))
+        recent = old + 10**10
+        for path in (self.messages, self.metadata):
+            os.utime(path, ns=(recent, recent))
+        self.scan()
         nested = self.child("sess_nested", {"_meta": {"kiro": {"serverSession": {"ownerSessionId": "sess_step"}}}},
-                            usage(3), mtime=recent)
-        unlinked = self.child("sess_unlinked", {}, usage(4), mtime=recent)
-        read = []
-        original = disk_index.read_session
-        with patch.object(disk_index, "read_session", side_effect=lambda path: read.append(path.parent) or original(path)):
-            disk_index.index_tree(self.db, self.sessions, since=recent)
-        self.assertEqual(sorted(path.name for path in read), ["sess_nested", "sess_unlinked"])
+                            mtime=old)
+        os.utime(nested.parent, ns=(old, old))
+        messages = nested / "messages.jsonl"
+        with messages.open("ab") as stream:
+            stream.write(usage(3))
+        os.utime(messages, ns=(recent, recent))
+        self.assertEqual(nested.parent.stat().st_mtime_ns, old)
+        disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
         self.assertEqual(self.ids(nested), {"ownerSessionId": "sess_step"})
-        self.assertIsNone(self.ids(unlinked))
-        # Older in-scope sessions are neither re-read nor pruned.
         self.assertEqual(self.count(), 3)
-        self.assertIsNotNone(self.ids(step))
+
+    def test_history_reparses_legacy_lineage_with_unchanged_metadata(self):
+        """A cache with only top-level identifiers must still discover a nested owner link."""
+        self.messages.write_bytes(usage())
+        child = self.child("sess_child", {
+            "sessionId": "child",
+            "_meta": {"kiro": {"serverSession": {"ownerSessionId": "sess_synthetic"}}},
+        })
+        self.db.executescript("""
+            CREATE TABLE disk_sessions (
+                path TEXT PRIMARY KEY, model_id TEXT, model_scope TEXT NOT NULL,
+                created_at TEXT, last_modified_at TEXT, numeric_metadata_json TEXT NOT NULL,
+                file_identity TEXT NOT NULL, identifiers_json TEXT NOT NULL
+            );
+        """)
+        info = (child / "session.json").stat()
+        identity = f"{info.st_dev}:{info.st_ino}:{info.st_size}:{info.st_mtime_ns}"
+        with self.db:
+            self.db.execute("INSERT INTO disk_sessions VALUES (?,NULL,'session-current',NULL,NULL,'{}',?,?)",
+                            (str(child), identity, '{"sessionId": "child"}'))
+        with (child / "messages.jsonl").open("ab") as messages:
+            messages.write(usage(2))
+
+        disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        result = query.query(self.db, "sess_synthetic", "tree")
+        self.assertEqual((result["sessions"], result["disk"]["turns"]),
+                         (["sess_child", "sess_synthetic"], 2))
+
+    def test_history_refreshes_indexed_descendant_in_an_old_workspace(self):
+        """Walking every workspace reuses unchanged metadata and transcript checkpoints."""
+        self.messages.write_bytes(usage())
+        step = self.child("sess_step", {"ownerSessionId": "synthetic"}, usage(2))
+        nested = self.child("sess_nested", {"parentSessionId": "sess_step"}, usage(3))
+        old = 10**18
+        recent = old + 10**10
+        for path in (step / "session.json", step / "messages.jsonl", nested / "session.json",
+                     nested.parent, self.session.parent):
+            os.utime(path, ns=(old, old))
+        for path in (self.messages, self.metadata):
+            os.utime(path, ns=(recent, recent))
+        disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertEqual(self.count(), 3)
+        messages = nested / "messages.jsonl"
+        with messages.open("ab") as stream:
+            stream.write(usage(4))
+        os.utime(messages, ns=(recent, recent))
+        statements = []
+        self.db.set_trace_callback(statements.append)
+        self.addCleanup(self.db.set_trace_callback, None)
+        with (patch.object(os, "scandir", wraps=os.scandir) as scandir,
+              patch.object(disk_index, "read_session", wraps=disk_index.read_session) as read):
+            disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertCountEqual([call.args[0] for call in scandir.call_args_list],
+                              [self.sessions, self.session.parent, nested.parent])
+        read.assert_not_called()
+        self.assertEqual(self.count(), 4)
+        lookups = [sql for sql in statements if sql.startswith("SELECT path FROM disk_sessions WHERE json_extract")]
+        plans = {row[3] for sql in lookups for row in self.db.execute("EXPLAIN QUERY PLAN " + sql)}
+        for link in disk_index.LINKS:
+            self.assertTrue(any(f"SEARCH disk_sessions USING INDEX disk_sessions_{link} " in plan for plan in plans),
+                            plans)
+
+    def test_history_updates_departed_lineage_and_leaves_unrelated_rows(self):
+        """Retire a stale link to the requested tree without refreshing or pruning unrelated history."""
+        self.messages.write_bytes(usage())
+        departed = self.child("sess_departed", {"parentSessionId": "sess_synthetic"}, usage(2))
+        unrelated = self.child("sess_unrelated", {"parentSessionId": "sess_elsewhere"}, usage(3))
+        self.captured(self.db, "sess_unrelated")
+        self.scan()
+        (departed / "session.json").write_text('{"parentSessionId":"sess_other"}')
+        (unrelated / "session.json").write_text('{"parentSessionId":"sess_different"}')
+        with (unrelated / "messages.jsonl").open("ab") as messages:
+            messages.write(usage(4))
+        disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertEqual(self.ids(departed), {"parentSessionId": "sess_other"})
+        self.assertEqual(self.ids(unrelated), {"parentSessionId": "sess_elsewhere"})
+        self.assertEqual(self.count(), 3)
+
+    def test_history_read_error_keeps_committed_batch_and_resumes(self):
+        """Interrupt a replacement transcript and resume from the first batch's checkpoint."""
+        self.messages.write_bytes(usage())
+        self.scan()
+        record = usage(3)
+        self.messages.write_bytes(record * 130)
+        checkpoint = len(record) * 128
+        self.metadata.write_text('{"modelId":"replacement"}')
+        read_record = disk_index.read_record
+        reads = 0
+
+        def fail_after_batch(stream):
+            nonlocal reads
+            reads += 1
+            if reads == 129:
+                raise OSError("private fixture details")
+            return read_record(stream)
+
+        with (patch.object(disk_index, "read_record", side_effect=fail_after_batch),
+              contextlib.redirect_stderr(io.StringIO()) as output):
+            disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertEqual(output.getvalue(),
+                         f"Warning: could not read Kiro session {self.session}; disk observations may be stale.\n")
+        self.assertEqual(self.count(), 128)
+        self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], checkpoint)
+        self.assertEqual(self.db.execute("SELECT model_id FROM disk_sessions").fetchone()[0], "replacement")
+        self.assertEqual(json.loads(self.db.execute("SELECT usage_json FROM disk_records WHERE byte_offset=0").fetchone()[0]),
+                         [{"usage": 3, "unit": "credit"}])
+
+        def read_remaining(stream):
+            self.assertGreaterEqual(stream.tell(), checkpoint)
+            return read_record(stream)
+
+        with patch.object(disk_index, "read_record", side_effect=read_remaining):
+            disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertEqual(self.count(), 130)
+
+    def test_history_records_unrelated_unreadable_metadata_without_losing_lineage(self):
+        """Keep the cached child and its turn when another tree encounters a metadata read error."""
+        child = self.child("sess_child", {"parentSessionId": "sess_other"}, usage())
+        self.captured(self.db, "sess_other")
+        self.scan()
+        metadata = child / "session.json"
+        metadata.write_text('{"parentSessionId":"sess_changed"}')
+        read_session = disk_index.read_session
+
+        def read_metadata(path):
+            """Fail the read after discovery has found the changed file."""
+            if path == metadata:
+                raise PermissionError("fixture metadata is unreadable")
+            return read_session(path)
+
+        with (patch.object(disk_index, "read_session", read_metadata),
+              contextlib.redirect_stderr(io.StringIO()) as warnings):
+            disk_index.index_tree(self.db, self.sessions, requested=("sess_other",))
+            self.assertEqual(self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0], 0)
+            disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
+        self.assertEqual((self.ids(child), self.count()), ({"parentSessionId": "sess_other"}, 1))
+        self.assertEqual([tuple(row) for row in self.db.execute("SELECT * FROM disk_session_omissions")],
+                         [(str(child), "unreadable_session_metadata")])
+        self.assertEqual(warnings.getvalue().splitlines(),
+                         [f"Warning: could not read Kiro session {child}; disk observations may be stale."] * 2)
 
     def test_full_pass_keeps_rows_from_other_session_roots(self):
         self.messages.write_bytes(usage())
@@ -516,7 +656,7 @@ class DiskIndexTests(unittest.TestCase):
             "serverSession": {"parentSessionId": "srv_x", "role": "workflow-step"}}}})
         self.assertEqual(ids, {"parentSessionId": "sess_local", "role": "workflow-step"})
 
-    def test_since_clears_repaired_omission_out_of_scope(self):
+    def test_history_clears_repaired_omission_out_of_scope(self):
         self.messages.write_bytes(usage())
         unlinked = self.child("sess_unlinked", {}, usage(4))
         (unlinked / "session.json").write_text("{")
@@ -524,7 +664,8 @@ class DiskIndexTests(unittest.TestCase):
         rows = lambda: self.db.execute("SELECT count(*) FROM disk_session_omissions").fetchone()[0]
         self.assertEqual(rows(), 1)
         (unlinked / "session.json").write_text("{}")
-        disk_index.index_tree(self.db, self.sessions, since=0)
+        os.utime(unlinked.parent)
+        disk_index.index_tree(self.db, self.sessions, requested=("sess_synthetic",))
         self.assertEqual(rows(), 0)
 
     def test_cli_vacuums_after_pruning(self):

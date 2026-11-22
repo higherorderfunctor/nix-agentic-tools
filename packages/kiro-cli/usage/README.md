@@ -35,15 +35,17 @@ retained payload evidence, counting sealed compressed payloads, staged payloads
 awaiting their seal (request BLOBs, entity and application chunks, event frames
 and parsed event JSON), and retained usage summaries. Past the threshold the
 running collector logs one warning line to standard error and keeps capturing,
-and captures are not marked incomplete for it. Each tracked `kiro-usage exec`
-summary repeats the warning with the store's size while it stays above the
-threshold. On restart the retained bytes are counted again. This counts
-payloads, not the SQLite file size: indexes, metadata, page overhead, and
-accumulated records also consume disk. Temporary SQLite journal space is
-additional. Stopping capture and deleting an intentionally retired private
-database are operator decisions: stop the service, then archive or delete
-`usage.sqlite3` with its `-wal` and `-shm` files; the next start creates a new
-store.
+and captures are not marked incomplete for it. On restart the retained bytes are
+counted again. The collector counts payloads, not the SQLite file size: indexes,
+metadata, page overhead, and accumulated records also consume disk.
+
+Each tracked `kiro-usage exec` summary compares the same threshold with the
+store's size on disk instead, `usage.sqlite3` plus its `-wal` file, so it can
+warn before the collector does, even for a store with no captures. It reads two
+file sizes and never scans the database. Stopping capture and deleting an
+intentionally retired private database are operator decisions: stop the service,
+then archive or delete `usage.sqlite3` with its `-wal` and `-shm` files; the
+next start creates a new store.
 
 When `KIRO_USAGE_RETENTION_DAYS` is a positive integer, the sealer deletes the
 sealed request and response blobs of captures older than that many days. It runs
@@ -158,13 +160,10 @@ conversation ID remain visible in coverage.
 are independent of any other application database. Additional tables, including
 the offline indexer's `disk_*` tables, are preserved. One advisory lock prevents
 concurrent collector writers to the same database; an independent indexer can
-still write its own tables. Indexers serialize on a second owner-only lock file,
-`<db>.index.lock`: the explicit full pass takes it exclusively and waits, and a
-tracked launch's exit refresh takes it shared without waiting, skipping with a
-warning only during a full pass. Exit refreshes then queue on a third,
-`<db>.refresh.lock`, taken exclusively and waiting: `index_messages` reads a
-source's offset before its write transaction, so two concurrent refreshes of one
-session would insert the same records.
+still write its own tables. The explicit full index takes `<db>.index.lock`
+exclusively and waits. History refreshes take it shared and skip with a warning
+if a full index holds it. History writers serialize on `<db>.history.lock`
+because a transcript's checkpoint is read before its write transaction.
 
 `store.seal` replaces a finished capture's staged payloads (`request_gzip`,
 `chunks`, `events`) with `sealed_requests`, `sealed_responses` and
@@ -506,29 +505,29 @@ or `query`) keeps the Root conversation, Other linked, and Unknown pool tables
 and the partial-coverage markers. A run with no captures, such as a resumed
 session exited without a turn, prints one line saying so that points to
 `kiro-usage report --session ID`; captures without a conversation identity mean
-an explicit unavailable summary. Before reporting, the outer launch
-incrementally indexes `~/.kiro/sessions` if present, using the existing database
-and checkpoints. The summary reads none of it; the refresh keeps
-`kiro-usage session` and `report --session` current. It reads the `session.json`
-of sessions whose `session.json` or `messages.jsonl` changed since the launch,
-and messages only for those linked to captures (less one second for coarse file
-timestamps) and never prunes; already indexed sessions still link their new
-descendants. The explicit `index` command is the full capture-scoped pass: it
-prunes `disk_*` rows for sessions no longer linked to captures and runs `VACUUM`
-plus a WAL checkpoint when its prune deleted rows. Lineage comes from
-`parentSessionId`, `rootSessionId`, `rootConversationId`, and
+an explicit unavailable summary. Tracked exits do no session discovery or disk
+indexing. The capture summary waits at most two seconds for this launch's calls
+to finish and stay unchanged for 0.1 s. A call started just before Kiro exits
+can still persist after that quiet period. A timed-out wait flags unfinished
+calls in the summary. Nested `kiro-usage exec` launches reuse the parent's
+marker. The outer launch prints the summary.
+
+`kiro-usage session` and `kiro-usage report --session` refresh disk history
+before reading, once per command even with several IDs. They may take longer
+because they check every workspace for descendants. They use transcript
+checkpoints to avoid rereading unchanged transcripts and leave other transcripts
+alone. A missing `~/.kiro/sessions` is skipped silently. If the cache is
+read-only or a full index holds the lock, the command warns and shows the last
+indexed facts. Read errors warn per session and a later pass resumes from the
+last committed transcript checkpoint. Bare `report`, `list`, `unpack`, and the
+standalone calibration queries open read-only connections.
+
+The explicit `index` command is the full capture-scoped pass. It prunes `disk_*`
+rows for sessions no longer linked to captures and runs `VACUUM` plus a WAL
+checkpoint when its prune deleted rows. Lineage comes from `parentSessionId`,
+`rootSessionId`, `rootConversationId`, and
 `_meta.kiro.serverSession.ownerSessionId`; the serverSession `role` and workflow
-`workflowId` and `nodeId` are retained as identifiers. Index failures warn
-without replacing the child exit status, and disk observations may then be
-stale; so does a running explicit `index` pass, which the exit refresh skips
-rather than interleaving with. Manual session queries use the last completed
-index. Before that refresh, which is scoped by persisted captures, the exit path
-waits at most two seconds for this launch's captured calls to finish and stay
-unchanged for 0.1 s. That quiet period is a heuristic, not a writer
-acknowledgement: a call started within a moment of Kiro exiting can persist
-after it. A timed-out wait flags unfinished calls in the summary, even if they
-finish during the refresh. Nested `kiro-usage exec` launches reuse the parent's
-marker; only the outer launch prints the summary.
+`workflowId` and `nodeId` are retained as identifiers.
 
 `unpack` writes one capture's private payloads to standard output, reading
 staged and unexpired sealed captures alike in one read snapshot; retention has
