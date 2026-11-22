@@ -22,12 +22,12 @@
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
-  rev = "a96e2bdf600481ef009bd8297bc4da0b419bb130";
+  rev = "5f51bd31decb53bba2fde8193e4b3f1afc7225a7";
   unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-abtT9KrAxOVc6DHjjE3/JzXDnd21tNXsSfmsBdDNAvM=";
+    hash = "sha256-7Buuw8L9ctQC3m+3ZuzRVD3aFrdKpPo391IBcQKPeqY=";
   };
   # Keep pnpm responsible for patching every peer variant. A name-only key
   # follows upstream versions; context application and the behavioral probe
@@ -77,7 +77,7 @@ in
       pnpm = pkgs.ai.generic.pnpm_11;
       fetcherVersion = 4;
       postInstall = verifyNapiPatch;
-      hash = "sha256-eE1kF/NVrFs286zKH5f/llyP4/TSUpoSfyoP3tctgCo=";
+      hash = "sha256-LWmfYxmorq1krvcqyc+ltgMjhlz6lOisfKgUrD6FYxs=";
     };
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
