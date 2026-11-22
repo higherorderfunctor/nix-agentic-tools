@@ -25,7 +25,7 @@ in {
       skills = import ./checks/catalog-routes.nix {inherit harness lib;};
     in
       pkgs.runCommand "delegate-routing-cpa-routes" {
-        nativeBuildInputs = [(pkgs.python3.withPackages (ps: [ps.pydantic ps.urllib3]))];
+        nativeBuildInputs = [(python-stack.withPackages (ps: [ps.pydantic ps.urllib3]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -154,7 +154,7 @@ in {
       '';
     delegate-routing-usage-types =
       pkgs.runCommand "delegate-routing-usage-types" {
-        nativeBuildInputs = [pkgs.pyright (pkgs.python3.withPackages (ps: [ps.pydantic ps.urllib3]))];
+        nativeBuildInputs = [pkgs.pyright (python-stack.withPackages (ps: [ps.pydantic ps.urllib3]))];
         inherit delegate-routing-allowance-ranking delegate-routing-observation-normalize;
       } ''
         set -euETo pipefail
