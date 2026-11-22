@@ -1,0 +1,99 @@
+# Delegate-routing and other Python consumers call withPackages on this
+# interpreter. Its package set builds Pydantic and core from one release.
+# cspell:ignore maturin
+{
+  lib,
+  packageLib,
+  pkgs,
+  python3,
+  repoPath,
+}: let
+  pinFile = name: let
+    file =
+      if name == "pydantic"
+      then "sources.json"
+      else "${name}-sources.json";
+  in
+    ../../../../. + "/${file}";
+  pinFor = name: builtins.fromJSON (builtins.readFile (pinFile name));
+
+  pinnedRelease = old: let
+    pin = pinFor old.pname;
+  in {
+    inherit (pin) version;
+    # Some nixpkgs recipes close over their old version in the changelog URL.
+    meta = old.meta // {changelog = lib.replaceStrings [old.version] [pin.version] old.meta.changelog;};
+    src = pkgs.fetchzip {
+      name = "source";
+      inherit (pin.src) url hash;
+      # nixpkgs uses the release tag in changelog links.
+      passthru.tag = lib.removeSuffix ".tar.gz" (baseNameOf pin.src.url);
+    };
+  };
+
+  # The core crate owns the compiler used by both sides of the wheel build.
+  rustPlatform = packageLib.mkRustPlatform {
+    inherit pkgs;
+    pname = "python-stack.pkgs.pydantic-core";
+    sourceRoot = "pydantic-core";
+    sources = pinFor "pydantic-core";
+    sourcesFile = repoPath (pinFile "pydantic-core");
+    override = "latest";
+  };
+  maturin =
+    (pkgs.buildPackages.maturin.override {inherit rustPlatform;}).overrideAttrs (old:
+      pinnedRelease old // {cargoHash = (pinFor "maturin").cargoHash or lib.fakeHash;});
+
+  # nixpkgs' hook takes its tools from the host package set.
+  maturinBuildHook = rustPlatform.maturinBuildHook.overrideAttrs {
+    propagatedBuildInputs = lib.unique [maturin rustPlatform.rust.cargo rustPlatform.rust.rustc];
+  };
+
+  python = python3.override {
+    self = python;
+    packageOverrides = final: prev:
+      lib.genAttrs ["annotated-types" "typing-extensions" "typing-inspection"]
+      (name: prev.${name}.overridePythonAttrs pinnedRelease)
+      // {
+        pydantic = prev.pydantic.overridePythonAttrs (old:
+          pinnedRelease old
+          // {
+            # This release includes the pytest compatibility change.
+            patches = builtins.filter (patch: (patch.name or "") != "pytest-9.1-compat.patch") (old.patches or []);
+            # 2.14 ships pydantic-core's tests in this repo. They test the core
+            # extension, not pydantic, and some need pydantic itself (pytest-examples),
+            # so they stay out of this build, as nixpkgs keeps them out of other builds.
+            disabledTestPaths = (old.disabledTestPaths or []) ++ ["tests/pydantic_core"];
+          });
+        pydantic-core = (prev.pydantic-core.override {rustPlatform = rustPlatform // {inherit maturinBuildHook;};}).overridePythonAttrs (finalAttrs: old: {
+          inherit (pinFor "pydantic-core") version;
+          inherit (final.pydantic) src;
+          sourceRoot = "${finalAttrs.src.name}/pydantic-core";
+          passthru =
+            old.passthru
+            // {
+              tests =
+                old.passthru.tests
+                // {
+                  pytest = final.pydantic-core.overridePythonAttrs {doCheck = true;};
+                };
+            };
+          cargoDeps = rustPlatform.fetchCargoVendor {
+            # A new Pydantic tag can change Cargo.lock at the same core version.
+            pname = "pydantic-${final.pydantic.version}-core";
+            inherit (finalAttrs) version src sourceRoot;
+            hash = (pinFor "pydantic-core").cargoHash or lib.fakeHash;
+          };
+        });
+      };
+  };
+in
+  python.overrideAttrs (old: {
+    passthru =
+      old.passthru
+      // (import ../../../../lib/update.nix {
+        inherit packageLib pinFile pkgs repoPath;
+        inherit (rustPlatform.passthru) fixRustToolchain;
+      })
+      // {maturinCargoDeps = maturin.cargoDeps;};
+  })

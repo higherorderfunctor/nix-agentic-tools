@@ -16,8 +16,12 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 from pydantic import BaseModel, JsonValue, RootModel
+
+# Loaded before the test classes so per-test @settings inherit it.
+settings.register_profile("ranking", database=None, deadline=None, max_examples=60)
+settings.load_profile("ranking")
 
 SCRIPTS = Path(sys.argv[1])
 CASES = Path(sys.argv[2])
@@ -163,6 +167,9 @@ class RankingCases(unittest.TestCase):
         )
         self.assertEqual((entry.pace, entry.score, entry.state), (None, 0.0, "out"))
 
+    # The draws are small sampled_from choices; the slow-input check only measures
+    # runner load here, and it failed CI on a loaded runner.
+    @settings(suppress_health_check=[HealthCheck.too_slow])
     @given(
         rates=st.sampled_from([order[:2] for order in permutations((0.2, 0.5, 1.0))]),
         capacities=st.tuples(st.integers(1, 200), st.integers(1, 200)).filter(
@@ -224,6 +231,4 @@ class RankingCases(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    settings.register_profile("ranking", database=None, deadline=None, max_examples=60)
-    settings.load_profile("ranking")
     unittest.main(argv=[sys.argv[0]], verbosity=2)

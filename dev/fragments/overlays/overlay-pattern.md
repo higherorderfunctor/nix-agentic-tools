@@ -911,6 +911,14 @@ metadata or constructing a second writer. Sidecar update scripts pass
 repairs such as pnpm_12's pnpm dependencies use the platform's `targets`
 parameter, whose default is the Cargo vendor target.
 
+The pinned Pydantic core crate declares no Rust channel. Its sidecar records an
+empty string, and the Python stack selects the latest stable compiler in the
+locked rust-overlay. Use that platform for maturin and core, and give the
+maturin build hook the same tools. The nixpkgs hook takes Cargo, rustc and
+maturin from its host package set even when the caller supplies a Rust platform.
+The grouped updater runs the platform's `fixRustToolchain` before refreshing
+each crate's vendor hash in its own sidecar.
+
 Rust updaters extract `channel` from `rust-toolchain.toml` or `rust-toolchain`
 at the recipe's crate/workspace root, using `codex-rs` for `chatgpt-codex`.
 `mkRustToolchainFix` reads that root through `sourceRoot` (default `"."`), using
@@ -1108,3 +1116,5 @@ sets. Do not re-emit `prev` (`ai = prev.ai // {...}`): it still merges, but the
 check then compares every carried sibling with `==`, which forces both
 `outPath`s of every sibling derivation. The `overlay-re-emit-forcing` probe in
 `checks/facets/facet-mock.nix` pins that hazard.
+
+<!-- cspell:ignore maturin -->

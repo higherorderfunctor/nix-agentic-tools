@@ -1,0 +1,7 @@
+{
+  "version": "0.4.5",
+  "src": {
+    "url": "https://github.com/pydantic/typing-inspection/archive/v0.4.5.tar.gz",
+    "hash": "sha256-MrvBeB9HmtPKMh8RuketTBykmxp9PW7ft3h2qMwSVKM="
+  }
+}
