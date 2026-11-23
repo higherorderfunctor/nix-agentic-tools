@@ -70,8 +70,9 @@ kiro-usage exec kiro-cli chat "your prompt"
 remains selected. It uses the installed tool's configured port and state
 directory; no `usageTracking` setting or proxy environment belongs in the
 contributor project's configuration. Wrapping the already tracked Home Manager
-launcher is also supported: the identical proxy and CA environment passes its
-conflict checks. No second collector starts.
+launcher is also supported: matching proxy routing passes its routing check,
+while an inherited CA is merged with the current capture CA. No second collector
+starts.
 
 When an outer interactive `kiro-usage exec kiro-cli` exits, it prints a card to
 standard error for each root session with calls from that Kiro process, ordered
@@ -171,15 +172,18 @@ just before Kiro exits can still persist after that quiet period. If the wait
 times out, unfinished calls stay flagged as incomplete coverage. If only
 external roots were captured, the tool points to the whole-session report.
 
-`exec` preserves arguments. It sets proxy and Node CA variables and clears
-bypass variables only for that invocation and its descendants, replacing
-conflicting inherited values. Your shell environment stays unchanged. For
-commands named `kiro-cli`, it prepends `--v3` unless already present before
-`--`, and for the `acp` subcommand it adds `--agent-engine=v3` before `--` (last
-without one) unless an `--agent-engine` is already there. Other command names
-receive arguments unchanged; callers must ensure those programs use the Node
-trust path. Use `kiro-usage exec -- COMMAND ...` when an explicit command
-boundary is useful.
+`exec` preserves arguments. It replaces routing variables only for that
+invocation and its descendants. An inherited `NODE_EXTRA_CA_CERTS` bundle is
+merged with the current capture CA in private runtime state; an empty or unset
+value uses the capture CA directly, as does the capture CA itself. Nested
+launches keep the original external bundle path and merge it again with the
+current capture CA. Your shell environment stays unchanged. For commands named
+`kiro-cli`, it prepends `--v3` unless already present before `--`, and for the
+`acp` subcommand it adds `--agent-engine=v3` before `--` (last without one)
+unless an `--agent-engine` is already there. Other command names receive
+arguments unchanged; callers must ensure those programs use the Node trust path.
+Use `kiro-usage exec -- COMMAND ...` when an explicit command boundary is
+useful.
 
 For a standalone devenv-managed collector, start `kiro-usage` through the
 process supervisor with `devenv up kiro-usage`. Home Manager on Darwin emits the
@@ -194,14 +198,17 @@ provider request.
 
 The launcher sets HTTP and HTTPS proxy variables in both cases and
 `NODE_EXTRA_CA_CERTS` for its process and descendants. It clears `ALL_PROXY` and
-`NO_PROXY` in both cases so inherited routing cannot bypass capture. Configured
-conflicting proxy or Node CA environment entries fail evaluation; inherited
-nonempty conflicts fail before launch. To use a shell that already exports proxy
-variables, remove those variables for the tracked invocation. Node trusts this
-extra CA only within the launched process tree. The module does not add a CA to
-the operating system trust store. Tools spawned by Kiro inherit these
-environment variables too; their own TLS implementations may have different
-trust requirements.
+`NO_PROXY` in both cases so inherited routing cannot bypass capture. Inherited
+routing conflicts fail before launch; a nonempty inherited Node CA is merged
+into a private bundle named by the full SHA-256 digest of its contents. An
+existing bundle is reused only when it is a user-owned regular `0600` file with
+matching bytes; otherwise a private replacement is published atomically.
+
+Configured proxy or Node CA environment entries still fail evaluation. Node
+trusts the combined file only within the launched process tree. The module does
+not add a CA to the operating system trust store. Tools spawned by Kiro inherit
+these environment variables too; their own TLS implementations may have
+different trust requirements.
 
 Set `upstreamCaFile` when the service must verify the upstream with a runtime
 bundle such as `/etc/nix/macos-ca.pem`. mitmproxy replaces its default upstream

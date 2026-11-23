@@ -50,7 +50,7 @@ LAUNCH_VALUE_OPTIONS = tuple(_measured_value_options("KIRO_LAUNCH_VALUE_OPTIONS"
 def supervised_fixture_environment():
     """Give supervised subprocess fixtures a fresh launch environment."""
     launch_settings = {runtime.INVOCATION, runtime.LAUNCH_HANDOFF, runtime.OUTERMOST_INVOCATION,
-                       *runtime.PROXY_NAMES}
+                       *runtime.OWNED_ENVIRONMENT_NAMES}
     return {name: value for name, value in os.environ.items() if name not in launch_settings}
 
 
@@ -986,6 +986,134 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(runtime.process_start_time(4321), "7654321")
         read.assert_called_once_with(Path("/proc/4321/stat"))
 
+    def test_launch_environment_merges_inherited_node_ca(self):
+        """Merge the original external Node CA with the current capture CA on every launch."""
+        with tempfile.TemporaryDirectory() as directory:
+            # Resolved, because the launcher anchors relative paths to os.getcwd(), which resolves symlinks.
+            root = Path(directory).resolve()
+            state = root / "state"
+            runtime.private_directory(state, create=True)
+            ca = state / "ca"
+            runtime.private_directory(ca, create=True)
+            cert = ca / "mitmproxy-ca-cert.pem"
+            inherited_x = root / "inherited-x.pem"
+            separator = b"\n# kiro-usage merged certificate authorities\n"
+            cert.write_bytes(b"capture CA\n")
+            inherited_x.write_bytes(b"inherited CA X\n")
+            nested = root / "nested"
+            nested.mkdir()
+            listener = self.enterContext(socket.socket())
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(32)
+
+            def launch(node=None, inherited_node=None):
+                """Build one tracked child environment from optional external Node trust."""
+                settings = {}
+                if node is not None:
+                    settings["NODE_EXTRA_CA_CERTS"] = node
+                if inherited_node is not None:
+                    settings[runtime.INHERITED_NODE_CA] = inherited_node
+                with patch.dict(os.environ, settings, clear=True):
+                    return runtime.launch_environment(state, listener.getsockname()[1], None)
+
+            with contextlib.chdir(root):
+                environment_x = launch(inherited_x.name)
+            path_x = Path(environment_x["NODE_EXTRA_CA_CERTS"])
+            expected_x = b"inherited CA X\n" + separator + b"capture CA\n"
+            self.assertEqual(path_x.parent, ca)
+            self.assertEqual(path_x.read_bytes(), expected_x)
+            self.assertEqual(path_x.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(environment_x[runtime.INHERITED_NODE_CA], str(inherited_x))
+
+            script = "import json, sys, runtime; print(json.dumps(runtime.launch_environment(__import__('pathlib').Path(sys.argv[1]), int(sys.argv[2]), None)))"
+            nested_process = subprocess.run(
+                [sys.executable, "-c", script, str(state), str(listener.getsockname()[1])],
+                cwd=nested, text=True, capture_output=True, timeout=5, check=True,
+                env={"HOME": str(root), "PATH": os.environ.get("PATH", ""),
+                     "PYTHONPATH": str(Path(__file__).parent), "PYTHONDONTWRITEBYTECODE": "1",
+                     runtime.INHERITED_NODE_CA: environment_x[runtime.INHERITED_NODE_CA]},
+            )
+            nested_environment = json.loads(nested_process.stdout)
+            self.assertEqual(nested_environment["NODE_EXTRA_CA_CERTS"], str(path_x))
+            self.assertEqual(nested_environment[runtime.INHERITED_NODE_CA], str(inherited_x))
+            self.assertEqual(Path(nested_environment["NODE_EXTRA_CA_CERTS"]).read_bytes(), expected_x)
+
+            identity = (path_x.stat().st_ino, path_x.stat().st_mtime_ns)
+            self.assertEqual(launch(str(inherited_x))["NODE_EXTRA_CA_CERTS"], str(path_x))
+            self.assertEqual((path_x.stat().st_ino, path_x.stat().st_mtime_ns), identity)
+            path_x.chmod(0o644)
+            self.assertEqual(launch(str(inherited_x))["NODE_EXTRA_CA_CERTS"], str(path_x))
+            self.assertEqual(path_x.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(path_x.read_bytes(), expected_x)
+            for value in (None, ""):
+                with self.subTest(inherited=value):
+                    environment = launch(value)
+                    self.assertEqual(environment["NODE_EXTRA_CA_CERTS"], str(cert))
+                    self.assertNotIn(runtime.INHERITED_NODE_CA, environment)
+            capture_environment = launch(str(cert))
+            self.assertEqual(capture_environment["NODE_EXTRA_CA_CERTS"], str(cert))
+            self.assertNotIn(runtime.INHERITED_NODE_CA, capture_environment)
+            stale_environment = launch(str(path_x), inherited_node=str(cert))
+            self.assertEqual(stale_environment["NODE_EXTRA_CA_CERTS"], str(cert))
+            self.assertNotIn(runtime.INHERITED_NODE_CA, stale_environment)
+
+            # The OS resolves "link/../" after following the link; lexical normalization would pick a decoy.
+            (root / "real" / "sub").mkdir(parents=True)
+            (root / "real" / "bundle.pem").write_bytes(b"bundle behind link\n")
+            (root / "bundle.pem").write_bytes(b"lexical decoy\n")
+            (root / "link").symlink_to(root / "real" / "sub")
+            with contextlib.chdir(root):
+                linked_environment = launch("link/../bundle.pem")
+            linked_path = Path(linked_environment["NODE_EXTRA_CA_CERTS"])
+            self.assertEqual(linked_path.read_bytes(),
+                             b"bundle behind link\n" + separator + b"capture CA\n")
+
+            empty = root / "empty.pem"
+            empty.write_bytes(b"")
+            for path in (root / "missing.pem", empty):
+                with (self.subTest(external=path),
+                      patch.dict(os.environ, {runtime.INHERITED_NODE_CA: str(path)}, clear=True),
+                      self.assertRaisesRegex(runtime.LaunchEnvironmentError,
+                                             r"NODE_EXTRA_CA_CERTS bundle is missing, unreadable, or empty")):
+                    runtime.launch_environment(state, listener.getsockname()[1], None)
+                with (self.subTest(cli_external=path),
+                      patch.dict(os.environ, {"NODE_EXTRA_CA_CERTS": str(path)}, clear=True),
+                      patch.object(sys, "argv", ["runtime.py", "cli", "--state-dir", str(state),
+                                                 "--port", str(listener.getsockname()[1]),
+                                                 "--warn-bytes", str(1 << 30),
+                                                 "--launch-value-options=--agent", "--", "exec", str(path)]),
+                      contextlib.redirect_stderr(io.StringIO()) as output):
+                    self.assertEqual(runtime.main(), 1)
+                self.assertIn("NODE_EXTRA_CA_CERTS bundle is missing, unreadable, or empty", output.getvalue())
+                self.assertIn(str(path), output.getvalue())
+                self.assertIn("fix the path or permissions, or unset NODE_EXTRA_CA_CERTS", output.getvalue())
+                self.assertNotIn("Start the kiro-usage service", output.getvalue())
+
+            inherited_x.write_bytes(b"inherited CA refreshed\n")
+            environment_refreshed = launch(str(inherited_x))
+            path_refreshed = Path(environment_refreshed["NODE_EXTRA_CA_CERTS"])
+            expected_refreshed = b"inherited CA refreshed\n" + separator + b"capture CA\n"
+            self.assertNotEqual(path_refreshed, path_x)
+            self.assertEqual(path_refreshed.parent, ca)
+            self.assertEqual(path_refreshed.read_bytes(), expected_refreshed)
+            self.assertEqual(path_x.read_bytes(), expected_x)
+            self.assertEqual(environment_refreshed[runtime.INHERITED_NODE_CA], str(inherited_x))
+
+            new_capture = b"capture CA regenerated\n"
+            cert.write_bytes(new_capture)
+            nested_environment = launch(str(path_refreshed), inherited_node=str(inherited_x))
+            nested_path = Path(nested_environment["NODE_EXTRA_CA_CERTS"])
+            expected_nested = b"inherited CA refreshed\n" + separator + new_capture
+            self.assertNotEqual(nested_path, path_x)
+            self.assertNotEqual(nested_path, path_refreshed)
+            self.assertEqual(nested_path.parent, ca)
+            self.assertEqual(nested_path.read_bytes(), expected_nested)
+            self.assertEqual(nested_environment[runtime.INHERITED_NODE_CA], str(inherited_x))
+            self.assertEqual(path_x.read_bytes(), expected_x)
+            self.assertEqual(path_refreshed.read_bytes(), expected_refreshed)
+            self.assertEqual(sorted(path.name for path in ca.iterdir()),
+                             sorted((cert.name, path_x.name, path_refreshed.name, nested_path.name, linked_path.name)))
+
     def test_launch_marker_lineage(self):
         """Run the environment CLI in a fixture Bash launcher and observe the final executable."""
         root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="kiro usage 'fixture' ")))
@@ -1010,8 +1138,9 @@ class SummaryTests(unittest.TestCase):
         project.write_text(f"""#!{sys.executable}
 import json, os, subprocess, sys
 
-keys = ("HTTP_PROXY", "HTTPS_PROXY", "KIRO_USAGE_HANDOFF", "KIRO_USAGE_INVOCATION",
-        "KIRO_USAGE_OUTERMOST_INVOCATION", "NODE_EXTRA_CA_CERTS", "http_proxy", "https_proxy")
+keys = ("HTTP_PROXY", "HTTPS_PROXY", "KIRO_USAGE_HANDOFF", "KIRO_USAGE_INHERITED_NODE_CA",
+        "KIRO_USAGE_INVOCATION", "KIRO_USAGE_OUTERMOST_INVOCATION", "NODE_EXTRA_CA_CERTS",
+        "http_proxy", "https_proxy")
 print(json.dumps({{key: os.environ.get(key) for key in keys}}), flush=True)
 for argv, identity in json.loads(sys.argv[-1]):
     subprocess.run(argv, env=os.environ | {{"FIXTURE_ID": identity}}, check=True)
@@ -1053,19 +1182,20 @@ exec -a "$0" {shlex.quote(str(project))} "$@"
             """Spell the fixture UUID chosen by each launch mode."""
             return digit * 31 + mode
 
-        def check(result, *identities):
+        def check(result, *identities, expected_cas=None):
             """Check ordered per-process credentials, shell quoting, and quiet output."""
+            certs = expected_cas if expected_cas is not None else (cert,) * len(identities)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stderr, "")
             rows = [json.loads(line) for line in result.stdout.splitlines()]
             self.assertEqual(len(rows), len(identities))
-            for row, (process, outer) in zip(rows, identities, strict=True):
+            for row, (process, outer), expected_ca in zip(rows, identities, certs, strict=True):
                 self.assertEqual(row["KIRO_USAGE_INVOCATION"], process)
                 self.assertEqual(row["KIRO_USAGE_OUTERMOST_INVOCATION"], outer)
                 username = process if process == outer else f"{process}.{outer}"
                 for setting in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                     self.assertEqual(row[setting], f"http://kiro-usage-{username}:@127.0.0.1:{port}", setting)
-                self.assertEqual(row["NODE_EXTRA_CA_CERTS"], str(cert))
+                self.assertEqual(row["NODE_EXTRA_CA_CERTS"], str(expected_ca))
             return rows
 
         outer = marker("1", "b")
@@ -1093,11 +1223,20 @@ exec -a "$0" {shlex.quote(str(project))} "$@"
                 self.assertTrue(all(row["KIRO_USAGE_HANDOFF"] is None for row in rows[1:]))
 
         legacy = "f" * 32
+        inherited_ca = root / "inherited-ca.pem"
+        inherited_ca.write_bytes(b"inherited lineage CA\n")
+        expected_combined = b"inherited lineage CA\n\n# kiro-usage merged certificate authorities\nfixture"
+        combined_name = "node-extra-ca-certs-382026acb4dc9b3dd6a51f09c35671ec0a53dddf0b9c04efd3cbad86731021be.pem"
+        combined = ca / combined_name
+        with self.subTest(launch="managed merges inherited Node CA"):
+            check(run(command(managed), NODE_EXTRA_CA_CERTS=str(inherited_ca)), (outer, outer),
+                  expected_cas=(combined,))
+            self.assertEqual(combined.read_bytes(), expected_combined)
+
         with self.subTest(launch="managed with matching legacy proxy"):
             check(run(command(managed), KIRO_USAGE_INVOCATION=legacy, NODE_EXTRA_CA_CERTS=str(cert),
                       HTTPS_PROXY=f"http://kiro-usage-{legacy}:@127.0.0.1:{port}"), (outer, legacy))
-        for setting, value in (("HTTPS_PROXY", "http://invalid.invalid:1"),
-                               ("NODE_EXTRA_CA_CERTS", str(root / "unrelated.pem"))):
+        for setting, value in (("HTTPS_PROXY", "http://invalid.invalid:1"), ("NO_PROXY", "*")):
             with self.subTest(conflict=setting):
                 result = run(command(managed), **{setting: value})
                 self.assertEqual(result.returncode, 1)
