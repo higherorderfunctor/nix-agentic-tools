@@ -18,6 +18,7 @@ ai.kiro = {
       payloadRetentionDays = 90;
       payloadWarnBytes = 5368709120;
       port = 18089;
+      upstreamCaFile = null;
     };
   };
 };
@@ -31,6 +32,9 @@ an existing directory with another owner, mode, or a symlink in its place. Keep
 this directory private and outside the repository. `dataDirectory` is a literal
 absolute path, with no shell expansion. Service and launcher must resolve the
 same runtime state directory.
+
+`upstreamCaFile` is also an absolute runtime string, not a Nix path. When set,
+the service passes that file to mitmproxy as its complete upstream trust store.
 
 The service runs `pkgs.mitmproxy` from the module's package set, binds only
 `127.0.0.1`, and claims its port through `ai.services`. It intercepts only
@@ -198,6 +202,11 @@ extra CA only within the launched process tree. The module does not add a CA to
 the operating system trust store. Tools spawned by Kiro inherit these
 environment variables too; their own TLS implementations may have different
 trust requirements.
+
+Set `upstreamCaFile` when the service must verify the upstream with a runtime
+bundle such as `/etc/nix/macos-ca.pem`. mitmproxy replaces its default upstream
+trust store with that file; it does not append the file to the default store.
+The service logs upstream certificate verification failures at `warn` level.
 
 A managed Kiro package is required; its launcher runs the v3 engine. This
 configures the v3 Node trust path; it does not verify every upstream transport

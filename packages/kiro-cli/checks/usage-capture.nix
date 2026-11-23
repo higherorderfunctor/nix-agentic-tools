@@ -19,7 +19,8 @@
     shopt -s inherit_errexit 2>/dev/null || :
     ${pkgs.python3}/bin/python3 ${./usage-mitm-transport.py} \
       --mitmdump ${pkgs.mitmproxy}/bin/mitmdump \
-      --addon ${../usage}/mitm_addon.py
+      --addon ${../usage}/mitm_addon.py \
+      --openssl ${pkgs.openssl}/bin/openssl
     touch "$out"
   '';
 }

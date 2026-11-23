@@ -727,6 +727,36 @@ class SummaryTests(unittest.TestCase):
                     execute.assert_called_once()
                     self.assertEqual(os.environ.get("KIRO_USAGE_RETENTION_DAYS"), expected)
 
+    def test_service_upstream_ca_and_warn_verbosity(self):
+        """Require an explicit runtime CA setting and warn logging, ignoring inherited Node trust."""
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            cases = (
+                ("configured CA", ["--upstream-ca-file", "/etc/nix/macos-ca.pem"], {},
+                 ["ssl_verify_upstream_trusted_ca=/etc/nix/macos-ca.pem"], ["termlog_verbosity=warn"]),
+                ("unset CA", [], {}, [], ["termlog_verbosity=warn"]),
+                ("inherited Node CA ignored", [], {"NODE_EXTRA_CA_CERTS": "/etc/nix/macos-ca.pem"},
+                 [], ["termlog_verbosity=warn"]),
+            )
+            for name, flag, inherited, expected_ca, expected_verbosity in cases:
+                arguments = ["runtime.py", "service", "--state-dir", str(state), "--port", "19001",
+                             "--warn-bytes", "1", "--mitmdump", "/mitmdump", "--addon", "/addon", *flag]
+                with (self.subTest(case=name),
+                      patch.dict(os.environ, inherited, clear=True),
+                      patch.object(sys, "argv", arguments),
+                      patch.object(runtime.os, "execv") as execute):
+                    runtime.main()
+                    execute.assert_called_once()
+                    argv = execute.call_args.args[1]
+                    settings = [value for option, value in zip(argv, argv[1:]) if option == "--set"]
+                    for prefix, expected in (("ssl_verify_upstream_trusted_ca=", expected_ca),
+                                             ("termlog_verbosity=", expected_verbosity)):
+                        # Every occurrence must be a --set value, so a dropped --set fails too.
+                        self.assertEqual([value for value in settings if value.startswith(prefix)], expected, argv)
+                        self.assertEqual([argument for argument in argv if argument.startswith(prefix)], expected, argv)
+                    self.assertNotIn("--upstream-ca-file", argv)
+                    self.assertNotIn("NODE_EXTRA_CA_CERTS", os.environ)
+
     def test_root_lineage_is_selected_once_without_disk(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

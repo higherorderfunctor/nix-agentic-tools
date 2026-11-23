@@ -30,6 +30,7 @@
             border = "rounded";
             styles.total = "bold #ffaf00";
           };
+          upstreamCaFile = "/etc/nix/macos-ca.pem";
         };
       };
     };
@@ -57,12 +58,24 @@
   rejected = change: lib.any (a: !a.assertion) (harness.evalDevenv (lib.recursiveUpdate configuration change)).config.assertions;
   # An interpreter without compression.zstd fails evaluation, whichever of the two carries it.
   rejectedWith = pkgs': lib.any (a: !a.assertion && lib.hasInfix "compression.zstd" a.message) (harness.evalDevenvWithSpecialArgs {pkgs = pkgs';} configuration).config.assertions;
+  # Whether the deep-forced service command accepts the configured upstream CA path.
+  acceptsUpstreamCaFile = value: let
+    command =
+      (harness.evalDevenv (lib.recursiveUpdate configuration {
+        ai.kiro.cli.usageTracking.upstreamCaFile = value;
+      })).config.ai.services.kiro-usage.command;
+  in
+    (builtins.tryEval (builtins.deepSeq command true)).success;
 in {
   checks = {
     module-kiro-usage-tracking = harness.mkTest "kiro-usage-tracking" (
       dev.config.ai.services.kiro-usage.ports.proxy
       == 18091
       && hm.config.ai.services.kiro-usage.command == dev.config.ai.services.kiro-usage.command
+      && acceptsUpstreamCaFile "/etc/nix/macos-ca.pem"
+      && !(acceptsUpstreamCaFile "macos-ca.pem")
+      && !(acceptsUpstreamCaFile ./usage-fake.py)
+      && !(lib.elem "--upstream-ca-file" (usage.service disabled.config.ai.kiro.cli.usageTracking).command)
       && dev.config.ai.claims.port."18091" == ["kiro:kiro-usage.ports.proxy"]
       && themed hm
       && themed dev

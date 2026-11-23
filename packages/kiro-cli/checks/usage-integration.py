@@ -55,6 +55,11 @@ with tempfile.TemporaryDirectory() as directory:
         assert (state.stat().st_mode & 0o777) == 0o700
         recorded = json.loads((state / "service.json").read_text())
         assert (recorded["payload_retention_days"], recorded["warn_bytes"]) == ("90", "5368709120")
+        mitmdump_argv = recorded["argv"]
+        assert any(mitmdump_argv[index:index + 2] == ["--set", "ssl_verify_upstream_trusted_ca=/etc/nix/macos-ca.pem"]
+                   for index in range(len(mitmdump_argv))), mitmdump_argv
+        assert any(mitmdump_argv[index:index + 2] == ["--set", "termlog_verbosity=warn"]
+                   for index in range(len(mitmdump_argv))), mitmdump_argv
         result = launch("kiro-cli", environment | {"HTTPS_PROXY": "http://invalid.invalid:1"})
         assert result.returncode != 0 and "inherited HTTPS_PROXY conflicts" in result.stderr
         result = launch("kiro-cli", environment | {"NO_PROXY": "*"})

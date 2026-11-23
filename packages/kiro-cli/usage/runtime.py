@@ -165,15 +165,19 @@ def service(args, path):
         os.environ["KIRO_USAGE_RETENTION_DAYS"] = str(args.payload_retention_days)
     else:
         os.environ.pop("KIRO_USAGE_RETENTION_DAYS", None)
+    upstream_verification = [] if args.upstream_ca_file is None else [
+        "--set", f"ssl_verify_upstream_trusted_ca={args.upstream_ca_file}"
+    ]
     os.execv(args.mitmdump, [
         args.mitmdump,
         "--listen-host", "127.0.0.1", "--listen-port", str(args.port),
         "--allow-hosts", r"^runtime\.us-east-1\.kiro\.dev:443$",
         "--set", f"confdir={ca_dir}",
         "--set", "flow_detail=0",
-        "--set", "termlog_verbosity=error",
+        "--set", "termlog_verbosity=warn",
         "--set", "connection_strategy=lazy",
         "--scripts", args.addon,
+        *upstream_verification,
     ])
 
 
@@ -447,6 +451,7 @@ def main():
             child.add_argument("--mitmdump", required=True)
             child.add_argument("--addon", required=True)
             child.add_argument("--payload-retention-days", type=int)
+            child.add_argument("--upstream-ca-file")
     args = parser.parse_args()
     try:
         path = state_directory(args.state_dir)

@@ -7,6 +7,8 @@
   proxyNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "NODE_EXTRA_CA_CERTS" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
   retentionArgs = cfg: lib.optionals (cfg.payloadRetentionDays != null) ["--payload-retention-days" (toString cfg.payloadRetentionDays)];
   stateArgs = cfg: lib.optionals (cfg.dataDirectory != null) ["--state-dir" cfg.dataDirectory];
+  # Service command: turn one configured runtime CA path into its runtime.py flag.
+  upstreamCaArgs = cfg: lib.optionals (cfg.upstreamCaFile != null) ["--upstream-ca-file" cfg.upstreamCaFile];
   warnArgs = cfg: ["--warn-bytes" (toString cfg.payloadWarnBytes)];
   # Set keys only: summary_theme.py owns the defaults, so unset options add no flag and no store file.
   # A direct wrapPackage usageTracking set may predate summary.
@@ -85,6 +87,11 @@ in {
         description = "Exit summary style specs by element, replacing the built-in defaults per element when color is on; see packages/kiro-cli/usage/README.md. An unknown element or token makes the summary report itself unavailable.";
       };
     };
+    upstreamCaFile = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "/.+");
+      default = null;
+      description = "Runtime absolute path to the certificate bundle mitmproxy uses as its complete upstream trust store. Null keeps mitmproxy's default upstream verification.";
+    };
   };
   assertions = cfg: environment:
     lib.optionals cfg.cli.usageTracking.enable [
@@ -113,7 +120,8 @@ in {
       ]
       ++ retentionArgs cfg
       ++ warnArgs cfg
-      ++ stateArgs cfg;
+      ++ stateArgs cfg
+      ++ upstreamCaArgs cfg;
     ports.proxy = cfg.port;
   };
   tool = cfg:

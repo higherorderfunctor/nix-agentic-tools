@@ -72,6 +72,7 @@ WSLENV
 Xext
 Xrender
 Xtst
+addext
 addy
 adoc
 affordances
@@ -291,6 +292,7 @@ kagisearch
 kasdirs
 kasid
 kdefault
+keyout
 killpg
 kimi
 kiro
