@@ -1,4 +1,4 @@
-"""The claude-usage command selects one login, reads its allowance and prints a public result."""
+"""The claude-usage command emits allowance windows, prepaid credits and reset grants for one login."""
 
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
