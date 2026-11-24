@@ -140,21 +140,83 @@
         refuses "v3 gone from acp --agent-engine" "no longer lists v3" 's/v2, v1, v3/v2, v1/' acp.txt
         touch "$out"
       '';
-      kiro-rollout-fixtures = pkgs.runCommand "kiro-rollout-fixtures" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${pkgs.python3}/bin/python3 - ${(import ../lib/packaging.nix).kiroRolloutExtractScript pkgs} <<'PY'
-        import json, pathlib, subprocess, sys
-        manifest = {"example_rollout": {"description": "", "treatment_percent": 10, "internal_treatment_percent": 50}}
-        data = json.dumps(manifest, indent=2).encode()
-        path = pathlib.Path("binary")
-        for blob, error in [(data + b'\0' + json.dumps({"other": {"description": ""}}, indent=2).encode(), "conflicting rollout copies"), (b"no manifest", "no rollout manifest found"), (data[:-2], "rollout manifest end not found")]:
-            path.write_bytes(blob)
-            result = subprocess.run([sys.executable, sys.argv[1], str(path)], capture_output=True, text=True)
-            assert result.returncode == 1 and error in result.stderr, result
-        PY
-        touch "$out"
-      '';
+      # Exercise both rollout scripts on synthetic payloads so extraction and
+      # patch refusal agree about which embedded rows are manifest sites.
+      kiro-rollout-fixtures = let
+        inherit (import ../lib/packaging.nix) kiroRolloutExtractScript kiroRolloutPatchScript;
+      in
+        pkgs.runCommand "kiro-rollout-fixtures" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${pkgs.python3}/bin/python3 - \
+            ${kiroRolloutExtractScript pkgs} ${kiroRolloutPatchScript pkgs} <<'PY'
+          import json, pathlib, subprocess, sys
+
+          extract_script, patch_script = sys.argv[1:]
+          feature = "example_rollout"
+          root = pathlib.Path("payload")
+          root.mkdir()
+          path = root / "binary"
+
+          def run_script(script, *args):
+              """Run a rollout script on the fixture and capture its diagnostics."""
+              return subprocess.run([sys.executable, script, *args], capture_output=True, text=True)
+
+          manifest = {
+              feature: {
+                  "description": "Enable the example rollout for selected accounts",
+                  "treatment_percent": 10,
+              },
+          }
+          data = json.dumps(manifest, indent=2).encode()
+          treatment = json.dumps({
+              "groups": {"kiro-cli-team": ["account"]},
+              feature: {"treatment": ["@kiro-cli-team"]},
+          }, indent=2).encode()
+          prefix = b"\x7fELF" + data + b"\0"
+
+          # Counting the treatment-group row would make this patch refuse.
+          path.write_bytes(prefix + treatment)
+          extracted = run_script(extract_script, path)
+          assert extracted.returncode == 0, extracted
+          assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+              "patchable": True,
+              "unmatchedSites": 0,
+          }, extracted
+          patched = run_script(patch_script, feature, root)
+          assert patched.returncode == 0, patched
+          patched_manifest, patched_treatment = path.read_bytes().split(b"\0", 1)
+          assert len(patched_manifest) == len(prefix) - 1
+          assert patched_treatment == treatment
+          entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
+          assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
+
+          # Ignoring every row named "treatment" would allow a partial patch.
+          unknown = json.dumps({feature: {"treatment": "@kiro-cli-team"}}, indent=2).encode()
+          blob = prefix + unknown
+          path.write_bytes(blob)
+          extracted = run_script(extract_script, path)
+          assert extracted.returncode == 0, extracted
+          assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+              "patchable": False,
+              "unmatchedSites": 1,
+          }, extracted
+          refused = run_script(patch_script, feature, root)
+          assert refused.returncode == 1 and "Refusing to half-patch." in refused.stderr, refused
+          assert path.read_bytes() == blob
+
+          for blob, error in [
+              (data + b"\0" + json.dumps({"other": {"description": ""}}, indent=2).encode(),
+               "conflicting rollout copies"),
+              (b"no manifest", "no rollout manifest found"),
+              (data[:-2], "rollout manifest end not found"),
+          ]:
+              path.write_bytes(blob)
+              result = run_script(extract_script, path)
+              assert result.returncode == 1 and error in result.stderr, result
+          PY
+          touch "$out"
+        '';
     }
     // mkOwnerCheck {
       dir = ../extracted;

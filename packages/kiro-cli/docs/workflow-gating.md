@@ -64,14 +64,15 @@ the caller, while no `features.workflows` switch exists on 3.1.0 because the
 rollout entry is gone; `chat.enableWorkflows` is the only workflows gate.
 
 The aggregate `rolloutStates.<name>` facts retain every manifest field except
-description, including internal treatment percentage.
-`rolloutPatchability.<name>.patchable` records whether every feature site
-matches the shared entry matcher. Enabling a feature that needs a patch but is
-measured unpatchable fails at evaluation, naming that fact. The unmatched-site
-count remains per platform and is not read by modules. The owner drift check
-compares fresh measurements with the committed facts; there is no hand-copied
-state table because it adds no human judgment. A single predicate in
-`extract/rollout-coverage.nix` derives whether a patch is needed: 100% public
+description, including internal treatment percentage. A rollout site starts with
+`"<name>": {`. The matcher skips treatment-group rows whose first field opens
+with `"treatment": [`. `rolloutPatchability.<name>.patchable` records whether
+every remaining site matches the shared entry matcher. Enabling a feature that
+needs a patch but is measured unpatchable fails at evaluation, naming that fact.
+The unmatched-site count remains per platform and is not read by modules. The
+owner drift check compares fresh measurements with the committed facts; there is
+no hand-copied state table because it adds no human judgment. A single predicate
+in `extract/rollout-coverage.nix` derives whether a patch is needed: 100% public
 and internal treatment for all users on the stable channel preserves the stock
 derivation; omitted internal treatment follows public treatment, and absent or
 null segment and channel fields mean all and stable. Unknown state fields fail

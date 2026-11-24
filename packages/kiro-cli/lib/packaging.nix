@@ -91,11 +91,11 @@ rec {
             rb'  \}'
         )
 
-    # Every `"<name>": {` site must match entry_re. Returns the matches and the
-    # count of sites that did not match.
     def rollout_sites(mapped, name):
+        """Find manifest entries and count unmatched sites for extraction and patching."""
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
-        sites = len(re.findall(key, mapped))
+        # Kiro 3.6.0 also embeds treatment groups keyed by feature name.
+        sites = len(re.findall(key + rb'(?!\n    "treatment": \[)', mapped))
         hits = list(entry_re(name).finditer(mapped))
         return hits, sites - len(hits)
 
@@ -302,8 +302,9 @@ rec {
     ${pkgs.jq}/bin/jq -S -s '.[0] * .[1]' ${static} help.json > "$out"
   '';
 
-  # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
-  # `treatment_percent: 100` / `segment: "all"` with no `channel` gate.
+  # Given a payload tree and feature names, rewrite the rollout entries in place
+  # to `treatment_percent: 100` / `segment: "all"` and print the patched paths
+  # for the package wrapper to re-sign. The fixture runs this script directly.
   #
   # Length preservation is the whole trick, and it is not fussiness: the
   # manifest sits in rodata inside a ~556 MB ELF, so growing it by even one
@@ -322,11 +323,8 @@ rec {
   # count does not equal the number of sites patched, aborts the build. A
   # half-patched binary is worse than an unpatched one, because which of the
   # duplicate manifest copies is consulted is not observable from here.
-  mkKiroRolloutPatch = {
-    features,
-    pkgs,
-  }: let
-    script = pkgs.writeText "kiro-rollout-patch.py" ''
+  kiroRolloutPatchScript = pkgs:
+    pkgs.writeText "kiro-rollout-patch.py" ''
       ${kiroChatLocatorPy}
       ${kiroRolloutEntryPy}
       import sys
@@ -413,10 +411,16 @@ rec {
       for p in patched_paths:
           print(p)
     '';
-  in ''
+
+  # Run the rollout patcher for the selected features and re-sign its output
+  # paths on Darwin after the in-place rewrite.
+  mkKiroRolloutPatch = {
+    features,
+    pkgs,
+  }: ''
     # Walks all of "$out", not "$out/bin", so the patch does not depend on
     # where the payload installs its binary; the locator selects it by content.
-    kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${script} \
+    kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${kiroRolloutPatchScript pkgs} \
       ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out")
     ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
       # Patching a Mach-O invalidates its code signature, and arm64 macOS

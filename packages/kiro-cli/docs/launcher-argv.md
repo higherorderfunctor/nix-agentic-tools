@@ -464,7 +464,9 @@ are extracted into the aggregate facts under `packages/kiro-cli/extracted/`.
 `ai.kiro.cli.features.<name>.enable` exposes those names; restricted entries are
 enabled by a length-preserving patch through `passthru.withRolloutFeatures`, and
 entries already available to every user preserve the stock package. Patch
-feasibility comes from `rolloutPatchability.<name>.patchable`. Enabling an
+feasibility comes from `rolloutPatchability.<name>.patchable`. Each
+`"<name>": {` site must match the rollout entry shape. The matcher skips
+treatment-group rows whose first field opens with `"treatment": [`. Enabling an
 unpatchable feature fails at evaluation and names the extracted flag.
 
 Workflows have no rollout entry since 3.1.0 and need no binary patch.

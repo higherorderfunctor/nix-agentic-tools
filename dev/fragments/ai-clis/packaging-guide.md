@@ -143,8 +143,10 @@ short sets retain readable names. The extractor locates each manifest root and
 parses its JSON, copying every entry field except the unused description.
 Missing manifests and disagreeing copies fail extraction. State readers reject
 unknown fields; internal treatment must also be 100% to preserve the stock
-package. Separately, `rolloutPatchability` records whether every feature site
-matches the shared patcher entry regex and counts unmatched sites. An
+package. A rollout site starts with `"<name>": {`. The matcher skips
+treatment-group rows whose first field opens with `"treatment": [`, a shape
+embedded since Kiro 3.6.0. `rolloutPatchability` records whether all remaining
+sites match the shared entry regex and counts any unmatched sites. An
 unpatchable feature is rejected at module evaluation with its name and the
 extracted flag if it needs a patch. Counts remain per platform; modules read
 only the aggregate flag. A patched canary contains modified proprietary bytes,
