@@ -369,6 +369,72 @@
       "type": "string",
       "userSettable": true
     },
+    "minder_cli_auto_download": {
+      "default": "",
+      "description": "Automatically download the GitLab Endpoint Agent Platform binary without prompting (true/false).",
+      "envVars": ["GLAB_MINDER_CLI_AUTO_DOWNLOAD", "MINDER_CLI_AUTO_DOWNLOAD"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_auto_download",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
+    "minder_cli_auto_run": {
+      "default": "",
+      "description": "Automatically run the GitLab Endpoint Agent Platform without prompting (true/false). Set to true to skip the confirmation prompt.",
+      "envVars": ["GLAB_MINDER_CLI_AUTO_RUN", "MINDER_CLI_AUTO_RUN"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_auto_run",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
+    "minder_cli_binary_checksum": {
+      "default": "",
+      "description": "SHA256 checksum of the installed GitLab Endpoint Agent Platform binary (automatically set).",
+      "envVars": ["MINDER_CLI_BINARY_CHECKSUM"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_binary_checksum",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
+    "minder_cli_binary_path": {
+      "default": "",
+      "description": "Path to the installed GitLab Endpoint Agent Platform binary (automatically set). Default: ~/.config/glab-cli/bin/agent-client",
+      "envVars": ["GLAB_MINDER_CLI_BINARY_PATH"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_binary_path",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
+    "minder_cli_binary_version": {
+      "default": "",
+      "description": "Version of the installed GitLab Endpoint Agent Platform binary (automatically set).",
+      "envVars": ["MINDER_CLI_BINARY_VERSION"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_binary_version",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
+    "minder_cli_last_update_check": {
+      "default": "",
+      "description": "Last time a GitLab Endpoint Agent Platform update check was performed (automatically set).",
+      "envVars": ["MINDER_CLI_LAST_UPDATE_CHECK"],
+      "fallback": false,
+      "keyring": false,
+      "name": "minder_cli_last_update_check",
+      "scope": "global",
+      "type": "string",
+      "userSettable": true
+    },
     "no_prompt": {
       "default": "false",
       "description": "Set to true (1) to disable prompts, or false (0) to enable them.",
