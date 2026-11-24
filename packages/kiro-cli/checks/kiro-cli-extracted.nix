@@ -39,7 +39,8 @@
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
       # key, the map is still found beside the engine's hook exit-code effect
-      # table. Check the diagnostics for zero or two maps and non-literal entries.
+      # table, and zero maps, two maps and non-literal entries each fail with
+      # their own diagnostic.
       kiro-hook-triggers-fixtures = let
         # One frozen trigger map bound to `binding`, its `SessionStart` entry
         # spelled `key:value` so the fixtures can vary quoting and literalness.

@@ -98,6 +98,9 @@ rec {
         Extraction and patching count each '"<name>": {' in the mapped binary
         as a site, except rows containing only a treatment string list. Those
         rows list group assignments and carry no rollout settings to patch.
+        The match is layout-exact (the pretty-printed form 3.6.0 ships), so a
+        compact or re-indented treatment row still counts as an unmatched site
+        and fails closed.
         """
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
         json_string = rb'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
