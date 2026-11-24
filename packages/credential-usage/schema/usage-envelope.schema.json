@@ -1,0 +1,744 @@
+{
+  "$defs": {
+    "Account": {
+      "additionalProperties": false,
+      "description": "Preserve the Reader's account identity even when some fields are unknown.",
+      "properties": {
+        "auth_index": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "auth_index"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "name"
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "plan"
+        }
+      },
+      "required": ["auth_index", "name", "plan"],
+      "title": "Account",
+      "type": "object"
+    },
+    "AccountedSpend": {
+      "additionalProperties": false,
+      "description": "Attribute an observed cost to its source and currency.",
+      "properties": {
+        "cost": {
+          "minimum": 0,
+          "title": "cost",
+          "type": "number"
+        },
+        "currency": {
+          "pattern": "\\S",
+          "title": "currency",
+          "type": "string"
+        },
+        "source": {
+          "pattern": "\\S",
+          "title": "source",
+          "type": "string"
+        }
+      },
+      "required": ["cost", "currency", "source"],
+      "title": "AccountedSpend",
+      "type": "object"
+    },
+    "Binding": {
+      "additionalProperties": false,
+      "description": "Identify the transport and public endpoint that supplied this observation.",
+      "properties": {
+        "endpoint": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "endpoint",
+          "type": "string"
+        },
+        "transport": {
+          "enum": ["direct", "cpa"],
+          "title": "transport",
+          "type": "string"
+        }
+      },
+      "required": ["endpoint", "transport"],
+      "title": "Binding",
+      "type": "object"
+    },
+    "CreditLot": {
+      "additionalProperties": false,
+      "description": "Keep one wallet lot's value, expiry and reach separate from allowance.",
+      "properties": {
+        "kind": {
+          "const": "credit",
+          "title": "kind",
+          "type": "string"
+        },
+        "amount": {
+          "minimum": 0,
+          "title": "amount",
+          "type": "number"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "expiresAt"
+        },
+        "funding": {
+          "pattern": "\\S",
+          "title": "funding",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "const": "account",
+              "type": "string"
+            },
+            {
+              "items": {
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "scope"
+        },
+        "unit": {
+          "pattern": "\\S",
+          "title": "unit",
+          "type": "string"
+        },
+        "usable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "usable"
+        }
+      },
+      "required": [
+        "kind",
+        "amount",
+        "expiresAt",
+        "funding",
+        "scope",
+        "unit",
+        "usable"
+      ],
+      "title": "CreditLot",
+      "type": "object"
+    },
+    "Grant": {
+      "additionalProperties": false,
+      "description": "Keep the vendor's grant terms so consumers can decide where it applies.",
+      "properties": {
+        "kind": {
+          "const": "grant",
+          "title": "kind",
+          "type": "string"
+        },
+        "clears": {
+          "items": {
+            "type": "string"
+          },
+          "title": "clears",
+          "type": "array"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "effect"
+        },
+        "eligible": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "eligible"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "expiresAt"
+        },
+        "funding": {
+          "pattern": "\\S",
+          "title": "funding",
+          "type": "string"
+        },
+        "givesBackWeekly": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "givesBackWeekly"
+        },
+        "handle": {
+          "pattern": "\\S",
+          "title": "handle",
+          "type": "string"
+        },
+        "remaining": {
+          "minimum": 0,
+          "title": "remaining",
+          "type": "integer"
+        },
+        "requiresLimit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "requiresLimit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "const": "account",
+              "type": "string"
+            },
+            {
+              "items": {
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "scope"
+        },
+        "startsAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "startsAt"
+        },
+        "usable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "usable"
+        },
+        "weeklyResetsAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "weeklyResetsAt"
+        }
+      },
+      "required": [
+        "kind",
+        "clears",
+        "effect",
+        "eligible",
+        "expiresAt",
+        "funding",
+        "givesBackWeekly",
+        "handle",
+        "remaining",
+        "requiresLimit",
+        "scope",
+        "startsAt",
+        "usable",
+        "weeklyResetsAt"
+      ],
+      "title": "Grant",
+      "type": "object"
+    },
+    "InvalidWindow": {
+      "additionalProperties": false,
+      "description": "Retain a proven zero when other facts about the window failed validation.",
+      "properties": {
+        "state": {
+          "const": "invalid",
+          "title": "state",
+          "type": "string"
+        },
+        "reason": {
+          "pattern": "^[a-z0-9-]{1,40}$",
+          "title": "reason",
+          "type": "string"
+        },
+        "remainingPercent": {
+          "maximum": 0,
+          "minimum": 0,
+          "title": "remainingPercent",
+          "type": "number"
+        }
+      },
+      "required": ["state", "reason"],
+      "title": "InvalidWindow",
+      "type": "object"
+    },
+    "MissingWindow": {
+      "additionalProperties": false,
+      "description": "Name a window the vendor omitted so consumers can distinguish it from zero.",
+      "properties": {
+        "state": {
+          "const": "missing",
+          "title": "state",
+          "type": "string"
+        },
+        "reason": {
+          "pattern": "^[a-z0-9-]{1,40}$",
+          "title": "reason",
+          "type": "string"
+        }
+      },
+      "required": ["state", "reason"],
+      "title": "MissingWindow",
+      "type": "object"
+    },
+    "Observed": {
+      "additionalProperties": false,
+      "description": "Mark a successful inventory read, including one that returned no entries.",
+      "properties": {
+        "state": {
+          "const": "observed",
+          "title": "state",
+          "type": "string"
+        }
+      },
+      "required": ["state"],
+      "title": "Observed",
+      "type": "object"
+    },
+    "ObservedWindow": {
+      "additionalProperties": false,
+      "description": "Publish the measured shares and the vendor's reset and enforcement information.",
+      "properties": {
+        "state": {
+          "const": "observed",
+          "title": "state",
+          "type": "string"
+        },
+        "enforced": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "enforced"
+        },
+        "remainingPercent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "remainingPercent",
+          "type": "number"
+        },
+        "resetsAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "resetsAt"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "status"
+        },
+        "usedPercent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "usedPercent",
+          "type": "number"
+        },
+        "windowSeconds": {
+          "exclusiveMinimum": 0,
+          "title": "windowSeconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "enforced",
+        "remainingPercent",
+        "resetsAt",
+        "status",
+        "usedPercent",
+        "windowSeconds"
+      ],
+      "title": "ObservedWindow",
+      "type": "object"
+    },
+    "ResetLot": {
+      "additionalProperties": false,
+      "description": "Identify one lot of resets with its remaining count and expiry.",
+      "properties": {
+        "kind": {
+          "const": "reset",
+          "title": "kind",
+          "type": "string"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "expiresAt"
+        },
+        "handle": {
+          "pattern": "\\S",
+          "title": "handle",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 0,
+          "title": "quantity",
+          "type": "integer"
+        }
+      },
+      "required": ["kind", "expiresAt", "handle", "quantity"],
+      "title": "ResetLot",
+      "type": "object"
+    },
+    "SlotStates": {
+      "additionalProperties": false,
+      "description": "Require a separate declaration for every optional source of usage data.",
+      "properties": {
+        "accountedSpend": {
+          "discriminator": {
+            "mapping": {
+              "observed": "#/$defs/Observed",
+              "unknown": "#/$defs/Unknown",
+              "unsupported": "#/$defs/Unsupported"
+            },
+            "propertyName": "state"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Observed"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "$ref": "#/$defs/Unsupported"
+            }
+          ],
+          "title": "accountedSpend"
+        },
+        "credits": {
+          "discriminator": {
+            "mapping": {
+              "observed": "#/$defs/Observed",
+              "unknown": "#/$defs/Unknown",
+              "unsupported": "#/$defs/Unsupported"
+            },
+            "propertyName": "state"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Observed"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "$ref": "#/$defs/Unsupported"
+            }
+          ],
+          "title": "credits"
+        },
+        "grants": {
+          "discriminator": {
+            "mapping": {
+              "observed": "#/$defs/Observed",
+              "unknown": "#/$defs/Unknown",
+              "unsupported": "#/$defs/Unsupported"
+            },
+            "propertyName": "state"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Observed"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "$ref": "#/$defs/Unsupported"
+            }
+          ],
+          "title": "grants"
+        },
+        "resetInventory": {
+          "discriminator": {
+            "mapping": {
+              "observed": "#/$defs/Observed",
+              "unknown": "#/$defs/Unknown",
+              "unsupported": "#/$defs/Unsupported"
+            },
+            "propertyName": "state"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Observed"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "$ref": "#/$defs/Unsupported"
+            }
+          ],
+          "title": "resetInventory"
+        }
+      },
+      "required": ["accountedSpend", "credits", "grants", "resetInventory"],
+      "title": "SlotStates",
+      "type": "object"
+    },
+    "Unknown": {
+      "additionalProperties": false,
+      "description": "Give consumers a reason code when the Reader could not verify a slot.",
+      "properties": {
+        "state": {
+          "const": "unknown",
+          "title": "state",
+          "type": "string"
+        },
+        "reason": {
+          "pattern": "^[a-z0-9-]{1,40}$",
+          "title": "reason",
+          "type": "string"
+        }
+      },
+      "required": ["state", "reason"],
+      "title": "Unknown",
+      "type": "object"
+    },
+    "Unsupported": {
+      "additionalProperties": false,
+      "description": "Declare that this Reader does not supply a slot.",
+      "properties": {
+        "state": {
+          "const": "unsupported",
+          "title": "state",
+          "type": "string"
+        }
+      },
+      "required": ["state"],
+      "title": "Unsupported",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Publish allowance windows and optional inventory for one account at one instant.",
+  "properties": {
+    "schemaVersion": {
+      "maximum": 1,
+      "minimum": 1,
+      "title": "schemaVersion",
+      "type": "integer"
+    },
+    "account": {
+      "$ref": "#/$defs/Account",
+      "title": "account"
+    },
+    "binding": {
+      "$ref": "#/$defs/Binding",
+      "title": "binding"
+    },
+    "observedAt": {
+      "format": "date-time",
+      "title": "observedAt",
+      "type": "string"
+    },
+    "pool": {
+      "pattern": "\\S",
+      "title": "pool",
+      "type": "string"
+    },
+    "windows": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[^:\\s]+(:[^:\\s][^:]*)?$": {
+          "discriminator": {
+            "mapping": {
+              "invalid": "#/$defs/InvalidWindow",
+              "missing": "#/$defs/MissingWindow",
+              "observed": "#/$defs/ObservedWindow"
+            },
+            "propertyName": "state"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ObservedWindow"
+            },
+            {
+              "$ref": "#/$defs/InvalidWindow"
+            },
+            {
+              "$ref": "#/$defs/MissingWindow"
+            }
+          ]
+        }
+      },
+      "title": "windows",
+      "type": "object"
+    },
+    "accountedSpend": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AccountedSpend"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "accountedSpend"
+    },
+    "balances": {
+      "items": {
+        "$ref": "#/$defs/CreditLot"
+      },
+      "title": "balances",
+      "type": "array"
+    },
+    "bonuses": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "grant": "#/$defs/Grant",
+            "reset": "#/$defs/ResetLot"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Grant"
+          },
+          {
+            "$ref": "#/$defs/ResetLot"
+          }
+        ]
+      },
+      "title": "bonuses",
+      "type": "array"
+    },
+    "slotStates": {
+      "$ref": "#/$defs/SlotStates",
+      "title": "slotStates"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "account",
+    "binding",
+    "observedAt",
+    "pool",
+    "windows",
+    "accountedSpend",
+    "balances",
+    "bonuses",
+    "slotStates"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

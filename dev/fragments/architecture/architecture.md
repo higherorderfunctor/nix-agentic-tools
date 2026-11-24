@@ -1,8 +1,9 @@
 # Architecture
 
-> **Last verified:** 2026-11-07 — router to the architecture decisions held by
+> **Last verified:** 2026-11-24 — router to the architecture decisions held by
 > their owners; each decision keeps its rule, reason, mechanism pointer and
-> vetted date beside the code it governs.
+> vetted date beside the code it governs; the credential-usage owner decision is
+> proposed.
 
 HITL-vetted decisions about how this repository is built live in the owner
 documents below, so they load whenever their files are edited. Each entry is a
@@ -27,5 +28,8 @@ existing abstraction.
 - `packages/airlock/docs/airlock.md` — Airlock rebuilt as a stack of small PRs.
 - `packages/cliproxyapi/docs/cliproxyapi-client-keys.md` — proposed CPA named
   routing.
+- `packages/credential-usage/docs/credential-usage.md` — the usage contract,
+  conformance suite and Reader runner share a vendor-neutral owner so each
+  Reader can publish the same result (proposed).
 - `packages/jail-nix/docs/jail-nix.md` — proposed harness sandboxing.
 - `packages/microvm/docs/sandbox.md` — the VM sandbox factory and VM git access.
