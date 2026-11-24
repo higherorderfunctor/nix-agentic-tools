@@ -23,12 +23,15 @@ Example below deliberately has a different model.
 overview = """
 GLM-99 is mentioned outside the catalog.
 
+> GLM-44 is now available to all GLM Coding Plan users. The Model API will be made available after completing the security assessment.
+
 ## Featured Models
 
 | Model | Resource |
 | --- | --- |
 | GLM-42 | [API Reference](/api-reference/llm/chat-completion.md) |
 | GLM-43 | [API Reference](/api-reference/llm/chat-completion.md) |
+| GLM-44 | [Guide](/guides/llm/glm-44.md) |
 
 > [accordion] Other Models, Agents and Tools
 >
@@ -59,9 +62,15 @@ assert extractor.extract(claude + manual_endpoint, overview, quick_start) == res
 assert extractor.extract(claude, overview.replace(
     "](/api-reference/", "](https://docs.z.ai/api-reference/"
 ), quick_start) == result
+guide = "[Guide](/guides/llm/glm-44.md)"
+promoted = overview.replace(guide, guide + " [API Reference](/api-reference/llm/chat-completion.md)")
+assert extractor.extract(claude, promoted, quick_start)["models"] == sorted(result["models"] + ["glm-44"])
 language_row = next(line for line in overview.splitlines() if line.startswith("> | GLM-5.2 |"))
 misses = []
 for name, bad_claude, bad_overview in [
+    ("guide-only model without its pending notice", claude, overview.replace("GLM-44 is now", "GLM-45 is now")),
+    ("pending model with changed API reference", claude, overview.replace(guide, guide + " [API Reference](/api-reference/llm/new.md)")),
+    ("pending model with unrelated guide", claude, overview.replace(guide, "[Guide](/guides/overview/pricing.md)")),
     ("missing tier", claude.replace("ANTHROPIC_DEFAULT_HAIKU_MODEL", "REMOVED"), overview),
     ("tier outside catalog", claude, overview.replace("GLM-42", "GLM-43")),
     ("foreign reference host", claude, overview.replace(

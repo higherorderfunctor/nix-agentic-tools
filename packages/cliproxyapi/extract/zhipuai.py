@@ -21,13 +21,25 @@ def extract(claude, overview, quick_start):
     # A model id listed twice, in one chat section or across two, is refused.
     chat_sections = {"Featured Models", "Language Models", "Text Models"}
     excluded_sections = {"Agents", "Built-in Tools", "Image Generation Models"}
+    tokens = parser.parse(overview)
+    # The overview announces Coding Plan availability separately from the Model API.
+    pending_notice = re.compile(
+        r"(GLM-[A-Za-z0-9.-]+) is now available to all GLM Coding Plan users\. "
+        r"The Model API will be made available after completing the security assessment\."
+    )
+    pending = set()
+    for opening, content in zip(tokens, tokens[1:]):
+        if opening.type == "paragraph_open" and content.type == "inline":
+            if match := pending_notice.fullmatch(content.content):
+                pending.add(match[1].lower())
+    seen = set()
     section = None
     heading = False
     table = False
     header = False
     row = []
-    references = []
-    for token in parser.parse(overview):
+    links = []
+    for token in tokens:
         if token.type == "heading_open":
             heading = True
         elif heading and token.type == "inline":
@@ -39,29 +51,32 @@ def extract(claude, overview, quick_start):
         elif token.type == "table_close":
             table = False
         elif table and token.type == "tr_open":
-            row, references = [], []
+            row, links = [], []
         elif table and token.type == "tr_close":
             if header:
                 if row[0] != "Model" or "Resource" not in row:
                     raise ValueError("z.ai chat model table header changed shape")
                 header = False
             else:
-                if references != ["/api-reference/llm/chat-completion.md"]:
+                model = row[0].lower()
+                if model in seen or not re.fullmatch(r"glm-[a-z0-9.-]+", model):
+                    raise ValueError(f"duplicated or malformed z.ai chat model: {row[0]}")
+                seen.add(model)
+                references = [link for link in links if link.startswith("/api-reference/")]
+                if references == ["/api-reference/llm/chat-completion.md"]:
+                    models.append(model)
+                elif model in pending and links == [f"/guides/llm/{model}.md"]:
+                    continue
+                else:
                     raise ValueError(f"unclassified z.ai chat model reference: {row[0]}")
-                models.append(row[0].lower())
         elif table and token.type == "inline":
             row.append(token.content)
-            references.extend(
-                href.removeprefix("https://docs.z.ai")
-                for child in token.children
-                if child.type == "link_open"
-                for href in [child.attrGet("href")]
-                if href.startswith(("/api-reference/", "https://docs.z.ai/api-reference/"))
+            links.extend(
+                child.attrGet("href").removeprefix("https://docs.z.ai")
+                for child in token.children if child.type == "link_open"
             )
-    if not models or len(models) != len(set(models)) or any(
-        not re.fullmatch(r"glm-[a-z0-9.-]+", model) for model in models
-    ):
-        raise ValueError("z.ai chat model table missing, duplicated or malformed")
+    if not models:
+        raise ValueError("z.ai chat model table missing")
 
     tokens = parser.parse(claude)
     defaults = {}
