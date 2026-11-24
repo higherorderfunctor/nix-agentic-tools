@@ -67,19 +67,21 @@ python3Packages.claude-agent-sdk 0.2.163 and claude-agent-acp 0.84.0 (TS SDK
 resolver reads a valid cached `tengu_hazel_trellis` value before the feature
 client fallback; explicit environment depth still wins (`codex:A`).
 
-Kimchi evidence uses the pinned x86_64-linux source build (1.5.1), patched Pi
-0.85.1 and kimchi-workflows 0.0.9 (`7a6765cc`). All indexed runnable offline
-scenarios, four tool inventories, extracted-source AST probes and VM replays
-were re-run with fake keys and local providers. Background steering reaches the
-next child request (`claude:s2-rpc-bg`). The system-prompt map (`claude:sp-*`,
-20 offline cases) replaces `codex:S`. Three LIVE cases
-(`claude:sp-p20-live-wire`, `claude:l1-live-agent-model-effort`,
-`claude:l2-live-effort-ab`) reach the real gateway through `live/recproxy.py`
-with the apiKey leaf of the operator's existing config; no login flow and no
-remote worker were used. `kimchi/*` replays 54 MATCH, 0 MISMATCH, 15 SKIP. A
-5-per-arm `claude:l2-live-effort-ab` (`--thinking minimal` vs `max`, scenarios
-in `live/sc/`, each answered 200 by the model sent) showed no detectable effect
-of effort on `reasoning_tokens` at n=5 on a one-turn prompt (V LIVE): minimax-m3
+The Kimchi wire captures used the x86_64-linux 1.5.1 source build, patched Pi
+0.85.1 and kimchi-workflows 0.0.9 (`7a6765cc`). The
+[control surface](control-surfaces.md#kimchi) records the 1.40.0 source check
+for child model selection. All then-indexed runnable offline scenarios, four
+tool inventories, extracted-source AST probes and VM replays were re-run with
+fake keys and local providers. Background steering reaches the next child
+request (`claude:s2-rpc-bg`). The system-prompt map (`claude:sp-*`, 20 offline
+cases) replaces `codex:S`. Three LIVE cases (`claude:sp-p20-live-wire`,
+`claude:l1-live-agent-model-effort`, `claude:l2-live-effort-ab`) reach the real
+gateway through `live/recproxy.py` with the apiKey leaf of the operator's
+existing config; no login flow and no remote worker were used. At 1.5.1,
+`kimchi/*` reported 54 MATCH, 0 MISMATCH, 15 SKIP. A 5-per-arm
+`claude:l2-live-effort-ab` (`--thinking minimal` vs `max`, scenarios in
+`live/sc/`, each answered 200 by the model sent) showed no detectable effect of
+effort on `reasoning_tokens` at n=5 on a one-turn prompt (V LIVE): minimax-m3
 means 253 vs 231, glm-5.3 71 vs 92, arms overlapping on both models.
 
 The normal packaged workflows output additionally always applies

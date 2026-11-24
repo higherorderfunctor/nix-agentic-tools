@@ -2,8 +2,8 @@
 
 This is a census of every network endpoint the Kimchi CLI can reach, what each
 one is for, how its target is changed, and what stops working if it is
-unreachable. It describes **1.1.37**. The 1.1.37 source tree is the one the
-package pins (identified by its NAR hash against
+unreachable. It describes **1.1.37**. The 1.1.37 source tree was the package pin
+at the time of the scan (identified by its NAR hash against
 `extraction.kimchiSource.hash`); the 1.1.30 to 1.1.36 release trees were fetched
 by tag for bisecting, and the hashes of 1.1.30–1.1.33 and 1.1.36 match the pins
 this repository recorded for those versions. The 1.1.21 to 1.1.30 history rests

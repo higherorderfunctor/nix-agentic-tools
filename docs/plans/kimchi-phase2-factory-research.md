@@ -2,8 +2,10 @@
 
 > Status: **RESEARCH ONLY** (2026-06-22). No implementation this session.
 > Prereq: the Kimchi binary package (Phase 1) is committed
-> (`619ee43`/`b7d5be4`/`f592c8a`). This doc scopes the declarative-config (HM +
-> devenv module) follow-up. See [docs/plans/kimchi-packaging.md].
+> (`619ee43`/`b7d5be4`/`f592c8a`). This records the research for the original
+> declarative-config integration. For current Home Manager and devenv settings,
+> see the [factory documentation](../../packages/kimchi/docs/kimchi-factory.md).
+> See [docs/plans/kimchi-packaging.md] for the original packaging plan.
 >
 > **Provenance:** facts tagged `[src]` come from reading the `getkimchi/kimchi`
 > source (TypeScript), `[docs]` from docs.kimchi.dev, `[bin]` from probing the

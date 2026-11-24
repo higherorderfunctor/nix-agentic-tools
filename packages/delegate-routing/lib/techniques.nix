@@ -129,7 +129,7 @@ in {
       kind = "subagent";
       modelArg = "`--list-models` id";
       modes = ["acp" "headless" "interactive"];
-      notes = "always pass `thinking` explicitly: an omitted one falls back to the persona default, not the parent's level; an omitted `model` uses the session's, or the role model when multi-model is on; with multi-model on, an explicit `model` must be in the allowed pool; runs in the background by default when a UI is attached";
+      notes = "pass `thinking` explicitly to override the persona default. Pass `model` to select a child model. Omitting it uses the session model. Agent runs in the background by default when a UI is attached";
       pinsEffort = true;
       pinsModel = true;
       # docs/delegates/tools.md Kimchi `Agent`: depth 1, child has no Agent tools (claude:s1-fg-pins)

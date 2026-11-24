@@ -46,8 +46,8 @@ kimchi/node_modules/pi-mcp-adapter/{package.json,dist/,<root JS/TS modules>}
 
 - **Kimchi's GitHub release source, not the build's patched tree.** CodeQL,
   `scan.mjs` and surface judgments read the pinned release tree. `extract.mjs`
-  reads the shared patched build tree so settings declarations include packaging
-  additions such as `modelRoles.sessionNamer`. This repository's packaging
+  reads the shared patched build tree so the settings extractor sees reads added
+  by packaging, including `sessionNameModel`. This repository's packaging
   patches (`command-shell.patch`, `package-identity.patch`, ...) are not in the
   CodeQL source root, and neither is Kimchi's upstream postinstall rewrite:
   `scripts/patch-pi-ai-oauth.js` replaces pi-ai's `dist/utils/oauth-page.js`,
