@@ -279,7 +279,9 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
                     if stdout.tell() or stderr.tell():
                         errors.append("import output")
                 status = command(env, network.clock)
-            except Exception:
+            except KeyboardInterrupt:
+                raise
+            except BaseException:
                 # Exception text can include a raw body or a credential.
                 status = None
 
