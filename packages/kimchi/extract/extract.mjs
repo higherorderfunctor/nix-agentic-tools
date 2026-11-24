@@ -151,11 +151,8 @@ function literalValue(node, ts, checker, seen = new Set()) {
   fail(`unsupported constant expression ${node.getText()}`);
 }
 
-// Every interface, type alias, function and variable declaration, by name,
-// across the files that can matter: pi's, and the Kimchi modules reachable
-// from src/entry.ts. A bare name is not an identity — Kimchi 1.1.37 ships two
-// model-metadata.ts files with different schemas, one of them dead — so a
-// lookup by name must match exactly one declaration or the extraction stops.
+// Group declarations from the supplied files by name. Keep all matches so
+// requireDeclaration can report ambiguity when it needs a single declaration.
 function declarationIndex(sourceFiles, ts) {
   const declarations = new Map();
   const add = (name, node) => {
@@ -1297,7 +1294,10 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
   return keys;
 }
 
-// Collect typed harness keys and their file scopes for the settings sidecar.
+// main writes these harness key descriptors to the settings sidecar. Derive
+// them from pi and Kimchi declarations and settings accesses. A Kimchi key
+// whose type cannot be inferred has type null. Only pi keys read from merged
+// settings accept project overrides. Ignored, unread pi keys retain null scope.
 function extractHarness(
   declarations,
   settingsManagerSource,
