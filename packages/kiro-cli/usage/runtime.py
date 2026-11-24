@@ -6,10 +6,12 @@ for captures on exit, check the store size and print a capture summary.
 # cspell:words getpgrp tcgetpgrp
 
 import argparse
+import hashlib
 import os
 import signal
 import sqlite3
 import subprocess
+import tempfile
 import time
 import uuid
 from contextlib import closing
@@ -22,13 +24,18 @@ import sys
 from markers import InvocationMarkers
 
 
-PROXY_NAMES = (
-    "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS",
+ROUTING_PROXY_NAMES = (
+    "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
     "all_proxy", "http_proxy", "https_proxy", "no_proxy",
 )
+PROXY_NAMES = (*ROUTING_PROXY_NAMES, "NODE_EXTRA_CA_CERTS")
+INHERITED_NODE_CA = "KIRO_USAGE_INHERITED_NODE_CA"
 INVOCATION = "KIRO_USAGE_INVOCATION"
 LAUNCH_HANDOFF = "KIRO_USAGE_HANDOFF"
 OUTERMOST_INVOCATION = "KIRO_USAGE_OUTERMOST_INVOCATION"
+OWNED_ENVIRONMENT_NAMES = (*PROXY_NAMES, INHERITED_NODE_CA)
+NODE_CA_PREFIX = "node-extra-ca-certs-"
+NODE_CA_SEPARATOR = b"\n# kiro-usage merged certificate authorities\n"
 
 
 EXEC_USAGE = "exec [--no-summary] [--] COMMAND [ARG ...]"
@@ -38,6 +45,10 @@ USAGE = (f"usage: kiro-usage {{{EXEC_USAGE}|index --sessions DIR|session ID [--s
 
 class CommandError(Exception):
     """A ready collector could not execute the selected command."""
+
+
+class LaunchEnvironmentError(ValueError):
+    """A tracked launch cannot safely construct its private environment."""
 
 
 def state_directory(explicit):
@@ -102,6 +113,39 @@ def proxy_settings(port: int, cert: Path, markers: InvocationMarkers | None) -> 
     }
 
 
+def combined_ca_path(directory: Path, data: bytes) -> Path:
+    """Name each combined trust bundle by its contents so launches cannot replace another bundle."""
+    digest = hashlib.sha256(data).hexdigest()
+    return directory / f"{NODE_CA_PREFIX}{digest}.pem"
+
+
+def reusable_private_file(path: Path, data: bytes) -> bool:
+    """Tell launch_environment whether path already holds exactly these private bytes, so it can skip republishing."""
+    try:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600):
+            return False
+        return path.read_bytes() == data
+    except OSError:
+        return False
+
+
+def replace_private_file(path: Path, data: bytes) -> None:
+    """Atomically publish a private file without sharing a temporary name between launches."""
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(data)
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
 def launch_environment(
     path: Path, port: int, markers: InvocationMarkers | None, *,
     inherited: InvocationMarkers | None = None, refuse_conflicts: bool = True,
@@ -120,14 +164,36 @@ def launch_environment(
         pass
     if refuse_conflicts:
         expected = proxy_settings(port, cert, inherited)
-        for name in PROXY_NAMES:
+        for name in ROUTING_PROXY_NAMES:
             value = os.environ.get(name)
             if value and value != expected.get(name):
                 raise ValueError(f"inherited {name} conflicts with usage tracking; unset it for this Kiro launch")
-    values = proxy_settings(port, cert, markers)
+    external_ca = os.environ.get(INHERITED_NODE_CA) or os.environ.get("NODE_EXTRA_CA_CERTS")
+    child_cert = cert
+    values_extra = {}
+    if external_ca:
+        # Anchor to the cwd without collapsing '..', which the OS resolves after symlinks.
+        external_path = Path(external_ca) if os.path.isabs(external_ca) else Path.cwd() / external_ca
+        if external_path != cert:
+            invalid_external_ca = LaunchEnvironmentError(
+                f"inherited NODE_EXTRA_CA_CERTS bundle is missing, unreadable, or empty: {external_path}; "
+                "fix the path or permissions, or unset NODE_EXTRA_CA_CERTS"
+            )
+            try:
+                external_data = external_path.read_bytes()
+            except OSError as error:
+                raise invalid_external_ca from error
+            if not external_data:
+                raise invalid_external_ca
+            combined_data = external_data + NODE_CA_SEPARATOR + cert.read_bytes()
+            child_cert = combined_ca_path(ca_dir, combined_data)
+            if not reusable_private_file(child_cert, combined_data):
+                replace_private_file(child_cert, combined_data)
+            values_extra[INHERITED_NODE_CA] = str(external_path)
+    values = proxy_settings(port, child_cert, markers) | values_extra
     if markers:
         values.update({INVOCATION: markers.invocation, OUTERMOST_INVOCATION: markers.outermost_invocation})
-    return {**{name: value for name, value in os.environ.items() if name not in PROXY_NAMES}, **values}
+    return {**{name: value for name, value in os.environ.items() if name not in OWNED_ENVIRONMENT_NAMES}, **values}
 
 
 def environment(path: Path, port: int, launcher_pid: int, launcher_parent_pid: int) -> None:
@@ -144,7 +210,7 @@ def environment(path: Path, port: int, launcher_pid: int, launcher_parent_pid: i
     markers = inherited if prepared else new_markers(inherited)
     values = launch_environment(path, port, markers, inherited=inherited)
     print(f"unset {LAUNCH_HANDOFF}")
-    for name in sorted((*PROXY_NAMES, INVOCATION, OUTERMOST_INVOCATION)):
+    for name in sorted((*OWNED_ENVIRONMENT_NAMES, INVOCATION, OUTERMOST_INVOCATION)):
         if name in values:
             print(f"export {name}={shlex.quote(values[name])}")
         else:
@@ -152,12 +218,13 @@ def environment(path: Path, port: int, launcher_pid: int, launcher_parent_pid: i
 
 
 def service(args, path):
+    """Prepare private state for the caller's mitmdump, then replace this process with it."""
     os.umask(0o077)
     private_directory(path, create=True)
     ca_dir = path / "ca"
     private_directory(ca_dir, create=True)
     # The proxy must never inherit the client-side proxy and loop into itself.
-    for name in PROXY_NAMES:
+    for name in OWNED_ENVIRONMENT_NAMES:
         os.environ.pop(name, None)
     os.environ["KIRO_USAGE_DB"] = str(path / "usage.sqlite3")
     os.environ["KIRO_USAGE_WARN_BYTES"] = str(args.warn_bytes)
@@ -165,15 +232,19 @@ def service(args, path):
         os.environ["KIRO_USAGE_RETENTION_DAYS"] = str(args.payload_retention_days)
     else:
         os.environ.pop("KIRO_USAGE_RETENTION_DAYS", None)
+    upstream_verification = [] if args.upstream_ca_file is None else [
+        "--set", f"ssl_verify_upstream_trusted_ca={args.upstream_ca_file}"
+    ]
     os.execv(args.mitmdump, [
         args.mitmdump,
         "--listen-host", "127.0.0.1", "--listen-port", str(args.port),
         "--allow-hosts", r"^runtime\.us-east-1\.kiro\.dev:443$",
         "--set", f"confdir={ca_dir}",
         "--set", "flow_detail=0",
-        "--set", "termlog_verbosity=error",
+        "--set", "termlog_verbosity=warn",
         "--set", "connection_strategy=lazy",
         "--scripts", args.addon,
+        *upstream_verification,
     ])
 
 
@@ -447,6 +518,7 @@ def main():
             child.add_argument("--mitmdump", required=True)
             child.add_argument("--addon", required=True)
             child.add_argument("--payload-retention-days", type=int)
+            child.add_argument("--upstream-ca-file")
     args = parser.parse_args()
     try:
         path = state_directory(args.state_dir)
@@ -459,6 +531,9 @@ def main():
             environment(path, args.port, args.launcher_pid, args.launcher_parent_pid)
     except CommandError as error:
         print(f"Kiro usage command failed: {error}.", file=sys.stderr)
+        return 1
+    except LaunchEnvironmentError as error:
+        print(f"Kiro usage tracking unavailable: {error}.", file=sys.stderr)
         return 1
     except (KeyError, OSError, ValueError) as error:
         print(f"Kiro usage tracking unavailable: {error}. Start the kiro-usage service first; see packages/kiro-cli/docs/usage-tracking.md.", file=sys.stderr)

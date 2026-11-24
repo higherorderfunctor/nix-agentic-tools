@@ -11,14 +11,15 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 
-def assert_outer_identity(body, cert):
+def assert_outer_identity(body, expected_ca=None):
     """Require a standalone tracked Kiro to receive a single identity in its markers and proxy."""
     proxy = urlsplit(body["proxy"])
     assert (proxy.scheme, proxy.hostname, proxy.port, proxy.password) == ("http", "127.0.0.1", 18091, ""), body
     invocation = body["invocation"]
     assert invocation and re.fullmatch(r"[0-9a-f]{32}", invocation), body
     assert body["outermost_invocation"] == invocation and proxy.username == f"kiro-usage-{invocation}", body
-    assert body["ca"] == str(cert), body
+    if expected_ca is not None:
+        assert body["ca"] == str(expected_ca), body
 
 
 package, service, disabled = sys.argv[1:]
@@ -30,6 +31,8 @@ with tempfile.TemporaryDirectory() as directory:
     environment.update(HOME=str(root), XDG_STATE_HOME=str(root / "state with spaces"))
     state = root / "state with spaces/kiro-cli/usage"
     cert = state / "ca/mitmproxy-ca-cert.pem"
+    node_ca_separator = b"\n# kiro-usage merged certificate authorities\n"
+
     def launch(binary, env=environment, arguments=None):
         if arguments is None:
             arguments = ["chat", "synthetic"]
@@ -52,9 +55,25 @@ with tempfile.TemporaryDirectory() as directory:
         assert result.returncode == 0, result.stderr
         body = json.loads(result.stdout)
         assert_outer_identity(body, cert)
+        inherited_ca = root / "inherited-ca.pem"
+        inherited_bytes = b"integration inherited CA\n"
+        inherited_ca.write_bytes(inherited_bytes)
+        result = launch("kiro-cli", environment | {"NODE_EXTRA_CA_CERTS": str(inherited_ca)})
+        assert result.returncode == 0, result.stderr
+        body = json.loads(result.stdout)
+        observed_ca = Path(body["ca"])
+        assert_outer_identity(body)
+        assert observed_ca.parent == state / "ca"
+        assert observed_ca.read_bytes() == inherited_bytes + node_ca_separator + cert.read_bytes()
+        assert (observed_ca.stat().st_mode & 0o777) == 0o600
         assert (state.stat().st_mode & 0o777) == 0o700
         recorded = json.loads((state / "service.json").read_text())
         assert (recorded["payload_retention_days"], recorded["warn_bytes"]) == ("90", "5368709120")
+        mitmdump_argv = recorded["argv"]
+        assert any(mitmdump_argv[index:index + 2] == ["--set", "ssl_verify_upstream_trusted_ca=/etc/nix/macos-ca.pem"]
+                   for index in range(len(mitmdump_argv))), mitmdump_argv
+        assert any(mitmdump_argv[index:index + 2] == ["--set", "termlog_verbosity=warn"]
+                   for index in range(len(mitmdump_argv))), mitmdump_argv
         result = launch("kiro-cli", environment | {"HTTPS_PROXY": "http://invalid.invalid:1"})
         assert result.returncode != 0 and "inherited HTTPS_PROXY conflicts" in result.stderr
         result = launch("kiro-cli", environment | {"NO_PROXY": "*"})

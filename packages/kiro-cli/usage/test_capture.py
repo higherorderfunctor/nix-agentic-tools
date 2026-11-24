@@ -998,12 +998,18 @@ class CaptureTests(unittest.TestCase):
 
 class RuntimeTests(unittest.TestCase):
     def test_exec_environment_and_arguments(self):
+        """Check explicit-exec replacement arguments and inherited Node trust merging."""
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state with spaces"
             runtime.private_directory(state, create=True)
             runtime.private_directory(state / "ca", create=True)
             (state / "ca/mitmproxy-ca-cert.pem").write_text("fake CA")
-            inherited = {"PATH": "/project/bin", "KEEP": "yes", **{name: "conflict" for name in runtime.PROXY_NAMES}}
+            inherited_ca = state.parent / "inherited-ca.pem"
+            inherited_ca.write_text("inherited CA")
+            inherited = {
+                "PATH": "/project/bin", "KEEP": "yes", "NODE_EXTRA_CA_CERTS": str(inherited_ca),
+                **{name: "conflict" for name in runtime.ROUTING_PROXY_NAMES},
+            }
             with patch.dict(os.environ, inherited, clear=True), patch.object(runtime.socket, "create_connection") as connect, patch.object(os, "execvpe") as execute, patch.object(runtime, "wait_command", return_value=0) as wait, patch.object(runtime, "invocation_summary"):
                 with self.assertRaisesRegex(ValueError, "inherited ALL_PROXY conflicts"):
                     runtime.launch_environment(state, 19001, None)
@@ -1015,7 +1021,11 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(environment["PATH"], "/project/bin")
                 for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                     self.assertEqual(environment[name], f"http://kiro-usage-{environment['KIRO_USAGE_INVOCATION']}:@127.0.0.1:19001")
-                self.assertEqual(environment["NODE_EXTRA_CA_CERTS"], str(state / "ca/mitmproxy-ca-cert.pem"))
+                combined = b"inherited CA\n# kiro-usage merged certificate authorities\nfake CA"
+                observed_ca = Path(environment["NODE_EXTRA_CA_CERTS"])
+                self.assertEqual(observed_ca.parent, state / "ca")
+                self.assertEqual(observed_ca.read_bytes(), combined)
+                self.assertEqual(environment[runtime.INHERITED_NODE_CA], str(inherited_ca))
                 for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy"):
                     self.assertNotIn(name, environment)
                 self.assertEqual(os.environ["NO_PROXY"], "conflict")
