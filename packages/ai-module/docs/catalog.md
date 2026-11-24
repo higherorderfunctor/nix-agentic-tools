@@ -17,12 +17,14 @@ own extracted facts and contribute ordinary module definitions. CPA contributes
 OpenCode Go and Z.ai through `packages/cliproxyapi/modules/catalog.nix`; its
 per-vendor files own maker identities and evidence. OpenCode Go's canonical
 namespaces are used as maker ids unchanged. The undisclosed iceman identity
-stays separate; no other maker is inferred. claude-code contributes its
-extracted Anthropic models and the `claude` vendor (every `anthropic` model)
-through `packages/claude-code/modules/catalog.nix`; chatgpt-codex contributes
-its extracted OpenAI model slugs and the `codex` vendor (every `openai` model)
-through `packages/chatgpt-codex/modules/catalog.nix`. Both are imported whether
-or not their runtime is enabled. Core supplies no vendor or model itself.
+stays separate. Any other model without a canonical id gets a `null` maker, so
+no maker is guessed and `excludeMakers` never removes it. claude-code
+contributes its extracted Anthropic models and the `claude` vendor (every
+`anthropic` model) through `packages/claude-code/modules/catalog.nix`;
+chatgpt-codex contributes its extracted OpenAI model slugs and the `codex`
+vendor (every `openai` model) through
+`packages/chatgpt-codex/modules/catalog.nix`. Both are imported whether or not
+their runtime is enabled. Core supplies no vendor or model itself.
 
 Owner contributions use `mkDefault` on each field. Equal-priority evidence lists
 concatenate; compare them as sets. Identical maker defaults agree, and

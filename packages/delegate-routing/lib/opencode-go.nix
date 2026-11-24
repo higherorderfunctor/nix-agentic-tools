@@ -1,4 +1,4 @@
-# cspell:ignore iceman longcat mimo multimodal
+# cspell:ignore hungerg iceman longcat mimo multimodal
 # OpenCode Go preset families, their pool hints and their drift from the
 # pinned catalog. Every tier is a provisional routing judgment from the
 # per-model research; none was measured on the operator's Go workload.
@@ -108,6 +108,14 @@
       match = "grok-4.7";
       tier = "strong";
       useFor = "agentic knowledge work; coding with acceptance checks; an alternate-vendor implementer";
+    };
+    go-hungerg-free = {
+      avoidFor = "long autonomous tool loops; sole judging; confidential inputs; work that depends on free capacity lasting";
+      defaultEffort = null;
+      effort = "leave unset; no effort levels advertised";
+      match = "hungerg-free";
+      tier = "small";
+      useFor = "provisional: disposable experiments, drafts and image or video reading with human checks; maker undisclosed";
     };
     go-hy3 = {
       avoidFor = "image input; sole judging; hardest architecture or long unattended runs";
