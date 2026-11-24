@@ -42,14 +42,18 @@
       # table, and an absent map, a non-literal entry and two maps each fail by
       # name.
       kiro-hook-triggers-fixtures = let
-        # The map bound to `binding`, its `SessionStart` entry spelled `key:value`.
-        bundle = binding: key: value: "var ${binding}=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        # One frozen trigger map bound to `binding`, its `SessionStart` entry
+        # spelled `key:value`. The `computed` case passes a non-literal value;
+        # every other case builds its bundle from this map.
+        triggerMap = binding: key: value: "var ${binding}=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
         # The engine's hook exit-code effect table: keyed by trigger names like
         # the map, but its values are objects or a shared reference.
         exitCodeTable = "var N={0:\"none\",1:\"none\",2:\"none\",other:\"none\"};var E=Object.freeze({SessionStart:{0:\"stdout\",1:\"none\",2:\"none\",other:\"none\"},SessionEnd:N,Stop:{0:\"stop-decision\",1:\"keep-working\",2:\"none\",other:\"none\",decidesWhenUnfinished:!0},PreToolUse:{0:\"permission-decision\",1:\"none\",2:\"block\",other:\"none\"}});";
         extract = (import ../lib/packaging.nix).kiroHookTriggersExtractScript pkgs;
-        # `bundle` with every entry a literal and the `SessionStart` key quoted.
-        literalMap = binding: bundle binding "\"SessionStart\"" "\"SessionStart\"";
+        # A trigger map whose every entry is a literal, with the `SessionStart`
+        # key quoted. The `quoted` case checks that a quoted key is the same
+        # key; `ambiguous` puts two of these in one bundle.
+        literalMap = binding: triggerMap binding "\"SessionStart\"" "\"SessionStart\"";
       in
         pkgs.runCommand "kiro-hook-triggers-fixtures" {} ''
           set -euETo pipefail
@@ -57,10 +61,10 @@
           jq=${pkgs.jq}/bin/jq
           printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M")} > quoted.js
           printf '%s' 'var M=Object.freeze({});' > absent.js
-          printf '%s' ${pkgs.lib.escapeShellArg (bundle "M" "SessionStart" "\"Session\"+\"Start\"")} > computed.js
+          printf '%s' ${pkgs.lib.escapeShellArg (triggerMap "M" "SessionStart" "\"Session\"+\"Start\"")} > computed.js
           # The table comes first, as in the 3.6.0 bundle, so a locator that
           # takes the first `SessionStart` object picks the table here.
-          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + bundle "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + triggerMap "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
           # A locator that takes the first or the last map instead of failing
           # succeeds here.
           printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M" + literalMap "N")} > ambiguous.js

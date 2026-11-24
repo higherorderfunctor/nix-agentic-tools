@@ -57,7 +57,10 @@ function walk(node) {
 }
 walk(file);
 
-// One `name: "canonical trigger"` entry of the map.
+// True for a `name: "canonical trigger"` property of a candidate's object
+// literal. Only the trigger map has nothing but such entries: the exit-code
+// effect table maps each trigger to an object or a shared reference, so this
+// test tells the two apart without relying on binding names or order.
 function isNameToNameEntry(property) {
   return (
     ts.isPropertyAssignment(property) &&
@@ -66,7 +69,6 @@ function isNameToNameEntry(property) {
   );
 }
 
-// The map is the one candidate whose every entry is name-to-name.
 const maps = candidates.filter((object) =>
   object.properties.every(isNameToNameEntry),
 );
