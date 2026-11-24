@@ -68,6 +68,8 @@
       "breakReminder",
       "clawdFileProgressEnabled",
       "doneMeansMerged",
+      "modelCatalogPublicKey",
+      "modelCatalogUrl",
       "modelProposedGoals",
       "policyHelpers",
       "precomputeArmTokens",
@@ -672,6 +674,7 @@
       "disabledMcpjsonServers": { "type": "array" },
       "disabledMcpjsonServers[]": { "type": "string" },
       "doneMeansMerged": { "type": "boolean" },
+      "downloadsMirrorUrl": { "type": "string" },
       "editorMode": { "enum": ["normal", "vim"], "type": "string" },
       "effortLevel": {
         "enum": ["high", "low", "medium", "xhigh"],
@@ -1057,6 +1060,8 @@
       "maxProseWidth": { "type": "integer" },
       "minimumVersion": { "type": "string" },
       "model": { "type": "string" },
+      "modelCatalogPublicKey": { "type": "string" },
+      "modelCatalogUrl": { "type": "string" },
       "modelOverrides": { "type": "object" },
       "modelOverrides.*": { "type": "string" },
       "modelPicker": { "type": "object" },
@@ -1119,7 +1124,6 @@
           "bypassPermissions",
           "default",
           "dontAsk",
-          "manual",
           "plan"
         ],
         "type": "string"
@@ -1765,6 +1769,7 @@
       "disableWindowsBashCommandSplit",
       "disableWorkflows",
       "disabledMcpjsonServers",
+      "downloadsMirrorUrl",
       "editorMode",
       "effortLevel",
       "emojiCompletionEnabled",
