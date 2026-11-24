@@ -8,7 +8,7 @@
 }: let
   redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
+  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm launchdAgentRunsLauncher mcpLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   webexResult = backend: clients: assignServers:
     (
@@ -876,7 +876,8 @@ in {
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-      module-mcp-proxy-darwin-warns = mkTest "mcp-proxy-darwin-warns" (
+      # Fails when the proxy daemon is missing from launchd or runs something other than its launcher.
+      module-mcp-proxy-darwin-launchd = mkTest "mcp-proxy-darwin-launchd" (
         let
           result = evalHm {
             ai.claude = {
@@ -887,7 +888,7 @@ in {
         in
           result.config.systemd.user.services
           == {}
-          && builtins.elem "ai.services.mcp-proxy-example: Home Manager writes services as systemd user units, which this platform lacks; the service is not written" result.config.warnings
+          && launchdAgentRunsLauncher result.config "mcp-proxy-example"
       );
     };
 }

@@ -86,12 +86,13 @@
 #
 # Per-server attribution therefore does NOT come from a logged header. It
 # comes from the unit — one `mcp-proxy-<name>.service` per server. Use
-# `journalctl --user -u mcp-proxy-<name>` to tell two proxies apart.
+# `journalctl --user -u mcp-proxy-<name>` to tell two proxies apart; on
+# Darwin each agent logs to `~/Library/Logs/ai-service-mcp-proxy-<name>.log`.
 #
 # ── Scope ─────────────────────────────────────────────────────────────
-# Home Manager runs the proxy through `ai.services` on Linux and warns on
-# Darwin, where launchd is unsupported. Devenv emits a process through
-# `ai.services`, started with `devenv up`.
+# Home Manager runs the proxy through `ai.services` as a systemd user unit
+# on Linux and a launchd user agent on Darwin. Devenv emits a process
+# through `ai.services`, started with `devenv up`.
 {
   lib,
   pkgs,

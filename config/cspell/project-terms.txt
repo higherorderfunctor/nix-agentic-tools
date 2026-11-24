@@ -5,6 +5,7 @@ AUTOUPDATES
 AWSLAMBDA
 bindingset
 Boehm
+bootout
 callees
 CFFIXED
 chatcmpl
