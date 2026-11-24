@@ -4452,6 +4452,54 @@
         "release_date": "2026-09-21",
         "type": "chat"
       },
+      "hungerg-free": {
+        "api": {
+          "chat-completions": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "capabilities": { "tools": { "updates": [] } },
+            "sdk": {
+              "aisdk": "@ai-sdk/openai-compatible",
+              "opencodeai": "@opencode/ai/providers/openai-compatible"
+            }
+          }
+        },
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": true },
+          "system_updates": false,
+          "tools": { "supported": true }
+        },
+        "cost": {
+          "text": {
+            "input": { "cache": { "read": 0 }, "price": 0 },
+            "output": { "price": 0 }
+          }
+        },
+        "description": "Stealth reasoning model, free for a limited time",
+        "id": "hungerg-free",
+        "last_updated": "2026-11-24",
+        "limit": { "context": 1000000, "input": 1000000, "output": 65536 },
+        "modalities": {
+          "input": [
+            "text",
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "video/mp4",
+            "video/quicktime",
+            "video/x-matroska"
+          ],
+          "output": ["text"]
+        },
+        "name": "HungerG Free",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "chat-completions",
+        "release_date": "2026-11-24",
+        "type": "chat"
+      },
       "hy3": {
         "api": {
           "chat-completions": {
@@ -4524,7 +4572,7 @@
         "family": "hy",
         "id": "hy4",
         "last_updated": "2026-11-04",
-        "limit": { "context": 1048576, "input": 983010, "output": 65536 },
+        "limit": { "context": 1048576, "input": 983040, "output": 65536 },
         "modalities": {
           "input": [
             "text",
@@ -4537,7 +4585,7 @@
         },
         "name": "Hy4",
         "object": "model",
-        "open_weights": false,
+        "open_weights": true,
         "owned_by": "opencode",
         "recommended_api": "chat-completions",
         "release_date": "2026-11-04",
@@ -4587,7 +4635,7 @@
         },
         "name": "Hy4 flash Free",
         "object": "model",
-        "open_weights": false,
+        "open_weights": true,
         "owned_by": "opencode",
         "recommended_api": "chat-completions",
         "release_date": "2026-11-16",
@@ -4624,7 +4672,7 @@
         "family": "hy",
         "id": "hy4-preview",
         "last_updated": "2026-08-28",
-        "limit": { "context": 1024000, "output": 64000 },
+        "limit": { "context": 1048576, "input": 983040, "output": 65536 },
         "modalities": { "input": ["text"], "output": ["text"] },
         "name": "Hy4 preview",
         "object": "model",
@@ -4817,7 +4865,7 @@
             "output": { "price": 15 }
           }
         },
-        "description": "Multimodal Kimi model with 1M context and toggleable max-effort thinking for long-horizon agent work",
+        "description": "Multimodal Kimi model with 1M context and always-on thinking for long-horizon agent work",
         "family": "kimi",
         "id": "kimi-k3",
         "last_updated": "2026-07-16",
@@ -4959,7 +5007,16 @@
         "id": "longcat-2.5",
         "last_updated": "2026-11-02",
         "limit": { "context": 1000000, "output": 262144 },
-        "modalities": { "input": ["text", "image"], "output": ["text"] },
+        "modalities": {
+          "input": [
+            "text",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif"
+          ],
+          "output": ["text"]
+        },
         "name": "LongCat-2.5",
         "object": "model",
         "open_weights": false,
@@ -5763,20 +5820,21 @@
         "deepseek-v4-pro": 15,
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
-        "gemini-decision-1": 15,
-        "gemini-embedding-2": 15,
+        "gemini-decision-1": 10,
+        "gemini-embedding-2": 10,
         "glm-5.3": 200,
         "glm-5.3-flash": 60,
         "gpt-5.6-luna": 15,
         "gpt-6-luna": 15,
-        "gpt-6-luna-decision": 15,
+        "gpt-6-luna-decision": 10,
         "grok-4.7": 15,
+        "hungerg-free": "unlimited",
         "hy3": 60,
         "hy4": 60,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 30,
         "iceman-contributor-free": "unlimited",
-        "jev-1.14": 15,
+        "jev-1.14": 10,
         "kimi-k2.7-code": 60,
         "kimi-k3": 15,
         "kimi-k3.1-pro": 15,
@@ -5787,13 +5845,13 @@
         "minimax-m3.1-flash": 20,
         "muse-spark-1.2-contributor": 60,
         "muse-spark-1.3-contributor": 60,
-        "qwen3-embedding-8b": 15,
+        "qwen3-embedding-8b": 10,
         "qwen3.7-plus": 60,
         "qwen3.8-flash": 30,
         "qwen3.8-max": 15,
         "qwen4-max": 15,
         "step-5-preview": 15,
-        "text-embedding-3-small": 15
+        "text-embedding-3-small": 10
       },
       "go-plus": {
         "beam-free": "unlimited",
@@ -5801,20 +5859,21 @@
         "deepseek-v4-pro": 60,
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
-        "gemini-decision-1": 60,
-        "gemini-embedding-2": 60,
+        "gemini-decision-1": 40,
+        "gemini-embedding-2": 40,
         "glm-5.3": 400,
         "glm-5.3-flash": 180,
         "gpt-5.6-luna": 60,
         "gpt-6-luna": 60,
-        "gpt-6-luna-decision": 60,
+        "gpt-6-luna-decision": 40,
         "grok-4.7": 60,
+        "hungerg-free": "unlimited",
         "hy3": 240,
         "hy4": 240,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 120,
         "iceman-contributor-free": "unlimited",
-        "jev-1.14": 60,
+        "jev-1.14": 40,
         "kimi-k2.7-code": 180,
         "kimi-k3": 60,
         "kimi-k3.1-pro": 60,
@@ -5825,13 +5884,13 @@
         "minimax-m3.1-flash": 80,
         "muse-spark-1.2-contributor": 120,
         "muse-spark-1.3-contributor": 120,
-        "qwen3-embedding-8b": 60,
+        "qwen3-embedding-8b": 40,
         "qwen3.7-plus": 180,
         "qwen3.8-flash": 90,
         "qwen3.8-max": 60,
         "qwen4-max": 60,
         "step-5-preview": 60,
-        "text-embedding-3-small": 60
+        "text-embedding-3-small": 40
       },
       "go-teams": {
         "beam-free": "unlimited",
@@ -5839,20 +5898,21 @@
         "deepseek-v4-pro": 20,
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
-        "gemini-decision-1": 20,
-        "gemini-embedding-2": 20,
+        "gemini-decision-1": 15,
+        "gemini-embedding-2": 15,
         "glm-5.3": 205,
         "glm-5.3-flash": 65,
         "gpt-5.6-luna": 20,
         "gpt-6-luna": 20,
-        "gpt-6-luna-decision": 20,
+        "gpt-6-luna-decision": 15,
         "grok-4.7": 20,
+        "hungerg-free": "unlimited",
         "hy3": 65,
         "hy4": 65,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 35,
         "iceman-contributor-free": "unlimited",
-        "jev-1.14": 20,
+        "jev-1.14": 15,
         "kimi-k2.7-code": 65,
         "kimi-k3": 20,
         "kimi-k3.1-pro": 20,
@@ -5863,13 +5923,13 @@
         "minimax-m3.1-flash": 25,
         "muse-spark-1.2-contributor": 65,
         "muse-spark-1.3-contributor": 65,
-        "qwen3-embedding-8b": 20,
+        "qwen3-embedding-8b": 15,
         "qwen3.7-plus": 65,
         "qwen3.8-flash": 35,
         "qwen3.8-max": 20,
         "qwen4-max": 20,
         "step-5-preview": 20,
-        "text-embedding-3-small": 20
+        "text-embedding-3-small": 15
       }
     }
   },
