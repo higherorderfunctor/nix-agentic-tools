@@ -7,7 +7,7 @@ import json
 
 from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError
 
-from .transport import (
+from credential_usage.transport import (
     FrozenModel,
     HttpRequest,
     HttpResponse,

@@ -1,6 +1,6 @@
 """Compare the runner's captures and process trace to the offline check's fixture.
 
-The Nix check supplies the scripts directory. Local runs use its checkout path.
+The Nix check imports the installed package. Local runs use its checkout path.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -14,14 +14,11 @@ from unittest.mock import patch
 from pydantic import BaseModel, TypeAdapter
 
 CASES = Path(__file__).parent / "cases" / "process"
-SCRIPTS = (
-    Path(sys.argv.pop(1))
-    if len(sys.argv) > 1
-    else Path(__file__).resolve().parents[3] / "scripts"
-)
-sys.path.insert(0, str(SCRIPTS))
+PACKAGE = Path(__file__).resolve().parents[2] / "python"
+if PACKAGE.is_dir():
+    sys.path.insert(0, str(PACKAGE))
 
-from usage import runner
+from credential_usage import runner
 
 
 class ProcessFixture(BaseModel):

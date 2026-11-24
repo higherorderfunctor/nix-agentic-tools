@@ -721,10 +721,11 @@ techniques; absent mode evidence leaves them unresolved.
 Only configured Reader commands and verified tool-free picker commands reach
 subprocess execution. Identical commands share one read and retry; full strict
 Bash mode and a ten-second process-group timeout bound execution. Registration
-keys identify each pool. `scripts/usage/runner.py` records the UTC time when the
-last attempt finishes. Aliases share that capture. A registration without a
-command has no capture time. The helper measures each successful capture once
-and uses `--now` only to evaluate its windows.
+keys identify each pool.
+`packages/credential-usage/python/credential_usage/runner.py` records the UTC
+time when the last attempt finishes. Aliases share that capture. A registration
+without a command has no capture time. The helper measures each successful
+capture once and uses `--now` only to evaluate its windows.
 
 Direct HTTP binds its bearer token to one origin. With neither discovery source,
 CPA trusts a registered pin and skips discovery. Otherwise, choose an OAuth
@@ -772,12 +773,13 @@ JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
-Run these suites with `pydantic` v2, `urllib3` and `hypothesis` installed. The
-`delegate-routing-plan-runtime` check runs them from this package directory.
+Run these suites with `pydantic` v2, `urllib3` and `hypothesis` installed. CI
+runs the first two as `credential-usage-runner` and `credential-usage-transport`
+and the last as `delegate-routing-plan-runtime`.
 
 ```bash
-python3 checks/usage/runner/test_runner.py scripts
-python3 checks/usage/transport/test_transport.py scripts
+python3 ../credential-usage/checks/runner/test_runner.py
+python3 ../credential-usage/checks/transport/test_transport.py
 python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
 ```
 

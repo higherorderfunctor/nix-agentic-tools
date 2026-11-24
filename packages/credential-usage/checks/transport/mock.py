@@ -5,7 +5,7 @@ import json
 
 from pydantic import JsonValue
 
-from usage.transport import HttpRequest, HttpResponse
+from credential_usage.transport import HttpRequest, HttpResponse
 
 
 class RecordingTransport:

@@ -12,12 +12,16 @@ from urllib3.response import HTTPResponse
 
 HERE = Path(__file__).resolve().parent
 CASES = HERE / "cases" / "binding"
-scripts = sys.argv.pop(1) if len(sys.argv) > 1 else HERE.parents[2] / "scripts"
+package = HERE.parents[1] / "python"
+# The CPA binding lives in delegate-routing. The Nix check passes that directory.
+scripts = sys.argv.pop(1) if len(sys.argv) > 1 else HERE.parents[1].parent / "delegate-routing" / "scripts"
 sys.path[:0] = [str(HERE), str(scripts)]
+if package.is_dir():
+    sys.path.insert(0, str(package))
 
 from mock import RecordingTransport
 from usage.cpa import CpaInstance, UnknownBinding
-from usage.transport import DirectHttp, HttpPolicy, HttpRequest, RequestFailure
+from credential_usage.transport import DirectHttp, HttpPolicy, HttpRequest, RequestFailure
 
 
 class Case(NamedTuple):

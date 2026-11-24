@@ -1,6 +1,6 @@
 # Architecture
 
-> **Last verified:** 2026-11-07 — router to the architecture decisions held by
+> **Last verified:** 2026-11-24 — router to the architecture decisions held by
 > their owners; each decision keeps its rule, reason, mechanism pointer and
 > vetted date beside the code it governs.
 
@@ -27,5 +27,8 @@ existing abstraction.
 - `packages/airlock/docs/airlock.md` — Airlock rebuilt as a stack of small PRs.
 - `packages/cliproxyapi/docs/cliproxyapi-client-keys.md` — proposed CPA named
   routing.
+- `packages/credential-usage/docs/credential-usage.md` — usage Readers share one
+  neutral runner and transport contract; credential owners supply transports
+  (proposed).
 - `packages/jail-nix/docs/jail-nix.md` — proposed harness sandboxing.
 - `packages/microvm/docs/sandbox.md` — the VM sandbox factory and VM git access.

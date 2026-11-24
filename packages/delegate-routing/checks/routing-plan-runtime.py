@@ -26,6 +26,10 @@ SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
 sys.path.insert(0, str(SOURCE.parent))
+# A checkout run imports the owner's source; the Nix check imports its installed module.
+package = SOURCE.parent.parents[1] / "credential-usage" / "python"
+if package.is_dir():
+    sys.path.insert(0, str(package))
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
