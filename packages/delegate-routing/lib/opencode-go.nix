@@ -8,8 +8,7 @@
   lib,
   modelIds ? null,
 }: let
-  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  fact = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
+  fact = import ../../cliproxyapi/lib/opencode-go-models.nix {inherit lib;};
   # This preset-scope rule limits which Go models need routing guidance here;
   # it does not restrict the models a CPA credential may serve. Module and
   # manual callers resolve the option first; coverage receives active prefixes.
@@ -22,7 +21,7 @@
     lib.any (prefix: lib.hasPrefix (lib.toLower prefix) (lib.toLower model))
     activeExclusionPrefixes;
   vendor = "opencode-go";
-  # Keep full inventory for pool hints and overlap checks, independently of scope.
+  # Pool hints and overlap checks cover all chat models, independently of preset scope.
   catalog =
     if modelIds == null
     then builtins.attrNames fact.models
@@ -174,19 +173,11 @@
       tier = "strong";
       useFor = "difficult terminal coding and tool-driven implementation; source-grounded research with checks";
     };
-    "go-longcat-2.0" = {
-      avoidFor = "image input; sole judging; unattended long-horizon work";
-      defaultEffort = null;
-      effort = "thinking on or off only; no effort levels";
-      match = "longcat-2.0";
-      tier = "mid";
-      useFor = "provisional: bounded coding help with tests and review";
-    };
-    "go-longcat-2.5-free" = {
-      avoidFor = "provisional: sole judging; unattended long-horizon work; relying on the limited-time free listing; inputs that cannot be hosted in China (Global regions required)";
+    "go-longcat-2.5" = {
+      avoidFor = "provisional: sole judging; unattended long-horizon work; inputs that cannot be hosted in China (Global regions required)";
       defaultEffort = null;
       effort = "thinking on or off only; no effort levels advertised by Go";
-      match = "longcat-2.5-free";
+      match = "longcat-2.5";
       tier = "mid";
       useFor = "provisional: bounded coding and tool tasks; visual code investigation with tests and review";
     };

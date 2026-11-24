@@ -3949,6 +3949,118 @@
         "release_date": "2026-10-13",
         "type": "chat"
       },
+      "gemini-decision-1": {
+        "api": {
+          "systemone": {
+            "base_url": "https://opencode.ai/inference/go/systemone/v1",
+            "compatibility": { "media_input": "state" },
+            "sdk": {
+              "aisdk": "@ai-sdk/typesafe-ai",
+              "opencodeai": "@opencode/ai/providers/opencode/decisions"
+            }
+          }
+        },
+        "canonical_id": "google/gemini-decision-1",
+        "capabilities": {
+          "cache": false,
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": false
+        },
+        "cost": {
+          "text": { "input": { "price": 0.1 }, "output": { "price": 0 } }
+        },
+        "description": "Google's decision model that returns calibrated probabilities for typed yes/no, choice and score questions about text, images, audio, video and PDFs",
+        "family": "gemini-decision",
+        "id": "gemini-decision-1",
+        "last_updated": "2026-11-11",
+        "limit": { "context": 262144 },
+        "modalities": {
+          "input": [
+            "text",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/heic",
+            "image/heif",
+            "image/gif",
+            "image/bmp",
+            "image/tiff",
+            "audio/wav",
+            "audio/mp3",
+            "audio/mpeg",
+            "audio/aiff",
+            "audio/aac",
+            "audio/ogg",
+            "audio/flac",
+            "audio/m4a",
+            "audio/opus",
+            "audio/webm",
+            "audio/l16",
+            "audio/alaw",
+            "audio/mulaw",
+            "video/mp4",
+            "video/mpeg",
+            "video/mov",
+            "video/avi",
+            "video/webm",
+            "video/wmv",
+            "video/x-flv",
+            "video/3gpp",
+            "application/pdf"
+          ],
+          "output": ["decision"]
+        },
+        "name": "Gemini Decision 1",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "systemone",
+        "release_date": "2026-11-11",
+        "type": "decision"
+      },
+      "gemini-embedding-2": {
+        "api": {
+          "embeddings": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "sdk": {
+              "aisdk": "@ai-sdk/openai-compatible",
+              "opencodeai": "@opencode/ai/providers/openai-compatible/embeddings"
+            }
+          }
+        },
+        "canonical_id": "google/gemini-embedding-2",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": false
+        },
+        "cost": {
+          "text": { "input": { "price": 0.2 }, "output": { "price": 0 } }
+        },
+        "description": "Multimodal embedding model mapping text, images, video, audio, and PDFs into a unified embedding space",
+        "family": "gemini-embedding",
+        "id": "gemini-embedding-2",
+        "knowledge": "2025-11",
+        "last_updated": "2026-04-22",
+        "limit": { "context": 8192, "output": 3072 },
+        "modalities": { "input": ["text"], "output": ["embedding"] },
+        "name": "Gemini Embedding 2",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "embeddings",
+        "release_date": "2026-04-22",
+        "type": "embedding"
+      },
       "glm-5.3": {
         "api": {
           "chat-completions": {
@@ -4205,6 +4317,71 @@
         "recommended_api": "responses",
         "release_date": "2026-09-22",
         "type": "chat"
+      },
+      "gpt-6-luna-decision": {
+        "api": {
+          "systemone": {
+            "base_url": "https://opencode.ai/inference/go/systemone/v1",
+            "compatibility": { "media_input": "state" },
+            "sdk": {
+              "aisdk": "@ai-sdk/typesafe-ai",
+              "opencodeai": "@opencode/ai/providers/opencode/decisions"
+            }
+          }
+        },
+        "canonical_id": "openai/gpt-6-luna",
+        "capabilities": {
+          "cache": { "implicit": { "min_tokens": 1024 } },
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "system_updates": false,
+          "temperature": true,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": true
+        },
+        "cost": {
+          "text": {
+            "input": {
+              "cache": { "read": 0.01, "write": { "12h": 0.25, "30m": 0.125 } },
+              "overrides": [
+                {
+                  "cache": {
+                    "read": 0.02,
+                    "write": { "12h": 0.5, "30m": 0.25 }
+                  },
+                  "price": 0.2,
+                  "when": { "context": { "gt": 272000 } }
+                }
+              ],
+              "price": 0.1
+            },
+            "output": { "price": 0 }
+          }
+        },
+        "description": "GPT-6 Luna on OpenAI's Decisions API, returning typed yes/no, choice and score answers about text and images",
+        "family": "gpt-luna",
+        "id": "gpt-6-luna-decision",
+        "knowledge": "2026-05-18",
+        "last_updated": "2026-09-22",
+        "limit": { "context": 1050000, "input": 922000, "output": 128000 },
+        "modalities": {
+          "input": [
+            "text",
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif"
+          ],
+          "output": ["decision"]
+        },
+        "name": "GPT-6 Luna Decision",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "systemone",
+        "release_date": "2026-09-22",
+        "type": "decision"
       },
       "grok-4.7": {
         "api": {
@@ -4493,6 +4670,47 @@
         "release_date": "2026-10-24",
         "type": "chat"
       },
+      "jev-1.14": {
+        "api": {
+          "systemone": {
+            "base_url": "https://opencode.ai/inference/go/systemone/v1",
+            "sdk": {
+              "aisdk": "@ai-sdk/typesafe-ai",
+              "opencodeai": "@opencode/ai/providers/opencode/decisions"
+            }
+          }
+        },
+        "canonical_id": "typesafe/jev-1.14.0",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "structured_output": true,
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": false
+        },
+        "cost": {
+          "text": { "input": { "price": 0.042 }, "output": { "price": 0 } }
+        },
+        "description": "System One model for fast, typed probabilistic decisions over text or structured state",
+        "family": "jev",
+        "id": "jev-1.14",
+        "last_updated": "2026-10-14",
+        "limit": { "context": 64000 },
+        "modalities": {
+          "input": ["text", "image/png", "image/jpeg"],
+          "output": ["decision"]
+        },
+        "name": "Jev 1.14",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "systemone",
+        "release_date": "2026-10-14",
+        "type": "decision"
+      },
       "kimi-k2.7-code": {
         "api": {
           "chat-completions": {
@@ -4708,49 +4926,7 @@
         "release_date": "2026-10-23",
         "type": "chat"
       },
-      "longcat-2.0": {
-        "api": {
-          "chat-completions": {
-            "base_url": "https://opencode.ai/inference/go/openai/v1",
-            "capabilities": { "tools": { "updates": [] } },
-            "compatibility": { "reasoning_field": "reasoning_content" },
-            "sdk": {
-              "aisdk": "@ai-sdk/openai-compatible",
-              "opencodeai": "@opencode/ai/providers/openai-compatible"
-            }
-          }
-        },
-        "canonical_id": "meituan/longcat-2.0",
-        "capabilities": {
-          "effort_updates": false,
-          "reasoning": { "supported": true, "toggle": true },
-          "system_updates": false,
-          "temperature": true,
-          "tools": { "supported": true },
-          "top_k": true,
-          "top_p": true
-        },
-        "cost": {
-          "text": {
-            "input": { "cache": { "read": 0.006 }, "price": 0.3 },
-            "output": { "price": 1.2 }
-          }
-        },
-        "description": "Meituan LongCat-2.0, a reasoning model with tool calling and a 1M-token context window",
-        "family": "longcat",
-        "id": "longcat-2.0",
-        "last_updated": "2026-06-30",
-        "limit": { "context": 1000000, "output": 131072 },
-        "modalities": { "input": ["text"], "output": ["text"] },
-        "name": "LongCat-2.0",
-        "object": "model",
-        "open_weights": true,
-        "owned_by": "opencode",
-        "recommended_api": "chat-completions",
-        "release_date": "2026-06-30",
-        "type": "chat"
-      },
-      "longcat-2.5-free": {
+      "longcat-2.5": {
         "api": {
           "chat-completions": {
             "base_url": "https://opencode.ai/inference/go/openai/v1",
@@ -4774,17 +4950,17 @@
         },
         "cost": {
           "text": {
-            "input": { "cache": { "read": 0 }, "price": 0 },
-            "output": { "price": 0 }
+            "input": { "cache": { "read": 0.006, "write": 0 }, "price": 0.3 },
+            "output": { "price": 1.2 }
           }
         },
         "description": "Meituan's multimodal reasoning model for long-horizon coding and agent tasks, with visual understanding and a 1M-token context window",
-        "family": "longcat-free",
-        "id": "longcat-2.5-free",
+        "family": "longcat",
+        "id": "longcat-2.5",
         "last_updated": "2026-11-02",
         "limit": { "context": 1000000, "output": 262144 },
         "modalities": { "input": ["text", "image"], "output": ["text"] },
-        "name": "LongCat 2.5 Free",
+        "name": "LongCat-2.5",
         "object": "model",
         "open_weights": false,
         "owned_by": "opencode",
@@ -5162,6 +5338,43 @@
         "release_date": "2026-09-02",
         "type": "chat"
       },
+      "qwen3-embedding-8b": {
+        "api": {
+          "embeddings": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "sdk": {
+              "aisdk": "@ai-sdk/openai-compatible",
+              "opencodeai": "@opencode/ai/providers/openai-compatible/embeddings"
+            }
+          }
+        },
+        "canonical_id": "alibaba/qwen3-embedding-8b",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": false
+        },
+        "cost": {
+          "text": { "input": { "price": 0.01 }, "output": { "price": 0 } }
+        },
+        "description": "Multilingual text embedding model for retrieval, code search, classification, and clustering",
+        "family": "qwen-embedding",
+        "id": "qwen3-embedding-8b",
+        "last_updated": "2025-06-05",
+        "limit": { "context": 32768, "output": 0 },
+        "modalities": { "input": ["text"], "output": ["embedding"] },
+        "name": "Qwen3 Embedding 8B",
+        "object": "model",
+        "open_weights": true,
+        "owned_by": "opencode",
+        "recommended_api": "embeddings",
+        "release_date": "2025-06-05",
+        "type": "embedding"
+      },
       "qwen3.7-plus": {
         "api": {
           "messages": {
@@ -5504,6 +5717,43 @@
         "recommended_api": "chat-completions",
         "release_date": "2026-09-16",
         "type": "chat"
+      },
+      "text-embedding-3-small": {
+        "api": {
+          "embeddings": {
+            "base_url": "https://opencode.ai/inference/go/openai/v1",
+            "sdk": {
+              "aisdk": "@ai-sdk/openai",
+              "opencodeai": "@opencode/ai/providers/openai/embeddings"
+            }
+          }
+        },
+        "canonical_id": "openai/text-embedding-3-small",
+        "capabilities": {
+          "effort_updates": false,
+          "reasoning": { "supported": false },
+          "system_updates": false,
+          "temperature": false,
+          "tools": { "supported": false },
+          "top_k": false,
+          "top_p": false
+        },
+        "cost": {
+          "text": { "input": { "price": 0.02 }, "output": { "price": 0 } }
+        },
+        "description": "Small, efficient OpenAI text embedding model",
+        "family": "text-embedding",
+        "id": "text-embedding-3-small",
+        "last_updated": "2024-01-25",
+        "limit": { "context": 8192, "output": 0 },
+        "modalities": { "input": ["text"], "output": ["embedding"] },
+        "name": "text-embedding-3-small",
+        "object": "model",
+        "open_weights": false,
+        "owned_by": "opencode",
+        "recommended_api": "embeddings",
+        "release_date": "2024-01-25",
+        "type": "embedding"
       }
     },
     "monthlyLimits": {
@@ -5513,32 +5763,37 @@
         "deepseek-v4-pro": 15,
         "deepseek-v4.1-flash": 100,
         "gemini-4-argon": 30,
-        "glm-5.3": 500,
+        "gemini-decision-1": 15,
+        "gemini-embedding-2": 15,
+        "glm-5.3": 200,
         "glm-5.3-flash": 60,
         "gpt-5.6-luna": 15,
         "gpt-6-luna": 15,
+        "gpt-6-luna-decision": 15,
         "grok-4.7": 15,
         "hy3": 60,
         "hy4": 60,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 30,
         "iceman-contributor-free": "unlimited",
+        "jev-1.14": 15,
         "kimi-k2.7-code": 60,
         "kimi-k3": 15,
         "kimi-k3.1-pro": 15,
-        "longcat-2.0": 60,
-        "longcat-2.5-free": "unlimited",
+        "longcat-2.5": 60,
         "mimo-v2.6-flash": 60,
         "mimo-v2.6-pro": 15,
         "minimax-m3": 60,
         "minimax-m3.1-flash": 20,
         "muse-spark-1.2-contributor": 60,
         "muse-spark-1.3-contributor": 60,
+        "qwen3-embedding-8b": 15,
         "qwen3.7-plus": 60,
         "qwen3.8-flash": 30,
         "qwen3.8-max": 15,
         "qwen4-max": 15,
-        "step-5-preview": 15
+        "step-5-preview": 15,
+        "text-embedding-3-small": 15
       },
       "go-plus": {
         "beam-free": "unlimited",
@@ -5546,32 +5801,37 @@
         "deepseek-v4-pro": 60,
         "deepseek-v4.1-flash": 200,
         "gemini-4-argon": 120,
-        "glm-5.3": 1000,
+        "gemini-decision-1": 60,
+        "gemini-embedding-2": 60,
+        "glm-5.3": 400,
         "glm-5.3-flash": 180,
         "gpt-5.6-luna": 60,
         "gpt-6-luna": 60,
+        "gpt-6-luna-decision": 60,
         "grok-4.7": 60,
         "hy3": 240,
         "hy4": 240,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 120,
         "iceman-contributor-free": "unlimited",
+        "jev-1.14": 60,
         "kimi-k2.7-code": 180,
         "kimi-k3": 60,
         "kimi-k3.1-pro": 60,
-        "longcat-2.0": 240,
-        "longcat-2.5-free": "unlimited",
+        "longcat-2.5": 240,
         "mimo-v2.6-flash": 120,
         "mimo-v2.6-pro": 60,
         "minimax-m3": 180,
         "minimax-m3.1-flash": 80,
         "muse-spark-1.2-contributor": 120,
         "muse-spark-1.3-contributor": 120,
+        "qwen3-embedding-8b": 60,
         "qwen3.7-plus": 180,
         "qwen3.8-flash": 90,
         "qwen3.8-max": 60,
         "qwen4-max": 60,
-        "step-5-preview": 60
+        "step-5-preview": 60,
+        "text-embedding-3-small": 60
       },
       "go-teams": {
         "beam-free": "unlimited",
@@ -5579,32 +5839,37 @@
         "deepseek-v4-pro": 20,
         "deepseek-v4.1-flash": 105,
         "gemini-4-argon": 35,
-        "glm-5.3": 505,
+        "gemini-decision-1": 20,
+        "gemini-embedding-2": 20,
+        "glm-5.3": 205,
         "glm-5.3-flash": 65,
         "gpt-5.6-luna": 20,
         "gpt-6-luna": 20,
+        "gpt-6-luna-decision": 20,
         "grok-4.7": 20,
         "hy3": 65,
         "hy4": 65,
         "hy4-flash-free": "unlimited",
         "hy4-preview": 35,
         "iceman-contributor-free": "unlimited",
+        "jev-1.14": 20,
         "kimi-k2.7-code": 65,
         "kimi-k3": 20,
         "kimi-k3.1-pro": 20,
-        "longcat-2.0": 65,
-        "longcat-2.5-free": "unlimited",
+        "longcat-2.5": 65,
         "mimo-v2.6-flash": 65,
         "mimo-v2.6-pro": 20,
         "minimax-m3": 65,
         "minimax-m3.1-flash": 25,
         "muse-spark-1.2-contributor": 65,
         "muse-spark-1.3-contributor": 65,
+        "qwen3-embedding-8b": 20,
         "qwen3.7-plus": 65,
         "qwen3.8-flash": 35,
         "qwen3.8-max": 20,
         "qwen4-max": 20,
-        "step-5-preview": 20
+        "step-5-preview": 20,
+        "text-embedding-3-small": 20
       }
     }
   },

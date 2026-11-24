@@ -12,9 +12,9 @@
   # The independent inventory uses record values rather than list indices.
   ids = map (model: model.slug) models;
   # CPA's raw vendor facts independently establish overlapping identities and evidence.
-  go = (facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo").models;
+  go = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
   # Shared ids must retain both owners' facts without assuming a rotating inventory.
-  overlap = lib.filter (id: builtins.hasAttr id go) ids;
+  overlap = lib.filter (id: (go.models.${id}.type or null) == "chat") ids;
   # Real owner discovery exercises both wrapper imports and their transformed bodies.
   backends = {
     devenv = harness.evalDevenvModules;

@@ -128,7 +128,8 @@ Built-in `vendor = "zhipuai"` defaults
 repairing measured tool-name and empty-justification failures. Explicit
 `toolAliases = {};` and `codexShellArgCleanup = false;` disable those defaults;
 other vendors omit both settings unless requested. `vendor = "opencode-go"`
-places every extracted OpenCode Go model on its native API. Its blocks send
+places each extracted OpenCode Go chat model on its native API. Decision and
+embedding entries remain in the extracted inventory. Its blocks send
 `x-opencode-session = "$CPA-SESSION-ID"`, which Go requires and CPA expands to
 its session identifier; the header type is secret, so the literal reaches the
 config through a store command reference.
