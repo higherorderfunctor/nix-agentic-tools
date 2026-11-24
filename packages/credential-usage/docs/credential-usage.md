@@ -95,9 +95,9 @@ Import `Envelope` from `credential_usage.envelope`. Use `model_validate_json` to
 read one result and `model_dump_json` to write it with UTC timestamps. The
 [version 1 schema](../schema/usage-envelope.schema.json) lists the public
 fields. The model also checks that inventory and spend have observed slots, that
-window shares total 100, and that endpoints contain no credentials, query or
-fragment. Timestamps have microsecond precision. The Reader drops finer digits
-without rounding.
+window shares total 100, and that an endpoint URL carries no user information,
+query or fragment. Timestamps have microsecond precision. The Reader drops finer
+digits without rounding.
 
 ## Consumers
 

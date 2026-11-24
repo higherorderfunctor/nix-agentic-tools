@@ -37,7 +37,7 @@
       "omit": ["slotStates.resetInventory"]
     }
   },
-  "unobserved": {
+  "slot-states": {
     "free-text-reason": {
       "changes": { "slotStates.grants.reason": "unavailable-response" }
     },
@@ -258,7 +258,7 @@
   "instant": {
     "offset-fraction": {
       "changes": {
-        "observedAt": "2026-01-01T03:00:00.1234567+02:00"
+        "observedAt": "2026-01-01T03:00:00.1234507+02:00"
       }
     },
     "naive": {
