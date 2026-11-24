@@ -1,5 +1,6 @@
 """The shared usage-reading contract, imported by Reader programs and their consumers.
 
+`envelope` validates one account observation and defines its public JSON schema.
 `runner` runs registered Reader commands and returns their raw captures or safe
 failures. `transport` defines the request a Reader sends, the credential-bound
 transport it sends through, and the direct HTTP binding. delegate-routing imports

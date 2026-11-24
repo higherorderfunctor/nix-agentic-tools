@@ -1,0 +1,65 @@
+{
+  "example": {
+    "schemaVersion": 1,
+    "binding": {
+      "endpoint": "https://reader.example/",
+      "transport": "direct"
+    },
+    "observedAt": "2026-01-01T01:00:00Z",
+    "pool": "example",
+    "account": {
+      "auth_index": null,
+      "name": null,
+      "plan": null
+    },
+    "windows": {
+      "5h": {
+        "state": "observed",
+        "enforced": true,
+        "remainingPercent": 0,
+        "resetsAt": "2026-01-01T03:00:00Z",
+        "status": null,
+        "usedPercent": 100,
+        "windowSeconds": 18000
+      },
+      "7d": {
+        "state": "invalid",
+        "reason": "invalid-reset",
+        "remainingPercent": 0
+      },
+      "7d:model": {
+        "state": "missing",
+        "reason": "meter-unreported"
+      }
+    },
+    "balances": [],
+    "bonuses": [],
+    "accountedSpend": null,
+    "slotStates": {
+      "accountedSpend": {
+        "state": "unsupported"
+      },
+      "credits": {
+        "state": "observed"
+      },
+      "grants": {
+        "state": "unknown",
+        "reason": "grants-unavailable"
+      },
+      "resetInventory": {
+        "state": "unsupported"
+      }
+    }
+  },
+  "withoutZero": {
+    "state": "invalid",
+    "reason": "invalid-reset"
+  },
+  "recorded": "2001-01-01T00:00:00Z",
+  "offsetFraction": "2026-01-01T01:00:00.125Z",
+  "withZero": {
+    "state": "invalid",
+    "reason": "invalid-reset",
+    "remainingPercent": 0
+  }
+}

@@ -1,7 +1,7 @@
 # Credential usage
 
-> **Last verified:** 2026-11-24 — consumers install the Reader runner and
-> transport through `lib.ai.credential-usage.pythonModule`.
+> **Last verified:** 2026-11-24 — the version 1 envelope, Reader runner and
+> transport share one Python module.
 
 This package owns the shared parts of reading a credential's usage. A vendor
 owns what to ask its API and what the answer means. The credential owner
@@ -21,12 +21,86 @@ supplies the transport. The consumer turns Reader output into decisions.
 
 Keep vendor requests and decoders, Nix options and ranking out of this package.
 
+## The usage envelope
+
+A Reader emits one version 1 envelope for the account it observed. Supply the
+binding, capture time and at least one allowance window. Publish only the
+endpoint address. Leave credentials, query parameters and fragments out. Keep a
+proven zero on an invalid window when other fields fail. Mark an absent window
+as missing.
+
+Declare all four optional slots. An observed slot reports what the Reader
+verified, including an empty inventory. An unknown slot gives the reason the
+read failed. An unsupported slot means the Reader cannot supply it. Only an
+observed slot can carry entries or spend. The Claude Reader has no source of
+reset lots or accounted spend.
+
+```json
+{
+  "schemaVersion": 1,
+  "binding": {
+    "endpoint": "https://reader.example/",
+    "transport": "direct"
+  },
+  "observedAt": "2026-01-01T01:00:00Z",
+  "pool": "example",
+  "account": {
+    "auth_index": null,
+    "name": null,
+    "plan": null
+  },
+  "windows": {
+    "5h": {
+      "state": "observed",
+      "enforced": true,
+      "remainingPercent": 0,
+      "resetsAt": "2026-01-01T03:00:00Z",
+      "status": null,
+      "usedPercent": 100,
+      "windowSeconds": 18000
+    },
+    "7d": {
+      "state": "invalid",
+      "reason": "invalid-reset",
+      "remainingPercent": 0
+    },
+    "7d:model": {
+      "state": "missing",
+      "reason": "meter-unreported"
+    }
+  },
+  "balances": [],
+  "bonuses": [],
+  "accountedSpend": null,
+  "slotStates": {
+    "accountedSpend": {
+      "state": "unsupported"
+    },
+    "credits": {
+      "state": "observed"
+    },
+    "grants": {
+      "state": "unknown",
+      "reason": "grants-unavailable"
+    },
+    "resetInventory": {
+      "state": "unsupported"
+    }
+  }
+}
+```
+
+Import `Envelope` from `credential_usage.envelope`. Use `model_validate_json` to
+read one result and `model_dump_json` to write it with UTC timestamps. The
+[version 1 schema](../schema/usage-envelope.schema.json) lists the public
+fields.
+
 ## Consumers
 
 Call `lib.ai.credential-usage.pythonModule` with `{ pkgs, python-stack }` and
 include its result in that interpreter's `withPackages`. The delegate-routing
 helper and CLIProxyAPI transport checks import `credential_usage` this way.
-Delegate-routing documents the Reader output contract in
+Delegate-routing describes how it uses the windows in
 [pacing.md](../../delegate-routing/docs/pacing.md).
 
 CPA supplies the credential transport today, in
@@ -37,9 +111,11 @@ against every Reader.
 
 ## Checks
 
-`credential-usage-runner` and `credential-usage-types` (strict Pyright) are the
-flake checks. The Nix checks import the installed module. Local runs need
-`pydantic` and read the checkout:
+`credential-usage-contract` checks envelope decisions. `credential-usage-schema`
+checks the published schema and example. `credential-usage-runner` checks
+process behavior, and `credential-usage-types` runs strict Pyright. The Nix
+checks import the installed module. Local runs need `pydantic` and read the
+checkout:
 
 ```bash
 python3 checks/runner/test_runner.py
