@@ -117,6 +117,7 @@ in {
         {
           expected = [
             "--autoConnect=false"
+            "--backgroundNewPages=true"
             "--executablePath=/run/examples/chrome"
             "--isolated=false"
             "--performanceCrux=false"
