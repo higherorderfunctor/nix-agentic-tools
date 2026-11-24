@@ -5,10 +5,7 @@
 # built from them holds secret placeholders, so it is safe in the
 # world-readable store. `lib/ai/mcpProxy.nix` is the first caller, and
 # `checks/mcp-proxy/example.Caddyfile` pins its rendering byte for byte.
-{
-  lib,
-  pkgs,
-}: {
+{lib}: {
   # Caddyfile env-substitution token: `{$VAR}`, resolved by Caddy while
   # PARSING the config. This keeps the value out of the Caddyfile, but the
   # adapted JSON holds the literal value; `persist_config off` in
@@ -83,20 +80,14 @@
     "}"
   ];
 
-  # Shell lines that end a run script: point Caddy's config and data
-  # directories at a 0700 per-daemon runtime directory, so instance state
-  # never lands in the user's persistent XDG directories and two daemons
-  # never share a Caddy state path, then exec `caddy` on the Caddyfile
-  # `config`. `name` must be unique per daemon; `caddy` is the build to
-  # run.
+  # The ai.services launcher creates and guards runtimeDir before starting
+  # this script. Both Caddy state directories stay inside that same leaf.
   runCaddy = {
     caddy,
     config,
-    name,
+    runtimeDir,
   }: ''
-    _state="''${XDG_RUNTIME_DIR:-''${TMPDIR:-/tmp}}/${name}"
-    ${pkgs.coreutils}/bin/mkdir -p "$_state"
-    ${pkgs.coreutils}/bin/chmod 0700 "$_state"
+    _state=${runtimeDir}
     export XDG_CONFIG_HOME="$_state/config" XDG_DATA_HOME="$_state/data"
 
     exec ${lib.getExe caddy} run --config ${config} --adapter caddyfile

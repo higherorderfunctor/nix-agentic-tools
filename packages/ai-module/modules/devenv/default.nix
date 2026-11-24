@@ -92,6 +92,14 @@
     };
 in {
   imports = [../common.nix];
+  # The per-project runtime root prevents HM and devenv services with the same
+  # name from sharing files or Caddy state. The launcher checks ownership and
+  # write permissions even when the consumer's devenv does not guard its root.
+  options.ai.services = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      config.runtimeRoot = config.devenv.runtime;
+    });
+  };
   config = lib.mkMerge [
     {
       files = files.native;
