@@ -241,6 +241,15 @@ CPA 8.1.2 ships two upstream defects, each worked around by its own patch:
   per call. `checks/antigravity-tool-call-continuations.patch` moves those tests
   to the new contract in the tool-shims check's copy of the source only. Drop it
   once an upstream release updates that test file.
+- **The top-up credits recovery test races its background refresh.** Upstream
+  16bf182f2088 keys the credits refresh state by auth ID plus registration
+  scope, but
+  `TestAntigravityManagerExecuteAndStream_ToppedUpCreditsRecoverDuringQuotaCooldown`
+  still looks it up by bare auth ID, so it skips its wait and can read the hint
+  early. `checks/antigravity-credits-refresh-state-key.patch` looks it up by the
+  scoped key in the tool-shims check only. A narrower race, where a clear of a
+  stale hint overwrites a fresh refresh, stays in upstream code (upstream PR
+  #7139, open). Drop the patch once an upstream release updates that test file.
 
 Fetch the version from `sources.json` into scratch and verify its unpacked NAR
 hash. Check each patch with `patch --dry-run -p1 --fuzz=0`, then apply it before

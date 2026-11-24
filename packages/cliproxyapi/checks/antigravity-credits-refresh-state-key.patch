@@ -1,0 +1,58 @@
+Look up the credits refresh state by the key upstream stores it under.
+
+Upstream 16bf182f2088 (isolate credits state by credential) keys the
+credits refresh state by the auth ID plus its registration scope. Every
+auth Manager.Register returns carries an epoch, so the scope is never
+empty. That commit updated the lookups in one test but not the three in
+TestAntigravityManagerExecuteAndStream_ToppedUpCreditsRecoverDuringQuotaCooldown,
+which still use the bare auth ID. Those lookups never match, so the test
+skips its wait for the background refresh and can read the credits hint
+before the refresh publishes it. That makes it fail at random.
+
+This check-only patch builds the same key the executor uses and waits on
+it, as the test intended. Drop it once an upstream release updates this
+test file.
+
+--- a/internal/runtime/executor/antigravity_executor_credits_test.go
++++ b/internal/runtime/executor/antigravity_executor_credits_test.go
+@@ -889,6 +889,13 @@
+ 				t.Fatalf("register auth: %v", errRegister)
+ 			}
+ 
++			// queueAntigravityCreditsRefresh keys its state by registration scope for
++			// every auth Manager.Register stamps with an epoch.
++			refreshStateKey := authID
++			if scope := cliproxyauth.AntigravityCreditsScope(registered); scope != "" {
++				refreshStateKey += "|" + scope
++			}
++
+ 			req := cliproxyexecutor.Request{
+ 				Model:   model,
+ 				Payload: []byte(`{"request":{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}}`),
+@@ -915,7 +922,7 @@
+ 					t.Fatal("initial Execute() succeeded, want 429 after quota and credits exhaustion")
+ 				}
+ 			}
+-			if value, ok := antigravityCreditsHintRefreshByID.Load(authID); ok {
++			if value, ok := antigravityCreditsHintRefreshByID.Load(refreshStateKey); ok {
+ 				if state, ok := value.(*antigravityCreditsHintRefreshState); ok && state != nil {
+ 					waitForAntigravityCreditsRefresh(t, state)
+ 				}
+@@ -931,7 +938,7 @@
+ 			// Step 2: Top up credits and expire the cached hint/throttle window while model remains in 1h quota cooldown.
+ 			toppedUp.Store(true)
+ 			callsBeforeTopUp := loadCodeAssistCalls.Load()
+-			if value, ok := antigravityCreditsHintRefreshByID.Load(authID); ok {
++			if value, ok := antigravityCreditsHintRefreshByID.Load(refreshStateKey); ok {
+ 				if state, ok := value.(*antigravityCreditsHintRefreshState); ok && state != nil {
+ 					state.mu.Lock()
+ 					state.lastAttempt = time.Now().Add(-antigravityCreditsHintRefreshInterval - time.Second)
+@@ -972,7 +979,7 @@
+ 				}
+ 			}
+ 
+-			if value, ok := antigravityCreditsHintRefreshByID.Load(authID); ok {
++			if value, ok := antigravityCreditsHintRefreshByID.Load(refreshStateKey); ok {
+ 				if state, ok := value.(*antigravityCreditsHintRefreshState); ok && state != nil {
+ 					waitForAntigravityCreditsRefresh(t, state)
+ 				}
