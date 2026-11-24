@@ -8035,5 +8035,809 @@
         }
       }
     }
+  },
+  "numeric-inventory-expiries": {
+    "direct": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/profile",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://api.anthropic.com/",
+          "transport": "direct"
+        },
+        "account": {
+          "auth_index": null,
+          "name": null,
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:03Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [
+          {
+            "kind": "credit",
+            "amount": 23.45,
+            "expiresAt": "1970-01-01T00:00:00Z",
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
+          {
+            "kind": "credit",
+            "amount": 76,
+            "expiresAt": null,
+            "funding": "purchased",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          }
+        ],
+        "bonuses": [
+          {
+            "kind": "grant",
+            "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "1970-01-02T00:00:00Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "fractional",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "1969-12-31T23:59:59Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          }
+        ],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "observed"
+          },
+          "grants": {
+            "state": "observed"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    },
+    "cpa": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://proxy.example/v0/management/auth-files",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": null
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/profile",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://proxy.example/",
+          "transport": "cpa"
+        },
+        "account": {
+          "auth_index": "reader-one",
+          "name": "sample@example.test",
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:04Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [
+          {
+            "kind": "credit",
+            "amount": 23.45,
+            "expiresAt": "1970-01-01T00:00:00Z",
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
+          {
+            "kind": "credit",
+            "amount": 76,
+            "expiresAt": null,
+            "funding": "purchased",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          }
+        ],
+        "bonuses": [
+          {
+            "kind": "grant",
+            "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "1970-01-02T00:00:00Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "fractional",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "1969-12-31T23:59:59Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          }
+        ],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "observed"
+          },
+          "grants": {
+            "state": "observed"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    }
+  },
+  "grant-unavailable-boolean-expiry": {
+    "direct": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/profile",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://api.anthropic.com/",
+          "transport": "direct"
+        },
+        "account": {
+          "auth_index": null,
+          "name": null,
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:03Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [
+          {
+            "kind": "credit",
+            "amount": 23.45,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
+          {
+            "kind": "credit",
+            "amount": 76,
+            "expiresAt": null,
+            "funding": "purchased",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          }
+        ],
+        "bonuses": [],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "observed"
+          },
+          "grants": {
+            "state": "unknown",
+            "reason": "grants-unavailable"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    },
+    "cpa": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://proxy.example/v0/management/auth-files",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": null
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/profile",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://proxy.example/",
+          "transport": "cpa"
+        },
+        "account": {
+          "auth_index": "reader-one",
+          "name": "sample@example.test",
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:04Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [
+          {
+            "kind": "credit",
+            "amount": 23.45,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
+          {
+            "kind": "credit",
+            "amount": 76,
+            "expiresAt": null,
+            "funding": "purchased",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          }
+        ],
+        "bonuses": [],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "observed"
+          },
+          "grants": {
+            "state": "unknown",
+            "reason": "grants-unavailable"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    }
+  },
+  "wallet-unavailable-missing-promo-tranches": {
+    "direct": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/profile",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        },
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.credentials.json]"
+          },
+          "body": null
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://api.anthropic.com/",
+          "transport": "direct"
+        },
+        "account": {
+          "auth_index": null,
+          "name": null,
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:03Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [],
+        "bonuses": [
+          {
+            "kind": "grant",
+            "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          }
+        ],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "unknown",
+            "reason": "prepaid-unavailable"
+          },
+          "grants": {
+            "state": "observed"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    },
+    "cpa": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://proxy.example/v0/management/auth-files",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": null
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/profile",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://proxy.example/",
+          "transport": "cpa"
+        },
+        "account": {
+          "auth_index": "reader-one",
+          "name": "sample@example.test",
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:04Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 0,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": null,
+            "usedPercent": 100,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 100,
+            "resetsAt": null,
+            "status": null,
+            "usedPercent": 0,
+            "windowSeconds": 604800
+          }
+        },
+        "accountedSpend": null,
+        "balances": [],
+        "bonuses": [
+          {
+            "kind": "grant",
+            "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          }
+        ],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "unknown",
+            "reason": "prepaid-unavailable"
+          },
+          "grants": {
+            "state": "observed"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    }
   }
 }

@@ -1,7 +1,8 @@
 """Read usage, profile and prepaid replies on the CLI's bound transport for one usage envelope."""
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
+from math import floor
 from string import ascii_lowercase, ascii_uppercase
 from typing import Annotated, Literal
 
@@ -84,6 +85,19 @@ def integral_float_as_int(value: JsonValue) -> JsonValue:
     return int(value) if isinstance(value, float) and value.is_integer() else value
 
 
+def expiry_from_epoch_seconds(value: JsonValue) -> JsonValue | datetime:
+    """Claude also reports lot and grant expiries as epoch seconds, floored to whole seconds."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    try:
+        return datetime.fromtimestamp(floor(value), UTC)
+    except (OverflowError, OSError, ValueError):
+        raise ValueError("expiry outside the UTC calendar") from None
+
+
+VendorExpiry = Annotated[Instant, BeforeValidator(expiry_from_epoch_seconds)]
+
+
 class VendorGrant(VendorResponse):
     """Read one grant's terms from the primary response for the public inventory."""
 
@@ -91,7 +105,7 @@ class VendorGrant(VendorResponse):
     clears: list[str]
     resets_left: Annotated[Quantity, BeforeValidator(integral_float_as_int)]
     effect: str | None = None
-    ends_at: Instant | None = None
+    ends_at: VendorExpiry | None = None
     gives_back_weekly: bool | None = None
     paused: bool | None = None
     scope: Scope = None
@@ -170,7 +184,7 @@ class Tranche(VendorResponse):
     """Read the amount and expiry from one USD lot before converting cents to dollars."""
 
     currency: Literal["USD"]
-    expires_at: Instant | None = None
+    expires_at: VendorExpiry | None = None
     remaining_amount_minor_units: Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
     def credit_lot(self, funding: Literal["promotional", "purchased"]) -> CreditLot:
