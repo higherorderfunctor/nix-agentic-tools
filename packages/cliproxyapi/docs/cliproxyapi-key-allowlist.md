@@ -228,7 +228,7 @@ The package applies `patches/key-allowlist.patch`,
 CPA 8.1.2 with zero fuzz. Extraction and the Go checks read that same patched
 source.
 
-CPA 8.1.2 ships two upstream defects, each worked around by its own patch:
+CPA 8.1.2 ships three upstream defects, each worked around by its own patch:
 
 - **Vertex Imagen streams panic.** Upstream e049c336b6c2 added an Imagen stream
   path that never creates a scanner, then calls `scanner.Err()` on it in

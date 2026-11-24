@@ -15,21 +15,18 @@ test file.
 
 --- a/internal/runtime/executor/antigravity_executor_credits_test.go
 +++ b/internal/runtime/executor/antigravity_executor_credits_test.go
-@@ -889,6 +889,13 @@
+@@ -889,6 +889,10 @@
  				t.Fatalf("register auth: %v", errRegister)
  			}
  
-+			// queueAntigravityCreditsRefresh keys its state by registration scope for
-+			// every auth Manager.Register stamps with an epoch.
-+			refreshStateKey := authID
-+			if scope := cliproxyauth.AntigravityCreditsScope(registered); scope != "" {
-+				refreshStateKey += "|" + scope
-+			}
++			// queueAntigravityCreditsRefresh keys its state by auth ID plus the
++			// registration scope Manager.Register stamps on every auth.
++			refreshStateKey := authID + "|" + cliproxyauth.AntigravityCreditsScope(registered)
 +
  			req := cliproxyexecutor.Request{
  				Model:   model,
  				Payload: []byte(`{"request":{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}}`),
-@@ -915,7 +922,7 @@
+@@ -915,7 +919,7 @@
  					t.Fatal("initial Execute() succeeded, want 429 after quota and credits exhaustion")
  				}
  			}
@@ -38,7 +35,7 @@ test file.
  				if state, ok := value.(*antigravityCreditsHintRefreshState); ok && state != nil {
  					waitForAntigravityCreditsRefresh(t, state)
  				}
-@@ -931,7 +938,7 @@
+@@ -931,7 +935,7 @@
  			// Step 2: Top up credits and expire the cached hint/throttle window while model remains in 1h quota cooldown.
  			toppedUp.Store(true)
  			callsBeforeTopUp := loadCodeAssistCalls.Load()
@@ -47,7 +44,7 @@ test file.
  				if state, ok := value.(*antigravityCreditsHintRefreshState); ok && state != nil {
  					state.mu.Lock()
  					state.lastAttempt = time.Now().Add(-antigravityCreditsHintRefreshInterval - time.Second)
-@@ -972,7 +979,7 @@
+@@ -972,7 +976,7 @@
  				}
  			}
  
