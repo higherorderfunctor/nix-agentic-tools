@@ -117,7 +117,7 @@
     "reason": "invalid-reset"
   },
   "recorded": "2001-01-01T00:00:00Z",
-  "offsetFraction": "2026-01-01T01:00:00.123456Z",
+  "offsetFraction": "2026-01-01T01:00:00.12345Z",
   "withZero": {
     "state": "invalid",
     "reason": "invalid-reset",
