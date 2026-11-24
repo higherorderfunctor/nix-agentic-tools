@@ -1,5 +1,7 @@
 # Static model catalog
 
+<!-- cspell:ignore hungerg -->
+
 `ai.catalog` contains canonical model identities and vendor offers. It contains
 no credentials, secrets, pools, client routes, runtime selections, transport
 URLs or overlap policy. Billing and usage Readers are absent. Declaring an offer
@@ -16,13 +18,29 @@ Core imports only its types and generic module libraries. Owners import their
 own extracted facts and contribute ordinary module definitions. CPA contributes
 OpenCode Go and Z.ai through `packages/cliproxyapi/modules/catalog.nix`; its
 per-vendor files own maker identities and evidence. OpenCode Go's canonical
-namespaces are used as maker ids unchanged. The undisclosed iceman identity
-stays separate; no other maker is inferred. claude-code contributes its
-extracted Anthropic models and the `claude` vendor (every `anthropic` model)
-through `packages/claude-code/modules/catalog.nix`; chatgpt-codex contributes
-its extracted OpenAI model slugs and the `codex` vendor (every `openai` model)
-through `packages/chatgpt-codex/modules/catalog.nix`. Both are imported whether
-or not their runtime is enabled. Core supplies no vendor or model itself.
+namespaces are used as maker ids unchanged. A stealth model that has a
+delegate-routing preset gets a placeholder maker named after it: `iceman` for
+`iceman-contributor-free` and `hungerg` for `hungerg-free`. The placeholder lets
+`excludeMakers` remove the model, lets an exclusive client key compare it with
+OAuth, and lets delegate-routing launch it. Any other model without a canonical
+id gets a `null` maker, so no maker is guessed. Such a model has three limits:
+
+- `excludeMakers` never removes it.
+- An exclusive client key that pairs it with an OAuth credential fails
+  evaluation.
+- A delegate-routing selection that resolves to it through a CPA client fails
+  evaluation, because a concrete launch needs a maker.
+
+Declare `ai.catalog.models.<id>.maker` to lift all three. Add the model to
+`placeholderMakers` in `packages/cliproxyapi/lib/vendors/opencode-go.nix` when
+it gets a delegate-routing preset.
+
+claude-code contributes its extracted Anthropic models and the `claude` vendor
+(every `anthropic` model) through `packages/claude-code/modules/catalog.nix`;
+chatgpt-codex contributes its extracted OpenAI model slugs and the `codex`
+vendor (every `openai` model) through
+`packages/chatgpt-codex/modules/catalog.nix`. Both are imported whether or not
+their runtime is enabled. Core supplies no vendor or model itself.
 
 Owner contributions use `mkDefault` on each field. Equal-priority evidence lists
 concatenate; compare them as sets. Identical maker defaults agree, and

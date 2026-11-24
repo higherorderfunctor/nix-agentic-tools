@@ -1,3 +1,4 @@
+# cspell:ignore hungerg
 # The Home Manager and devenv harnesses render credential defaults from the merged catalog.
 # Both compare the rendered routes with the extracted vendor inventories.
 {
@@ -62,7 +63,7 @@
   };
   # Force placement and URL checks without evaluating a service derivation.
   builds = models: (builtins.tryEval (builtins.deepSeq (manual.opencodeGo models).apis true)).success;
-  # Both backend checks use these named cases to verify placement and rejection of malformed offers.
+  # Both backend checks use these named cases to verify maker resolution, placement and rejection of malformed offers.
   catalogShapes = {
     "conflicting base URLs accepted" = !(builds (shaped // {other = native "chat-completions" "https://elsewhere.example/v1";}));
     "Gemini pair placed outside native chat" =
@@ -77,6 +78,19 @@
     "interactions alone accepted" = !(builds (shaped // {gemini-4-argon.api = {inherit (gemini.api) interactions;};}));
     "messages URL without /v1 accepted" = !(builds (shaped // {anthropic = native "messages" "https://go.example/anthropic";}));
     "missing base_url accepted" = !(builds (shaped // {bare.api.responses = {};}));
+    # Fails if a model without canonical_id gets "" or its owned_by vendor as maker.
+    "missing canonical_id given a maker" =
+      lib.mapAttrs (_: identity: identity.maker) (goVendor.identitiesOf {
+        disclosed = {
+          canonical_id = "zhipuai/glm-fixture";
+          owned_by = "opencode";
+        };
+        stealth.owned_by = "opencode";
+      })
+      == {
+        disclosed = "zhipuai";
+        stealth = null;
+      };
     "non-chat models contribute identities or served spellings" = lib.all (id:
       !(goVendor.catalog.models ? ${id}) && !(goVendor.servedModels ? ${id}))
     (lib.subtractLists eligible (builtins.attrNames go));
@@ -116,13 +130,17 @@
   chosen = lib.head (lib.filter (id: !(go.${id}.api ? generate-content)) eligible);
   # Select by input data rather than pinning a removable release model id.
   chosenZhipuai = lib.head zhipuai.models;
-  # Independent maker expectations expose missing identity evidence and namespace drift.
-  expectedMaker = id: let
-    namespace = lib.head (lib.splitString "/" (go.${id}.canonical_id or ""));
-  in
-    if id == "iceman-contributor-free"
+  # Independent maker expectations expose namespace drift and invented makers.
+  # Stealth models with a routing preset expect their hand-written placeholder;
+  # any other model without canonical_id has an undisclosed maker, expected as null.
+  expectedMaker = id:
+    if id == "hungerg-free"
+    then "hungerg"
+    else if id == "iceman-contributor-free"
     then "iceman"
-    else namespace;
+    else if go.${id} ? canonical_id
+    then lib.head (lib.splitString "/" go.${id}.canonical_id)
+    else null;
   # Each backend exercises complete defaults, list overrides and vendor-scoped served spellings.
   checks = lib.mapAttrs (backendName: evaluate:
     harness.mkTest "cliproxyapi-catalog-${backendName}" (let
@@ -182,8 +200,8 @@
         }
       ];
       overridden = render overrideResult;
-      # Exclude two makers taken from the extracted Go facts, so no maker name or model id is pinned.
-      excluded = lib.take 2 (sorted (map expectedMaker eligible));
+      # Exclude two known makers taken from the extracted Go facts, so no maker name or model id is pinned.
+      excluded = lib.take 2 (sorted (lib.filter (maker: maker != null) (map expectedMaker eligible)));
       filteredGo = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = excluded;}]);
       expectedFilteredGo = lib.mapAttrs (_: sorted) (lib.groupBy expectedPlacement (lib.filter (id: !(lib.elem (expectedMaker id) excluded)) eligible));
       # Synthetic explicit offers exercise alias scope, canonical precedence and unknown maker preservation.
@@ -419,11 +437,11 @@
                 provider = "openai-compatible-filtered";
               }
             ];
-          "lost owner mapping or missing/wrong maker" =
+          "lost owner mapping or wrong or invented maker" =
             lib.all (id: let
               identity = catalog.models.${id};
             in
-              expectedMaker id != "" && identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id))
+              identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id))
             eligible
             && lib.all (id: catalog.models.${id}.maker == "zhipuai") zhipuai.models;
           "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "zhipuai" == expectedZhipuai;
