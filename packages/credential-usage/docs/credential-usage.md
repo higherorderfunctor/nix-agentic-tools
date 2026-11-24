@@ -1,14 +1,11 @@
 # Credential usage
 
-> **Last verified:** 2026-11-24 — the Reader runner, the transport interface and
-> their two suites moved here from delegate-routing with their behavior
-> unchanged; the schema, conformance suite, client and vendor Readers below are
-> planned and do not exist yet.
+> **Last verified:** 2026-11-24 — the Reader runner and the transport interface
+> moved here from delegate-routing with their behavior unchanged.
 
-This package owns the shared parts of reading a credential's usage: the Reader
-runner, the transport interface and the Reader output contract. A vendor owns
-what to ask its API and what the answer means. The credential owner supplies the
-transport. delegate-routing consumes the observations and ranks routes.
+This package owns the shared parts of reading a credential's usage. A vendor
+owns what to ask its API and what the answer means. The credential owner
+supplies the transport. The consumer turns Reader output into decisions.
 
 ## What lives here
 
@@ -23,38 +20,18 @@ transport. delegate-routing consumes the observations and ranks routes.
   interpreter.
 
 Keep vendor requests and decoders, Nix options and ranking out of this package.
-Each vendor fill belongs with its vendor, contributed the way owners contribute
-`ai.catalog` entries.
 
 ## Consumers
 
-delegate-routing is the consumer today. Its packaged routing helper and the
-`usage` modules import `credential_usage` from their Python environment. A
-consumer adds the module to its own `withPackages` list:
+delegate-routing is the consumer today. Its packaged routing helper and `usage`
+modules import `credential_usage` from their Python environment. A consumer
+lists the result of `lib/python-module.nix` in its own `withPackages`. The
+Reader output contract is documented with that consumer in
+[pacing.md](../../delegate-routing/docs/pacing.md).
 
-```nix
-credentialUsageModule = import ../credential-usage/lib/python-module.nix {inherit pkgs python-stack;};
-python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule])
-```
-
-CPA supplies the credential transport today and Airlock supplies one once it
-replaces CPA. Airlock's UI will read the same Reader output. The CPA binding
-still lives at `packages/delegate-routing/scripts/usage/cpa.py` and is due to
-move to `packages/cliproxyapi`. Until then the transport suite imports it from
-delegate-routing, and `credential-usage-transport` passes that directory.
-
-## Planned, not built
-
-- A versioned JSON Schema for the Reader output, published from strict models.
-- `checks/conformance`, which runs the same named cases against every Reader.
-- A small Python client that turns selected bindings into typed observations.
-- The vendor Readers for Claude, Codex, z.ai and OpenCode Go.
-
-## Ownership
-
-The runner and contract sit in a neutral owner because two consumers already
-share them and CPA is scheduled for removal. Reconsider CPA ownership if CPA
-becomes the permanent credential manager and the only consumer.
+CPA supplies the credential transport today. Airlock will supply one, and its UI
+will read the same Reader output. A future `checks/conformance` will run the
+same named cases against every Reader.
 
 ## Checks
 
