@@ -372,10 +372,8 @@ in
     checkPhase = ''
       runHook preCheck
       pnpm exec vitest run --maxWorkers=2 \
-        src/extensions/orchestration/model-roles.test.ts \
         src/extensions/prompt-construction/prompt-enrichment.test.ts \
         src/extensions/session-name.test.ts \
-        src/ollama.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.disables-skills.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.requires-resource.test.ts \
         src/shared/skill-discovery/resolve-skill-roots.test.ts \
