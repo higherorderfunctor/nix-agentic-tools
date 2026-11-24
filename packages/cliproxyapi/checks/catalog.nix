@@ -62,7 +62,7 @@
   };
   # Force placement and URL checks without evaluating a service derivation.
   builds = models: (builtins.tryEval (builtins.deepSeq (manual.opencodeGo models).apis true)).success;
-  # Both backend checks use these named cases to verify placement and rejection of malformed offers.
+  # Both backend checks use these named cases to verify maker resolution, placement and rejection of malformed offers.
   catalogShapes = {
     "conflicting base URLs accepted" = !(builds (shaped // {other = native "chat-completions" "https://elsewhere.example/v1";}));
     "Gemini pair placed outside native chat" =
@@ -77,6 +77,19 @@
     "interactions alone accepted" = !(builds (shaped // {gemini-4-argon.api = {inherit (gemini.api) interactions;};}));
     "messages URL without /v1 accepted" = !(builds (shaped // {anthropic = native "messages" "https://go.example/anthropic";}));
     "missing base_url accepted" = !(builds (shaped // {bare.api.responses = {};}));
+    # Fails if a model without canonical_id gets "" or its owned_by vendor as maker.
+    "missing canonical_id given a maker" =
+      lib.mapAttrs (_: identity: identity.maker) (goVendor.identitiesOf {
+        disclosed = {
+          canonical_id = "zhipuai/glm-fixture";
+          owned_by = "opencode";
+        };
+        stealth.owned_by = "opencode";
+      })
+      == {
+        disclosed = "zhipuai";
+        stealth = null;
+      };
     "non-chat models contribute identities or served spellings" = lib.all (id:
       !(goVendor.catalog.models ? ${id}) && !(goVendor.servedModels ? ${id}))
     (lib.subtractLists eligible (builtins.attrNames go));

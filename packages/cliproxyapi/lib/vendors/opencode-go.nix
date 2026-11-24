@@ -4,30 +4,30 @@
   inherit (import ../providers.nix {inherit lib;}) baseUrlType;
   go = import ../opencode-go-models.nix {inherit lib;};
   extracted = go.models;
-  # canonical_id names the maker; owned_by names the serving vendor instead.
-  identities =
-    lib.mapAttrs (id: model: let
-      canonical = model.canonical_id or null;
-      namespace =
-        if canonical == null
-        then null
-        else lib.head (lib.splitString "/" canonical);
-    in {
-      maker =
-        if id == "iceman-contributor-free"
-        then "iceman"
-        else namespace;
-      source =
-        ["cliproxyapi:opencodeGo.models.${id}"]
-        # The upstream identity is undisclosed, not evidence for another maker.
-        ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
-    })
-    extracted;
+  # Map Go models to catalog identities. canonical_id names the maker;
+  # owned_by names the serving vendor instead, so a model without canonical_id
+  # gets a null maker. Called for the extracted models and by checks/catalog.nix.
+  identitiesOf = lib.mapAttrs (id: model: let
+    canonical = model.canonical_id or null;
+    namespace =
+      if canonical == null
+      then null
+      else lib.head (lib.splitString "/" canonical);
+  in {
+    maker =
+      if id == "iceman-contributor-free"
+      then "iceman"
+      else namespace;
+    source =
+      ["cliproxyapi:opencodeGo.models.${id}"]
+      # The upstream identity is undisclosed, not evidence for another maker.
+      ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
+  });
   # External spellings belong to this owner, never the shared identity catalog.
   servedModels = lib.mapAttrs (id: model: [id] ++ lib.optional (model ? canonical_id) model.canonical_id) extracted;
   # Full extracted offers supply defaults; consumers choose their own model subsets.
   catalog = {
-    models = identities;
+    models = identitiesOf extracted;
     vendors.opencode-go.models = builtins.attrNames extracted;
   };
   # Credentials and catalog checks use the measured models to build one CPA route per offer.
@@ -106,6 +106,6 @@ in {
     merged.vendors.opencode-go.models));
   # Static definitions are read by modules/catalog.nix and standalone construction.
   inherit catalog servedModels;
-  # checks/catalog.nix supplies synthetic catalogs to exercise placement refusals.
-  inherit opencodeGo;
+  # checks/catalog.nix supplies synthetic catalogs to exercise maker resolution and placement refusals.
+  inherit identitiesOf opencodeGo;
 }
