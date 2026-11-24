@@ -331,7 +331,7 @@
     },
     "InvalidWindow": {
       "additionalProperties": false,
-      "description": "Retain a proven zero when other facts about the window failed validation.",
+      "description": "Keep a measured zero when the reset is invalid.",
       "properties": {
         "state": {
           "const": "invalid",

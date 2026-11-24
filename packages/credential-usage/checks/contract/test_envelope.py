@@ -116,7 +116,7 @@ class TestEnvelope(unittest.TestCase):
         self.check_cases("duration")
 
     def test_invalid_windows_keep_only_a_proven_zero(self) -> None:
-        """18–21, 23–24. Publish only a proven zero from an invalid window."""
+        """18–24. Keep zero for an invalid reset and reject it for conflicts or invalid utilization."""
         self.check_cases(
             "invalid",
             {"unproven": self.expected.withoutZero, "zero": self.expected.withZero},

@@ -26,8 +26,8 @@ Keep vendor requests and decoders, Nix options and ranking out of this package.
 A Reader emits one version 1 envelope for the account it observed. Supply the
 binding, capture time and at least one allowance window. Publish only the
 endpoint address. Leave credentials, query parameters and fragments out. Keep a
-proven zero on an invalid window when other fields fail. Mark an absent window
-as missing.
+proven zero on an invalid window when the reset fails. Mark an absent window as
+missing.
 
 Declare all four optional slots. An observed slot reports what the Reader
 verified, including an empty inventory. An unknown slot gives the reason the
@@ -95,9 +95,10 @@ Import `Envelope` from `credential_usage.envelope`. Use `model_validate_json` to
 read one result and `model_dump_json` to write it with UTC timestamps. The
 [version 1 schema](../schema/usage-envelope.schema.json) lists the public
 fields. The model also checks that inventory and spend have observed slots, that
-window shares total 100, and that an endpoint URL carries no user information,
-query or fragment. Timestamps have microsecond precision. The Reader drops finer
-digits without rounding.
+window shares total 100, that only an invalid reset can retain a measured zero,
+and that an endpoint URL carries no user information, query or fragment.
+Timestamps have microsecond precision. The Reader drops finer digits without
+rounding.
 
 ## Consumers
 

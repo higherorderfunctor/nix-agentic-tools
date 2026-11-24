@@ -5,7 +5,7 @@ from datetime import datetime
 from string import ascii_lowercase, ascii_uppercase
 from typing import Annotated, Literal
 
-from pydantic import AliasPath, Field, HttpUrl, OnErrorOmit, ValidatorFunctionWrapHandler, WrapValidator
+from pydantic import AliasPath, BeforeValidator, Field, HttpUrl, JsonValue, ValidatorFunctionWrapHandler, WrapValidator
 
 from credential_usage.envelope import (
     Account, Binding, Envelope, Instant, InvalidWindow, MissingWindow, ObservedWindow,
@@ -33,7 +33,11 @@ Used = Annotated[Percent | None, invalid_as(None)]
 Reset = Annotated[Instant | None | Literal["invalid"], invalid_as("invalid")]
 
 
-class Meter(FrozenModel):
+class VendorResponse(FrozenModel, extra="ignore"):
+    """Read known fields strictly as the usage API adds new fields."""
+
+
+class Meter(VendorResponse):
     """Read each vendor meter independently and preserve only proven remaining capacity."""
 
     utilization: Used = None
@@ -60,23 +64,28 @@ ReportedMeter = Annotated[Meter | None, invalid_as(Meter())]
 class Limit(Meter):
     """Read the weekly status and the separately metered model from Claude's limits array."""
 
-    kind: str
+    kind: Annotated[str | None, invalid_as(None)] = None
     utilization: Used = Field(default=None, alias="percent")
-    display_name: Annotated[str, Field(pattern=r"^[^:\s][^:]*$")] | None = Field(
+    display_name: Annotated[str | None, Field(pattern=r"^[^:\s][^:]*$"), invalid_as(None)] = Field(
         default=None, validation_alias=AliasPath("scope", "model", "display_name")
     )
-    is_active: bool | None = None
-    severity: str | None = None
+    is_active: Annotated[bool | None, invalid_as(None)] = None
+    severity: Annotated[str | None, invalid_as(None)] = None
 
 
-class Usage(FrozenModel):
+def limit_fields(value: JsonValue) -> JsonValue:
+    """A non-object supplies no kind, name or weekly status."""
+    return value if isinstance(value, dict) else {}
+
+
+class Usage(VendorResponse):
     """Parse the primary reply once, keeping null optional meters distinct from malformed ones."""
 
     five_hour: ReportedMeter = None
     seven_day: ReportedMeter = None
     seven_day_opus: ReportedMeter = None
     seven_day_sonnet: ReportedMeter = None
-    limits: tuple[OnErrorOmit[Limit], ...] = ()
+    limits: tuple[Annotated[Limit, BeforeValidator(limit_fields)], ...] = ()
 
     def windows(self) -> dict[str, Window]:
         """Publish expected rows even when absent and include each reported optional scope."""
@@ -92,13 +101,15 @@ class Usage(FrozenModel):
             if meter is not None:
                 rows[f"7d:{name}"] = meter.window(604800, None)
         for limit in self.limits:
-            if limit.kind == "weekly_scoped" and limit.display_name:
-                status = None if limit.is_active is None else "active" if limit.is_active else "inactive"
-                window_id = f"7d:{limit.display_name.translate(ASCII_LOWER)}"
-                if window_id in rows:
-                    rows[window_id] = InvalidWindow(state="invalid", reason="conflicting-meter")
-                else:
-                    rows[window_id] = limit.window(604800, status)
+            # Only named weekly scopes identify a separate window.
+            if limit.kind != "weekly_scoped" or not limit.display_name:
+                continue
+            status = None if limit.is_active is None else "active" if limit.is_active else "inactive"
+            window_id = f"7d:{limit.display_name.translate(ASCII_LOWER)}"
+            if window_id in rows:
+                rows[window_id] = InvalidWindow(state="invalid", reason="conflicting-meter")
+            else:
+                rows[window_id] = limit.window(604800, status)
         return rows
 
 
