@@ -7,6 +7,7 @@
     ./checks/cliproxyapi-passthrough.nix
     ./checks/cliproxyapi-settings.nix
     ./checks/cliproxyapi-tool-shims.nix
+    ./checks/cliproxyapi-usage.nix
     ./checks/exclusive.nix
     ./checks/passthrough-module.nix
   ];

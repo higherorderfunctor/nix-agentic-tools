@@ -8,6 +8,7 @@
   ...
 }: let
   inherit (pkgs) lib;
+  inherit (import ../../lib/usage-python.nix {inherit pkgs;}) usagePython;
   generated = generatedLib pkgs;
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
   treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../../lib/treefmt-module.nix).config;
@@ -156,7 +157,7 @@
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
       text = ''
-        exec ${pkgs.ai.generic.python-stack.withPackages (ps: [ps.pydantic ps.urllib3])}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+        exec ${usagePython}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';
     };
     helperCommand = lib.getExe helper;

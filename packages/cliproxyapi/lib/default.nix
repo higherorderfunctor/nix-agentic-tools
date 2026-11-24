@@ -66,6 +66,8 @@
     tool = "CLIProxyAPI";
   };
 in {
+  # Transport checks and routing helpers build the module for their python-stack.
+  ai.cliproxyapi.pythonModule = import ./python-module.nix;
   cliproxyapi = {
     # Named upstream API-key providers (./providers.nix).
     inherit providers refinements;

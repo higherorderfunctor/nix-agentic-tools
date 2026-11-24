@@ -8,9 +8,9 @@ import sys
 
 sys.path.insert(0, sys.argv[1])
 from usage.config import CaptureFailure, CredentialReader, UsageManifest
-from usage.cpa import UnknownBinding
-from usage.runner import MissingReader, ReaderSuccess
-from usage.transport import RequestFailure
+from cliproxyapi.usage.transport import UnknownBinding
+from credential_usage.runner import MissingReader, ReaderSuccess
+from credential_usage.transport import RequestFailure
 
 
 def packaged_manifest(skill: Path) -> str:

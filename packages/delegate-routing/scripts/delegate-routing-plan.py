@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from usage.runner import (
+from credential_usage.runner import (
     MissingReader,
     ReaderFailure,
     ReaderPolicy,
