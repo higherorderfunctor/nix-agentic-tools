@@ -8,6 +8,8 @@
   pacingPython = python-stack.withPackages (ps: [ps.hypothesis ps.pydantic]);
   # The shared Reader runner and transport are a module in that interpreter's package set.
   credentialUsageModule = import ../credential-usage/lib/python-module.nix {inherit pkgs python-stack;};
+  # CPA's credential transport is a module in that package set.
+  cpaUsageModule = import ../cliproxyapi/lib/python-module.nix {inherit pkgs python-stack;};
   cases = import ./eval/cases.nix {inherit harness lib pkgs;};
   fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
@@ -27,7 +29,7 @@ in {
       skills = import ./checks/catalog-routes.nix {inherit harness lib;};
     in
       pkgs.runCommand "delegate-routing-cpa-routes" {
-        nativeBuildInputs = [(python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule]))];
+        nativeBuildInputs = [(python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule cpaUsageModule]))];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -154,7 +156,7 @@ in {
       '';
     delegate-routing-usage-types =
       pkgs.runCommand "delegate-routing-usage-types" {
-        nativeBuildInputs = [pkgs.pyright (python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule]))];
+        nativeBuildInputs = [pkgs.pyright (python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule cpaUsageModule]))];
         inherit delegate-routing-allowance-ranking delegate-routing-observation-normalize;
       } ''
         set -euETo pipefail

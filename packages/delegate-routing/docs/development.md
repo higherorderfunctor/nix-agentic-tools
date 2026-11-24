@@ -774,12 +774,12 @@ the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
 Run these suites with `pydantic` v2, `urllib3` and `hypothesis` installed. CI
-runs the first two as `credential-usage-runner` and `credential-usage-transport`
-and the last as `delegate-routing-plan-runtime`.
+runs the first two as `credential-usage-runner` and
+`cliproxyapi-usage-transport` and the last as `delegate-routing-plan-runtime`.
 
 ```bash
 python3 ../credential-usage/checks/runner/test_runner.py
-python3 ../credential-usage/checks/transport/test_transport.py
+python3 ../cliproxyapi/checks/transport/test_transport.py
 python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
 ```
 

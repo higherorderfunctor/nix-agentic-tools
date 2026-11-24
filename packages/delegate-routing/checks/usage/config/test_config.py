@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, sys.argv[1])
 from usage.config import CaptureFailure, CredentialReader, UsageManifest
-from usage.cpa import UnknownBinding
+from cliproxyapi.usage.transport import UnknownBinding
 from credential_usage.runner import MissingReader, ReaderSuccess
 from credential_usage.transport import RequestFailure
 

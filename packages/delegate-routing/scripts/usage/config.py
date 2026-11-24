@@ -8,11 +8,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
+from cliproxyapi.usage.transport import UnknownBinding
 from credential_usage.runner import MissingReader, ReaderCapture, ReaderFailure, ReaderSuccess
 from credential_usage.transport import FrozenModel, HttpPolicy, RequestFailure
 from usage_normalize import CaptureEvidence, parse_reader_stdout
 
-from .cpa import UnknownBinding
 from .scope import Nonempty, Registration, Route
 
 

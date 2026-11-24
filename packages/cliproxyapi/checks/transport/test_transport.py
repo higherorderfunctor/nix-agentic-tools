@@ -12,15 +12,15 @@ from urllib3.response import HTTPResponse
 
 HERE = Path(__file__).resolve().parent
 CASES = HERE / "cases" / "binding"
-package = HERE.parents[1] / "python"
-# The CPA binding lives in delegate-routing. The Nix check passes that directory.
-scripts = sys.argv.pop(1) if len(sys.argv) > 1 else HERE.parents[1].parent / "delegate-routing" / "scripts"
-sys.path[:0] = [str(HERE), str(scripts)]
-if package.is_dir():
-    sys.path.insert(0, str(package))
+sys.path.insert(0, str(HERE))
+packages = HERE.parents[1].parent
+# A checkout run imports both owners' sources; the Nix check imports the installed modules.
+# `cliproxyapi` is a namespace package, so its root is the repository's packages directory.
+if (packages / "credential-usage" / "python").is_dir():
+    sys.path[:0] = [str(packages / "credential-usage" / "python"), str(packages)]
 
 from mock import RecordingTransport
-from usage.cpa import CpaInstance, UnknownBinding
+from cliproxyapi.usage.transport import CpaInstance, UnknownBinding
 from credential_usage.transport import DirectHttp, HttpPolicy, HttpRequest, RequestFailure
 
 
