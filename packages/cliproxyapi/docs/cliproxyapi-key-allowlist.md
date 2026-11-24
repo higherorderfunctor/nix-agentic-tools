@@ -42,7 +42,7 @@ and `oauth.account` (a redact reference), lowering to an `accounts` rule through
 the existing secret renderer. An account rule matches only OAuth with a nonempty
 native `AccountInfo()` email, compared case-sensitively after trimming both
 values. `AccountInfo()` reads `Metadata.email`, with a service-account
-`client_email` fallback (`sdk/cliproxy/auth/types.go:788`). An account with no
+`client_email` fallback (`sdk/cliproxy/auth/types.go:961`). An account with no
 matching login selects nothing; several matching logins remain eligible.
 `accounts` combined with `kind = "apikey"` matches nothing. A config API key's
 ID hashes its secret, so use provider and `base-urls` to address a group through
@@ -223,9 +223,24 @@ Manager and devenv.
 ## Bumping CPA
 
 The package applies `patches/key-allowlist.patch`,
-`patches/zhipuai-tool-shims.patch`, and `patches/passthrough-provider.patch` in
-that order. All three apply to CPA 8.1.2 with zero fuzz. Extraction and the Go
-checks read that same patched source.
+`patches/zhipuai-tool-shims.patch`, `patches/passthrough-provider.patch`, and
+`patches/vertex-imagen-stream-scanner.patch` in that order. All four apply to
+CPA 8.1.2 with zero fuzz. Extraction and the Go checks read that same patched
+source.
+
+CPA 8.1.2 ships two upstream defects, each worked around by its own patch:
+
+- **Vertex Imagen streams panic.** Upstream e049c336b6c2 added an Imagen stream
+  path that never creates a scanner, then calls `scanner.Err()` on it in
+  `gemini_vertex_executor.go`. `patches/vertex-imagen-stream-scanner.patch` adds
+  the `isImagenModel(baseModel)` guard the neighbouring checks use. Drop it once
+  an upstream release guards both calls.
+- **The Issue 6825 executor tests are stale.** Upstream 4df055de9504 now streams
+  a tool call's arguments as an open fragment, closed by `}` on the terminal
+  chunk, but left `antigravity_issue6825_test.go` expecting one complete delta
+  per call. `checks/antigravity-tool-call-continuations.patch` moves those tests
+  to the new contract in the tool-shims check's copy of the source only. Drop it
+  once an upstream release updates that test file.
 
 Fetch the version from `sources.json` into scratch and verify its unpacked NAR
 hash. Check each patch with `patch --dry-run -p1 --fuzz=0`, then apply it before

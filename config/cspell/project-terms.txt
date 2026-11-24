@@ -275,6 +275,7 @@ hotspots
 httpcaddyfile
 huggingface
 idempotently
+imagen
 indexedlog
 inferera
 inlines
