@@ -4,8 +4,10 @@
 # If git-url is provided, bumps rev to latest default branch commit first.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# shellcheck source-path=SCRIPTDIR
-source "$(dirname "$0")/update-common.sh"
+# The workflow ref pins the updater. The source worktree supplies its target flake.
+automation_root=$(cd -- "$(dirname -- "$0")/../.." && pwd -P)
+# shellcheck source-path=SCRIPTDIR source=update-common.sh
+source "$automation_root/dev/scripts/update-common.sh"
 
 name="$1"
 shift
@@ -393,7 +395,7 @@ set +e
 	# a bare pipeline would abort before any status check ran, losing this
 	# message.
 	# shellcheck disable=SC2086
-	if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$(nat_system)" $extra_flags 2>&1 | tee "$version_file"; then
+	if ! nix run "$automation_root#ciNixUpdate.$(nat_system)" -- --flake "$(nat_attr "$name")" --system "$(nat_system)" $extra_flags 2>&1 | tee "$version_file"; then
 		# PIPESTATUS survives into this block — measured, including the real
 		# exit code and which side failed:
 		#   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi

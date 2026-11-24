@@ -1,0 +1,11 @@
+--- a/nix_update/patches.py
++++ b/nix_update/patches.py
+@@ -27,6 +27,8 @@ def _merged_patch_indices(opts: Options) -> set[int]:
+       flags = if builtins.isList flagsValue then flagsValue else [ flagsValue ];
+     in pkg.overrideAttrs (old: {{
+       name = "${{pkg.name}}-merged-patches";
++      outputs = [ "out" ];
++      separateDebugInfo = false;
+       patches = [ ];
+       patchInputs = patches;
+       phases = [ "unpackPhase" "installPhase" ];
