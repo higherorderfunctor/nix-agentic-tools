@@ -72,14 +72,10 @@
   # (1500), which a non-null value at the same priority would conflict with.
   autoModelPriority = 1200;
 
-  # Home Manager owns the model choice and defaults it to Kimchi's Auto
-  # router. Since Kimchi 1.5.1 it also moves an Auto-entitled account to Auto
-  # on its own: it rolls back a non-Auto session model, whatever its source, on
-  # every fresh main launch with no CLI model choice and persists Auto, and it
-  # deletes the retired `autoDefaultApplied` key
-  # (src/extensions/auto-model/index.ts:104,270-303). The next activation
-  # restores the declared leaves, but on an Auto-entitled account a declared
-  # non-Auto model never survives a fresh main launch.
+  # Home Manager defaults the main session to Kimchi's Auto router.
+  # When the catalog serves Auto, Kimchi switches a fresh main session from
+  # a concrete model to Auto unless the caller supplied `--model`
+  # (src/extensions/auto-model/index.ts).
   #
   # A module of the option TYPE, not a definition of the option: an outer
   # definition would sit at normal priority, and the outer option's
@@ -95,15 +91,6 @@
   # (mkOptionDefault, mkOverride above 1200) lose to the default, and
   # mkOverride 1200 is a conflict error. `highestPrio` reads only definition
   # priorities, never values, so the test cannot recurse.
-  #
-  # An account whose catalog lacks `auto` still starts: pi 0.85.1's
-  # findInitialModel skips a saved default the registry does not hold and
-  # falls back, silently, to the model it picks when no default is declared
-  # (dist/core/model-resolver.js:501-529). Any saved default, Auto included,
-  # also turns off the global `multiModel` default on a fresh launch whose
-  # model is not on `kimchi-dev` (auto-model/index.ts:130-132,316-321), so
-  # such an account loses multi-model, and `multiModel = true` takes effect
-  # only with `defaultModel = null`.
   #
   # Home Manager only: a project `defaultModel` would put every devenv Kimchi
   # behind project trust and the exact-cwd launch guard.
@@ -202,16 +189,11 @@
           Home Manager defaults the model to Kimchi's Auto router,
           `defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`, at
           priority 1200, below `mkDefault`. Declaring either key at `mkDefault`
-          or stronger, null included, replaces both; a weaker declaration loses
-          to the default. Any saved default, Auto included, turns off Kimchi's
-          global `multiModel` default on a fresh launch whose model is not on
-          `kimchi-dev`, so `multiModel = true` needs `defaultModel = null`; an
-          account whose catalog lacks Auto gets the model Kimchi picks when
-          none is declared, with multi-model off. Since Kimchi 1.5.1, an
-          Auto-entitled account starts every fresh main session on Auto
-          whatever `defaultModel` declares; only a launch-time
-          `--model`/`--provider` (or `--multi-model`/`--models`) or a
-          per-session `/model` avoids it.
+          or stronger, null included, replaces both defaults. Weaker declarations
+          yield to the default pair. When the catalog serves Auto, Kimchi switches
+          a fresh main session from a concrete model to Auto. Use `--model` at
+          launch or `/model` during a session to choose a different model.
+          Set `sessionNameModel` to the gateway model ID for generating titles.
         '';
     };
   };

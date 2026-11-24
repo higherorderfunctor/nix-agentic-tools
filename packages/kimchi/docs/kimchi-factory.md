@@ -1,16 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-11-18 — the pr-watch extension is a resource that
-> defaults off; package precedence and the shared background step handoff
-> contract account for trust bootstrap initializing a shadowed user copy;
-> bundled skills gated off by `requires-resource` leave each visible skill as
-> its own in-place root; config guards include the helpers readConfigExtras
-> hands `parsed.<key>` to, and a `delete` target is not a read; pi 1.3 settings
-> follow reexports and inherited TypeBox properties through lock-pinned
-> declaration entrypoints; scope follows settings accessors, with unread JSON
-> Schema metadata explicitly ignored. The sidecar carries CodeQL environment,
-> network, resource definition, region registry and request guard facts on
-> x86_64-linux.
+> **Last verified:** 2026-11-24 — The package patch adds a title model setting
+> to Kimchi 1.40.0 in the user harness settings. Home Manager supplies the
+> gateway model ID and devenv rejects it at project scope.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -71,22 +63,13 @@ harness `settings.json` it declares:
     restores only the declared model leaves and preserves unrelated runtime
     state. That restore does not make a non-Auto model stick on an Auto-entitled
     account: Kimchi switches back to Auto and persists it on the next fresh main
-    launch. Only a launch-time `--model`/`--provider` (or
-    `--multi-model`/`--models`) or a per-session `/model` avoids it.
-  - **Multi-model.** Any saved default, Auto included, turns off the global
-    `multiModel` default on a fresh launch whose model is not on `kimchi-dev`
-    (`auto-model/index.ts:130-132,316-321`). An account whose catalog lacks Auto
-    still starts, because pi 1.3.0 silently falls back to the model it picks
-    when none is declared, but that fallback runs with multi-model off.
-    `multiModel = true` needs `defaultModel = null`. Devenv is an explicit
-    exclusion. A project model default would make every devenv Kimchi's harness
-    file non-empty, which puts it behind project trust and the exact-cwd launch
-    guard, and it would outrank the user's HM choice. So a devenv-only user's
-    fresh launch runs on Auto and Kimchi persists it in their user file. A
-    declared project `defaultModel` takes effect only on an account whose
-    catalog lacks Auto, or with a launch-time `--model`/`--provider` (or
-    `--multi-model`/`--models`); on an Auto-entitled account Kimchi rolls it
-    back to Auto and persists that. Locked by
+    launch. Use `--model` at launch or `/model` during the session to select a
+    different model.
+  - **Project scope.** Devenv inherits the user's model choice. Supplying an
+    implicit project default would create a project harness file for every user,
+    subject every launch to the trust and exact-cwd checks, and override the
+    Home Manager default. The account's Auto policy also applies when it starts
+    a fresh main session from a project default. See
     `module-kimchi-auto-model-default`.
 
 `packages/kimchi/extracted/` measures the two native settings surfaces and the
@@ -118,11 +101,10 @@ and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
 it again clears the flag, and the key becomes an option. Secret exclusions
 (`apiKey`, its alias, and `gitTokens`) live in the config rows, naming
 `ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their delivery path. The option
-generator keeps two hand tables: one refinement (`modelRoles`, whose role names
-and single-string roles come from the sidecar while the non-blank and non-empty
-checks do not), and one description note. `report.stale*` lists any refinement
-or note whose path the sidecar lost, and `checks/native-options.nix` fails on
-it. Reconcile detects stale exclusion rows.
+generator takes its types from the reconciled facts. It adds a description note
+to `settings.skillPaths`. If that option disappears, `report.staleNotes` reports
+the unused note and `kimchi-native-options` fails. Reconcile detects stale
+exclusion rows.
 
 The sidecar's `network` fact comes from CodeQL, not `extract.mjs`, on
 x86_64-linux only (`kimchi-codeql-network.md`). `extract/rules.nix` passes it
@@ -130,38 +112,38 @@ through as `results.network`, with no hand rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's structured harness additions remain a hand list in
-`extract.mjs`. For `fermentV2` and `modelRoles`, the helper guards accept a
-broad object while downstream parsers validate the individual leaves. Two
-censuses discover keys beyond it: every harness key config.ts parses, and every
-constant key passed to config/settings.ts's `readConfigSetting`,
-`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
-anywhere in `src/`, is matched against pi `Settings` and the additions. The read
-helpers' second argument supplies the accepted type through the TypeScript
-predicate, including named guards and typed array items. Incompatible predicates
-for one key stop extraction with both source locations and types. A guard whose
-JSON kind is disjoint from a retained pi or parser-derived shape also stops
-extraction; a broad object guard can retain a parser's deeper shape. An
-unresolved guard for a retained key emits a diagnostic with its read site.
-Writes and fallbacks supply no accepted type. A key with no resolved read guard
-is emitted untyped (`type = null`, user scope, optional), and the harness
-surface fails it as `needs-human` until its row supplies a `type`, or
-`ignored = "<reason>"` when Nix should not expose it. A row's `type` is a bare
-JSON type with no `enum`, `items` or `properties`, so a structured addition
-belongs in the `extract.mjs` hand list instead. The option generator reads only
-reconciled entries, so an ignored read never becomes an option. An untyped read
-becomes an untyped JSON option, which both `report.untyped` and the drift check
-fail until its row supplies a `type`. As in config, a string key the classifier
-calls secret is never accepted without a recorded row carrying `excluded`. Other
-direct readers of the harness file are not censused (in 1.1.37,
-`telemetry/config-snapshot.ts` reads `model` and `provider` for telemetry), so a
-key upstream adds there meets the closed submodule as an unknown option with no
-drift signal. The config.json shapes of `teleport`, `gitTokens` and the
-`surveys` record have no declared type, so they are written by hand and pinned
-both ways to their readers' runtime guards (`readTeleportCompactHintEnabled`,
-`readGitToken`, `readSurveyConfig`): every scalar leaf must be `typeof`-guarded
-as its type, and every guarded path must be in the shape. That check also runs
-the generator over a fixture sidecar with a key added, a key removed and an enum
-widened, and requires the option surface to move with it.
+`extract.mjs`. For `fermentV2`, the helper guard accepts a broad object and the
+downstream parser validates its leaves. Two censuses discover keys beyond it:
+every harness key config.ts parses, and every constant key passed to
+config/settings.ts's `readConfigSetting`, `readConfigSettingAsync`,
+`writeConfigSetting` and `writeConfigSettingAsync` anywhere in `src/`, is
+matched against pi `Settings` and the additions. The read helpers' second
+argument supplies the accepted type through the TypeScript predicate, including
+named guards and typed array items. Incompatible predicates for one key stop
+extraction with both source locations and types. A guard whose JSON kind is
+disjoint from a retained pi or parser-derived shape also stops extraction; a
+broad object guard can retain a parser's deeper shape. An unresolved guard for a
+retained key emits a diagnostic with its read site. Writes and fallbacks supply
+no accepted type. A key with no resolved read guard is emitted untyped
+(`type = null`, user scope, optional), and the harness surface fails it as
+`needs-human` until its row supplies a `type`, or `ignored = "<reason>"` when
+Nix should not expose it. A row's `type` is a bare JSON type with no `enum`,
+`items` or `properties`, so a structured addition belongs in the `extract.mjs`
+hand list instead. The option generator reads only reconciled entries, so an
+ignored read never becomes an option. An untyped read becomes an untyped JSON
+option, which both `report.untyped` and the drift check fail until its row
+supplies a `type`. As in config, a string key the classifier calls secret is
+never accepted without a recorded row carrying `excluded`. Other direct readers
+of the harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts`
+reads `model` and `provider` for telemetry), so a key upstream adds there meets
+the closed submodule as an unknown option with no drift signal. The config.json
+shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
+type, so they are written by hand and pinned both ways to their readers' runtime
+guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):
+every scalar leaf must be `typeof`-guarded as its type, and every guarded path
+must be in the shape. That check also runs the generator over a fixture sidecar
+with a key added, a key removed and an enum widened, and requires the option
+surface to move with it.
 
 The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only
@@ -229,35 +211,35 @@ config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
 `settings-manager.d.ts`'s exports, and each Settings member carries its
 recursively resolved type inline. The Kimchi harness schemas still looked up by
 name must match exactly one declaration among the modules reachable from
-`src/entry.ts`, so the dead `model-catalog/model-metadata.ts` is ignored, and a
-second live `ModelCustomMetadataSchema` stops the extraction instead of
-narrowing the option. Same-named constants back a constant only where the
-checker finds no initializer, and only when they all agree. Four additional
-hash-pinned pi declaration packages, including TypeBox, use the versions
-Kimchi's `pnpm-lock.yaml` resolves for pi, rather than the floors of pi's caret
-ranges. The update job reads those versions from the lockfile. These packages
-resolve the settings type's external imports through each package's declared
-`types` entrypoint; unresolved named leaves fail extraction. Pi 1.3 reexports
-`Settings` from `settings-schema.d.ts`; the same checker follows that alias and
-inherited `Omit<Static<...>>` properties, retaining their optionality through
-the existing type renderer. Deep union descriptors carry each alternative, so
-numeric settings with literal sentinels produce native union types; an
-unresolved alternative still fails type coverage. Default accessors that return
-a property such as `SETTINGS_DEFAULTS.defaultProjectTrust` are accepted only
-when its checker type is one string literal. Harness project scope recognizes
-reads through both `getGlobalSettings()` and the merged `getSettings()`
-accessor. The inherited `$schema` field is JSON Schema metadata
-(`settings-schema.js`'s JSON Schema reference), with no settings accessor read;
-the ignored annotation added for pi 1.3 keeps the raw field with unknown project
-scope and removes it before native options are generated. Other unread settings
-still stop extraction. The same updater also pins the direct `pi-mcp-adapter`
-dependency for the CodeQL database, including its root TypeScript exports and
-upstream patch. The extractor (handed the lockfile as JSON through `yq`) fails
-when a supplied package differs from it. The extractor also checks that the
-hash-pinned source URL names the same release tag recorded in provenance;
-Kimchi's source `package.json` intentionally retains the `0.0.0` development
-placeholder. It no longer extracts the CLI: the wrapper passes no flags, so that
-surface had no reader.
+`src/entry.ts`, so `kimchi-extracted-harness-guard` introduces a second live
+`FermentV2Settings` declaration and checks that extraction reports the
+ambiguity. Same-named constants back a constant only where the checker finds no
+initializer, and only when they all agree. Four additional hash-pinned pi
+declaration packages, including TypeBox, use the versions Kimchi's
+`pnpm-lock.yaml` resolves for pi, rather than the floors of pi's caret ranges.
+The update job reads those versions from the lockfile. These packages resolve
+the settings type's external imports through each package's declared `types`
+entrypoint; unresolved named leaves fail extraction. Pi 1.3 reexports `Settings`
+from `settings-schema.d.ts`; the same checker follows that alias and inherited
+`Omit<Static<...>>` properties, retaining their optionality through the existing
+type renderer. Deep union descriptors carry each alternative, so numeric
+settings with literal sentinels produce native union types; an unresolved
+alternative still fails type coverage. Default accessors that return a property
+such as `SETTINGS_DEFAULTS.defaultProjectTrust` are accepted only when its
+checker type is one string literal. Harness project scope recognizes reads
+through both `getGlobalSettings()` and the merged `getSettings()` accessor. The
+inherited `$schema` field is JSON Schema metadata (`settings-schema.js`'s JSON
+Schema reference), with no settings accessor read; the ignored annotation added
+for pi 1.3 keeps the raw field with unknown project scope and removes it before
+native options are generated. Other unread settings still stop extraction. The
+same updater also pins the direct `pi-mcp-adapter` dependency for the CodeQL
+database, including its root TypeScript exports and upstream patch. The
+extractor (handed the lockfile as JSON through `yq`) fails when a supplied
+package differs from it. The extractor also checks that the hash-pinned source
+URL names the same release tag recorded in provenance; Kimchi's source
+`package.json` intentionally retains the `0.0.0` development placeholder. It no
+longer extracts the CLI: the wrapper passes no flags, so that surface had no
+reader.
 
 ## User and project paths (the load-bearing fact)
 
@@ -403,21 +385,20 @@ user's `defaultMode` inside that project, which the option description states.
 Removing the last key removes the project copy, so a `{}` never outlives the
 declaration.
 
-`native.harnessSettings.modelRoles` values are provider/model strings, or for
-delegable roles a non-empty list of them. The role names, and which roles take
-one string (`orchestrator`, `compactor` and `sessionNamer`), come from the
-sidecar's `modelRoles` properties. Any other shape is discarded with a runtime
-warning (`parseModelRoles` in `src/extensions/orchestration/model-roles.ts`), so
-the option type rejects it at evaluation: an unknown role is an unknown option.
-Locked by `module-kimchi-model-roles-shape`.
+Home Manager can select the model that generates session titles. When migrating
+to Kimchi 1.40.0, replace
+`ai.kimchi.native.harnessSettings.modelRoles.sessionNamer = "kimchi-dev/title-model";`
+with:
 
-Home Manager exposes
-`ai.kimchi.native.harnessSettings.modelRoles.sessionNamer = "kimchi-dev/<model>";`.
-Session naming sends the model ID after `kimchi-dev/` to the Kimchi gateway.
-Other providers and invalid values produce a warning and use upstream's
-`deepseek-v4-flash-0731` default; leaving the option unset keeps that default.
-Devenv exposes the same option type, but its existing user-scope assertion
-rejects `modelRoles`: Kimchi reads these roles from the user harness settings.
+```nix
+ai.kimchi.native.harnessSettings.sessionNameModel = "title-model";
+```
+
+Use the bare model ID served by your Kimchi gateway. Kimchi reads
+`sessionNameModel` from the user harness `settings.json` and sends the trimmed
+value to the gateway. An unset or blank value uses the upstream default,
+`deepseek-v4-flash-0731`. Devenv rejects the setting at project scope. The Home
+Manager rendering check is `module-kimchi-session-name-model`.
 
 `remote-feature-toggles.patch` adds `extensions.pr-watch`,
 `extensions.remote-run` and `extensions.teleport` to Kimchi's resource registry.
@@ -783,14 +764,11 @@ blocks and user-facing text alone. So `--help` still lists
 names that variable. The CodeQL environment extractor still reads the release
 source and records upstream's `KIMCHI_NO_UPDATE_CHECK` environment variable.
 
-`session-name-model.patch` adds the optional single-string `sessionNamer` role
-to `ModelRoles`. The settings extractor discovers it from the patched
-declaration. The parser accepts only `kimchi-dev/<id>` because session naming
-uses the Kimchi gateway; invalid values warn and fall back to upstream's naming
-model. The request body and work attribution both use the ID without the
-provider prefix. `/multi-model` keeps the role out of its picker and preserves
-it when saving other roles. The package's check phase runs the naming and role
-tests, including settings-to-request cases and Ollama role preservation.
+`session-name-model.patch` resolves the title model once with Kimchi's
+`readConfigSetting`. The request body, usage capture and work attribution use
+that same ID. The extractor derives the user-only string option from the patched
+reader's type predicate. The package runs `session-name.test.ts` to check the
+override and the upstream fallback.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.

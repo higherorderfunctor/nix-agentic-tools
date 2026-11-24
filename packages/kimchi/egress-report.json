@@ -39,9 +39,7 @@
       "language",
       "memory",
       "memory-residency",
-      "multi-model",
       "permissions",
-      "phase",
       "plugins",
       "pr-reporting",
       "pr-watch",
@@ -96,6 +94,7 @@
       "extensions.agents",
       "extensions.bash-tool-guard",
       "extensions.claude-code-hook-adapter",
+      "extensions.claude-code-instructions",
       "extensions.claude-code-skills",
       "extensions.cost-per-pr",
       "extensions.dap",
@@ -177,25 +176,25 @@
   },
   "endpointVariables": [
     {
-      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:315"],
       "consumerOverridable": true,
       "name": "GH_HOST",
       "readBy": ["kimchi"]
     },
     {
-      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:315"],
       "consumerOverridable": true,
       "name": "GITLAB_HOST",
       "readBy": ["kimchi"]
     },
     {
-      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:315"],
       "consumerOverridable": true,
       "name": "GITLAB_URI",
       "readBy": ["kimchi"]
     },
     {
-      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:315"],
       "consumerOverridable": true,
       "name": "GL_HOST",
       "readBy": ["kimchi"]
@@ -225,7 +224,7 @@
       "readBy": ["kimchi"]
     },
     {
-      "callSites": ["src/ollama.ts:197", "src/ollama.ts:247"],
+      "callSites": ["src/ollama.ts:195", "src/ollama.ts:245"],
       "consumerOverridable": true,
       "name": "KIMCHI_OLLAMA_HOST",
       "readBy": ["kimchi"]
@@ -258,7 +257,7 @@
       "readBy": ["pi"]
     },
     {
-      "callSites": ["src/ollama.ts:197", "src/ollama.ts:247"],
+      "callSites": ["src/ollama.ts:195", "src/ollama.ts:245"],
       "consumerOverridable": true,
       "name": "OLLAMA_HOST",
       "readBy": ["kimchi"]
@@ -307,8 +306,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-Ro2bCk/vXZKo4SSkQZDiHZQL7VhZjPsWm/eT3rfIQuk=",
-      "kimchiVersion": "1.37.5",
+      "kimchiSourceHash": "sha256-U3qFJePLKNhLTNVG3954zRuqYK27sJeX2RCVZBakgxI=",
+      "kimchiVersion": "1.40.0",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -326,8 +325,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-Ro2bCk/vXZKo4SSkQZDiHZQL7VhZjPsWm/eT3rfIQuk=",
-      "kimchiVersion": "1.37.5",
+      "kimchiSourceHash": "sha256-U3qFJePLKNhLTNVG3954zRuqYK27sJeX2RCVZBakgxI=",
+      "kimchiVersion": "1.40.0",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -492,7 +491,7 @@
     },
     {
       "callSites": [
-        "src/extensions/pull-request-status/provider-api.ts:278",
+        "src/extensions/pull-request-status/provider-api.ts:315",
         "src/utils/http.ts:90"
       ],
       "files": [
@@ -852,7 +851,7 @@
         "@earendil-works/pi-coding-agent/dist/bundle/chunks/chunk-66G7ITPS.js:493",
         "@earendil-works/pi-coding-agent/dist/bundle/chunks/github-copilot.js:2",
         "@earendil-works/pi-coding-agent/dist/utils/management-http.js:28",
-        "src/extensions/pull-request-status/provider-api.ts:278",
+        "src/extensions/pull-request-status/provider-api.ts:315",
         "src/utils/http.ts:90"
       ],
       "files": [
@@ -874,7 +873,7 @@
       "value": "github.com"
     },
     {
-      "callSites": ["src/extensions/pull-request-status/provider-api.ts:278"],
+      "callSites": ["src/extensions/pull-request-status/provider-api.ts:315"],
       "files": ["src/extensions/pull-request-status/provider-api.ts"],
       "value": "gitlab.com"
     },
@@ -938,7 +937,7 @@
       "value": "llm.kimchi.dev"
     },
     {
-      "callSites": ["src/ollama.ts:197", "src/ollama.ts:247"],
+      "callSites": ["src/ollama.ts:195", "src/ollama.ts:245"],
       "files": [
         "@earendil-works/pi-ai/dist/auth/oauth/callback-server.js",
         "@earendil-works/pi-ai/dist/auth/oauth/openai-codex.js",
@@ -3494,7 +3493,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:891",
+          "origin": "src/config.ts:897",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3521,7 +3520,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:891",
+          "origin": "src/config.ts:897",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3563,7 +3562,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:891",
+          "origin": "src/config.ts:897",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3665,7 +3664,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:974",
+          "origin": "src/config.ts:980",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3707,7 +3706,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:974",
+          "origin": "src/config.ts:980",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3728,7 +3727,7 @@
       "bundledModule": null,
       "file": "src/extensions/pull-request-status/provider-api.ts",
       "library": "fetch",
-      "line": 278,
+      "line": 315,
       "readBy": "kimchi",
       "targets": [
         {
@@ -3770,13 +3769,13 @@
         {
           "host": "api.github.com",
           "kind": "url",
-          "origin": "src/extensions/pull-request-status/provider-api.ts:220",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:257",
           "value": "https://api.github.com/graphql"
         },
         {
           "host": "api.github.com",
           "kind": "url",
-          "origin": "src/extensions/pull-request-status/provider-api.ts:214",
+          "origin": "src/extensions/pull-request-status/provider-api.ts:251",
           "value": "https://api.github.com"
         }
       ]
@@ -3836,7 +3835,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:974",
+          "origin": "src/config.ts:980",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -3908,7 +3907,7 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:891",
+          "origin": "src/config.ts:897",
           "value": "KIMCHI_BASE_URL"
         },
         {
@@ -3929,25 +3928,25 @@
       "bundledModule": null,
       "file": "src/ollama.ts",
       "library": "fetch",
-      "line": 197,
+      "line": 195,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "env",
-          "origin": "src/ollama.ts:125",
+          "origin": "src/ollama.ts:123",
           "value": "KIMCHI_OLLAMA_HOST"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/ollama.ts:125",
+          "origin": "src/ollama.ts:123",
           "value": "OLLAMA_HOST"
         },
         {
           "host": "localhost",
           "kind": "url",
-          "origin": "src/ollama.ts:19",
+          "origin": "src/ollama.ts:17",
           "value": "http://localhost:11434"
         }
       ]
@@ -3956,25 +3955,25 @@
       "bundledModule": null,
       "file": "src/ollama.ts",
       "library": "fetch",
-      "line": 247,
+      "line": 245,
       "readBy": "kimchi",
       "targets": [
         {
           "host": null,
           "kind": "env",
-          "origin": "src/ollama.ts:125",
+          "origin": "src/ollama.ts:123",
           "value": "KIMCHI_OLLAMA_HOST"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/ollama.ts:125",
+          "origin": "src/ollama.ts:123",
           "value": "OLLAMA_HOST"
         },
         {
           "host": "localhost",
           "kind": "url",
-          "origin": "src/ollama.ts:19",
+          "origin": "src/ollama.ts:17",
           "value": "http://localhost:11434"
         }
       ]
@@ -3989,55 +3988,55 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:974",
+          "origin": "src/config.ts:980",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/index.ts:1195",
+          "origin": "src/extensions/agents/index.ts:1294",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1264",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1282",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1278",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1296",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:564",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:577",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:604",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:617",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:654",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:667",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:704",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:717",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:747",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:760",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -4160,13 +4159,13 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:891",
+          "origin": "src/config.ts:897",
           "value": "KIMCHI_BASE_URL"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/config.ts:974",
+          "origin": "src/config.ts:980",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -5607,7 +5606,7 @@
       "file": "src/extensions/pull-request-status/provider-api.ts",
       "guards": [],
       "library": "fetch",
-      "line": 278,
+      "line": 315,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5670,7 +5669,7 @@
       "file": "src/ollama.ts",
       "guards": [],
       "library": "fetch",
-      "line": 197,
+      "line": 195,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5679,7 +5678,7 @@
       "file": "src/ollama.ts",
       "guards": [],
       "library": "fetch",
-      "line": 247,
+      "line": 245,
       "readBy": "kimchi",
       "status": "no modeled local guard"
     },
@@ -5743,168 +5742,175 @@
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.agents",
-      "line": 80,
+      "line": 81,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.bash-tool-guard",
-      "line": 121,
+      "line": 122,
       "restartRequired": null
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.claude-code-hook-adapter",
-      "line": 129,
+      "line": 130,
+      "restartRequired": true
+    },
+    {
+      "defaultEnabled": true,
+      "file": "src/resources/definitions.ts",
+      "id": "extensions.claude-code-instructions",
+      "line": 146,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.claude-code-skills",
-      "line": 137,
+      "line": 138,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.cost-per-pr",
-      "line": 153,
+      "line": 163,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.dap",
-      "line": 113,
+      "line": 114,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.ferment",
-      "line": 88,
+      "line": 89,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.ferment-v2",
-      "line": 188,
+      "line": 198,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.lsp",
-      "line": 104,
+      "line": 105,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.memory",
-      "line": 197,
+      "line": 207,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.pi-package-lookup",
-      "line": 162,
+      "line": 172,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.pii-redaction",
-      "line": 215,
+      "line": 225,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.side-chat-pill",
-      "line": 206,
+      "line": 216,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "extensions.todos",
-      "line": 96,
+      "line": 97,
       "restartRequired": true
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "extensions.workflows",
-      "line": 145,
+      "line": 155,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "hooks.bash",
-      "line": 57,
+      "line": 58,
       "restartRequired": null
     },
     {
       "defaultEnabled": false,
       "file": "src/resources/definitions.ts",
       "id": "plugins.kimchi-mcp-gateway",
-      "line": 178,
+      "line": 188,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "plugins.mcp-apps",
-      "line": 170,
+      "line": 180,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "skills.docx",
-      "line": 39,
+      "line": 40,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "skills.pdf",
-      "line": 30,
+      "line": 31,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "skills.pptx",
-      "line": 21,
+      "line": 22,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "skills.xlsx",
-      "line": 48,
+      "line": 49,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "tools.web_fetch",
-      "line": 72,
+      "line": 73,
       "restartRequired": true
     },
     {
       "defaultEnabled": true,
       "file": "src/resources/definitions.ts",
       "id": "tools.web_search",
-      "line": 64,
+      "line": 65,
       "restartRequired": true
     }
   ],
@@ -5925,6 +5931,12 @@
       "callee": "execFileSync",
       "category": "spawn",
       "file": "kimchi/src/extensions/behaviours/session-context.ts",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFile",
+      "category": "spawn",
+      "file": "kimchi/src/extensions/ferment-v2/workspace.ts",
       "target": "\"git\""
     },
     {
@@ -6855,6 +6867,7 @@
     {
       "files": [
         "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+        "kimchi/tests/e2e/tui/support/ferment-v2-verifier.ts",
         "kimchi/tests/e2e/tui/support/oauth-refresh.ts",
         "kimchi/tests/e2e/tui/support/wire-requests.ts"
       ],

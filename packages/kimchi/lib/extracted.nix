@@ -20,14 +20,8 @@
 # consumer that still sets it fail with an unknown-option error instead of
 # writing a key nothing reads. Every submodule is closed for the same reason.
 #
-# Two small hand tables are this generator's only exceptions (the extractor
-# keeps hand-written parts of its own; docs/kimchi-factory.md lists them and
-# their guards), and each row must name a path the sidecar still has —
-# `report.stale*` lists any that do not, and `checks/native-options.nix` fails
-# on it:
-#
-#   refinements  path → (node → type), runtime validation the type tree lacks
-#   notes        path → prose appended to the generated description
+# Description notes add context to generated options. The native-options
+# check uses report.staleNotes to catch a note whose option path disappeared.
 {
   aggregate,
   extractedLib,
@@ -39,15 +33,6 @@
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
 
-  # Kimchi 1.1.37 reads each modelRoles value as a provider/model string, and
-  # for delegable roles also a non-empty list of them. Anything else is
-  # discarded with a warning at runtime
-  # (src/extensions/orchestration/model-roles.ts:83-91, 117-122 and 144-181),
-  # so evaluation rejects it instead. Which roles exist, and which take one
-  # string only, both come from the sidecar.
-  roleModelType = types.addCheck types.str (value: builtins.match "[[:space:]]*" value == null);
-  roleModelsType = types.addCheck (types.listOf roleModelType) (values: values != []);
-
   rules = import ../extract/rules.nix ({inherit aggregate extractedLib pkgs;} // lib.optionalAttrs (rows != null) {inherit rows;});
 
   surfaces = {
@@ -57,34 +42,6 @@
     settings = {
       keys = rules.results.config.entries;
     };
-  };
-
-  refinements = {
-    "harnessSettings.modelRoles" = node:
-      types.submodule {
-        options = lib.mapAttrs (role: roleNode: let
-          single = roleNode.type == "string";
-          many = roleNode.type == "union" && roleNode.typeExpression == "string | string[]";
-        in
-          lib.mkOption {
-            type = types.nullOr (
-              if single
-              then roleModelType
-              else if many
-              then types.either roleModelType roleModelsType
-              else throw "ai.kimchi.native.harnessSettings.modelRoles.${role}: packages/kimchi/extracted/ harness.keys.modelRoles types it as `${roleNode.typeExpression}`, which the role refinement in packages/kimchi/lib/extracted.nix does not handle"
-            );
-            default = null;
-            description =
-              (roleNode.description or "Model for the ${role} role.")
-              + (
-                if single
-                then " One provider/model string."
-                else " A provider/model string, or a non-empty list of them."
-              );
-          })
-        node.properties;
-      };
   };
 
   notes = {
@@ -128,9 +85,7 @@
       untyped = lib.concatMap (c: c.untyped) (builtins.attrValues children);
     };
   in
-    if refinements ? ${path}
-    then leaf (refinements.${path} node)
-    else if t == "enum"
+    if t == "enum"
     then leaf (types.enum node.enum)
     else if scalarTypes ? ${toString t}
     then leaf scalarTypes.${t}
@@ -224,8 +179,6 @@
     != null
     && lib.foldl' step {properties = surface.keys;} (builtins.tail segments) != null;
 
-  stale = table: lib.sort (a: b: a < b) (lib.filter (path: !(knownPath path)) (builtins.attrNames table));
-
   variables = rules.results.environment.entries;
   userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
@@ -272,8 +225,7 @@ in {
 
   report = {
     excluded = lib.mapAttrs (_: s: s.excluded) generated;
-    staleNotes = stale notes;
-    staleRefinements = stale refinements;
+    staleNotes = lib.filter (path: !(knownPath path)) (builtins.attrNames notes);
     untyped = lib.concatMap (s: s.untyped) (builtins.attrValues generated);
   };
 }

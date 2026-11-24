@@ -2,8 +2,8 @@
 
 This is a census of every network endpoint the Kimchi CLI can reach, what each
 one is for, how its target is changed, and what stops working if it is
-unreachable. It describes **1.1.37**. The 1.1.37 source tree is the one the
-package pins (identified by its NAR hash against
+unreachable. It describes **1.1.37**. The 1.1.37 source tree was the package pin
+at the time of the scan (identified by its NAR hash against
 `extraction.kimchiSource.hash`); the 1.1.30 to 1.1.36 release trees were fetched
 by tag for bisecting, and the hashes of 1.1.30–1.1.33 and 1.1.36 match the pins
 this repository recorded for those versions. The 1.1.21 to 1.1.30 history rests
@@ -531,15 +531,15 @@ callers (`src/extensions/telemetry/pre-session.ts:44`,
 `src/extensions/telemetry/session-context.ts:339`), and nothing warms it at
 startup for Auto any more.
 
-**1.5.1 made it every launch, not once.** The marker is retired: a fresh main
-session deletes `autoDefaultApplied` from the harness `settings.json`
-(`1.5.1 src/extensions/auto-model/index.ts:104`), and on an account whose
-catalog advertises `auto` it rolls a non-Auto model back to `kimchi-dev/auto`
-and persists it on every fresh main session
-(`1.5.1 src/extensions/auto-model/index.ts:270-303`). Only a launch-time
-`--model`, `--provider`, `--multi-model` or `--models`, or a per-session
-`/model`, avoids it. The network surface is unchanged: Auto still rides the
-ordinary inference wire.
+**1.5.1 applied Auto on every fresh main launch.** Kimchi deleted the retired
+`autoDefaultApplied` marker from the harness `settings.json`
+(`1.5.1 src/extensions/auto-model/index.ts:104`). If the account's catalog
+advertised `auto`, Kimchi reverted a non-Auto model to `kimchi-dev/auto` and
+persisted the choice on every fresh main session
+(`1.5.1 src/extensions/auto-model/index.ts:270-303`). In 1.5.1, the only
+launch-time exemptions were `--model`, `--provider`, `--multi-model` and
+`--models`. During a session, `/model` could override Auto. Auto continued to
+use the ordinary inference endpoint.
 
 ### 4.4 Connecting wakes a hibernated workspace, with no prompt
 

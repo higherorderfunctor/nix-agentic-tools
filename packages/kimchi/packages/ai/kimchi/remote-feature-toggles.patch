@@ -13,10 +13,10 @@ keeps the extension inert under ACP, and the ACP server neither advertises
 it is off.
 
 diff --git i/src/cli.ts w/src/cli.ts
-index 240e739..3e250fd 100644
+index 6cda992..84de15f 100644
 --- i/src/cli.ts
 +++ w/src/cli.ts
-@@ -147,6 +147,7 @@ import pluginPackageHooksAdapter from "./extensions/plugin-package-hook-adapter/
+@@ -148,6 +148,7 @@ import pluginPackageHooksAdapter from "./extensions/plugin-package-hook-adapter/
  import powershellGateExtension from "./extensions/powershell-gate.js"
  import prCostReportingExtension from "./extensions/pr-cost-reporting/index.js"
  import prWatchExtension from "./extensions/pr-watch/index.js"
@@ -24,7 +24,7 @@ index 240e739..3e250fd 100644
  import { setPrintGate } from "./extensions/print-mode.js"
  import promptEnrichmentExtension from "./extensions/prompt-construction/prompt-enrichment.js"
  import promptSummaryExtension from "./extensions/prompt-summary.js"
-@@ -1048,9 +1049,11 @@ async function cliMain(): Promise<void> {
+@@ -1040,9 +1041,11 @@ async function cliMain(): Promise<void> {
  				inputHistoryExtension,
  				bugReportDestinationExtension,
  				tagsExtension,
@@ -92,10 +92,10 @@ index d8ebe4e..d569dc1 100644
  	if (value === undefined || value === "") return true
  	return !DISABLE_VALUES.has(value)
 diff --git i/src/modes/acp/server.ts w/src/modes/acp/server.ts
-index 1edd2df..4c2c33b 100644
+index 0a8ad85..7363176 100644
 --- i/src/modes/acp/server.ts
 +++ w/src/modes/acp/server.ts
-@@ -150,7 +150,7 @@ import {
+@@ -156,7 +156,7 @@ import {
  import { prWatchCommandArgs, runPRWatchCommand } from "../../extensions/pr-watch/command.js"
  import { getPRWatcher } from "../../extensions/pr-watch/index.js"
  import { formatPRWatchStatus } from "../../extensions/pr-watch/presentation.js"
@@ -104,16 +104,16 @@ index 1edd2df..4c2c33b 100644
  import { isRefusal, refusalText } from "../../extensions/refused-turns.js"
  import { modelSupportsImages } from "../../extensions/vision-support.js"
  import { configureHttpIdleTimeout } from "../../http/proxy.js"
-@@ -770,7 +770,7 @@ export class KimchiAcpAgent implements Agent {
- 					// button. Note the agent NEEDS this flag advertised only so
+@@ -794,7 +794,7 @@ export class KimchiAcpAgent implements Agent {
  					// clients feature-detect the gate; emission is opt-in gated.
  					[BACKGROUND_RUNS_CAPABILITY]: true,
+ 					[MCP_OAUTH_TURN_CAPABILITY]: true,
 -					[PR_MONITORING_CAPABILITY]: true,
 +					[PR_MONITORING_CAPABILITY]: isPRWatchResourceEnabled(),
  					// Cast AI SSO login via the stepwise `_kimchi.dev/sso_*` ext
  					// methods. Clients gate their SSO UI on this flag.
  					sso: true,
-@@ -1585,7 +1585,7 @@ export class KimchiAcpAgent implements Agent {
+@@ -1577,7 +1577,7 @@ export class KimchiAcpAgent implements Agent {
  			return { stopReason: "end_turn" }
  		}
  		const prWatchArgs =
@@ -122,7 +122,7 @@ index 1edd2df..4c2c33b 100644
  				? prWatchCommandArgs(text)
  				: undefined
  		if (prWatchArgs !== undefined) {
-@@ -3475,7 +3475,7 @@ export class KimchiAcpAgent implements Agent {
+@@ -3563,7 +3563,7 @@ export class KimchiAcpAgent implements Agent {
  					sessionUpdate: "available_commands_update",
  					availableCommands: composeAvailableCommands(
  						record.skillCommands,
@@ -132,7 +132,7 @@ index 1edd2df..4c2c33b 100644
  				},
  			})
 diff --git i/src/resources/definitions.ts w/src/resources/definitions.ts
-index a63b442..17c27ee 100644
+index 8e4b08b..cac118c 100644
 --- i/src/resources/definitions.ts
 +++ w/src/resources/definitions.ts
 @@ -4,6 +4,7 @@ import { KIMCHI_MCP_GATEWAY_RESOURCE_ID } from "../extensions/mcp/gateway.js"
@@ -140,10 +140,10 @@ index a63b442..17c27ee 100644
  import { PI_PACKAGE_LOOKUP_RESOURCE_ID } from "../extensions/pi-package-lookup/index.js"
  import { PII_REDACTION_RESOURCE_ID } from "../extensions/pii-redaction/resource.js"
 +import { PR_WATCH_RESOURCE_ID } from "../extensions/pr-watch/resource.js"
+ import { CLAUDE_CODE_INSTRUCTIONS_RESOURCE_ID } from "../extensions/prompt-construction/claude-code-instructions-resource.js"
  import { SIDE_CHAT_PILL_RESOURCE_ID } from "../extensions/side-chat/resource.js"
  import { COST_PER_PR_RESOURCE_ID } from "../extensions/work-attribution/resource.js"
- import { discoverBashHookResources } from "./bash-hook-discovery.js"
-@@ -167,6 +168,30 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
+@@ -177,6 +178,30 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
  		defaultEnabled: false,
  		restartRequired: true,
  	},

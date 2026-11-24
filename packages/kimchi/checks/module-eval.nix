@@ -77,11 +77,7 @@
     fermentV2.autoResume = true;
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";
-    modelMetadata.example.description = "Example model";
-    modelRoles = {
-      builder = "provider/model";
-      sessionNamer = "kimchi-dev/title-model";
-    };
+    sessionNameModel = "custom-title-model";
     statusLine.pinned = ["model"];
   };
   userScopeOnlyHarnessSettingValue = key:
@@ -864,54 +860,25 @@ in {
         && !(emptyDevenv.config.ai.files ? ".kimchi/mcp.json")
     );
 
-    # Kimchi 1.1.37 accepts a role value only as a provider/model string, or
-    # for delegable roles a non-empty list of them
-    # (src/extensions/orchestration/model-roles.ts:117-181). Anything else is
-    # discarded with a warning at runtime, so the option type rejects it. The
-    # role names, and which roles take one string, come from
-    # packages/kimchi/extracted/ harness.keys.modelRoles.
-    module-kimchi-model-roles-shape = mkTest "kimchi-model-roles-shape" (
+    # The patched title request reads one optional gateway model ID from the user file.
+    # Check the rendered value, omission on null, and rejection of non-string IDs.
+    module-kimchi-session-name-model = mkTest "kimchi-session-name-model" (
       let
-        withRoles = modelRoles:
-          evalHm {
+        settingsWithModel = sessionNameModel:
+          hmHarnessSettings (evalHm {
             ai.kimchi = {
               enable = true;
-              native.harnessSettings.modelRoles = modelRoles;
+              native.harnessSettings = {inherit sessionNameModel;};
             };
-          };
-        valid = evaluated: lib.all (entry: entry.assertion) evaluated.config.assertions;
-        rolesTypeCheck = modelRoles:
-          (builtins.tryEval (builtins.deepSeq
-            (withRoles modelRoles).config.ai.kimchi.native.harnessSettings
-            true)).success;
-        typeChecks = value: rolesTypeCheck {builder = value;};
-        rendered = withRoles {
-          builder = ["a/b" "c/d"];
-          orchestrator = "a/b";
-          sessionNamer = "kimchi-dev/title-model";
-        };
+          });
+        accepts = value: (builtins.tryEval (builtins.deepSeq (settingsWithModel value) true)).success;
       in
-        valid rendered
-        && (hmHarnessSettings rendered).modelRoles
-        == {
-          builder = ["a/b" "c/d"];
-          orchestrator = "a/b";
-          sessionNamer = "kimchi-dev/title-model";
-        }
-        && typeChecks "provider/model"
-        && !(typeChecks "")
-        && !(typeChecks "  ")
-        && !(typeChecks [])
-        && !(typeChecks [""])
-        && !(typeChecks {provider = "a";})
-        && !(rolesTypeCheck {unknown = "a/b";})
-        && !(rolesTypeCheck {orchestrator = ["a/b"];})
-        && !(rolesTypeCheck {compactor = ["a/b"];})
-        && rolesTypeCheck {compactor = "a/b";}
-        && !(rolesTypeCheck {sessionNamer = ["kimchi-dev/title-model"];})
-        && !(rolesTypeCheck {sessionNamer = "";})
-        && !(rolesTypeCheck {sessionNamer = "  ";})
-        && rolesTypeCheck {sessionNamer = null;}
+        (settingsWithModel "custom-title-model").sessionNameModel
+        == "custom-title-model"
+        && !(settingsWithModel null ? sessionNameModel)
+        && !(accepts 42)
+        && !(accepts ["custom-title-model"])
+        && !(accepts {model = "custom-title-model";})
     );
 
     # Kimchi 1.1.37 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`

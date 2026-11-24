@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-/** Extract Kimchi's settings surfaces with TypeScript. */
+/** The package build reads Kimchi and pi with TypeScript to produce settings facts. */
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -151,11 +151,8 @@ function literalValue(node, ts, checker, seen = new Set()) {
   fail(`unsupported constant expression ${node.getText()}`);
 }
 
-// Every interface, type alias, function and variable declaration, by name,
-// across the files that can matter: pi's, and the Kimchi modules reachable
-// from src/entry.ts. A bare name is not an identity — Kimchi 1.1.37 ships two
-// model-metadata.ts files with different schemas, one of them dead — so a
-// lookup by name must match exactly one declaration or the extraction stops.
+// Group declarations from the supplied files by name. Keep all matches so
+// requireDeclaration can report ambiguity when it needs a single declaration.
 function declarationIndex(sourceFiles, ts) {
   const declarations = new Map();
   const add = (name, node) => {
@@ -1109,65 +1106,6 @@ function extractConfig(
   };
 }
 
-function typeBoxDescriptor(initializer, checker, ts) {
-  function convert(node) {
-    if (ts.isIdentifier(node))
-      return convert(constantInitializer(node, checker, ts));
-    if (
-      !ts.isCallExpression(node) ||
-      !ts.isPropertyAccessExpression(node.expression)
-    ) {
-      fail(`unsupported TypeBox schema expression ${node.getText()}`);
-    }
-    const method = node.expression.name.text;
-    if (method === "Optional")
-      return { ...convert(node.arguments[0]), optional: true };
-    if (method === "String")
-      return { type: "string", typeExpression: "string" };
-    if (method === "Boolean")
-      return { type: "boolean", typeExpression: "boolean" };
-    if (method === "Literal") {
-      const value = literalValue(node.arguments[0], ts, checker);
-      return {
-        enum: [value],
-        type: "enum",
-        typeExpression: JSON.stringify(value),
-      };
-    }
-    if (method === "Union") {
-      if (!ts.isArrayLiteralExpression(node.arguments[0]))
-        fail("Type.Union argument is no longer an array literal");
-      const values = node.arguments[0].elements.flatMap(
-        (element) => convert(element).enum ?? [],
-      );
-      return {
-        enum: values,
-        type: "enum",
-        typeExpression: values.map(JSON.stringify).join(" | "),
-      };
-    }
-    if (method === "Object") {
-      const object = node.arguments[0];
-      if (!ts.isObjectLiteralExpression(object))
-        fail("Type.Object argument is no longer an object literal");
-      const properties = {};
-      for (const property of object.properties) {
-        if (!ts.isPropertyAssignment(property))
-          fail("Type.Object has an unsupported member");
-        const name = syntaxName(property.name, ts);
-        properties[name] = convert(property.initializer);
-      }
-      return {
-        properties: sortObject(properties),
-        type: "object",
-        typeExpression: "object",
-      };
-    }
-    fail(`unsupported TypeBox method Type.${method}`);
-  }
-  return convert(initializer);
-}
-
 function extractDefaultProjectTrust(sourceFile, checker, ts) {
   let settingsManager;
   function findClass(node) {
@@ -1356,9 +1294,12 @@ function settingsHelperKeys(settingsSource, kimchiSources, context) {
   return keys;
 }
 
+// main writes these harness key descriptors to the settings sidecar. Derive
+// them from pi and Kimchi declarations and settings accesses. A Kimchi key
+// whose type cannot be inferred has type null. Only pi keys read from merged
+// settings accept project overrides. Ignored, unread pi keys retain null scope.
 function extractHarness(
   declarations,
-  configSource,
   settingsManagerSource,
   settingsDeclarationSource,
   piSources,
@@ -1393,11 +1334,6 @@ function extractHarness(
     "FermentV2Settings",
     ts.isInterfaceDeclaration,
   );
-  const roles = requireDeclaration(
-    declarations,
-    "ModelRoles",
-    ts.isInterfaceDeclaration,
-  );
   const resourceSettings = requireDeclaration(
     declarations,
     "ResourceSettings",
@@ -1412,11 +1348,6 @@ function extractHarness(
     declarations,
     "StatusLineConfig",
     ts.isTypeAliasDeclaration,
-  );
-  const metadataSchema = requireDeclaration(
-    declarations,
-    "ModelCustomMetadataSchema",
-    ts.isVariableDeclaration,
   );
   const resourceMembers = membersOfDeclaration(
     resourceSettings,
@@ -1437,38 +1368,16 @@ function extractHarness(
       properties: membersOfDeclaration(ferment, checker, ts, true),
     },
     lastTerminalWarnings: terminalMembers.lastTerminalWarnings,
-    modelMetadata: {
-      additionalProperties: typeBoxDescriptor(
-        metadataSchema.initializer,
-        checker,
-        ts,
-      ),
-      type: "object",
-      typeExpression: "Record<string, ModelCustomMetadata>",
-    },
-    modelRoles: {
-      type: "object",
-      typeExpression: "ModelRoles",
-      properties: membersOfDeclaration(roles, checker, ts, true),
-    },
     resources: resourceMembers.resources,
     statusLine: descriptorForNode(statusLine.type, checker, ts, true),
   };
   // Kimchi's harness settings readers accept an absent top-level key and
   // either return undefined or apply a fallback; none is required in the file.
   for (const descriptor of Object.values(additions)) descriptor.optional = true;
-  // These declarations describe the normalized values after parser defaults.
-  // Their persisted input objects accept every child independently.
-  for (const name of ["fermentV2", "modelRoles"]) {
-    for (const property of Object.values(additions[name].properties))
-      property.optional = true;
-  }
+  // Ferment fills in missing properties when it reads the persisted object.
+  for (const property of Object.values(additions.fermentV2.properties))
+    property.optional = true;
   additions.statusLine.properties.pinned.optional = true;
-  if (additions.modelRoles.properties.orchestrator?.type !== "string") {
-    fail(
-      "harness/settings.json Kimchi additions validation shape changed: modelRoles.orchestrator is no longer a string",
-    );
-  }
   additions.statusLine.properties.command = descriptorForType(
     checker.getStringType(),
     statusLine,
@@ -1502,9 +1411,7 @@ function extractHarness(
   if (!baseKeys.modelThinkingLevels.additionalProperties)
     fail("pi modelThinkingLevels value type was not resolved");
   // Kimchi reads its additions itself, from the user harness file only
-  // (config/settings.ts and the model-metadata and terminal-warning readers
-  // all resolve ~/.config/kimchi/harness), never through pi's project-merging
-  // SettingsManager, which does not type them.
+  // (~/.config/kimchi/harness). Only pi's SettingsManager merges project settings.
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor, project: false };
   // A key Kimchi reads or writes (in config.ts or through config/settings.ts)
@@ -1894,7 +1801,6 @@ async function main() {
     ),
     harness: extractHarness(
       declarations,
-      configSource,
       requireSource(join(piRoot, "dist/core/settings-manager.js")),
       requireSource(join(piRoot, "dist/core/settings-manager.d.ts")),
       sourceFiles.filter(
