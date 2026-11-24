@@ -1,9 +1,9 @@
 {
-  "version": "2.12.1",
+  "version": "2.13.0",
   "src": {
-    "url": "https://github.com/anthropics/anthropic-cli/archive/v2.12.1.tar.gz",
-    "hash": "sha256-j6zmny/STolQTIXLDwtM/7q/QBZ/EnsZ3YrtyYuWpho="
+    "url": "https://github.com/anthropics/anthropic-cli/archive/v2.13.0.tar.gz",
+    "hash": "sha256-FjaZ1mXfB9Z/wer8HeWSxA7vltJi6teUiF3+M7nfOLI="
   },
   "goFloor": "1.26.10",
-  "vendorHash": "sha256-25PeOk/VRwe+n7WMs61WmWr4nPN5p7X/Py2OI0aG2FU="
+  "vendorHash": "sha256-XKZy4w2qktB2Q8h3QgMyvIAMtispzZ/4ezH229H6uPw="
 }
