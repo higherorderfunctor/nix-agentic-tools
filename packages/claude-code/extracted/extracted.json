@@ -1124,6 +1124,7 @@
           "bypassPermissions",
           "default",
           "dontAsk",
+          "manual",
           "plan"
         ],
         "type": "string"

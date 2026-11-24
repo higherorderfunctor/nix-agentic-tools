@@ -39,6 +39,9 @@ if (!extractDir || !fixtureDir || !typescriptPath) {
   process.exit(2);
 }
 const L = await import(pathToFileURL(path.join(extractDir, "locate.mjs")).href);
+const { discoverAliases } = await import(
+  pathToFileURL(path.join(extractDir, "census.mjs")).href
+);
 const { sliceModule } = await import(
   pathToFileURL(path.join(extractDir, "slice.mjs")).href
 );
@@ -72,6 +75,29 @@ const check = (name, ok, detail) => {
     `FAIL ${name}${detail === undefined ? "" : ` — ${JSON.stringify(detail)}`}`,
   );
 };
+
+// In the settings builder, a preprocess pipe holds the callback on its input.
+{
+  const change = (value) => (value === "old" ? "new" : value);
+  const output = { type: "enum" };
+  const pipe = (type) => ({ type: "pipe", in: { type, change }, out: output });
+  const schema = {
+    type: "object",
+    shape: {
+      mode: { type: "optional", innerType: pipe("transform") },
+      decoy: pipe("string"),
+      withoutEnum: pipe("transform"),
+    },
+  };
+  const paths = { mode: { enum: ["new"] }, decoy: { enum: ["new"] } };
+  const aliases = discoverAliases(schema, paths);
+  check(
+    "preprocess aliases: only a transform feeding an enum contributes a spelling",
+    JSON.stringify(aliases) ===
+      JSON.stringify([{ path: "mode", alias: "old", becomes: "new" }]),
+    aliases,
+  );
+}
 
 // ── The @internal marker identifies the filter by its calls, not substrings ──
 // 2.1.302 named the predicate `ys`; `Object.keys(` in the smaller recursive

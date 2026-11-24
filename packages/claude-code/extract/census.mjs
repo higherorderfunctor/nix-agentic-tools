@@ -354,20 +354,20 @@ function flatten(root) {
 // ---------------------------------------------------------------------------
 const UNWRAP = ["innerType", "element", "valueType", "schema"];
 
+// The settings builder now stores the schema definition directly on its nodes.
+const definitionOf = (node) => node?._zod?.def ?? node;
+
 function collectTransforms(node, p, acc, depth, seen) {
   if (!node || depth > 40) return;
-  const def = node._zod && node._zod.def;
+  const def = definitionOf(node);
   if (!def || seen.has(node)) return;
   seen.add(node);
   switch (def.type) {
     case "pipe": {
-      const inDef = def.in && def.in._zod && def.in._zod.def;
-      if (
-        inDef &&
-        inDef.type === "transform" &&
-        typeof inDef.transform === "function"
-      ) {
-        acc.push({ path: p, fn: inDef.transform });
+      const input = definitionOf(def.in);
+      if (input?.type === "transform") {
+        const fn = input.change ?? input.transform;
+        if (typeof fn === "function") acc.push({ path: p, fn });
       }
       collectTransforms(def.in, p, acc, depth + 1, seen);
       collectTransforms(def.out, p, acc, depth + 1, seen);
@@ -407,7 +407,7 @@ function collectTransforms(node, p, acc, depth, seen) {
 
 const LITERALS_RE = /"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'/g;
 
-function discoverAliases(schema, paths) {
+export function discoverAliases(schema, paths) {
   const acc = [];
   collectTransforms(schema, "", acc, 0, new Set());
   const found = [];
