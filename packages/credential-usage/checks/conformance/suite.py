@@ -14,7 +14,7 @@ import sys
 from tempfile import TemporaryDirectory, TemporaryFile
 from typing import Annotated, Literal, NamedTuple, TextIO, cast
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError, field_validator
 from urllib3.response import HTTPResponse
 from unittest.mock import patch
 
@@ -25,6 +25,19 @@ Entry = Callable[[Mapping[str, str], Callable[[], datetime]], int]
 TransportName = Literal["cpa", "direct"]
 FileName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")]
 Document = dict[str, JsonValue]
+
+
+def credential_file_name(name: str) -> str:
+    """Keep dotfiles in the fixture directory and refuse the two directory aliases."""
+    if name in (".", ".."):
+        raise ValueError("expected a credential file name")
+    return name
+
+
+CredentialFileName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+$"), AfterValidator(credential_file_name)]
+
+
+CredentialFiles = dict[CredentialFileName, Annotated[str, Field(min_length=1)]]
 
 
 class FixtureModel(BaseModel):
@@ -43,6 +56,7 @@ class Scenario(FixtureModel):
     """Set the binding environment and select replies in request order."""
     env: dict[str, str]
     replies: list[str]
+    credentials: CredentialFiles = Field(default_factory=dict)
 
 
 class Inputs(FixtureModel):
@@ -51,7 +65,7 @@ class Inputs(FixtureModel):
     transports: Annotated[list[TransportName], Field(min_length=1)]
     now: datetime
     replies: dict[str, Reply]
-    credentials: dict[FileName, Annotated[str, Field(min_length=1)]]
+    credentials: CredentialFiles
     executables: dict[FileName, str]
     scenarios: Annotated[dict[FileName, dict[TransportName, Scenario]], Field(min_length=1)]
 
@@ -180,17 +194,19 @@ class ScriptedNetwork:
         return HTTPResponse(status=reply.status, body=reply.body.encode())
 
 
-def case_environment(root: Path, inputs: Inputs, settings: dict[str, str]) -> dict[str, str]:
+def case_environment(
+    root: Path, executables: dict[str, str], settings: dict[str, str], credentials: CredentialFiles,
+) -> dict[str, str]:
     """Give the command private credential files, an empty home and first choice of executables."""
     directory = root / "credentials"
     directory.mkdir()
-    for name, content in inputs.credentials.items():
+    for name, content in credentials.items():
         path = directory / name
         path.write_text(content)
         path.chmod(0o600)
     programs = root / "bin"
     programs.mkdir()
-    for name, script in inputs.executables.items():
+    for name, script in executables.items():
         path = programs / name
         path.write_text(
             f"#!{which('bash') or '/bin/bash'}\n"
@@ -201,12 +217,12 @@ def case_environment(root: Path, inputs: Inputs, settings: dict[str, str]) -> di
 
     def expand(match: re.Match[str]) -> str:
         name = match[1]
-        if name not in inputs.credentials:
+        if name not in credentials:
             raise ValueError("unknown credential file")
         return str(directory / name)
 
     env = {"HOME": str(root), **{
-        key: re.sub(r"\$\{credentials:([^}]+)\}", expand, value.replace("${bin}", str(programs)))
+        key: re.sub(r"\$\{credentials:([^}]+)\}", expand, value.replace("${bin}", str(programs)).replace("${credentialsDir}", str(directory)))
         for key, value in settings.items()
     }}
     env["PATH"] = os.pathsep.join((str(programs), env.get("PATH", os.environ.get("PATH", os.defpath))))
@@ -255,15 +271,16 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
     """Run the actual command and return only safe case labels for every failed comparison."""
     errors: list[str] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
+    credentials = inputs.credentials | case.scenario.credentials
     masks = {
         spelling: f"[credential:{name}]"
-        for name, content in inputs.credentials.items()
+        for name, content in credentials.items()
         for value in private_strings(content)
         for spelling in (value, json.dumps(value)[1:-1])
     }
     network = ScriptedNetwork(inputs.now, replies, masks)
     with TemporaryDirectory() as tmp:
-        env = case_environment(Path(tmp), inputs, case.scenario.env)
+        env = case_environment(Path(tmp), inputs.executables, case.scenario.env, credentials)
         with (
             patch.dict(sys.modules),
             patch.dict(os.environ, env, clear=True),

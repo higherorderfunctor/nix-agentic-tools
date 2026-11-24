@@ -120,8 +120,11 @@ transports, a UTC start time (`now` ending in `Z`), named HTTP replies (status
 and literal body text), credential file contents and Bash program bodies in
 `executables`. Each named scenario supplies `env` and an ordered list of reply
 names on every declared transport. Use `${credentials:name}` for a private file
-path and `${bin}` for the program directory. The suite prepends that directory
-to `PATH`.
+path and `${bin}` for the program directory. Use `${credentialsDir}` for the
+directory containing credential files, including dotfiles such as
+`.credentials.json`. A scenario can add or replace a file for one transport by
+supplying its own `credentials` map. The suite prepends that directory to
+`PATH`.
 
 In `expected.json`, write each scenario and transport's complete `requests` and
 `result` by hand. Include the method, URL, headers and body for each HTTP call.
