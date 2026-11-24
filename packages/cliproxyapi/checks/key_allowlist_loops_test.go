@@ -23,16 +23,17 @@ var keyAllowlistLoopExemptions = map[string]string{
 	"Manager.AvailableProviders":                       "lists provider names, chooses no credential",
 	"Manager.ForceRefreshAll":                          "refreshes tokens for every credential, serves no request",
 	"Manager.HasProviderAuth":                          "reports whether a provider has any credential, chooses none",
+	"Manager.IDsByProvider":                            "returns IDs for background Copilot catalog refresh, chooses no request credential",
 	"Manager.List":                                     "returns copies of the pool; a caller that selects from them is outside this check",
 	"Manager.LookupSessionAffinity":                    "observes a binding for the plugin host's affinity callback; the instance module refuses plugins beside the allowlist",
-	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.0.78 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
 	"Manager.RegisterExecutorWithRevision":             "reschedules refreshes for an executor's credentials",
 	"Manager.clearDisabledCooldownStates":              "clears cooldown state on config reload",
 	"Manager.cooldownStateRecordsSnapshot":             "snapshots cooldown state for persistence",
-	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.0.78 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
 	"Manager.rebuildAPIKeyModelAliasLocked":            "rebuilds model alias tables on config reload",
 	"Manager.requestRetryRoundExclusions":              "returns IDs to exclude; it only narrows a selection that still runs allows",
-	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; in 8.0.78 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
 	"authAutoRefreshLoop.rebuild":                      "schedules background token refreshes, serves no request",
 }
 
@@ -78,9 +79,11 @@ func (m *Manager) keyAllowlistBypassClosure(eligibility authSelectionEligibility
 // Not seen: an indexed lookup (m.auths[id]), an alias of the map, the map
 // passed to a helper, a loop over a copy (snapshotAuths, List), and the
 // scheduler's own pools and pickers, which match every entry on a nil
-// predicate. In 8.0.78 none of these chooses a request's credential outside
-// allows; that is a review obligation on each bump, not something this test
-// checks.
+// predicate. In 8.1.2 the added indexed reads refresh state for an already
+// selected ID, guard registration publication, or clean up reloads;
+// IDsByProvider feeds background Copilot catalog refresh. None chooses a
+// request credential outside allows; that remains a review obligation on each
+// bump, not something this test checks.
 func keyAllowlistLoopsWithoutAllows(t *testing.T, fixture bool) []string {
 	t.Helper()
 	fileSet := token.NewFileSet()

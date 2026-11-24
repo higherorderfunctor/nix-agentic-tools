@@ -126,25 +126,11 @@ index 0000000..cfbdc73
 +		t.Fatalf("group option lost or leaked: %+v", cfg.OpenAICompatibility)
 +	}
 +}
-diff --git a/internal/config/config_load.go b/internal/config/config_load.go
-index cc0e2da..10c7a69 100644
---- a/internal/config/config_load.go
-+++ b/internal/config/config_load.go
-@@ -239,6 +239,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
- 	if errValidate := cfg.ValidateCredentialWeights(); errValidate != nil {
- 		return nil, errValidate
- 	}
-+	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
-+		return nil, errValidate
-+	}
- 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
- 		return nil, errValidate
- 	}
 diff --git a/internal/config/config_types.go b/internal/config/config_types.go
-index 9151df1..b92075a 100644
+index 77e37e7..ea23260 100644
 --- a/internal/config/config_types.go
 +++ b/internal/config/config_types.go
-@@ -767,6 +767,9 @@ type CloakConfig struct {
+@@ -768,6 +768,9 @@ type CloakConfig struct {
  // ClaudeKey represents the configuration for a Claude API key,
  // including the API key itself and an optional base URL for the API endpoint.
  type ClaudeKey struct {
@@ -154,7 +140,7 @@ index 9151df1..b92075a 100644
  	// APIKey is the authentication key for accessing Claude API services.
  	APIKey string `yaml:"api-key" json:"api-key"`
  
-@@ -1109,6 +1112,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
+@@ -1110,6 +1113,9 @@ func (m GeminiModel) GetThinking() *registry.ThinkingSupport { return m.Thinking
  // OpenAICompatibility represents the configuration for OpenAI API compatibility
  // with external providers, allowing model aliases to be routed through OpenAI API format.
  type OpenAICompatibility struct {
@@ -165,10 +151,10 @@ index 9151df1..b92075a 100644
  	Name string `yaml:"name" json:"name"`
  
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 1e83468..0933397 100644
+index b690c1b..28ff84d 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -385,6 +385,12 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+@@ -391,6 +391,12 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
  	return root, nil
  }
  
@@ -181,7 +167,7 @@ index 1e83468..0933397 100644
  var sharedKeyFields = map[string]bool{
  	"priority": true, "prefix": true, "proxy-url": true, "headers": true,
  	"models": true, "excluded-models": true, "disable-cooling": true,
-@@ -426,7 +432,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -432,7 +438,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		}
  		for i := 0; i < len(group.Content); i += 2 {
  			field := group.Content[i].Value
@@ -190,7 +176,7 @@ index 1e83468..0933397 100644
  				return nil, fmt.Errorf("api-keys.%s: unsupported group field %s", provider, field)
  			}
  		}
-@@ -440,7 +446,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -446,7 +452,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  			item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
  			for i := 0; i < len(group.Content); i += 2 {
  				field := group.Content[i].Value
@@ -199,7 +185,7 @@ index 1e83468..0933397 100644
  					setYAMLPath(item, field, group.Content[i+1])
  				}
  			}
-@@ -503,7 +509,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -509,7 +515,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  			key := deepCopyNode(entry)
  			for i := 0; i < len(entry.Content); i += 2 {
  				field := entry.Content[i].Value
@@ -209,10 +195,10 @@ index 1e83468..0933397 100644
  					deleteYAMLPath(key, field)
  				}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
-index d2975a7..d251b0f 100644
+index 17aff52..b5f9da8 100644
 --- a/internal/config/parse.go
 +++ b/internal/config/parse.go
-@@ -58,6 +58,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+@@ -106,6 +106,9 @@ func validateStartupConfig(data []byte, optional bool) (*startupConfig, error) {
  	if errValidate := cfg.Codex.LiveMediaRelay.Validate(); errValidate != nil {
  		return nil, errValidate
  	}
@@ -223,10 +209,10 @@ index d2975a7..d251b0f 100644
  		return nil, errValidate
  	}
 diff --git a/internal/runtime/executor/claude_executor_execute.go b/internal/runtime/executor/claude_executor_execute.go
-index 5bd2e31..0b073b3 100644
+index 9390136..d71c19e 100644
 --- a/internal/runtime/executor/claude_executor_execute.go
 +++ b/internal/runtime/executor/claude_executor_execute.go
-@@ -212,7 +212,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -213,7 +213,12 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -240,7 +226,7 @@ index 5bd2e31..0b073b3 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequestDoc(doc, mcpAliases)
  		if err != nil {
-@@ -381,7 +386,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -383,7 +388,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  		threadMessageID = claudeMessageIDFromSSE(data)
  		if msgID := threadMessageID; msgID != "" {
  			commitClaudeContinuity(diagnosticsState, msgID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -251,7 +237,7 @@ index 5bd2e31..0b073b3 100644
  		}
  		lines := bytes.Split(data, []byte("\n"))
  		var eventBuf bytes.Buffer
-@@ -423,7 +430,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
+@@ -425,7 +432,9 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
  		messageID := claudeMessageIDFromResponse(data)
  		threadMessageID = messageID
  		commitClaudeContinuity(diagnosticsState, messageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -496,10 +482,10 @@ index 0000000..5edd0f7
 +	}
 +}
 diff --git a/internal/runtime/executor/claude_executor_stream.go b/internal/runtime/executor/claude_executor_stream.go
-index 4de4be9..d6ae1a7 100644
+index cb63d6d..44b761a 100644
 --- a/internal/runtime/executor/claude_executor_stream.go
 +++ b/internal/runtime/executor/claude_executor_stream.go
-@@ -209,7 +209,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -210,7 +210,12 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  	// Extract betas from body and convert to header
  	var extraBetas []string
  	var oauthToolNamesReverseMap map[string]string
@@ -513,7 +499,7 @@ index 4de4be9..d6ae1a7 100644
  		mcpAliases := resolveClaudeMCPAliasOptions(ctx, opts.Metadata, req.Metadata)
  		oauthToolNamesReverseMap, err = e.prepareClaudeOAuthToolNamesForRequestDoc(doc, mcpAliases)
  		if err != nil {
-@@ -398,7 +403,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -400,7 +405,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  
  		streamBody := threadBetas.StreamReader(decodedBody, func(messageID string) {
  			commitClaudeContinuity(diagnosticsState, messageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -524,7 +510,7 @@ index 4de4be9..d6ae1a7 100644
  		})
  		// If the response target is Claude, directly forward complete SSE events without translation.
  		if responseFormat == to {
-@@ -474,7 +481,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -477,7 +484,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  			}
  			if upstreamCompleted {
  				commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -535,7 +521,7 @@ index 4de4be9..d6ae1a7 100644
  			}
  			return
  		}
-@@ -577,7 +586,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
+@@ -581,7 +590,9 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
  		}
  		if upstreamCompleted {
  			commitClaudeContinuity(diagnosticsState, upstreamMessageID, helps.HeaderValueCaseInsensitive(httpResp.Header, "request-id"))
@@ -547,7 +533,7 @@ index 4de4be9..d6ae1a7 100644
  	}()
  	result := &cliproxyexecutor.StreamResult{Headers: httpResp.Header.Clone(), Chunks: out}
 diff --git a/internal/runtime/executor/claude_executor_tokens.go b/internal/runtime/executor/claude_executor_tokens.go
-index 9a872bc..a139fcd 100644
+index fe94084..ca48a7b 100644
 --- a/internal/runtime/executor/claude_executor_tokens.go
 +++ b/internal/runtime/executor/claude_executor_tokens.go
 @@ -70,6 +70,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
@@ -563,7 +549,7 @@ index 9a872bc..a139fcd 100644
  	helps.NormalizeClaudeToolPropertyNamesDoc(doc)
  	sanitizeClaudeMessagesForClaudeUpstreamWithDebugDoc(ctx, doc, baseModel, helps.APIKeyModelIsCompat(req))
  	applyClaudePreservedThinkingBindingDoc(doc)
-@@ -226,7 +232,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
+@@ -227,7 +233,12 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
  		normalizeCacheControlTTLDoc(doc)
  	}
  
@@ -578,7 +564,7 @@ index 9a872bc..a139fcd 100644
  		prepareClaudeOAuthToolNamesForUpstreamDoc(doc, mcpAliases)
  	}
 diff --git a/internal/runtime/executor/openai_compat_executor.go b/internal/runtime/executor/openai_compat_executor.go
-index 1c72c5e..3d9c154 100644
+index 512c4f1..309e5ed 100644
 --- a/internal/runtime/executor/openai_compat_executor.go
 +++ b/internal/runtime/executor/openai_compat_executor.go
 @@ -22,6 +22,7 @@ import (

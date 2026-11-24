@@ -4,15 +4,16 @@ Keep validated grouped configuration, keyed synthesis, alias resolution and
 management indexes independent of chat compatibility. Add a raw client route,
 executor and internal-only model registration using native selection, cooldown
 and per-client usage reporting. Select configured response objects and usage
-locations.
+locations. Upstream 8.1.2 centralizes startup parsing in validateStartupConfig;
+the passthrough YAML precheck remains ahead of optional-loader fallback.
 Applied after key-allowlist and zhipuai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.
 
 diff --git a/config.example.yaml b/config.example.yaml
-index 6b798c3..7deb1ab 100644
+index 08651e4..985eda0 100644
 --- a/config.example.yaml
 +++ b/config.example.yaml
-@@ -1011,6 +1011,20 @@ upstream:
+@@ -1016,6 +1016,20 @@ upstream:
  #         - api-key: "..."
  #           weight: 5 # optional: weighted-round-robin share; omitted defaults to 1; maximum 1,000,000
  #
@@ -636,10 +637,10 @@ index 57a8fd8..5aa29dc 100644
  		v1.POST("/completions", openaiHandlers.Completions)
  		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)
 diff --git a/internal/config/config.go b/internal/config/config.go
-index 9cd301b..530d0ed 100644
+index f9e632f..1280c6d 100644
 --- a/internal/config/config.go
 +++ b/internal/config/config.go
-@@ -199,6 +199,9 @@ type Config struct {
+@@ -203,6 +203,9 @@ type Config struct {
  	// OpenAICompatibility defines OpenAI API compatibility configurations for external providers.
  	OpenAICompatibility []OpenAICompatibility `yaml:"openai-compatibility" json:"openai-compatibility"`
  
@@ -649,36 +650,11 @@ index 9cd301b..530d0ed 100644
  	// VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.
  	// Used for services that use Vertex AI-style paths but with simple API key authentication.
  	VertexCompatAPIKey []VertexCompatKey `yaml:"vertex-api-key" json:"vertex-api-key"`
-diff --git a/internal/config/config_load.go b/internal/config/config_load.go
-index 10c7a69..e6a0a4d 100644
---- a/internal/config/config_load.go
-+++ b/internal/config/config_load.go
-@@ -178,6 +178,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
- 		return cfg, nil
- 	}
- 
-+	if errValidate := validatePassthroughYAML(data); errValidate != nil {
-+		return nil, errValidate
-+	}
-+
- 	if errValidate := validateCredentialWeightYAML(data); errValidate != nil {
- 		if optional {
- 			cfgOptional := &Config{CredentialInFlight: DefaultCredentialInFlightConfig()}
-@@ -242,6 +246,9 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
- 	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
- 		return nil, errValidate
- 	}
-+	if errValidate := cfg.ValidatePassthrough(); errValidate != nil {
-+		return nil, errValidate
-+	}
- 	if errValidate := ValidateKeyAllowlist(cfg.KeyAllowlist); errValidate != nil {
- 		return nil, errValidate
- 	}
 diff --git a/internal/config/config_v8.go b/internal/config/config_v8.go
-index 0933397..a142a1b 100644
+index 28ff84d..ccd9c67 100644
 --- a/internal/config/config_v8.go
 +++ b/internal/config/config_v8.go
-@@ -70,6 +70,7 @@ var v8KeyFamilies = []configPath{
+@@ -72,6 +72,7 @@ var v8KeyFamilies = []configPath{
  	{"vertex-api-key", "vertex"}, {"codex-api-key", "codex"},
  	{"claude-api-key", "claude"}, {"xai-api-key", "xai"}, {"meta-api-key", "meta"},
  	{"openai-compatibility", "openai-compatibility"},
@@ -686,7 +662,7 @@ index 0933397..a142a1b 100644
  }
  
  func buildV8Paths() []configPath {
-@@ -385,6 +386,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
+@@ -391,6 +392,13 @@ func flattenV8(node *yaml.Node) (*yaml.Node, error) {
  	return root, nil
  }
  
@@ -700,7 +676,7 @@ index 0933397..a142a1b 100644
  // isV8GroupKeyField is shared with the settings extractor: a field accepted
  // on a provider group must also appear in that group's generated schema.
  func isV8GroupKeyField(provider, field string) bool {
-@@ -416,7 +424,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
+@@ -422,7 +430,7 @@ func expandV8Groups(groups *yaml.Node, provider string) (*yaml.Node, error) {
  		if err := validateWeightSequenceNode(keys, "api-keys."+provider+".keys"); err != nil {
  			return nil, err
  		}
@@ -709,7 +685,7 @@ index 0933397..a142a1b 100644
  			item := deepCopyNode(group)
  			deleteYAMLPath(item, "keys")
  			deleteYAMLPath(item, "auth_index")
-@@ -496,7 +504,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
+@@ -502,7 +510,7 @@ func groupLegacyKeys(keys *yaml.Node, provider string) *yaml.Node {
  	out := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
  	for index, entry := range keys.Content {
  		group := deepCopyNode(entry)
@@ -791,21 +767,21 @@ index 0000000..d9e9061
 +	}
 +}
 diff --git a/internal/config/parse.go b/internal/config/parse.go
-index d251b0f..516bf15 100644
+index b5f9da8..28e1437 100644
 --- a/internal/config/parse.go
 +++ b/internal/config/parse.go
-@@ -16,6 +16,10 @@ func ParseConfigBytes(data []byte) (*Config, error) {
- 		return nil, fmt.Errorf("config payload is empty")
+@@ -57,6 +57,10 @@ func validateStartupConfig(data []byte, optional bool) (*startupConfig, error) {
+ 	if err == nil && len(docs) == 0 {
+ 		err = fmt.Errorf("config payload is empty")
  	}
- 
-+	if errValidate := validatePassthroughYAML(data); errValidate != nil {
-+		return nil, errValidate
++	if errPassthrough := validatePassthroughYAML(data); errPassthrough != nil {
++		return nil, errPassthrough
 +	}
 +
- 	if errValidate := validateCredentialWeightYAML(data); errValidate != nil {
- 		return nil, errValidate
+ 	if err == nil {
+ 		err = validateCredentialWeightsNode(docs[0].Content[0])
  	}
-@@ -61,6 +65,9 @@ func ParseConfigBytes(data []byte) (*Config, error) {
+@@ -109,6 +113,9 @@ func validateStartupConfig(data []byte, optional bool) (*startupConfig, error) {
  	if errValidate := cfg.ValidateClaudeToolAliases(); errValidate != nil {
  		return nil, errValidate
  	}
@@ -1193,10 +1169,10 @@ index 0000000..1eab4a5
 +	}
 +}
 diff --git a/internal/registry/model_registry.go b/internal/registry/model_registry.go
-index 001f108..095b586 100644
+index 84ec75b..2647ada 100644
 --- a/internal/registry/model_registry.go
 +++ b/internal/registry/model_registry.go
-@@ -1641,6 +1641,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
+@@ -1697,6 +1697,43 @@ func modelRegistrationAvailability(registration *ModelRegistration, now time.Tim
  	return available, expiresAt
  }
  
@@ -1240,7 +1216,7 @@ index 001f108..095b586 100644
  // GetAvailableModelInfos returns cloned metadata for all currently available models.
  func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	now := r.now()
-@@ -1650,10 +1687,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
+@@ -1706,10 +1743,11 @@ func (r *ModelRegistry) GetAvailableModelInfos() []*ModelInfo {
  	result := make([]*ModelInfo, 0, len(r.models))
  	for _, registration := range r.models {
  		available, _ := modelRegistrationAvailability(registration, now)
@@ -1254,7 +1230,7 @@ index 001f108..095b586 100644
  	}
  	sort.Slice(result, func(i, j int) bool {
  		return strings.TrimSpace(result[i].ID) < strings.TrimSpace(result[j].ID)
-@@ -1674,7 +1712,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
+@@ -1730,7 +1768,7 @@ func (r *ModelRegistry) buildAvailableModelsLocked(handlerType string, now time.
  			continue
  		}
  
@@ -1263,7 +1239,7 @@ index 001f108..095b586 100644
  		if model != nil {
  			models = append(models, model)
  		}
-@@ -1728,6 +1766,9 @@ func cloneModelMapValue(value any) any {
+@@ -1784,6 +1822,9 @@ func cloneModelMapValue(value any) any {
  //   - []*ModelInfo: List of available models for the provider
  func (r *ModelRegistry) GetAvailableModelsByProvider(provider string) []*ModelInfo {
  	provider = strings.ToLower(strings.TrimSpace(provider))
@@ -1878,7 +1854,7 @@ index 0000000..919cabd
 +	}
 +}
 diff --git a/sdk/api/handlers/handlers_execution.go b/sdk/api/handlers/handlers_execution.go
-index 65b2bce..8d3b7f1 100644
+index e368be0..8817c5d 100644
 --- a/sdk/api/handlers/handlers_execution.go
 +++ b/sdk/api/handlers/handlers_execution.go
 @@ -10,6 +10,7 @@ import (
@@ -1982,10 +1958,10 @@ index 0000000..f14a1cd
 +	}
 +}
 diff --git a/sdk/api/handlers/handlers_routing.go b/sdk/api/handlers/handlers_routing.go
-index 671aa51..009c50f 100644
+index 25d8fda..fb8c7d1 100644
 --- a/sdk/api/handlers/handlers_routing.go
 +++ b/sdk/api/handlers/handlers_routing.go
-@@ -10,6 +10,7 @@ import (
+@@ -11,6 +11,7 @@ import (
  
  	. "github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
@@ -1993,7 +1969,7 @@ index 671aa51..009c50f 100644
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
  	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
  	coreexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
-@@ -58,6 +59,14 @@ func preferExecutionProvider(providers []string, preferred string) []string {
+@@ -59,6 +60,14 @@ func preferExecutionProvider(providers []string, preferred string) []string {
  }
  
  func adjustExecutionProvidersForEntryProtocol(entryProtocol string, providers []string) []string {
@@ -2008,7 +1984,7 @@ index 671aa51..009c50f 100644
  	if entryProtocol == Interactions {
  		return preferExecutionProvider(providers, GeminiInteractions)
  	}
-@@ -361,6 +370,9 @@ func modelRoutersEnabled(host PluginModelRouterHost, skipPluginID string) bool {
+@@ -367,6 +376,9 @@ func modelRoutersEnabled(host PluginModelRouterHost, skipPluginID string) bool {
  
  func (h *BaseAPIHandler) applyModelRouter(ctx context.Context, handlerType, modelName string, rawJSON []byte, stream bool, execOptions modelExecutionOptions) modelRouteDecision {
  	var decision modelRouteDecision
@@ -2065,10 +2041,10 @@ index 0000000..2c3f9af
 +	c.Data(http.StatusOK, "application/json", response)
 +}
 diff --git a/sdk/cliproxy/auth/conductor_models.go b/sdk/cliproxy/auth/conductor_models.go
-index d0d3f49..d973f34 100644
+index d42d72c..5125d4e 100644
 --- a/sdk/cliproxy/auth/conductor_models.go
 +++ b/sdk/cliproxy/auth/conductor_models.go
-@@ -516,6 +516,9 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
+@@ -626,6 +626,9 @@ func configuredModelAliasEntries(cfg *internalconfig.Config, auth *Auth) []model
  		return nil
  	}
  	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
@@ -2078,7 +2054,7 @@ index d0d3f49..d973f34 100644
  	var models []modelAliasEntry
  	switch provider {
  	case "gemini":
-@@ -677,6 +680,9 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
+@@ -787,6 +790,9 @@ func (m *Manager) rebuildAPIKeyModelAliasLocked(cfg *internalconfig.Config) {
  
  		byAlias := make(map[string]string)
  		provider := strings.ToLower(strings.TrimSpace(auth.Provider))
@@ -2116,7 +2092,7 @@ index 0000000..b5cd3d0
 +	return model.String(), nil
 +}
 diff --git a/sdk/cliproxy/service_executors.go b/sdk/cliproxy/service_executors.go
-index 4b0f0b9..990ed11 100644
+index 889f595..0406145 100644
 --- a/sdk/cliproxy/service_executors.go
 +++ b/sdk/cliproxy/service_executors.go
 @@ -7,6 +7,7 @@ import (
@@ -2142,7 +2118,7 @@ index 4b0f0b9..990ed11 100644
  	// Keep all Service-owned executor registration paths here so native, Home,
  	// auth-derived, and plugin executors stay in the same binding order.
  	if opts.includeBaseline {
-@@ -359,6 +368,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
+@@ -360,6 +369,14 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
  	if a.Disabled {
  		return
  	}
@@ -2158,10 +2134,10 @@ index 4b0f0b9..990ed11 100644
  		if compatProviderKey == "" {
  			compatProviderKey = strings.ToLower(strings.TrimSpace(a.Provider))
 diff --git a/sdk/cliproxy/service_models.go b/sdk/cliproxy/service_models.go
-index 196a0fd..87123e3 100644
+index b28582c..9e5cc0d 100644
 --- a/sdk/cliproxy/service_models.go
 +++ b/sdk/cliproxy/service_models.go
-@@ -57,6 +57,23 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
+@@ -58,6 +58,23 @@ func (s *Service) registerModelsForAuthWithConfigAndCache(ctx context.Context, c
  			return true
  		}
  	}

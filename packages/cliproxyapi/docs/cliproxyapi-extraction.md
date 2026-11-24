@@ -63,7 +63,13 @@ package so it can read those unexported tables. It reflects every YAML-tagged
 and retains unchanged paths whose roots `v8AllowedRoots()` accepts. Every
 relocated current path must appear in the result or extraction fails. Scalar
 roots accepted by `v8AllowedRoots()` but absent from the structs, including
-`config-version`, take their key and type from the canonical template.
+`config-version`, take their key and type from the canonical template. The one
+nested separately decoded exception is `server.server-id`: CPA's custom YAML
+decoder reads it directly from the raw YAML node through its own `serverIDPath`,
+while its `yaml:"-"` tag keeps the normal field walk from seeing it. The
+extractor therefore reflects `Config.ServerID` at that production path. Every
+other nested template key still requires a reflected node and remains an
+extraction failure when absent.
 
 An upstream key family becomes `api-keys.<family>[]` groups holding `name` and
 `keys`; `isV8GroupKeyField` supplies the group fields to both CPA's loader and

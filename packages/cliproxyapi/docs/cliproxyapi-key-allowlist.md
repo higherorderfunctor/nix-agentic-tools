@@ -1,6 +1,6 @@
 # CLIProxyAPI client-key allowlist
 
-> **Last verified:** 2026-11-19 — loading rejects duplicate client keys and
+> **Last verified:** 2026-11-23 — loading rejects duplicate client keys and
 > startup exits 1 on refusal. Hot reload can briefly serve a retired config
 > credential under newly widened rules, so rotation that also widens access
 > requires a restart or an `ids` rule. Named instance client routes derive
@@ -110,23 +110,24 @@ The shared Caddy helpers remain in use by the MCP proxy.
 
 Two entries with the same trimmed client key would merge rules into one
 principal and widen access. CPA rejects them by entry index, without logging the
-secret. Validation runs after decoding in both `LoadConfigOptional` and
-`ParseConfigBytes`: cloud-deploy turns decode errors into an empty config, so
-validation inside the decoder would erase a refusal. Initial load (including
-cloud-deploy's optional load), hot reload, management writes, and Home pushes
-all reach one of these paths. Startup exits 1 before serving; hot reload retains
-the previous config and retries a later valid write; management `PUT` answers
-422 without writing; a Home push is refused. A caller that constructs `Config`
-directly bypasses loading, so the Manager compiles duplicate entries into an
-allowlist granting no key any credential. Empty client keys bind no request.
+secret. Validation runs after decoding in `validateStartupConfig`, which both
+`LoadConfigOptional` and `ParseConfigBytes` call: cloud-deploy turns decode
+errors into an empty config, so validation inside the decoder would erase a
+refusal. Initial load (including cloud-deploy's optional load), hot reload,
+management writes, and Home pushes all reach one of these paths. Startup exits 1
+before serving; hot reload retains the previous config and retries a later valid
+write; management `PUT` answers 422 without writing; a Home push is refused. A
+caller that constructs `Config` directly bypasses loading, so the Manager
+compiles duplicate entries into an allowlist granting no key any credential.
+Empty client keys bind no request.
 
 The eligibility predicate covers the legacy candidate loop, scheduler fast path,
 the alternative-target check (`Manager.HasAlternativeTargetForModel`), retry,
 Codex continuity retries, and cooldown waits. `SelectAuth` always uses the
 legacy loop; mixed `Execute` with a built-in selector exercises the scheduler
-fast path. Plugin schedulers receive only surviving candidates. Two 8.0.40 paths
-bypass that predicate: Home dispatch, which is refused, and the Antigravity
-credits fallback, which checks the allowlist itself. The fallback matters when
+fast path. Plugin schedulers receive only surviving candidates. Home dispatch is
+the one legacy path that bypasses the predicate, and it is refused. Upstream
+8.1.2’s Antigravity credits fallback uses the shared predicate and matters when
 selection fails because a client key has no Antigravity rule. Plugin executors
 and `host.auth.get` bypass eligibility; this is why enabling plugins must be
 refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
@@ -223,8 +224,8 @@ Manager and devenv.
 
 The package applies `patches/key-allowlist.patch`,
 `patches/zhipuai-tool-shims.patch`, and `patches/passthrough-provider.patch` in
-that order. All three apply to CPA 8.0.79 and 8.0.80 with zero fuzz. Extraction
-and the Go checks read that same patched source.
+that order. All three apply to CPA 8.1.2 with zero fuzz. Extraction and the Go
+checks read that same patched source.
 
 Fetch the version from `sources.json` into scratch and verify its unpacked NAR
 hash. Check each patch with `patch --dry-run -p1 --fuzz=0`, then apply it before

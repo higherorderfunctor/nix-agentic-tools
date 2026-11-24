@@ -63,6 +63,8 @@
     # config/config_validation.go: raw params must contain valid JSON text
     "requests.payload.default-raw[].params.<name>" = "{}";
     "requests.payload.override-raw[].params.<name>" = "{}";
+    # config/server_id.go: a supplied identity is a nonzero hyphenated UUID
+    "server.server-id" = "69ec4306-978f-4dae-8365-5409c17985fc";
     # config/trusted_proxies.go: an IP or CIDR
     "server.trusted-proxies[]" = "127.0.0.1";
     # config/config_normalization.go: supported client-request-id mode
