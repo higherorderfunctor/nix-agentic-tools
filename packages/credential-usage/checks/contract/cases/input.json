@@ -38,6 +38,52 @@
     }
   },
   "unobserved": {
+    "free-text-reason": {
+      "changes": { "slotStates.grants.reason": "unavailable-response" }
+    },
+    "observed-inventory": {
+      "changes": {
+        "balances": [
+          {
+            "kind": "credit",
+            "amount": 1.25,
+            "expiresAt": null,
+            "funding": "purchased",
+            "scope": "account",
+            "unit": "USD",
+            "usable": true
+          }
+        ],
+        "bonuses": [
+          {
+            "kind": "grant",
+            "clears": ["5h"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": null,
+            "funding": "promotional",
+            "givesBackWeekly": null,
+            "handle": "example",
+            "remaining": 2,
+            "requiresLimit": null,
+            "scope": null,
+            "startsAt": null,
+            "usable": true,
+            "weeklyResetsAt": null
+          },
+          {
+            "kind": "reset",
+            "expiresAt": null,
+            "handle": "weekly",
+            "quantity": 1
+          }
+        ],
+        "accountedSpend": { "cost": 3, "currency": "USD", "source": "meter" },
+        "slotStates.accountedSpend": { "state": "observed" },
+        "slotStates.grants": { "state": "observed" },
+        "slotStates.resetInventory": { "state": "observed" }
+      }
+    },
     "unknown-grant": {
       "changes": {
         "bonuses": [
@@ -212,7 +258,7 @@
   "instant": {
     "offset-fraction": {
       "changes": {
-        "observedAt": "2026-01-01T03:00:00.125000+02:00"
+        "observedAt": "2026-01-01T03:00:00.1234567+02:00"
       }
     },
     "naive": {

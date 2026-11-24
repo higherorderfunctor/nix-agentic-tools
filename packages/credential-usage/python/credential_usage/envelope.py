@@ -51,10 +51,12 @@ def utc_text(value: datetime) -> str:
 Instant = Annotated[
     AwareDatetime, BeforeValidator(aware_instant), PlainSerializer(utc_text, when_used="json")
 ]
+"""Publish UTC instants at microsecond precision. Drop finer digits without rounding."""
+
 Name = Annotated[str, Field(pattern=r"\S")]
 Percent = Annotated[float, Field(ge=0, le=100)]
 Quantity = Annotated[int, Field(ge=0)]
-Reason = Annotated[str, Field(pattern=r"^[a-z0-9-]{1,40}$")]
+SlotReason = Literal["grants-unavailable", "prepaid-organization-unknown", "prepaid-unavailable"]
 Scope = Literal["account"] | Annotated[list[Name], Field(min_length=1)] | None
 WindowId = Annotated[str, Field(pattern=r"^[^:\s]+(:[^:\s][^:]*)?$")]
 
@@ -104,7 +106,7 @@ class InvalidWindow(ContractModel):
     """Retain a proven zero when other facts about the window failed validation."""
 
     state: Literal["invalid"]
-    reason: Reason
+    reason: Literal["invalid-reset", "invalid-utilization"]
     remainingPercent: Annotated[float, Field(ge=0, le=0)] | MISSING = MISSING
 
 
@@ -112,7 +114,7 @@ class MissingWindow(ContractModel):
     """Name a window the vendor omitted so consumers can distinguish it from zero."""
 
     state: Literal["missing"]
-    reason: Reason
+    reason: Literal["meter-unreported"]
 
 
 Window = Annotated[ObservedWindow | InvalidWindow | MissingWindow, Field(discriminator="state")]
@@ -128,7 +130,7 @@ class Unknown(ContractModel):
     """Give consumers a reason code when the Reader could not verify a slot."""
 
     state: Literal["unknown"]
-    reason: Reason
+    reason: SlotReason
 
 
 class Unsupported(ContractModel):
