@@ -4,12 +4,26 @@
   inherit (pkgs.ai.generic) python-stack;
   credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
   usagePython = python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule]);
+  synthetic = (import ./lib/default.nix).ai.credential-usage.conformanceCheck {
+    inherit pkgs python-stack;
+    name = "credential-usage-conformance";
+    ownerModules = [];
+    pair = ./checks/conformance/synthetic/cases;
+    entry = "synthetic.cli:main";
+  };
   strict = ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
   '';
 in {
   checks = {
+    credential-usage-conformance = synthetic.overrideAttrs (old: {
+      buildCommand =
+        old.buildCommand
+        + ''
+          python3 -I -B ${./checks/conformance}/test_conformance.py -v
+        '';
+    });
     credential-usage-contract =
       pkgs.runCommand "credential-usage-contract" {
         nativeBuildInputs = [usagePython];
@@ -35,9 +49,10 @@ in {
         python3 -I -B ${./checks/contract}/test_envelope.py TestEnvelope.test_requires_supported_schema_version
         touch "$out"
       '';
-    credential-usage-types = pkgs.runCommand "credential-usage-types" {nativeBuildInputs = [pkgs.pyright usagePython];} ''
+    credential-usage-types = pkgs.runCommand "credential-usage-types" {nativeBuildInputs = [pkgs.pyright synthetic.python];} ''
       ${strict}
       pyright --project ${./python} --pythonpath "$(command -v python3)"
+      pyright --project ${./checks/conformance} --pythonpath "$(command -v python3)"
       touch "$out"
     '';
   };

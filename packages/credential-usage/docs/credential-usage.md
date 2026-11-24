@@ -1,7 +1,7 @@
 # Credential usage
 
-> **Last verified:** 2026-11-24 — the version 1 envelope, Reader runner and
-> transport share one Python module.
+> **Last verified:** 2026-11-24 — the conformance suite compares direct and CPA
+> request traces and version 1 Reader results.
 
 This package owns the shared parts of reading a credential's usage. A vendor
 owns what to ask its API and what the answer means. The credential owner
@@ -110,16 +110,45 @@ Delegate-routing describes how it uses the windows in
 CPA supplies the credential transport today, in
 `packages/cliproxyapi/usage/transport.py`, and tests it with
 `cliproxyapi-usage-transport`. Airlock will supply one, and its UI will read the
-same Reader output. A future `checks/conformance` will run the same named cases
-against every Reader.
+same Reader output.
+
+## Conformance suite
+
+Give your fill an importable command entry `main(env, clock) -> int` and one
+fixture directory. In `input.json`, supply a description, the supported
+transports, a UTC start time (`now` ending in `Z`), named HTTP replies (status
+and literal body text), credential file contents and Bash program bodies in
+`executables`. Each named scenario supplies `env` and an ordered list of reply
+names on every declared transport. Use `${credentials:name}` for a private file
+path and `${bin}` for the program directory. The suite prepends that directory
+to `PATH`.
+
+In `expected.json`, write each scenario and transport's complete `requests` and
+`result` by hand. Include the method, URL, headers and body for each HTTP call.
+Write JSON request bodies as JSON values. Use `[credential:name]` where the
+request carries a credential. The clock advances one second per call. Compare
+the envelope at the end of the read. For a failure, expect empty stdout and one
+stderr line, written as `{"failed":"usage: <reason>"}`. Choose a fixed public
+phrase for the reason. The suite checks both streams for credentials and failed
+response bodies.
+
+From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
+the fill and both transport modules installed. Append `<scenario>/<transport>`
+to select one case. In Nix, call `lib.ai.credential-usage.conformanceCheck` with
+`pkgs`, `python-stack`, a check `name`, the fill's `ownerModules`, `pair` and
+`entry`. Supply extra command-line tools in `extraPackages`. For mutation
+testing, set `READER_PAIR` and `READER_ENTRY` and collect
+`test_conformance.py::GoldenCases` with pytest. Each scenario and transport has
+its own selectable test.
 
 ## Checks
 
-`credential-usage-contract` checks envelope decisions. `credential-usage-schema`
-checks the published schema and example. `credential-usage-runner` checks
-process behavior, and `credential-usage-types` runs strict Pyright. The Nix
-checks import the installed module. Local runs need `pydantic` and read the
-checkout:
+`credential-usage-conformance` exercises the suite against working and broken
+Readers. `credential-usage-contract` checks envelope decisions.
+`credential-usage-schema` checks the published schema and example.
+`credential-usage-runner` checks process behavior, and `credential-usage-types`
+runs strict Pyright. The Nix checks import the installed module. Local runs need
+`pydantic` and read the checkout:
 
 ```bash
 python3 checks/runner/test_runner.py
