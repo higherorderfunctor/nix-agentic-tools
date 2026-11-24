@@ -1,0 +1,32 @@
+Stop Vertex Imagen streams from panicking on a nil scanner.
+
+The Imagen stream path reads the whole response and never creates a
+scanner, but the pending-filter flush calls scanner.Err() without
+checking for that. Every Imagen stream through the service-account or
+API-key path dereferences nil and kills the process. This adds the same
+isImagenModel(baseModel) guard the neighbouring checks already use.
+
+Works around upstream e049c336b6c2 (fix(vertex): normalize Imagen
+predict protocol), present in CPA 8.1.2. Drop it once an upstream
+release guards these two calls.
+
+--- a/internal/runtime/executor/gemini_vertex_executor.go
++++ b/internal/runtime/executor/gemini_vertex_executor.go
+@@ -1144,7 +1144,7 @@
+ 			}
+ 			return
+ 		}
+-		if scanner.Err() == nil && len(pendingFilterLine) > 0 {
++		if (isImagenModel(baseModel) || scanner.Err() == nil) && len(pendingFilterLine) > 0 {
+ 			if !guardAndEmitLine(pendingFilterLine) {
+ 				return
+ 			}
+@@ -1560,7 +1560,7 @@
+ 			}
+ 			return
+ 		}
+-		if scanner.Err() == nil && len(pendingFilterLine) > 0 {
++		if (isImagenModel(baseModel) || scanner.Err() == nil) && len(pendingFilterLine) > 0 {
+ 			if !guardAndEmitLine(pendingFilterLine) {
+ 				return
+ 			}

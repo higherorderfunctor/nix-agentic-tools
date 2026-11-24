@@ -1,10 +1,10 @@
 # CLIProxyAPI typed settings
 
-> **Last verified:** 2026-10-30 — 933 config nodes, including the patched
+> **Last verified:** 2026-11-23 — 1089 config nodes, including the patched
 > `access.key-allowlist`, give the settings type through
 > `lib/extracted/options.nix`, with refinements and module assertions on the
 > allowlist; the clean render passes native v8 validation and loads through CPA
-> 8.0.40's `LoadConfig` in `cliproxyapi-settings`; `ai.cliproxyapi.instances`
+> 8.1.2's `LoadConfig` in `cliproxyapi-settings`; `ai.cliproxyapi.instances`
 > renders it at start, defaults its listener to loopback, turns off the
 > unprompted fetches the pinned CPA has a switch for, types `server.tls.key` as
 > a secret file, and derives named client keys' `access.api-keys` and
@@ -28,12 +28,22 @@ shared rules are in `dev/fragments/extracted/typed-settings.md`.
 `settings.server.host` defaults to `127.0.0.1` through `mkDefault`, so a
 consumer can explicitly override the bind address. `stateDir`
 (`<state root>/cliproxyapi/<name>`) fixes `oauth.auth-dir` to `<stateDir>/auth`,
-where CLIProxyAPI writes its OAuth logins. The launcher renders the settings to
-`config.json` at each start and the run script, inside `stateDir` so the `.env`
-and `logs/` CLIProxyAPI resolves against its working directory are its own,
+where CLIProxyAPI writes its OAuth logins. The service launcher atomically
+renders the settings to `config.json` in its per-service runtime directory at
+every start, while the run script works inside `stateDir` so the `.env` and
+`logs/` CLIProxyAPI resolves against its working directory are its own, and
 execs `cliproxyapi --config "$CPA_CONFIG"`. CLIProxyAPI's rewrites of its config
 reach only that copy and are lost at restart. `ai.settings.inference.instance`
 points the harnesses at an instance by name.
+
+`server.server-id` is the one nested setting CPA's custom YAML decoder reads
+directly from the raw YAML node instead of through the flattened legacy struct.
+The extracted type is an optional string. A nonempty value must be a nonzero
+hyphenated UUID and is normalized to lowercase; omitted, null, and
+whitespace-empty values leave identity unset. The service launcher re-renders
+`config.json` at every start, so CPA allocates a UUID into that copy but an
+omitted identity does not survive the next launcher start. Set a valid UUID
+explicitly when an instance needs persistent identity across restarts.
 
 `credentials` and `clientKeys` declare upstream credentials and client access
 once on the Instance. Harnesses select

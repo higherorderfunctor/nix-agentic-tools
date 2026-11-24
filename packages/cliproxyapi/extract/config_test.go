@@ -372,6 +372,17 @@ func TestNatExtract(t *testing.T) {
 		families[family.old] = family.current
 	}
 	config := reflect.TypeOf(Config{})
+	serverID, hasServerID := config.FieldByName("ServerID")
+	if !hasServerID {
+		t.Fatal("Config has no ServerID field")
+	}
+	// Config.UnmarshalYAML reads server.server-id directly from the raw YAML
+	// node; its yaml:"-" tag keeps the normal field walk from seeing it.
+	serverIDCurrent := strings.Join(serverIDPath, ".")
+	x.emit(serverIDCurrent, natNode{
+		Description: x.doc(config, "ServerID"),
+		Type:        x.kind(serverID.Type, serverIDCurrent),
+	})
 	natFields(config, natYAML, func(tag string, field reflect.StructField, owner reflect.Type) {
 		if current, ok := families[tag]; ok {
 			x.family(field, owner, current)

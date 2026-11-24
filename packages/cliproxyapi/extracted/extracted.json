@@ -2530,7 +2530,7 @@
     "oauth.excluded-models.<name>": { "type": "list" },
     "oauth.excluded-models.<name>[]": { "type": "string" },
     "oauth.model-alias": {
-      "description": "OAuthModelAlias defines global model name aliases for OAuth/file-backed auth channels.\nThese aliases affect both model listing and model routing for supported channels:\nvertex, aistudio, antigravity, claude, codex, kimi, xai, meta.\n\nNOTE: This does not apply to existing per-credential model alias features under:\ngemini-api-key, interactions-api-key, codex-api-key, xai-api-key, meta-api-key, claude-api-key, openai-compatibility, and vertex-api-key.",
+      "description": "OAuthModelAlias defines global model name aliases for OAuth/file-backed auth channels.\nThese aliases affect both model listing and model routing for supported channels,\nincluding vertex, aistudio, antigravity, claude, codex, kimi, xai, meta, and copilot.\n\nNOTE: This does not apply to existing per-credential model alias features under:\ngemini-api-key, interactions-api-key, codex-api-key, xai-api-key, meta-api-key, claude-api-key, openai-compatibility, and vertex-api-key.",
       "type": "map"
     },
     "oauth.model-alias.<name>": { "type": "list" },
@@ -2580,7 +2580,7 @@
       "type": "string"
     },
     "oauth.providers.antigravity.connection-pool.max-idle-conns-per-host": {
-      "description": "MaxIdleConnsPerHost specifies the maximum number of idle connections to retain per host per credential.\nDefaults to 2.",
+      "description": "MaxIdleConnsPerHost specifies the maximum number of idle connections to retain per host per credential.\nDefaults to 2. Zero or negative values disable idle pooling (short-lived connection mode).",
       "type": "int"
     },
     "oauth.providers.antigravity.sensitive-patterns-replace": {
@@ -2637,7 +2637,7 @@
     "oauth.providers.codex.header-defaults.user-agent": { "type": "string" },
     "oauth.providers.codex.live-media-relay": {
       "description": "LiveMediaRelay terminates and relays Codex Live WebRTC media in this process.",
-      "template": "Terminate and relay Codex Live WebRTC audio and DataChannel traffic in this process.\nThis requires inbound UDP reachability. Keep disabled to preserve direct media behavior.",
+      "template": "Terminate and relay Codex Live WebRTC audio and DataChannel traffic in this process.\nThis requires inbound UDP reachability. Keep disabled to preserve direct media behavior.\nOn Solaris and illumos, leave this disabled: in-process media relay is unsupported.\nEnabling it returns HTTP 503 for call setup; direct SDP forwarding and sideband work when disabled.",
       "type": "object"
     },
     "oauth.providers.codex.live-media-relay.disable-private-remote-ips": {
@@ -2709,7 +2709,7 @@
     },
     "oauth.providers.devin.sensitive-words[]": { "type": "string" },
     "oauth.request-scoped-errors": {
-      "description": "OAuthRequestScopedErrors defines per-provider request-scoped error rules applied to OAuth/file-backed auth entries.\nSupported channels include: vertex, aistudio, antigravity, claude, codex, kimi, xai, meta, and OAuth plugin provider keys.\n\nNOTE: This applies only to OAuth credentials and does not affect per-credential request-scoped-errors under *-api-key.",
+      "description": "OAuthRequestScopedErrors defines per-provider request-scoped error rules applied to OAuth/file-backed auth entries.\nSupported channels include vertex, aistudio, antigravity, claude, codex, kimi, xai, meta, copilot, and OAuth plugin provider keys.\n\nNOTE: This applies only to OAuth credentials and does not affect per-credential request-scoped-errors under *-api-key.",
       "type": "map"
     },
     "oauth.request-scoped-errors.<name>": { "type": "list" },
@@ -3411,6 +3411,11 @@
       "description": "MinBytes defaults to 1024 when zero or negative.",
       "template": "Non-streaming responses smaller than this many bytes are sent uncompressed.",
       "type": "int"
+    },
+    "server.server-id": {
+      "description": "ServerID is the stable deployment UUID from server.server-id, or a\nprocess-local identity when the file cannot be written. It is not public JSON.",
+      "template": "Deployment UUID. Leave empty to generate and save one on the first valid startup.\nThe value is normalized to lowercase; a read-only file uses a generated ID for\nthis process only. Reuse the persisted value across restarts and shared storage.",
+      "type": "string"
     },
     "server.shutdown-timeout": {
       "description": "ShutdownTimeoutSeconds controls how long the API server waits for in-flight\nrequests to finish during shutdown before forcibly closing connections.\n0 (the default) keeps the legacy behavior of closing immediately without draining.\nValues are in seconds.",
