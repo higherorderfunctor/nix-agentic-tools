@@ -9,6 +9,9 @@
   inherit (pkgs) lib;
 in {
   checks = {
+    # Build the exact updater used by preparation before accepting an input bump.
+    nix-update-patch = self.ciNixUpdate.${pkgs.stdenv.hostPlatform.system};
+
     # Catch backup/reject leakage in actual patched source trees. These are the
     # recipes that expose their patched tree as a derivation; recipes that patch
     # inside their own build rely on patch-flags proving the shared list.

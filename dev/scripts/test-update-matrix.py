@@ -1460,7 +1460,7 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         if new_rev is not None:
             env["NEW_REV"] = new_rev
         return subprocess.run(
-            ["bash", str(SCRIPTS / "update-pkg.sh"), "demo", *(flags or ["--version", "skip"]), "https://github.com/example/demo.git"],
+            ["bash", os.path.relpath(SCRIPTS / "update-pkg.sh", self.repo), "demo", *(flags or ["--version", "skip"]), "https://github.com/example/demo.git"],
             cwd=self.repo,
             env=env,
             capture_output=True,
@@ -1474,6 +1474,18 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         updated = self.git("show", "update/demo:packages/demo/package.nix")
         self.assertIn('goFloor = "1.26.8";', updated)
         self.assertEqual(self.git("rev-list", "--count", f"{self.base}..update/demo"), "1")
+
+    def test_package_selects_updater_from_automation_checkout(self):
+        result = self.run_package("floor", floor=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(line) for line in (self.root / "nix-calls").read_text().splitlines()]
+        self.assertIn(
+            [
+                "run", f"{SCRIPTS.parents[1]}#ciNixUpdate.x86_64-linux", "--",
+                "--flake", "ciPackages.x86_64-linux.demo", "--system", "x86_64-linux", "--version", "skip",
+            ],
+            calls,
+        )
 
     def test_git_source_prefetches_with_the_fetchers_own_flags(self):
         result = self.run_package("floor-submodules", floor=True)

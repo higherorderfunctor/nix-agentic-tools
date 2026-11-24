@@ -254,6 +254,14 @@
       pkgs = pkgsFor "x86_64-linux";
     };
 
+    # Drop the local patch when nix-update's merged-patch probe declares only
+    # the output it writes, including for packages with separate debug info.
+    ciNixUpdate = forAllSystems (system:
+      inputs.nix-update.packages.${system}.default.overrideAttrs (old: {
+        inherit (import ./lib/packaging.nix) patchFlags;
+        patches = (old.patches or []) ++ [./dev/nix-update-probe-outputs.patch];
+      }));
+
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
