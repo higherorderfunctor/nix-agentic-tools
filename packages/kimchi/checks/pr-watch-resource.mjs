@@ -52,6 +52,10 @@ const stubs = {
   "src/extensions/pii-redaction/resource": {
     PII_REDACTION_RESOURCE_ID: "extensions.stub-pii-redaction",
   },
+  "src/extensions/prompt-construction/claude-code-instructions-resource": {
+    CLAUDE_CODE_INSTRUCTIONS_RESOURCE_ID:
+      "extensions.stub-claude-code-instructions",
+  },
   "src/extensions/side-chat/resource": {
     SIDE_CHAT_PILL_RESOURCE_ID: "extensions.stub-side-chat-pill",
   },
