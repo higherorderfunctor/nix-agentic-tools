@@ -1,5 +1,7 @@
-# Checks and routing helpers pass pkgs and python-stack to build the module
-# for their chosen interpreter through this public library entry.
+# Fill owners use the shared envelope and run their command against its fixture pair.
 {
-  ai.credential-usage.pythonModule = import ./python-module.nix;
+  ai.credential-usage = {
+    conformanceCheck = import ./conformance.nix;
+    pythonModule = import ./python-module.nix;
+  };
 }
