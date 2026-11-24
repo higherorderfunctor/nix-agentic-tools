@@ -1123,7 +1123,7 @@
     { "maturity": "under development", "name": "code_mode" },
     { "maturity": "removed", "name": "code_mode_buffered_exec" },
     { "maturity": "stable", "name": "code_mode_host" },
-    { "maturity": "stable", "name": "code_mode_host_grpc" },
+    { "maturity": "removed", "name": "code_mode_host_grpc" },
     { "maturity": "stable", "name": "code_mode_host_output_truncation" },
     { "maturity": "stable", "name": "code_mode_interrupt" },
     { "maturity": "under development", "name": "code_mode_only" },
@@ -1143,6 +1143,10 @@
     {
       "maturity": "under development",
       "name": "concurrent_reasoning_summaries"
+    },
+    {
+      "maturity": "under development",
+      "name": "connector_tool_result_passthrough"
     },
     { "maturity": "stable", "name": "content_item_kinds" },
     { "maturity": "under development", "name": "context_management" },
@@ -1254,7 +1258,7 @@
     { "maturity": "experimental", "name": "login_shell_package_path" },
     { "maturity": "under development", "name": "mcp_2026_07_28" },
     { "maturity": "under development", "name": "mcp_connection_sharing" },
-    { "maturity": "under development", "name": "mcp_lazy_stdio_startup" },
+    { "maturity": "stable", "name": "mcp_lazy_stdio_startup" },
     { "maturity": "stable", "name": "mcp_oauth_refresh_coordination" },
     { "maturity": "under development", "name": "mcp_shared_repl_cwd" },
     { "maturity": "under development", "name": "mcp_tool_list_changed" },
@@ -1288,6 +1292,7 @@
     { "maturity": "experimental", "name": "prevent_idle_sleep" },
     { "maturity": "under development", "name": "psp" },
     { "maturity": "removed", "name": "realtime_conversation" },
+    { "maturity": "under development", "name": "realtime_frames_local" },
     { "maturity": "stable", "name": "reasoning_effort_override" },
     { "maturity": "stable", "name": "recommended_plugins" },
     { "maturity": "removed", "name": "remote_compaction_v2" },
