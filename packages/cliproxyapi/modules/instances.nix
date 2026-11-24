@@ -70,8 +70,8 @@ backend: {
     (builtins.filter (provider: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" provider == null) (builtins.attrNames (providersLib.apiKeys instance)));
   # Every instance is a selectable proxy (lib/ai/inference); a selected client
   # carries its key and its routed credentials, with the API-key models of each
-  # route's resolved API, in route order. The claim keeps the name unique
-  # across proxy owners.
+  # route's resolved API and the ids its route opted into `pickerModels`, in
+  # route order. The claim keeps the name unique across proxy owners.
   inferenceInstances =
     lib.mapAttrs (name: instance: {
       backend = "cliproxyapi";
@@ -81,10 +81,11 @@ backend: {
           credentials = lib.concatMap (choice: let
             result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;
           in
-            lib.optional (builtins.hasAttr choice.credential instance.credentials && (!(result ? api) || providersLib.apis.${result.api}.harnessApi)) {
-              name = choice.credential;
-              models = result.models or [];
-            })
+            lib.optional (builtins.hasAttr choice.credential instance.credentials && (!(result ? api) || providersLib.apis.${result.api}.harnessApi)) ({
+                name = choice.credential;
+                models = result.models or [];
+              }
+              // lib.optionalAttrs (choice.pickerModels != []) {inherit (choice) pickerModels;}))
           client.routes;
         })
         instance.clientKeys;

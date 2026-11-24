@@ -229,8 +229,15 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages);
-        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
+        # devenv delivers the rows through the launcher's `--settings` file.
+        pickerFile = result:
+          lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" ((lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages)).buildCommand or ""));
+        # The rows Claude's picker receives: user settings on Home Manager,
+        # the launcher's settings file on devenv.
+        claudeRows = result:
+          if backend == "hm"
+          then (claudeSettings result).modelPicker.options or []
+          else (builtins.fromJSON (builtins.readFile (lib.head (pickerFile result)))).modelPicker.options;
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
         # One credential whose APIs serve different models; the
@@ -270,6 +277,26 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
+        # Claude's client routes a Codex OAuth login that opts into a raw GPT
+        # id and into `glm-5.3`, a synthetic collision with the API key routed
+        # after it, then routes the login again with a repeat. The Codex client
+        # also supplies picker metadata on its separate OAuth route.
+        codexOptIn = pickerModels:
+          evaluate backend (instanceChange {
+            credentials.codex.oauth = {
+              vendor = "codex";
+              account = redact.file "/run/secrets/cpa-codex-account";
+            };
+            clientKeys.personal.routes = lib.mkForce [
+              ((route "codex") // {inherit pickerModels;})
+              {
+                credential = "zhipuai";
+                api = "anthropic";
+              }
+              ((route "codex") // {inherit pickerModels;})
+            ];
+            clientKeys.work.routes = lib.mkForce [((route "work") // {inherit pickerModels;})];
+          });
         checks = {
           "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
           "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
@@ -353,7 +380,59 @@ in {
             ];
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
-          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = rows;});
+          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile result != null && builtins.fromJSON (builtins.readFile (lib.head (pickerFile result))) == {modelPicker.options = rows;});
+          "OAuth route opt-in lists raw ids in route order, first row of a repeat" = let
+            opted = codexOptIn ["gpt-6.2-sol" "glm-5.3"];
+          in
+            failedMessages opted
+            == []
+            && opted.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "codex";
+                models = [];
+                pickerModels = ["gpt-6.2-sol" "glm-5.3"];
+              }
+              {
+                name = "zhipuai";
+                inherit (apiKey) models;
+              }
+              {
+                name = "codex";
+                models = [];
+                pickerModels = ["gpt-6.2-sol" "glm-5.3"];
+              }
+            ]
+            && claudeRows opted
+            == [
+              {
+                description = "codex through CLIProxyAPI";
+                model = "gpt-6.2-sol";
+              }
+              {
+                description = "codex through CLIProxyAPI";
+                model = "glm-5.3";
+              }
+              (lib.last rows)
+            ]
+            && (backend == "hm" || !((claudeSettings opted) ? modelPicker));
+          "OAuth route opt-in changes no CPA config or Codex file" = let
+            plain = codexOptIn [];
+            opted = codexOptIn ["gpt-6.2-sol" "glm-5.3"];
+          in
+            failedMessages plain == [] && rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;
+          "API-key route refuses pickerModels" = let
+            apiKeyRoute =
+              (route "zhipuai")
+              // {
+                api = "anthropic";
+                pickerModels = ["gpt-6.2-sol"];
+              };
+          in
+            refused backend "API-key credential `zhipuai` takes its picker rows from its declared models; remove pickerModels" (instanceChange {clientKeys.personal.routes = lib.mkForce [(route "personal") apiKeyRoute];});
+          "blank or spaced picker model id refused" =
+            lib.all (pickerModels: rejectsType (instanceChange {clientKeys.personal.routes = lib.mkForce [((route "personal") // {inherit pickerModels;})];}))
+            [[""] [" "] ["gpt 6"] ["gpt-6.2-sol" "\t"]];
           "client key hand-written access refused" = refused backend "lists ai.cliproxyapi.instances.clients.clientKeys.personal.key by hand" (instanceChange {settings.access.api-keys = [(clientKey "personal")];});
           "client key hand-written rule refused" = refused backend "hand-written entry for ai.cliproxyapi.instances.clients.clientKeys.personal.key" (instanceChange {
             settings.access.key-allowlist = [

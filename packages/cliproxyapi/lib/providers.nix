@@ -319,6 +319,9 @@
       };
     };
   });
+  # A raw upstream model id as a picker row names it: non-empty, with no
+  # whitespace for a harness to trim into a different id.
+  modelIdType = types.strMatching "[^[:space:]]+" // {description = "a model id without whitespace";};
   clientKeyType = types.submodule {
     options = {
       key = mkOption {
@@ -336,6 +339,11 @@
             credential = mkOption {
               type = types.str;
               description = "Name in this Instance's credentials. Routes preserve this list's order without promising CPA fallback order.";
+            };
+            pickerModels = mkOption {
+              type = types.listOf modelIdType;
+              default = [];
+              description = "Raw upstream model ids, such as `gpt-6.2-sol`, that Claude Code's `/model` picker lists for an OAuth route. Presentation only: it grants no access and changes no routing, and no other catalog is derived from it. An API-key route refuses it, since its picker rows come from the credential's declared models.";
             };
           };
         });
@@ -370,6 +378,8 @@
           accounts = [credential.oauth.account];
         };
       }
+    else if choice.pickerModels != []
+    then {problem = "${path}: API-key credential `${choice.credential}` takes its picker rows from its declared models; remove pickerModels.";}
     else if api == null
     then {problem = "${path}: API-key credential `${choice.credential}` needs api because it does not serve exactly one API.";}
     else if !(lib.elem api available)

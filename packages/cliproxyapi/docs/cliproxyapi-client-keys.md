@@ -1,8 +1,9 @@
 ## CLIProxyAPI instance client keys and routes
 
-> **Last verified:** 2026-11-07 — carries the proposed architecture decision for
-> named routing; named client keys generate CPA access keys and allowlist rules
-> from credential routes. Conflicting hand-written entries are refused.
+> **Last verified:** 2026-11-24 — OAuth routes can supply Claude picker rows.
+> carries the proposed architecture decision for named routing; named client
+> keys generate CPA access keys and allowlist rules from credential routes.
+> Conflicting hand-written entries are refused.
 
 ## Architecture decisions
 
@@ -49,6 +50,16 @@ URL remain separate grants. The client key and rules stay available for
 `POST /v1/passthrough`, while the entire route is omitted from harness inference
 credentials and model lists. See `cliproxyapi-passthrough.md` for the named Nix
 shape, envelope options and secret path references.
+
+An OAuth route can list raw upstream model ids in `pickerModels`, for example
+`routes = [{credential = "codex"; pickerModels = ["gpt-6.2-sol"];}]`. Claude
+Code then shows each id in its `/model` picker beside the rows for declared
+API-key models. The list only labels picker rows: it grants no access, changes
+no CPA rule and feeds no other catalog, so CPA still decides whether the login
+serves a request. The default `[]` adds nothing. An id listed twice across a
+client's routes shows once, with the first route's credential. An API-key route
+with `pickerModels` fails evaluation because its rows come from the credential's
+declared models, as does a blank id or one containing whitespace.
 
 `credentials.<name>.exclusive` is an opt-in check scoped to each enabled
 instance's client key. If either of two distinct routed credentials sets it to

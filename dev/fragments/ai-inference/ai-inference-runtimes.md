@@ -1,11 +1,12 @@
 ## ai.settings.inference runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-30 — each runtime's inference library
-> (`packages/<owner>/lib/inference.nix`) holds one lowering per backend (only
-> `cliproxyapi`, which also lowers external selections) and asserts on any
-> other; lowerings derive native values at `mkDefault`. Claude's helper and
-> launcher keep inherited credentials away from the proxy; Codex uses
-> command-backed provider auth; Kimchi, Kiro and Copilot warn.
+> **Last verified:** 2026-11-24 — OAuth routes can supply Claude picker rows.
+> each runtime's inference library (`packages/<owner>/lib/inference.nix`) holds
+> one lowering per backend (only `cliproxyapi`, which also lowers external
+> selections) and asserts on any other; lowerings derive native values at
+> `mkDefault`. Claude's helper and launcher keep inherited credentials away from
+> the proxy; Codex uses command-backed provider auth; Kimchi, Kiro and Copilot
+> warn.
 
 ### Claude (packages/claude-code/lib/inference.nix)
 
@@ -51,16 +52,20 @@ already writes (user on Home Manager, project on devenv). Every derived leaf is
 a `mkDefault`, so a consumer's own value for one, such as
 `env.ANTHROPIC_BASE_URL`, wins without `mkForce`.
 
-Each declared API-key model of each routed upstream credential
+Each model id of each routed upstream credential
 (`normalized.settings.inference.credentials`) becomes one `modelPicker.options`
 row, `{model; description = "<credential> through CLIProxyAPI";}`, labelled with
-its id. `replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker
-builder returns the built-in lineup plus each new row unless that flag is
-`=== true`, and its schema says unset adds the rows after the built-ins. The
-same schema says `modelPicker` is honored only from managed, `--settings`/SDK
-and user settings, never a project checkout. So Home Manager writes the rows to
-user settings, where a consumer's own `modelPicker.options` list replaces the
-derived rows, and devenv's launcher adds `--settings <store file>` holding only
+its id. The ids are the API-key models a route resolves and the raw ids an OAuth
+route lists in `pickerModels`
+(`packages/cliproxyapi/docs/cliproxyapi-client-keys.md`), which reach the picker
+as written. Rows follow route order, and an id listed again keeps its first row.
+`replaceBuiltInOptions` stays unset: Claude Code 2.1.306's picker builder
+returns the built-in lineup plus each new row unless that flag is `=== true`,
+and its schema says unset adds the rows after the built-ins. The same schema
+says `modelPicker` is honored only from managed, `--settings`/SDK and user
+settings, never a project checkout. So Home Manager writes the rows to user
+settings, where a consumer's own `modelPicker.options` list replaces the derived
+rows, and devenv's launcher adds `--settings <store file>` holding only
 `modelPicker`. Since the highest scope that defines `modelPicker` wins outright,
 that devenv session shows the credential rows instead of any user picker rows.
 

@@ -1,8 +1,9 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
-> **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
-> a secret account email; named API-key credentials can select the built-in Z.ai
-> or OpenCode Go vendor defaults and a priority, and serve per-API models.
+> **Last verified:** 2026-11-24 — OAuth routes can supply Claude picker rows.
+> OAuth upstream credentials require vendor and a secret account email; named
+> API-key credentials can select the built-in Z.ai or OpenCode Go vendor
+> defaults and a priority, and serve per-API models.
 
 How a harness selects an instance and its client key is in
 `dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
@@ -56,10 +57,11 @@ API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
 letter or digit, so Go and Nix normalize their compatibility-provider identities
 alike.
 
-`normalized.settings.inference.credentials` is `[{name; models;}]` in client
-route order, each with the models of the route's resolved API. Claude turns
-declared API-key models into `/model` picker rows; Codex discovers CPA's catalog
-without per-credential `-p` profiles
+`normalized.settings.inference.credentials` is `[{name; models; pickerModels;}]`
+in client route order, each with the models of the route's resolved API and,
+when a route sets it, that route's `pickerModels`
+(`cliproxyapi-client-keys.md`). Claude turns both into `/model` picker rows;
+Codex discovers CPA's catalog without per-credential `-p` profiles
 (`dev/fragments/ai-inference/ai-inference-runtimes.md`). Route list order is
 preserved in generated rules and picker rows; it does not define CPA priority or
 fallback. `apiKey.priority` is an optional integer, omitted from CPA config when

@@ -28,15 +28,24 @@
       inherit key;
       option = "ai.claude.settings.inference.key";
     };
-    # One row per model of each routed upstream credential, in route order.
-    # Claude labels a row with its model id when it has no label.
-    rows = lib.concatMap (credential:
-      map (model: {
-        description = "${credential.name} through CLIProxyAPI";
-        inherit model;
-      })
-      credential.models)
-    credentials;
+    # One row per distinct model id of the routed upstream credentials, in
+    # route order: an API-key credential's declared models, then the ids an
+    # OAuth route lists in `pickerModels`, which reach the proxy unconverted.
+    # A repeated id keeps its first row's description. CPA chooses the
+    # upstream credential separately.
+    rows =
+      lib.foldl' (listed: row:
+        if lib.any (known: known.model == row.model) listed
+        then listed
+        else listed ++ [row])
+      []
+      (lib.concatMap (credential:
+        map (model: {
+          description = "${credential.name} through CLIProxyAPI";
+          inherit model;
+        })
+        (credential.models ++ (credential.pickerModels or [])))
+      credentials);
     # toFile: the rows hold no store paths, and evaluation can read it back.
     picker = builtins.toFile "claude-inference-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
   in {
