@@ -1,3 +1,4 @@
+# cspell:ignore hungerg
 # The Home Manager and devenv harnesses render credential defaults from the merged catalog.
 # Both compare the rendered routes with the extracted vendor inventories.
 {
@@ -130,9 +131,12 @@
   # Select by input data rather than pinning a removable release model id.
   chosenZhipuai = lib.head zhipuai.models;
   # Independent maker expectations expose namespace drift and invented makers.
-  # A model without canonical_id has an undisclosed maker, expected as null.
+  # Stealth models with a routing preset expect their hand-written placeholder;
+  # any other model without canonical_id has an undisclosed maker, expected as null.
   expectedMaker = id:
-    if id == "iceman-contributor-free"
+    if id == "hungerg-free"
+    then "hungerg"
+    else if id == "iceman-contributor-free"
     then "iceman"
     else if go.${id} ? canonical_id
     then lib.head (lib.splitString "/" go.${id}.canonical_id)

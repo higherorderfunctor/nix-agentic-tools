@@ -1,12 +1,22 @@
+# cspell:ignore hungerg
 # OpenCode Go contributes extracted model identities to the catalog and maps selected offers
 # back to their native transport metadata for credential defaults and catalog checks.
 {lib}: let
   inherit (import ../providers.nix {inherit lib;}) baseUrlType;
   go = import ../opencode-go-models.nix {inherit lib;};
   extracted = go.models;
+  # Stealth models with a delegate-routing preset get a placeholder maker named
+  # after the model. A concrete launch refuses a null maker (validateId in
+  # delegate-routing/lib/select-families.nix), so without one, selecting the
+  # opencode-go vendor through CPA would fail evaluation.
+  placeholderMakers = {
+    hungerg-free = "hungerg";
+    iceman-contributor-free = "iceman";
+  };
   # Map Go models to catalog identities. canonical_id names the maker;
-  # owned_by names the serving vendor instead, so a model without canonical_id
-  # gets a null maker. Called for the extracted models and by checks/catalog.nix.
+  # owned_by names the serving vendor instead, so a model with neither
+  # canonical_id nor a placeholder gets a null maker. Called for the extracted
+  # models and by checks/catalog.nix.
   identitiesOf = lib.mapAttrs (id: model: let
     canonical = model.canonical_id or null;
     namespace =
@@ -14,14 +24,11 @@
       then null
       else lib.head (lib.splitString "/" canonical);
   in {
-    maker =
-      if id == "iceman-contributor-free"
-      then "iceman"
-      else namespace;
+    maker = placeholderMakers.${id} or namespace;
     source =
       ["cliproxyapi:opencodeGo.models.${id}"]
       # The upstream identity is undisclosed, not evidence for another maker.
-      ++ lib.optional (id == "iceman-contributor-free") "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
+      ++ lib.optional (placeholderMakers ? ${id}) "packages/delegate-routing/lib/opencode-go.nix: maker undisclosed";
   });
   # External spellings belong to this owner, never the shared identity catalog.
   servedModels = lib.mapAttrs (id: model: [id] ++ lib.optional (model ? canonical_id) model.canonical_id) extracted;
