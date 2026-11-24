@@ -2,15 +2,13 @@
 """Owner checks call this script with a fixture directory, an importable Reader entry and a case."""
 
 from collections.abc import Sequence
-from importlib import import_module
 from pathlib import Path
 import sys
-from typing import cast
 
 # Isolated Python omits the script directory, which holds the shared suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from suite import Entry, IncompletePair, Pair, differences
+from suite import IncompletePair, Pair, differences
 
 
 def main(args: Sequence[str]) -> int:
@@ -20,11 +18,9 @@ def main(args: Sequence[str]) -> int:
         return 1
     try:
         pair = Pair.read(Path(args[0]))
-        module, name = args[1].split(":")
-        entry = cast(Entry, getattr(import_module(module), name))
         selector = args[2] if len(args) == 3 else "all"
         cases = list(pair.cases.values()) if selector == "all" else [pair.cases[selector]]
-        errors = [error for case in cases for error in differences(pair.inputs, case, entry)]
+        errors = [error for case in cases for error in differences(pair.inputs, case, args[1])]
     except IncompletePair as error:
         print(error, file=sys.stderr)
         return 1

@@ -28,6 +28,11 @@
     "proxy-wallet": {
       "status": 200,
       "body": "{\"status_code\":200,\"body\":\"[]\"}"
+    },
+    "proxy-failed": {
+      "status": 200,
+      "private": true,
+      "body": "{\"status_code\":503,\"body\":\"{\\\"message\\\":\\\"private nested upstream detail\\\"}\"}"
     }
   },
   "scenarios": {
@@ -60,7 +65,7 @@
           "CREDENTIAL_FILE": "${credentials:login}",
           "TRANSPORT": "cpa"
         },
-        "replies": ["proxy-allowance", "failed"]
+        "replies": ["proxy-allowance", "proxy-failed"]
       }
     },
     "primary-failure": {
@@ -76,7 +81,7 @@
           "CREDENTIAL_FILE": "${credentials:login}",
           "TRANSPORT": "cpa"
         },
-        "replies": ["failed"]
+        "replies": ["proxy-failed"]
       }
     },
     "unreadable-credential": {
