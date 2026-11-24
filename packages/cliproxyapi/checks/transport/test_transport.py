@@ -72,14 +72,14 @@ class TransportTests(unittest.TestCase):
                     outcome = (
                         binding.value
                         if isinstance(binding, UnknownBinding)
-                        else binding.request(fixture.requests[case.request]).model_dump()
+                        else (binding.account_name, binding.request(fixture.requests[case.request]).model_dump())
                     )
                 except RequestFailure as error:
                     outcome = str(error)
                 calls, result = expected["cases"][name]
                 self.assertEqual(mock.requests, [requests[key] for key in calls])
                 self.assertEqual(
-                    outcome, expected["success"] if result == "success" else result
+                    outcome, (None, expected["success"]) if result == "success" else result
                 )
 
     def test_direct_http_binds_the_token_and_owns_network_retries(self) -> None:

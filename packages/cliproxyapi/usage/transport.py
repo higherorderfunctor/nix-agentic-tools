@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 
-from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError
+from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError, field_validator
 
 from credential_usage.transport import (
     FrozenModel,
@@ -26,6 +26,12 @@ class AuthFile(FrozenModel):
     email: str | None = None
     name: str | None = None
     provider: str | None = None
+
+    @field_validator("email", "name", mode="before")
+    @classmethod
+    def optional_label(cls, value: object) -> str | None:
+        """Keep optional attribution independent of credential selection."""
+        return value if isinstance(value, str) else None
 
 
 class AuthFiles(FrozenModel):

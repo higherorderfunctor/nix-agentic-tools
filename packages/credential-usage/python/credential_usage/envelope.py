@@ -106,7 +106,7 @@ class InvalidWindow(ContractModel):
     """Retain a proven zero when other facts about the window failed validation."""
 
     state: Literal["invalid"]
-    reason: Literal["invalid-reset", "invalid-utilization"]
+    reason: Literal["conflicting-meter", "invalid-reset", "invalid-utilization"]
     remainingPercent: Annotated[float, Field(ge=0, le=0)] | MISSING = MISSING
 
 

@@ -27,17 +27,17 @@ FileName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")]
 Document = dict[str, JsonValue]
 
 
-def credential_file_name(name: str) -> str:
-    """Keep dotfiles in the fixture directory and refuse the two directory aliases."""
-    if name in (".", ".."):
-        raise ValueError("expected a credential file name")
-    return name
+def credential_path(path: str) -> str:
+    """Keep every credential beneath the fixture directory, including nested dotfiles."""
+    if any(part in (".", "..") for part in path.split("/")):
+        raise ValueError("expected a relative credential path without directory aliases")
+    return path
 
 
-CredentialFileName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+$"), AfterValidator(credential_file_name)]
+CredentialPath = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"), AfterValidator(credential_path)]
 
 
-CredentialFiles = dict[CredentialFileName, Annotated[str, Field(min_length=1)]]
+CredentialFiles = dict[CredentialPath, Annotated[str, Field(min_length=1)]]
 
 
 class FixtureModel(BaseModel):
@@ -202,6 +202,7 @@ def case_environment(
     directory.mkdir()
     for name, content in credentials.items():
         path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         path.chmod(0o600)
     programs = root / "bin"
