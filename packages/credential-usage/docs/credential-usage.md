@@ -127,10 +127,14 @@ In `expected.json`, write each scenario and transport's complete `requests` and
 `result` by hand. Include the method, URL, headers and body for each HTTP call.
 Write JSON request bodies as JSON values. Use `[credential:name]` where the
 request carries a credential. The clock advances one second per call. Compare
-the envelope at the end of the read. For a failure, expect empty stdout and one
-stderr line, written as `{"failed":"usage: <reason>"}`. Choose a fixed public
-phrase for the reason. The suite checks both streams for credentials and failed
-response bodies.
+the JSON values exactly as the Reader prints them, including URL spelling and
+UTC timestamps. For a failure, expect empty stdout and one stderr line, written
+as `{"failed":"usage: <reason>"}`. Choose a fixed public phrase for the reason.
+The suite checks both streams for credentials and failed response bodies. Set
+`"private": true` on a named reply when an upstream failure arrives inside a
+successful HTTP response. Every non-2xx reply is private automatically. Keep the
+whole private body and each of its JSON string values, including strings inside
+nested JSON text, out of both streams. The Reader must also load silently.
 
 From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`

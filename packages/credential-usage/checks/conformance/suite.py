@@ -4,13 +4,15 @@
 from collections.abc import Callable, Generator, Iterator, Mapping
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
+from importlib import import_module
 import json
 import os
 from pathlib import Path
 import re
 from shutil import which
+import sys
 from tempfile import TemporaryDirectory, TemporaryFile
-from typing import Annotated, Literal, NamedTuple, TextIO
+from typing import Annotated, Literal, NamedTuple, TextIO, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError, field_validator
 from urllib3.response import HTTPResponse
@@ -34,6 +36,7 @@ class Reply(FixtureModel):
     """Deliver the scripted status and literal HTTP response text."""
     status: Annotated[int, Field(ge=100, le=599)]
     body: str
+    private: bool = False
 
 
 class Scenario(FixtureModel):
@@ -112,8 +115,10 @@ class Pair(NamedTuple):
         return cls(inputs, cases)
 
 
-def credential_strings(content: str) -> Iterator[str]:
-    """Mask both a credential file and the strings a Reader can extract from JSON credentials."""
+def private_strings(content: str) -> Iterator[str]:
+    """Find literal private text and strings a Reader can extract from nested JSON."""
+    if not content:
+        return
     yield content
     if content.strip() and content.strip() != content:
         yield content.strip()
@@ -124,7 +129,7 @@ def credential_strings(content: str) -> Iterator[str]:
 
     def strings(value: JsonValue) -> Iterator[str]:
         if isinstance(value, str) and value:
-            yield value
+            yield from private_strings(value)
         elif isinstance(value, dict):
             for part in value.values():
                 yield from strings(part)
@@ -227,7 +232,9 @@ def public_result(status: int | None, out: str, err: str) -> Document | None:
     """Decode one successful envelope or an exact public failure line as the command's consumer."""
     if status == 0:
         try:
-            return Envelope.model_validate_json(out).model_dump(mode="json")
+            document = TypeAdapter(Document).validate_json(out, strict=True)
+            Envelope.model_validate(document)
+            return document
         except ValidationError:
             return None
     if status is not None and not out and re.fullmatch(r"usage: [^\r\n]+\n", err):
@@ -244,26 +251,34 @@ def same_json(left: JsonValue, right: JsonValue) -> bool:
     return isinstance(left, bool) == isinstance(right, bool) and left == right
 
 
-def differences(inputs: Inputs, case: Case, entry: Entry) -> list[str]:
+def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
     """Run the actual command and return only safe case labels for every failed comparison."""
+    errors: list[str] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     masks = {
         spelling: f"[credential:{name}]"
         for name, content in inputs.credentials.items()
-        for value in credential_strings(content)
+        for value in private_strings(content)
         for spelling in (value, json.dumps(value)[1:-1])
     }
     network = ScriptedNetwork(inputs.now, replies, masks)
     with TemporaryDirectory() as tmp:
         env = case_environment(Path(tmp), inputs, case.scenario.env)
         with (
+            patch.dict(sys.modules),
             patch.dict(os.environ, env, clear=True),
             patch("urllib3.request", network.request),
             captured_stream(1) as stdout,
             captured_stream(2) as stderr,
         ):
             try:
-                status = entry(env, network.clock)
+                module, name = entry.split(":")
+                try:
+                    command = cast(Entry, getattr(import_module(module), name))
+                finally:
+                    if stdout.tell() or stderr.tell():
+                        errors.append("import output")
+                status = command(env, network.clock)
             except Exception:
                 # Exception text can include a raw body or a credential.
                 status = None
@@ -272,8 +287,8 @@ def differences(inputs: Inputs, case: Case, entry: Entry) -> list[str]:
             stderr.seek(0)
             out, err = stdout.read(), stderr.read()
 
-    errors: list[str] = []
-    private = [*masks, *(reply.body for reply in replies if not 200 <= reply.status < 300 and reply.body)]
+    private = [*masks, *(value for reply in replies if reply.private or not 200 <= reply.status < 300
+                         for value in private_strings(reply.body))]
     if any(secret in stream or json.dumps(secret)[1:-1] in stream for stream in (out, err) for secret in private):
         errors.append("leak")
     if len(network.requests) != len(replies):
