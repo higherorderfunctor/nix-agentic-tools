@@ -46,7 +46,7 @@
   fixtureHasNoLlmEndpoint = !(fixture.settingsOptions ? llmEndpoint);
 
   # A hand-table row whose path is gone, and a key whose type nothing maps.
-  withoutModelRoles = surfaceFor {removed = ["harness.keys.modelRoles"];};
+  withoutSkillPaths = surfaceFor {removed = ["config.keys.skillPaths"];};
   withUnion = surfaceFor {
     changes."harness.keys.probeUnion" = {
       optional = true;
@@ -206,17 +206,16 @@
       && !(accepts real.harnessSettingsOptions {workSemanticMatching = "true";})
       && (hmHarness {workSemanticMatching = true;}).workSemanticMatching;
 
-    hand-tables-are-current =
+    option-notes-are-current =
       real.report.staleNotes
       == []
-      && real.report.staleRefinements == []
-      && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"];
+      && withoutSkillPaths.report.staleNotes == ["settings.skillPaths"];
 
     # The devenv rejection list is the sidecar's per-key scope, including
     # Kimchi's own additions and pi's global-only keys a hand list once
     # missed.
     user-scope-harness-follows-the-sidecar =
-      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles" "workSemanticMatching"]
+      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "sessionNameModel" "workSemanticMatching"]
       && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
       && !(lib.elem "theme" real.userScopeHarnessKeys)
       && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys

@@ -76,32 +76,32 @@
           mutant "$kimchi" config-second-shape src/config.ts \
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
-            'import { homedir } from "node:os"' $'import { homedir } from "node:os"\nconst ModelCustomMetadataSchema = 0'
+            'import { homedir } from "node:os"' $'import { homedir } from "node:os"\ninterface FermentV2Settings {}'
           mutant "$kimchi" hand-shape-new-member src/config.ts \
             '		const enabled = parsed?.teleport?.compactHint?.enabled' $'\t\tif (typeof parsed?.teleport?.delayMs === "number") return false\n\t\tconst enabled = parsed?.teleport?.compactHint?.enabled'
           mutant "$kimchi" hand-shape-retyped src/config.ts \
             'return typeof seenAt === "string" && seenAt.length > 0' 'return typeof seenAt === "number"'
-          mutant "$kimchi" helper-computed-key src/extensions/multi-model.ts \
-            'readConfigSetting("multiModel"' 'readConfigSetting(String(Date.now())'
-          mutant "$kimchi" helper-unknown-key src/extensions/tags.ts \
-            'readConfigSetting("hidePhaseChanges"' 'readConfigSetting("hidePhaseChangesProbe"'
-          mutant "$kimchi" helper-unresolved-guard src/extensions/tags.ts \
-            'readConfigSetting("hidePhaseChanges", (value) => typeof value === "boolean", false)' \
-            'readConfigSetting("hidePhaseChangesProbe", (value) => Boolean(value), false)'
+          semantic_reader=src/extensions/work-attribution/semantic.ts
+          semantic_key='readConfigSetting("workSemanticMatching"'
+          semantic_read="$semantic_key"', (value): value is boolean => typeof value === "boolean")'
+          mutant "$kimchi" helper-computed-key "$semantic_reader" \
+            "$semantic_key" 'readConfigSetting(String(Date.now())'
+          mutant "$kimchi" helper-unknown-key src/extensions/session-name.ts \
+            '"sessionNameModel"' '"sessionNameModelProbe"'
+          mutant "$kimchi" helper-unresolved-guard "$semantic_reader" \
+            "$semantic_read" 'readConfigSetting("semanticProbe", (value) => Boolean(value))'
           mutant "$kimchi" helper-named-guard src/extensions/ferment-v2/settings.ts \
             'readConfigSetting("fermentV2", isPlainObject)' 'readConfigSetting("fermentV2Probe", isPlainObject)'
-          mutant "$kimchi" helper-guard-conflict src/extensions/multi-model.ts \
-            'readConfigSetting("multiModel", (value) => typeof value === "boolean")' \
-            'readConfigSetting("hidePhaseChanges", (value) => typeof value === "string")'
+          mutant "$kimchi" helper-guard-conflict "$semantic_reader" \
+            "$semantic_key" 'readConfigSetting("sessionNameModel"'
           mutant "$kimchi" helper-retained-conflict src/extensions/ferment-v2/settings.ts \
             'readConfigSetting("fermentV2", isPlainObject)' \
             'readConfigSetting("fermentV2", (value) => typeof value === "string")'
           mutant "$kimchi" helper-known-unresolved src/extensions/ferment-v2/settings.ts \
             'readConfigSetting("fermentV2", isPlainObject)' \
             'readConfigSetting("fermentV2", (value) => Boolean(value))'
-          mutant "$kimchi" helper-number-array src/extensions/tags.ts \
-            'readConfigSetting("hidePhaseChanges", (value) => typeof value === "boolean", false)' \
-            'readConfigSetting("hidePhaseChanges", (value): value is number[] => Array.isArray(value) && value.every((item) => typeof item === "number"), [])'
+          mutant "$kimchi" helper-number-array "$semantic_reader" \
+            "$semantic_read" 'readConfigSetting("workSemanticMatching", (value): value is number[] => Array.isArray(value) && value.every((item) => typeof item === "number"))'
           # The pi snapshot's own pi-tui entry: the only one followed by
           # photon-node. Read from the lockfile rather than spelled out, so a new
           # Kimchi patch hash on pi-tui cannot break the fixture; exactly one match
@@ -121,8 +121,6 @@
             "''${pi_tui_line/: $pi_tui_version/: $drifted_version}"$'\n'"$photon_line"
           mutant "$kimchi" inert-consumed src/config.ts \
             'export function getAgentConfigDir(): string {' $'export function getAgentConfigDir(): string {\n\tvoid loadConfig().maxToolResultChars'
-          mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
-            'orchestrator: string' 'orchestrator: number'
           mutant "$kimchi" project-tier src/config.ts \
             'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
           mutant "$pi" pi-scope-merged dist/core/settings-manager.js \
@@ -178,7 +176,7 @@
           # A second same-named declaration in a live module makes the schema
           # ambiguous, which must stop the extraction rather than pick one.
           expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
-            'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
+            'TypeScript declaration FermentV2Settings is declared 2 times' >> "$TMPDIR/proof"
           expect_rejection hand-shape-new-member "$TMPDIR/hand-shape-new-member-source" \
             'readTeleportCompactHintEnabled reads teleport.delayMs, which the teleport shape lacks' >> "$TMPDIR/proof"
           expect_rejection hand-shape-retyped "$TMPDIR/hand-shape-retyped-source" \
@@ -186,22 +184,22 @@
           expect_rejection helper-computed-key "$TMPDIR/helper-computed-key-source" \
             'passes a non-constant key to readConfigSetting' >> "$TMPDIR/proof"
           expect_rejection helper-guard-conflict "$TMPDIR/helper-guard-conflict-source" \
-            'harness setting hidePhaseChanges has incompatible read guards:' >> "$TMPDIR/proof"
+            'harness setting sessionNameModel has incompatible read guards:' >> "$TMPDIR/proof"
           expect_rejection helper-retained-conflict "$TMPDIR/helper-retained-conflict-source" \
             'harness setting fermentV2 has incompatible retained FermentV2Settings and read guard string at' >> "$TMPDIR/proof"
           expect_rejection lockfile-drift "$TMPDIR/lockfile-drift-source" \
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
-          expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
-            "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
-
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
-          # Reading the release tree would omit the patched naming role.
-          ${pkgs.jq}/bin/jq -e \
-            '.harness.keys.modelRoles.properties.sessionNamer | .type == "string" and .optional == true' \
-            "$TMPDIR/real.json" > /dev/null
-          echo 'real (exit 0): extracted optional single-string sessionNamer from the patched tree' >> "$TMPDIR/proof"
+          # The patched title setting is one optional user-level string. Upstream
+          # b1e77fad removed roles and their companion settings.
+          ${pkgs.jq}/bin/jq -e '
+            .harness.keys |
+            (.sessionNameModel | .type == "string" and .optional == true and .project == false and .source == "kimchi") and
+            (has("hidePhaseChanges") or has("modelMetadata") or has("modelRoles") or has("multiModel") | not)
+          ' "$TMPDIR/real.json" > /dev/null
+          echo 'real (exit 0): extracted the user-only sessionNameModel string without retired settings' >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
           if ${pkgs.jq}/bin/jq -e \
             '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
@@ -214,7 +212,7 @@
           fi
           # Reads without a type predicate remain visible as unknown; a typed
           # guard yields its accepted type even for a newly named key.
-          for fixture in config-parse-attribution:surveys helper-unresolved-guard:hidePhaseChangesProbe; do
+          for fixture in config-parse-attribution:surveys helper-unresolved-guard:semanticProbe; do
             IFS=: read -r label name <<< "$fixture"
             ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
             if ${pkgs.jq}/bin/jq -e --arg name "$name" \
@@ -227,7 +225,7 @@
               exit 1
             fi
           done
-          for fixture in helper-unknown-key:hidePhaseChangesProbe:boolean helper-named-guard:fermentV2Probe:object; do
+          for fixture in helper-unknown-key:sessionNameModelProbe:string helper-named-guard:fermentV2Probe:object; do
             IFS=: read -r label name type <<< "$fixture"
             ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
             ${pkgs.jq}/bin/jq -e --arg name "$name" --arg type "$type" \
@@ -237,7 +235,7 @@
           done
           ${runExtractor ''"$TMPDIR/helper-number-array-source"'' ''"$TMPDIR/helper-number-array.json"'' ''"$pi"''}
           ${pkgs.jq}/bin/jq -e \
-            '.harness.keys.hidePhaseChanges | .type == "array" and .items.type == "number"' \
+            '.harness.keys.workSemanticMatching | .type == "array" and .items.type == "number"' \
             "$TMPDIR/helper-number-array.json" > /dev/null
           echo 'helper-number-array (exit 0): retained number[] items' >> "$TMPDIR/proof"
           {
