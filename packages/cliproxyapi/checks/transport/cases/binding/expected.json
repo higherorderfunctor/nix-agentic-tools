@@ -2,13 +2,21 @@
   "description": "Each case expects complete requests in order, followed by the public result.",
   "request_defaults": {
     "method": "GET",
-    "headers": { "Content-Type": "application/json" },
+    "headers": {
+      "Content-Type": "application/json"
+    },
     "body": null
   },
   "requests": {
-    "accounts": { "url": "http://cpa.test/v0/management/auth-files" },
-    "claude": { "url": "http://cpa.test/v8/management/config/api-keys/claude" },
-    "codex": { "url": "http://cpa.test/v8/management/config/api-keys/codex" },
+    "accounts": {
+      "url": "http://cpa.test/v0/management/auth-files"
+    },
+    "claude": {
+      "url": "http://cpa.test/v8/management/config/api-keys/claude"
+    },
+    "codex": {
+      "url": "http://cpa.test/v8/management/config/api-keys/codex"
+    },
     "two": {
       "method": "POST",
       "url": "http://cpa.test/v0/management/api-call",
@@ -16,13 +24,21 @@
         "auth_index": "two",
         "method": "POST",
         "url": "https://vendor.test/usage",
-        "header": { "Accept": "text/plain", "Authorization": "Bearer $TOKEN$" },
+        "header": {
+          "Accept": "text/plain",
+          "Authorization": "Bearer $TOKEN$"
+        },
         "data": "query"
       }
     }
   },
-  "success": { "status_code": 200, "body": "usage" },
-  "direct": { "private network exception": "HTTP request failed" },
+  "success": {
+    "status_code": 200,
+    "body": "usage"
+  },
+  "direct": {
+    "private network exception": "HTTP request failed"
+  },
   "cases": {
     "ambiguous discovery": [["accounts"], "ambiguous credentials"],
     "correct pin sent": [["accounts", "two"], "success"],
@@ -38,6 +54,9 @@
     "mixed sources skip I/O": [[], "conflicting CPA discovery sources"],
     "registered pin skips discovery": [["two"], "success"],
     "single provider login": [["accounts", "two"], "success"],
-    "vendor HTTP failure": [["accounts", "two"], "HTTP 403"]
+    "vendor HTTP failure": [["accounts", "two"], "HTTP 403"],
+    "41 malformed unrelated attribution": [["accounts", "two"], "success"],
+    "42 malformed disabled attribution": [["accounts", "two"], "success"],
+    "40 malformed selected attribution": [["accounts", "two"], "success"]
   }
 }

@@ -94,7 +94,11 @@ class Usage(FrozenModel):
         for limit in self.limits:
             if limit.kind == "weekly_scoped" and limit.display_name:
                 status = None if limit.is_active is None else "active" if limit.is_active else "inactive"
-                rows[f"7d:{limit.display_name.translate(ASCII_LOWER)}"] = limit.window(604800, status)
+                window_id = f"7d:{limit.display_name.translate(ASCII_LOWER)}"
+                if window_id in rows:
+                    rows[window_id] = InvalidWindow(state="invalid", reason="conflicting-meter")
+                else:
+                    rows[window_id] = limit.window(604800, status)
         return rows
 
 

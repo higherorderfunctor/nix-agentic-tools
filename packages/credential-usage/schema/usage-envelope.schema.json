@@ -339,7 +339,7 @@
           "type": "string"
         },
         "reason": {
-          "enum": ["invalid-reset", "invalid-utilization"],
+          "enum": ["conflicting-meter", "invalid-reset", "invalid-utilization"],
           "title": "reason",
           "type": "string"
         },

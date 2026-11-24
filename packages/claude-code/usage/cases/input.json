@@ -22,6 +22,10 @@
       "status": 200,
       "body": "{\"files\":[{\"provider\":\"claude\",\"account_type\":\"oauth\",\"auth_index\":\"reader-one\",\"email\":null,\"name\":null}]}"
     },
+    "discovery-malformed-labels": {
+      "status": 200,
+      "body": "{\"files\":[{\"provider\":\"claude\",\"account_type\":\"oauth\",\"auth_index\":\"reader-one\",\"email\":7,\"name\":[]}]}"
+    },
     "discovery-ambiguous": {
       "status": 200,
       "body": "{\"files\":[{\"provider\":\"claude\",\"account_type\":\"oauth\",\"auth_index\":\"reader-one\",\"email\":\"sample@example.test\",\"name\":\"alternate-name\"},{\"provider\":\"claude\",\"account_type\":\"oauth\",\"auth_index\":\"reader-two\",\"email\":\"sample@example.test\",\"name\":\"alternate-name\"}]}"
@@ -104,6 +108,14 @@
       "status": 200,
       "body": "{\"status_code\":200,\"body\":\"{\\\"detail\\\":\\\"private unknown body\\\"}\"}",
       "private": true
+    },
+    "conflicting-meters": {
+      "status": 200,
+      "body": "{\"five_hour\":{\"utilization\":23,\"resets_at\":\"2030-03-17T10:46:40.123456-07:00\"},\"seven_day\":{\"utilization\":61,\"resets_at\":\"2030-03-17T17:46:40Z\"},\"seven_day_opus\":{\"utilization\":12,\"resets_at\":\"2030-03-19T02:00:00Z\"},\"seven_day_sonnet\":null,\"limits\":[{\"kind\":\"weekly_all\",\"percent\":61,\"severity\":\"warning\",\"resets_at\":\"2030-03-17T17:46:40Z\",\"is_active\":true},{\"kind\":\"weekly_scoped\",\"percent\":32,\"resets_at\":\"2030-03-18T05:30:00Z\",\"scope\":{\"model\":{\"display_name\":\"Fable\"}},\"is_active\":false},{\"kind\":\"weekly_scoped\",\"scope\":{\"model\":{\"display_name\":\"Opus\"}},\"percent\":79,\"resets_at\":\"2030-03-18T05:30:00Z\"},{\"kind\":\"weekly_scoped\",\"scope\":{\"model\":{\"display_name\":\"Fable\"}},\"percent\":3,\"resets_at\":\"2030-03-18T05:30:00Z\"}],\"spend\":{\"used\":{\"amount_minor\":1250,\"currency\":\"USD\",\"exponent\":2},\"limit\":{\"amount_minor\":20000,\"currency\":\"USD\",\"exponent\":2}},\"promo_credits\":null}"
+    },
+    "proxy-conflicting-meters": {
+      "status": 200,
+      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":23,\\\"resets_at\\\":\\\"2030-03-17T10:46:40.123456-07:00\\\"},\\\"seven_day\\\":{\\\"utilization\\\":61,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day_opus\\\":{\\\"utilization\\\":12,\\\"resets_at\\\":\\\"2030-03-19T02:00:00Z\\\"},\\\"seven_day_sonnet\\\":null,\\\"limits\\\":[{\\\"kind\\\":\\\"weekly_all\\\",\\\"percent\\\":61,\\\"severity\\\":\\\"warning\\\",\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"is_active\\\":true},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":32,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"is_active\\\":false},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Opus\\\"}},\\\"percent\\\":79,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\"},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"percent\\\":3,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\"}],\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2},\\\"limit\\\":{\\\"amount_minor\\\":20000,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"promo_credits\\\":null}\"}"
     }
   },
   "scenarios": {
@@ -329,6 +341,24 @@
           "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
         },
         "replies": []
+      }
+    },
+    "conflicting-meters": {
+      "direct": {
+        "env": {
+          "HOME": "${credentialsDir}"
+        },
+        "replies": ["conflicting-meters"],
+        "credentials": {
+          ".claude/.credentials.json": "{\"claudeAiOauth\":{\"accessToken\":\"sample-home-value\"}}"
+        }
+      },
+      "cpa": {
+        "env": {
+          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
+          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
+        },
+        "replies": ["discovery-malformed-labels", "proxy-conflicting-meters"]
       }
     }
   }

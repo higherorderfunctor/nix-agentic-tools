@@ -1032,5 +1032,175 @@
         "failed": "usage: incomplete claude proxy configuration"
       }
     }
+  },
+  "conflicting-meters": {
+    "direct": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+          "headers": {
+            "anthropic-beta": "oauth-2025-04-20",
+            "User-Agent": "claude-cli/9.8.7 (external, cli)",
+            "Authorization": "Bearer [credential:.claude/.credentials.json]"
+          },
+          "body": null
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://api.anthropic.com/",
+          "transport": "direct"
+        },
+        "account": {
+          "auth_index": null,
+          "name": null,
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:01Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 77,
+            "resetsAt": "2030-03-17T17:46:40.123456Z",
+            "status": null,
+            "usedPercent": 23,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 39,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": "warning",
+            "usedPercent": 61,
+            "windowSeconds": 604800
+          },
+          "7d:opus": {
+            "state": "invalid",
+            "reason": "conflicting-meter"
+          },
+          "7d:fable": {
+            "state": "invalid",
+            "reason": "conflicting-meter"
+          }
+        },
+        "accountedSpend": null,
+        "balances": [],
+        "bonuses": [],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "unknown",
+            "reason": "prepaid-unavailable"
+          },
+          "grants": {
+            "state": "unknown",
+            "reason": "grants-unavailable"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    },
+    "cpa": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://proxy.example/v0/management/auth-files",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": null
+        },
+        {
+          "method": "POST",
+          "url": "https://proxy.example/v0/management/api-call",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": {
+            "method": "GET",
+            "url": "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1",
+            "auth_index": "reader-one",
+            "header": {
+              "anthropic-beta": "oauth-2025-04-20",
+              "User-Agent": "claude-cli/9.8.7 (external, cli)",
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $TOKEN$"
+            }
+          }
+        }
+      ],
+      "result": {
+        "schemaVersion": 1,
+        "binding": {
+          "endpoint": "https://proxy.example/",
+          "transport": "cpa"
+        },
+        "account": {
+          "auth_index": "reader-one",
+          "name": "reader-one",
+          "plan": null
+        },
+        "observedAt": "2026-11-24T12:00:02Z",
+        "pool": "claude",
+        "windows": {
+          "5h": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 77,
+            "resetsAt": "2030-03-17T17:46:40.123456Z",
+            "status": null,
+            "usedPercent": 23,
+            "windowSeconds": 18000
+          },
+          "7d": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 39,
+            "resetsAt": "2030-03-17T17:46:40Z",
+            "status": "warning",
+            "usedPercent": 61,
+            "windowSeconds": 604800
+          },
+          "7d:opus": {
+            "state": "invalid",
+            "reason": "conflicting-meter"
+          },
+          "7d:fable": {
+            "state": "invalid",
+            "reason": "conflicting-meter"
+          }
+        },
+        "accountedSpend": null,
+        "balances": [],
+        "bonuses": [],
+        "slotStates": {
+          "accountedSpend": {
+            "state": "unsupported"
+          },
+          "credits": {
+            "state": "unknown",
+            "reason": "prepaid-unavailable"
+          },
+          "grants": {
+            "state": "unknown",
+            "reason": "grants-unavailable"
+          },
+          "resetInventory": {
+            "state": "unsupported"
+          }
+        }
+      }
+    }
   }
 }
