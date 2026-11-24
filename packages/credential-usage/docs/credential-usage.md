@@ -31,9 +31,10 @@ as missing.
 
 Declare all four optional slots. An observed slot reports what the Reader
 verified, including an empty inventory. An unknown slot gives the reason the
-read failed. An unsupported slot means the Reader cannot supply it. Only an
-observed slot can carry entries or spend. The Claude Reader has no source of
-reset lots or accounted spend.
+read failed. Map that failure to a public reason code from the schema. An
+unsupported slot means the Reader cannot supply it. Only an observed slot can
+carry entries or spend. The Claude Reader has no source of reset lots or
+accounted spend.
 
 ```json
 {
@@ -93,7 +94,10 @@ reset lots or accounted spend.
 Import `Envelope` from `credential_usage.envelope`. Use `model_validate_json` to
 read one result and `model_dump_json` to write it with UTC timestamps. The
 [version 1 schema](../schema/usage-envelope.schema.json) lists the public
-fields.
+fields. The model also checks that inventory and spend have observed slots, that
+window shares total 100, and that endpoints contain no credentials, query or
+fragment. Timestamps have microsecond precision. The Reader drops finer digits
+without rounding.
 
 ## Consumers
 

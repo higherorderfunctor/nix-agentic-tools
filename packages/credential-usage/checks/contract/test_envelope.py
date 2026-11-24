@@ -48,6 +48,7 @@ class Case(BaseModel):
 class Expected(BaseModel):
     """Supply independent public values for the successful cases."""
 
+    observedInventory: Object
     example: Object
     withZero: Object
     withoutZero: Object
@@ -95,8 +96,8 @@ class TestEnvelope(unittest.TestCase):
         self.check_cases("declarations")
 
     def test_unobserved_slots_assert_nothing(self) -> None:
-        """9–11. Refuse inventory without an observation and failed reads without a reason."""
-        self.check_cases("unobserved")
+        """9–11. Preserve observed inventory and spend. Reject unobserved entries and unknown reason codes."""
+        self.check_cases("unobserved", {"observed-inventory": self.expected.observedInventory})
 
     def test_preserves_observed_empty_inventory_and_zero(self) -> None:
         """7–8. Preserve a verified empty credit inventory and a measured zero share."""
@@ -130,7 +131,7 @@ class TestEnvelope(unittest.TestCase):
         )
 
     def test_normalizes_offsets_and_preserves_fractions(self) -> None:
-        """31. Apply the offset and retain fractional seconds in UTC."""
+        """31. Apply the offset and truncate UTC fractions to microseconds."""
         self.check_cases(
             "instant", {"offset-fraction": self.expected.offsetFraction},
             lambda envelope: envelope.model_dump(mode="json")["observedAt"],

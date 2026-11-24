@@ -339,7 +339,7 @@
           "type": "string"
         },
         "reason": {
-          "pattern": "^[a-z0-9-]{1,40}$",
+          "enum": ["invalid-reset", "invalid-utilization"],
           "title": "reason",
           "type": "string"
         },
@@ -364,7 +364,7 @@
           "type": "string"
         },
         "reason": {
-          "pattern": "^[a-z0-9-]{1,40}$",
+          "const": "meter-unreported",
           "title": "reason",
           "type": "string"
         }
@@ -603,7 +603,11 @@
           "type": "string"
         },
         "reason": {
-          "pattern": "^[a-z0-9-]{1,40}$",
+          "enum": [
+            "grants-unavailable",
+            "prepaid-organization-unknown",
+            "prepaid-unavailable"
+          ],
           "title": "reason",
           "type": "string"
         }
