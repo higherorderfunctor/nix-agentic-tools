@@ -250,6 +250,11 @@
         codexShellArgCleanup = false;
         toolAliases = {};
       });
+      codingPlanUrl = "https://api.z.ai/api/coding/paas/v4";
+      codingPlan = render (zhipuaiOverride {
+        apis.chat.base-url = codingPlanUrl;
+        models = ["glm-5.4"];
+      });
       zhipuaiCustomModels = render (zhipuaiOverride {
         apis = {
           anthropic = null;
@@ -454,6 +459,13 @@
               };
             });
           "vendor tool defaults lost" = (block settings "claude" "zhipuai").tool-aliases == {ToolSearch = "ToolSearch_";} && (block settings "openai-compatibility" "zhipuai").codex-shell-arg-cleanup && lib.all (api: let value = block settings families.${api} "opencode-go"; in !(value ? tool-aliases) && !(value ? codex-shell-arg-cleanup)) (builtins.attrNames expectedGo);
+          "z.ai Coding Plan identities missing or offered by default" =
+            lib.all (id: catalog.models.${id}.maker == "zhipuai" && !(lib.elem id catalog.vendors.zhipuai.models)) zhipuai.codingPlanOnly;
+          "z.ai Coding Plan override did not render GLM-5.4" =
+            catalog.models."glm-5.4".maker
+            == "zhipuai"
+            && (offers codingPlan "zhipuai").chat == ["glm-5.4"]
+            && (block codingPlan "openai-compatibility" "zhipuai").base-url == codingPlanUrl;
           "z.ai explicit model or API overrides ignored" = offers zhipuaiCustomModels "zhipuai" == {chat = ["fixture-zhipuai-model"];} && (block zhipuaiCustomModels "openai-compatibility" "zhipuai").base-url == "https://zhipuai-override.example/v1";
           "z.ai explicit tool overrides ignored" = (block customized "claude" "zhipuai").tool-aliases == {ToolSearch = "SearchProxy";} && !((block disabled "claude" "zhipuai") ? tool-aliases) && !((block disabled "openai-compatibility" "zhipuai") ? codex-shell-arg-cleanup);
           "z.ai extracted API URL ignored" = lib.all (api: (block settings families.${api} "zhipuai").base-url == zhipuai.apis.${api}.base-url) (builtins.attrNames zhipuai.apis);

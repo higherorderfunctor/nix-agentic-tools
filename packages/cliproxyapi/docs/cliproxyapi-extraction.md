@@ -1,8 +1,7 @@
 # CLIProxyAPI extraction: the v8 configuration shape
 
-> **Last verified:** 2026-11-19 — CPA 8.0.78 custom YAML decoders are probed
-> through yaml.v3; Z.ai documentation and the OpenCode Go catalog and plan page
-> use the shared `webDocsLib.mkSnapshot` updater and validate candidates.
+> **Last verified:** 2026-11-23 — Z.ai extraction distinguishes Coding Plan
+> identities from ordinary Model API offers.
 
 ## Why reflection also needs the v8 tables
 
@@ -15,12 +14,15 @@ pages with `extract/zhipuai.py` before publishing the content and NAR hashes.
 `extract/zhipuai.py` parses the overview's chat API table, Claude Code's JSON
 environment example, and the quick start's Python AST for the two base URLs.
 Featured, Language and Text Models tables, including the block-quoted Language
-Models table, require a known chat reference on every model row, accepting
-relative paths or absolute links on `https://docs.z.ai` only; image, tool and
-agent sections are explicitly excluded. Unknown sections or references, a model
-listed twice within or across chat tables, missing tables, ambiguous URLs,
-malformed tier bullets, or a tier pointing outside the catalog fail extraction.
-The fixtures exclude prose-only model mentions and image models.
+Models table, require a known chat reference for ordinary Model API offers. A
+model with an explicit Coding Plan availability and pending Model API notice
+must have one row linking only to its matching official guide. Its identity is
+recorded in `codingPlanOnly`. Links can be relative or absolute on
+`https://docs.z.ai`. Image, tool and agent sections are excluded. Unknown
+sections or references, a model listed twice within or across chat tables,
+missing tables, ambiguous URLs, malformed tier bullets, or a tier pointing
+outside the catalog fail extraction. The fixtures exclude prose-only model
+mentions and image models.
 
 The Claude Code page's explicitly labeled default tier bullets are parsed as
 prose (the regex tier: no executable mapping or structured source exists). Later

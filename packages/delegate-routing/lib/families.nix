@@ -74,12 +74,12 @@
   };
   zhipuai = {
     glm = {
-      avoidFor = "judging; image input (text-only); quick lookups (thinking cannot be turned off)";
+      avoidFor = "judging; quick lookups prone to long thinking";
       defaultEffort = "high";
       effort = "low, high or max; high default";
       match = "glm-[0-9]*.[0-9]";
       tier = "strong";
-      useFor = "finding bugs as a first check; hard multi-file coding; planning";
+      useFor = "finding bugs as a first check; hard multi-file coding; planning; coding from images with GLM-5.4 on routes verified to accept image input";
     };
     glm-flash = {
       avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
