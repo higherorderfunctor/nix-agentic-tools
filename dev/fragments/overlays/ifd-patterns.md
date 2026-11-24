@@ -1,9 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-11-18 — a pnpm repin comes from the update tooling;
-> extracted facts self-heal through visible PR CI commits, with Linux carrying
-> its facts before Darwin measures; the Claude census evaluates its converter
-> and filter as declaration slices.
+> **Last verified:** 2026-11-24 — the KAS hook-trigger map is the one frozen
+> `SessionStart` object whose every entry maps a name to a name; a pnpm repin
+> comes from the update tooling; extracted facts self-heal through visible PR CI
+> commits, with Linux carrying its facts before Darwin measures; the Claude
+> census evaluates its converter and filter as declaration slices.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -382,8 +383,12 @@ Mach-O architecture, validates its compressed frame checksum and full archive
 layout, and installs one selected runtime tree. The final CLI may reference KAS;
 KAS never references the final CLI. No consumer reads the output at evaluation.
 `extract/hook-triggers.mjs` still locates the frozen map by decoded
-`SessionStart` key, requires literal entries and canonical identity entries, and
-emits `hookTriggers` plus `hookTriggerAliases`. See
+`SessionStart` key. Since KAS 0.66.127 (kiro-cli 3.6.0) the engine also freezes
+a hook exit-code effect table keyed by the same trigger names, so that key finds
+two objects. The map is the one whose every entry maps a name to a name. The
+script still fails on zero maps or on several, on a lone candidate with a
+non-literal entry, and on a map without canonical identity entries; it emits
+`hookTriggers` plus `hookTriggerAliases`. See
 `packages/kiro-cli/docs/launcher-argv.md` for package and patch selection.
 
 #### An anchor can lose its TYPE information without losing its match

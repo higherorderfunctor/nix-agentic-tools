@@ -5,6 +5,11 @@ import { createRequire } from "node:module";
 // every canonical trigger maps to itself and every alias (v2 camelCase names,
 // IDE names) maps to a canonical one. Located by CONTENT, never by the
 // minified binding name, which changes between builds.
+//
+// `lib/packaging.nix` runs this once per platform on the bundle extracted from
+// that platform's release; `checks/kiro-cli-extracted.nix` runs it on synthetic
+// bundles. The JSON printed supplies the `hookTriggers` (canonical) and
+// `hookTriggerAliases` (alias -> canonical) keys of that platform's raw.
 const require = createRequire(import.meta.url);
 const ts = require(process.argv[3]);
 const source = fs.readFileSync(process.argv[2], "utf8");
@@ -30,6 +35,9 @@ function keyName(property) {
     : undefined;
 }
 
+// The frozen objects carrying a `SessionStart` key. The engine's hook
+// exit-code effect table is keyed by the same trigger names, so it is found
+// beside the map.
 const candidates = [];
 function walk(node) {
   if (
@@ -49,22 +57,33 @@ function walk(node) {
 }
 walk(file);
 
-if (candidates.length !== 1)
+// One `name: "canonical trigger"` entry of the map.
+function isNameToNameEntry(property) {
+  return (
+    ts.isPropertyAssignment(property) &&
+    keyName(property) !== undefined &&
+    ts.isStringLiteral(property.initializer)
+  );
+}
+
+// The map is the one candidate whose every entry is name-to-name.
+const maps = candidates.filter((object) =>
+  object.properties.every(isNameToNameEntry),
+);
+
+// With one candidate, a non-literal entry is the more precise diagnosis.
+if (maps.length !== 1)
   fail(
-    `hook trigger map is absent or ambiguous (${candidates.length} frozen ` +
-      "objects carry a SessionStart key); re-derive the anchor against the bundle",
+    candidates.length === 1
+      ? "hook trigger map contains a non-literal entry"
+      : `hook trigger map is absent or ambiguous (${maps.length} of ` +
+          `${candidates.length} frozen objects carrying a SessionStart key are ` +
+          "name-to-name maps); re-derive the anchor against the bundle",
   );
 
 const map = {};
-for (const property of candidates[0].properties) {
-  if (
-    !ts.isPropertyAssignment(property) ||
-    keyName(property) === undefined ||
-    !ts.isStringLiteral(property.initializer)
-  )
-    fail("hook trigger map contains a non-literal entry");
+for (const property of maps[0].properties)
   map[keyName(property)] = property.initializer.text;
-}
 
 const hookTriggers = [...new Set(Object.values(map))].sort();
 const missing = ["PreToolUse", "SessionStart"].filter(

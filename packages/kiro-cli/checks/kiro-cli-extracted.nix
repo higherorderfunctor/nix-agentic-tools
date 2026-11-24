@@ -38,22 +38,39 @@
   in
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
-      # key; an absent map and a non-literal entry each fail by name.
+      # key, the map is still found beside the engine's hook exit-code effect
+      # table, and an absent map, a non-literal entry and two maps each fail by
+      # name.
       kiro-hook-triggers-fixtures = let
-        bundle = key: value: "var M=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        # The map bound to `binding`, its `SessionStart` entry spelled `key:value`.
+        bundle = binding: key: value: "var ${binding}=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        # The engine's hook exit-code effect table: keyed by trigger names like
+        # the map, but its values are objects or a shared reference.
+        exitCodeTable = "var N={0:\"none\",1:\"none\",2:\"none\",other:\"none\"};var E=Object.freeze({SessionStart:{0:\"stdout\",1:\"none\",2:\"none\",other:\"none\"},SessionEnd:N,Stop:{0:\"stop-decision\",1:\"keep-working\",2:\"none\",other:\"none\",decidesWhenUnfinished:!0},PreToolUse:{0:\"permission-decision\",1:\"none\",2:\"block\",other:\"none\"}});";
         extract = (import ../lib/packaging.nix).kiroHookTriggersExtractScript pkgs;
+        # `bundle` with every entry a literal and the `SessionStart` key quoted.
+        literalMap = binding: bundle binding "\"SessionStart\"" "\"SessionStart\"";
       in
         pkgs.runCommand "kiro-hook-triggers-fixtures" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           jq=${pkgs.jq}/bin/jq
-          printf '%s' ${pkgs.lib.escapeShellArg (bundle "\"SessionStart\"" "\"SessionStart\"")} > quoted.js
+          printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M")} > quoted.js
           printf '%s' 'var M=Object.freeze({});' > absent.js
-          printf '%s' ${pkgs.lib.escapeShellArg (bundle "SessionStart" "\"Session\"+\"Start\"")} > computed.js
+          printf '%s' ${pkgs.lib.escapeShellArg (bundle "M" "SessionStart" "\"Session\"+\"Start\"")} > computed.js
+          # The table comes first, as in the 3.6.0 bundle, so a locator that
+          # takes the first `SessionStart` object picks the table here.
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + bundle "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
+          # A locator that takes the first or the last map instead of failing
+          # succeeds here.
+          printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M" + literalMap "N")} > ambiguous.js
           ${extract} quoted.js > quoted.json
           [ "$("$jq" '.hookTriggers | length' quoted.json)" = 12 ]
           [ "$("$jq" -r '.hookTriggerAliases.agentSpawn' quoted.json)" = SessionStart ]
-          for case in absent:"hook trigger map is absent" computed:"non-literal entry"; do
+          ${extract} exit-codes.js > exit-codes.json
+          [ "$("$jq" -c '.hookTriggers' exit-codes.json)" = '["Manual","PostFileCreate","PostFileDelete","PostFileSave","PostTaskExec","PostToolUse","PreTaskExec","PreToolUse","SessionEnd","SessionStart","Stop","UserPromptSubmit"]' ]
+          [ "$("$jq" -c '.hookTriggerAliases' exit-codes.json)" = '{"agentSpawn":"SessionStart"}' ]
+          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
             # Two statements: the left side of `&&` is exempt from errexit, so
