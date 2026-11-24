@@ -1,6 +1,6 @@
 {
-  "version": "0.3.5",
-  "srcHash": "sha256-9WBThxAZi6wgiaFn1DLqyEsm+majY94vgepObrzgApg=",
+  "version": "0.3.6",
+  "srcHash": "sha256-nQCVZ3Fuj5kw8tSuZGPaMiRa4VrXLs89h7Gw54mx4F0=",
   "rustToolchainChannel": "1.100.0",
-  "cargoHash": "sha256-PFNjs6jAnVjbJo97CA42OKBVxVAL/r1tK+jF+pcOtcw="
+  "cargoHash": "sha256-7NDB4jFy17/LI2f4pmkL2O9s6Qc/pciePhnFWyPu8Ao="
 }
