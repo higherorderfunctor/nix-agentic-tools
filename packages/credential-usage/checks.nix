@@ -1,3 +1,5 @@
+# The flake checks run the Reader process fixtures and strict type checker
+# against the module installed in the supplied package set's Python.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
   credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
