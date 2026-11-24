@@ -5619,6 +5619,7 @@
       "opus": "glm-5.3-flash",
       "sonnet": "glm-5.3-flash"
     },
+    "codingPlanOnly": ["glm-5.4"],
     "models": [
       "glm-4.6",
       "glm-4.7",

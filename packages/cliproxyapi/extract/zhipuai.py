@@ -1,5 +1,6 @@
-"""Extract z.ai's published chat catalog and Claude Code defaults.
+"""Extract z.ai's Model API catalog, Coding Plan identities and Claude defaults.
 
+The snapshot validator and owner facts build read these three documentation pages.
 Markdown tables and code fences are parsed before reading their values. Tier
 bullets are prose, so neither evaluation nor an AST supplies the mapping; the
 regex reads only inline tokens from the explicitly named default paragraph.
@@ -15,6 +16,18 @@ from markdown_it import MarkdownIt
 
 def extract(claude, overview, quick_start):
     parser = MarkdownIt("default")
+    overview_tokens = parser.parse(overview)
+    # A guide alone establishes neither a Coding Plan offer nor a Model API offer.
+    notice = re.compile(
+        r"(GLM-[a-zA-Z0-9.-]+) is now available to all GLM Coding Plan users\. "
+        r"The Model API will be made available after completing the security assessment\."
+    )
+    pending = {
+        match[1].lower()
+        for token in overview_tokens
+        if token.type == "inline" and (match := notice.fullmatch(" ".join(token.content.split())))
+    }
+    coding_plan_only = []
     models = []
     # Catalog sections classify the tables before their rows are validated:
     # one changed chat reference must not silently remove a non-tier model.
@@ -27,7 +40,7 @@ def extract(claude, overview, quick_start):
     header = False
     row = []
     references = []
-    for token in parser.parse(overview):
+    for token in overview_tokens:
         if token.type == "heading_open":
             heading = True
         elif heading and token.type == "inline":
@@ -46,9 +59,15 @@ def extract(claude, overview, quick_start):
                     raise ValueError("z.ai chat model table header changed shape")
                 header = False
             else:
-                if references != ["/api-reference/llm/chat-completion.md"]:
+                model = row[0].lower()
+                if model in pending and references == [f"/guides/llm/{model}.md"]:
+                    coding_plan_only.append(model)
+                elif model not in pending and [
+                    ref for ref in references if ref.startswith("/api-reference/")
+                ] == ["/api-reference/llm/chat-completion.md"]:
+                    models.append(model)
+                else:
                     raise ValueError(f"unclassified z.ai chat model reference: {row[0]}")
-                models.append(row[0].lower())
         elif table and token.type == "inline":
             row.append(token.content)
             references.extend(
@@ -56,8 +75,9 @@ def extract(claude, overview, quick_start):
                 for child in token.children
                 if child.type == "link_open"
                 for href in [child.attrGet("href")]
-                if href.startswith(("/api-reference/", "https://docs.z.ai/api-reference/"))
             )
+    if sorted(coding_plan_only) != sorted(pending):
+        raise ValueError("z.ai pending Model API notice needs exactly one matching Coding Plan row")
     if not models or len(models) != len(set(models)) or any(
         not re.fullmatch(r"glm-[a-z0-9.-]+", model) for model in models
     ):
@@ -95,7 +115,7 @@ def extract(claude, overview, quick_start):
                     defaults = env
     if set(mapping) != {"haiku", "opus", "sonnet"}:
         raise ValueError("z.ai must publish all three Claude Code default tiers")
-    if not set(mapping.values()) <= set(models):
+    if not set(mapping.values()) <= set(models) | pending:
         raise ValueError("z.ai default tier names a model absent from its chat catalog")
     if len(set(anthropic_urls)) != 1 or not anthropic_urls[0].startswith("https://api.z.ai/"):
         raise ValueError("z.ai documented Anthropic base URLs missing or ambiguous")
@@ -123,6 +143,7 @@ def extract(claude, overview, quick_start):
             if key not in {"ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"}
         },
         "claudeModels": dict(sorted(mapping.items())),
+        "codingPlanOnly": sorted(coding_plan_only),
         "models": sorted(models),
     }
 

@@ -6,9 +6,12 @@
   extracted = facts.get (facts.load {dir = ../../extracted;}).aggregate "zhipuai";
   # Z.ai serves GLM models; zhipuai is the maker namespace upstream ids use (OpenCode Go canonical_id).
   catalog = {
-    models = lib.genAttrs extracted.models (_: {
+    models = lib.genAttrs (extracted.models ++ extracted.codingPlanOnly) (id: {
       maker = "zhipuai";
-      source = ["cliproxyapi:zhipuai.models"];
+      source =
+        if lib.elem id extracted.codingPlanOnly
+        then ["cliproxyapi:zhipuai.codingPlanOnly"]
+        else ["cliproxyapi:zhipuai.models"];
     });
     vendors.zhipuai.models = extracted.models;
   };
