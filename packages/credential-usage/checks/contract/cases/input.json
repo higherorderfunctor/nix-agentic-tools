@@ -215,6 +215,12 @@
     }
   },
   "invalid": {
+    "conflict-with-zero": {
+      "changes": { "windows.7d.reason": "conflicting-meter" }
+    },
+    "invalid-utilization-with-zero": {
+      "changes": { "windows.7d.reason": "invalid-utilization" }
+    },
     "positive": {
       "changes": {
         "windows.7d.remainingPercent": 1

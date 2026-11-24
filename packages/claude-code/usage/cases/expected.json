@@ -1075,13 +1075,22 @@
             "enforced": null,
             "remainingPercent": 39,
             "resetsAt": "2030-03-17T17:46:40Z",
-            "status": "warning",
+            "status": null,
             "usedPercent": 61,
             "windowSeconds": 604800
           },
           "7d:opus": {
             "state": "invalid",
             "reason": "conflicting-meter"
+          },
+          "7d:sonnet": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 58,
+            "resetsAt": "2030-03-18T05:30:00Z",
+            "status": null,
+            "usedPercent": 42,
+            "windowSeconds": 604800
           },
           "7d:fable": {
             "state": "invalid",
@@ -1168,13 +1177,22 @@
             "enforced": null,
             "remainingPercent": 39,
             "resetsAt": "2030-03-17T17:46:40Z",
-            "status": "warning",
+            "status": null,
             "usedPercent": 61,
             "windowSeconds": 604800
           },
           "7d:opus": {
             "state": "invalid",
             "reason": "conflicting-meter"
+          },
+          "7d:sonnet": {
+            "state": "observed",
+            "enforced": null,
+            "remainingPercent": 58,
+            "resetsAt": "2030-03-18T05:30:00Z",
+            "status": null,
+            "usedPercent": 42,
+            "windowSeconds": 604800
           },
           "7d:fable": {
             "state": "invalid",

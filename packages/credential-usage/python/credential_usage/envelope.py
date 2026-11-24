@@ -103,11 +103,18 @@ class ObservedWindow(ContractModel):
 
 
 class InvalidWindow(ContractModel):
-    """Retain a proven zero when other facts about the window failed validation."""
+    """Keep a measured zero when the reset is invalid."""
 
     state: Literal["invalid"]
     reason: Literal["conflicting-meter", "invalid-reset", "invalid-utilization"]
     remainingPercent: Annotated[float, Field(ge=0, le=0)] | MISSING = MISSING
+
+    @model_validator(mode="after")
+    def zero_requires_invalid_reset(self) -> Self:
+        """A conflict or invalid utilization leaves remaining capacity unknown."""
+        if self.remainingPercent is not MISSING and self.reason != "invalid-reset":
+            raise ValueError("only an invalid reset can retain a measured zero")
+        return self
 
 
 class MissingWindow(ContractModel):
