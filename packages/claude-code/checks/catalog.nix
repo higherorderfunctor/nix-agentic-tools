@@ -10,7 +10,7 @@
   # The aggregate's set value is a list, not an attribute set of model records.
   ids = facts.get (facts.load {dir = ../extracted;}).aggregate "models";
   # CPA's independent input establishes overlapping identities and evidence.
-  go = (facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo").models;
+  go = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
   # Select an override target from current input so release changes need no fixture edits.
   chosen = lib.head ids;
   # Lists merge without promising order.
@@ -54,7 +54,7 @@
             identity = catalog.models.${id};
           in
             lib.elem "cliproxyapi:opencodeGo.models.${id}" identity.source)
-          (lib.filter (id: go ? ${id}) ids))
+          (lib.filter (id: (go.models.${id}.type or null) == "chat") ids))
         catalogs;
         "user addition lost or maker-wide offer narrowed" = changed.models.catalog-test-added.maker == "anthropic" && changed.models.catalog-test-added.source == ["configured addition"] && changed.vendors.claude.maker == "anthropic" && changed.vendors.claude.models == null;
         "user leaf override blocked by owner priority" = changed.models.${chosen}.maker == "configured-maker" && changed.models.${chosen}.source == ["configured evidence"];

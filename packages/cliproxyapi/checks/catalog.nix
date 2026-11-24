@@ -16,8 +16,8 @@
   zhipuai = fact "zhipuai";
   # Sets deliberately ignore grant and module merge ordering.
   sorted = values: lib.sort builtins.lessThan (lib.unique values);
-  # Every extracted offer is eligible, regardless of its maker or id prefix.
-  eligible = builtins.attrNames go;
+  # CPA serves the chat inventory regardless of maker or id prefix.
+  eligible = builtins.attrNames (lib.filterAttrs (_: model: model.type == "chat") go);
   # This table independently specifies native protocol placement, including Gemini's chat fallback.
   nativeApi = {
     chat-completions = "chat";
@@ -47,6 +47,7 @@
   cpa = (import ../lib/default.nix {inherit lib;}).cliproxyapi;
   # Standalone construction must stay equivalent without importing any module configuration.
   manual = import ../lib/providers.nix {inherit lib;};
+  goVendor = import ../lib/vendors/opencode-go.nix {inherit lib;};
   # Synthetic native metadata refuses transport shapes that CPA cannot lower safely.
   native = api: base_url: {api.${api} = {inherit base_url;};};
   # Synthetic ids keep shape checks independent of release inventories.
@@ -76,7 +77,17 @@
     "interactions alone accepted" = !(builds (shaped // {gemini-4-argon.api = {inherit (gemini.api) interactions;};}));
     "messages URL without /v1 accepted" = !(builds (shaped // {anthropic = native "messages" "https://go.example/anthropic";}));
     "missing base_url accepted" = !(builds (shaped // {bare.api.responses = {};}));
-    "unknown native API accepted" = !(builds (shaped // {odd = native "embeddings" "https://go.example/openai/v1";}));
+    "non-chat models contribute identities or served spellings" = lib.all (id:
+      !(goVendor.catalog.models ? ${id}) && !(goVendor.servedModels ? ${id}))
+    (lib.subtractLists eligible (builtins.attrNames go));
+    "non-chat models enter routes" =
+      (manual.opencodeGo (shaped
+        // {
+          decision = {type = "decision";} // shaped.chat;
+          embedding = {type = "embedding";} // shaped.chat;
+        })).apis
+      == (manual.opencodeGo shaped).apis;
+    "unknown native API accepted" = lib.all (metadata: !(builds (shaped // {odd = (native "embeddings" "https://go.example/openai/v1") // metadata;}))) [{} {type = "chat";}];
     "unrelated native API pair accepted" = !(builds (shaped // {gemini-4-argon.api = shaped.anthropic.api // shaped.chat.api;}));
     "well-formed catalog rejected" = builds shaped;
   };
@@ -376,7 +387,7 @@
           "configured finite lists ignored" = offers narrowed "opencode-go" == expectedNarrowGo && offers narrowed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
           "configured vendor-scoped served spellings ignored" = offers renamed "opencode-go" == expectedNarrowGo && offers renamed "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: [chosenZhipuai]);
           "custom Zhipuai identity loses id fallback" = offers customZhipuai "zhipuai" == lib.genAttrs (builtins.attrNames zhipuai.apis) (_: ["fixture-zhipuai-custom"]);
-          "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == builtins.attrNames go && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (builtins.attrNames go ++ zhipuai.models);
+          "dropped extracted offer" = sorted catalog.vendors.opencode-go.models == eligible && sorted catalog.vendors.zhipuai.models == sorted zhipuai.models && lib.all (id: catalog.models ? ${id}) (eligible ++ zhipuai.models);
           "empty exclusions change rendered defaults" = render (evaluate [fixture {ai.cliproxyapi.instances.main.credentials.opencode-go.excludeMakers = [];}]) == settings;
           "empty served spellings lost aliases or canonical fallback" =
             clearedAliasesResult.config.ai.cliproxyapi.servedModels.opencode-go.beam-free
@@ -407,7 +418,8 @@
             lib.all (id: let
               identity = catalog.models.${id};
             in
-              expectedMaker id != "" && identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id)) (builtins.attrNames go)
+              expectedMaker id != "" && identity.maker == expectedMaker id && sorted result.config.ai.cliproxyapi.servedModels.opencode-go.${id} == sorted ([id] ++ lib.optional ((go.${id}.canonical_id or null) != null) go.${id}.canonical_id))
+            eligible
             && lib.all (id: catalog.models.${id}.maker == "zhipuai") zhipuai.models;
           "lost model or wrong native API in rendered defaults" = offers settings "opencode-go" == lib.mapAttrs (_: sorted) expectedGo && offers settings "zhipuai" == expectedZhipuai;
           "maker exclusion ignored or native APIs changed" = offers filteredGo "opencode-go" == expectedFilteredGo;

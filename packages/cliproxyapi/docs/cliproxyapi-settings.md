@@ -11,8 +11,8 @@
 > `access.key-allowlist` entries from named upstream routes. Built-in
 > `vendor = "zhipuai"` defaults upstream API-key models and APIs from pinned
 > official documentation; `vendor = "opencode-go"` places each pinned OpenCode
-> Go catalog model on its native API. Named API-key credentials accept an
-> optional integer priority, omitted when unset.
+> Go chat model on its native API. Named API-key credentials accept an optional
+> integer priority, omitted when unset.
 
 `lib/default.nix` exports
 `cliproxyapi.{settingsType, render, report, refinements, sample}`. The type is
@@ -76,7 +76,7 @@ unless requested. Validation and wire behavior are documented in
 `cliproxyapi-key-allowlist.md`.
 
 For `vendor = "opencode-go"` the credential likewise needs only its key. The
-defaults select one transport per model from the `opencodeGo` fact
+defaults select one transport per chat model from the `opencodeGo` fact
 (`cliproxyapi-extraction.md`). Models advertising `chat-completions`,
 `messages`, or `responses` go in the corresponding `chat`, `anthropic`, or
 `responses` model list. Gemini's `generate-content` uses the native chat models'
@@ -84,7 +84,7 @@ base URL. When `gemini-4-argon` advertises both `generate-content` and
 `interactions`, the credential selects `generate-content` and keeps that chat
 route. CPA translates other protocols. Base URLs come from the catalog. The
 Anthropic base URL drops its trailing `/v1`, which CPA's claude executor
-appends. The defaults serve the whole pinned catalog; to keep a model off Go,
+appends. The defaults serve all pinned chat models; to keep a model off Go,
 narrow the credential's models, and to refuse overlap with another credential,
 set `exclusive` (see `cliproxyapi-client-keys.md`). The Responses API keeps Grok
 and Muse Spark. `toolAliases` and `codexShellArgCleanup` stay off. An API

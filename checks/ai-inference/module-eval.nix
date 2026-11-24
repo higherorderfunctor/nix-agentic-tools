@@ -175,7 +175,8 @@ in {
     module-ai-inference-opencode-go-credential = mkTest "ai-inference-opencode-go-credential" (
       lib.all (backend: let
         facts = import ../../lib/extracted/facts.nix {inherit lib;};
-        inherit ((facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "opencodeGo")) models;
+        inventory = facts.get (facts.load {dir = ../../packages/cliproxyapi/extracted;}).aggregate "opencodeGo";
+        models = lib.filterAttrs (_: model: model.type == "chat") inventory.models;
         nativeApi = {
           chat-completions = "chat";
           generate-content = "chat";
