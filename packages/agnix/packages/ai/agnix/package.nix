@@ -28,12 +28,12 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "c806bf5cb9711324558d2cf837936d9882c66b22";
+  rev = "0cc2faea150af8710765e44cbce1e7d36786180f";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-Np3c9dOWIL4EBteJ13509WQwWLcVz/I/GNXWPCU4IlQ=";
+    hash = "sha256-QIwO3JQs+677qaMW2/9UQxbwjEs8qa7V3yFmns3mOCM=";
   };
 in
   rustPlatform.buildRustPackage {
@@ -51,7 +51,7 @@ in
     # upstream ships its own `tests/fixtures/kiro-reach/kr-set-013/` fixture.
     patches = [../../../patches/kr-set-013-reach-fixture.patch];
     inherit (vu) patchFlags;
-    cargoHash = "sha256-Jvh6mXVcL6lvjpYH8fZvZ+es3WnbTyhICX6tgyXz8lQ=";
+    cargoHash = "sha256-T3KgeY07+b8P3vkk6Csbgm2c59IbwuENajOLZcP3jPU=";
 
     nativeBuildInputs = [pkgs.pkg-config];
     buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
