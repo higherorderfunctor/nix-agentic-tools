@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-11-24 — Kimchi 1.40.0 reads the title model from the
-> user harness settings. Home Manager supplies the gateway model ID and devenv
-> rejects it at project scope.
+> **Last verified:** 2026-11-24 — The package patch adds a title model setting
+> to Kimchi 1.40.0 in the user harness settings. Home Manager supplies the
+> gateway model ID and devenv rejects it at project scope.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
