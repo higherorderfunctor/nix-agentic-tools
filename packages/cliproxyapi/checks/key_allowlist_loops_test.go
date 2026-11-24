@@ -16,6 +16,11 @@ import (
 	"testing"
 )
 
+// schedulerPicksFilter is why a loop that only feeds the scheduler needs no
+// allows call: every scheduler pick builds its predicate with
+// scheduledAuthPredicate. Re-check the cited lines on each CPA bump.
+const schedulerPicksFilter = "every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630 at CPA 8.1.2); re-check on bump"
+
 // Functions that range over the credential pool without an allowlist
 // predicate, each with the reason it does not choose a request's credential.
 // An entry added here needs that reason, checked against the bump's source.
@@ -26,14 +31,14 @@ var keyAllowlistLoopExemptions = map[string]string{
 	"Manager.IDsByProvider":                            "returns IDs for background Copilot catalog refresh, chooses no request credential",
 	"Manager.List":                                     "returns copies of the pool; a caller that selects from them is outside this check",
 	"Manager.LookupSessionAffinity":                    "observes a binding for the plugin host's affinity callback; the instance module refuses plugins beside the allowlist",
-	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.RefreshSchedulerAll":                      "re-syncs scheduler entries; " + schedulerPicksFilter,
 	"Manager.RegisterExecutorWithRevision":             "reschedules refreshes for an executor's credentials",
 	"Manager.clearDisabledCooldownStates":              "clears cooldown state on config reload",
 	"Manager.cooldownStateRecordsSnapshot":             "snapshots cooldown state for persistence",
-	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.publishOAuthModelAliasAndReconcileStates": "publishes the OAuth alias table and reconciles model states into scheduler shards; " + schedulerPicksFilter,
 	"Manager.rebuildAPIKeyModelAliasLocked":            "rebuilds model alias tables on config reload",
 	"Manager.requestRetryRoundExclusions":              "returns IDs to exclude; it only narrows a selection that still runs allows",
-	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; in 8.1.2 every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630); re-check on bump",
+	"Manager.snapshotAuths":                            "copies the pool for scheduler rebuilds; " + schedulerPicksFilter,
 	"authAutoRefreshLoop.rebuild":                      "schedules background token refreshes, serves no request",
 }
 
@@ -79,11 +84,11 @@ func (m *Manager) keyAllowlistBypassClosure(eligibility authSelectionEligibility
 // Not seen: an indexed lookup (m.auths[id]), an alias of the map, the map
 // passed to a helper, a loop over a copy (snapshotAuths, List), and the
 // scheduler's own pools and pickers, which match every entry on a nil
-// predicate. In 8.1.2 the added indexed reads refresh state for an already
-// selected ID, guard registration publication, or clean up reloads;
-// IDsByProvider feeds background Copilot catalog refresh. None chooses a
-// request credential outside allows; that remains a review obligation on each
-// bump, not something this test checks.
+// predicate. The indexed reads refresh state for an already selected ID, guard
+// registration publication, or clean up reloads, and IDsByProvider feeds
+// background Copilot catalog refresh. None chooses a request credential
+// outside allows; that remains a review obligation on each bump, not
+// something this test checks.
 func keyAllowlistLoopsWithoutAllows(t *testing.T, fixture bool) []string {
 	t.Helper()
 	fileSet := token.NewFileSet()

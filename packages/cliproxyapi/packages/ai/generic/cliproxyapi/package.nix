@@ -31,6 +31,7 @@
         src = fetchzip {inherit (sources.src) url hash;};
         patches = [
           ../../../../patches/key-allowlist.patch
+          # Per-credential Z.ai tool aliases and Codex shell-argument cleanup.
           ../../../../patches/zhipuai-tool-shims.patch
           ../../../../patches/passthrough-provider.patch
           # Guards a nil-scanner panic in Vertex Imagen streams (upstream e049c336b6c2).

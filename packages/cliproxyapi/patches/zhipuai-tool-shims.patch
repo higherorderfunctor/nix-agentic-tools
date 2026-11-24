@@ -1,3 +1,15 @@
+CLIProxyAPI: per-credential Z.ai tool shims, apiKey.toolAliases and
+apiKey.codexShellArgCleanup.
+
+Both are opt-in credential settings that repair measured Z.ai compatibility
+failures without changing credential selection: toolAliases renames a client
+tool before it reaches the upstream (ToolSearch -> ToolSearch_), and
+codexShellArgCleanup drops an empty or unpaired justification and an empty
+prefix-rule array from Codex exec_command and shell_command calls. Validation
+runs on upstream 8.1.2's shared config loading path.
+Applied with --fuzz=0.
+Rationale: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md, "Credential tool shims".
+
 diff --git a/internal/config/claude_tool_aliases.go b/internal/config/claude_tool_aliases.go
 new file mode 100644
 index 0000000..6ef7786
