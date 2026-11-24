@@ -15,6 +15,7 @@
     allowUnrestrictedPaths = setting "allowUnrestrictedPaths" "--allowUnrestrictedPaths";
     allowedUrlPattern = setting "allowedUrlPattern" "--allowedUrlPattern";
     autoConnect = setting "autoConnect" "--autoConnect";
+    backgroundNewPages = setting "backgroundNewPages" "--backgroundNewPages";
     blockedUrlPattern = setting "blockedUrlPattern" "--blockedUrlPattern";
     browserUrl = setting "browserUrl" "--browserUrl";
     categoryDebugging = setting "categoryDebugging" "--categoryDebugging";

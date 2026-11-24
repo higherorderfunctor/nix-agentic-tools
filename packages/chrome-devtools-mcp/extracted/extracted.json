@@ -44,6 +44,12 @@
           "description": "If specified, automatically connects to a browser (Chrome 144+) running locally from the user data directory identified by the channel param (default channel is stable). Requires the remote debugging server to be started in the Chrome instance via chrome://inspect/#remote-debugging.",
           "type": "boolean"
         },
+        "backgroundNewPages": {
+          "default": false,
+          "describe": "Set to true to open every page created by new_page in the background, without bringing it to the front, whatever the tool call passes for background. Useful when several agents or the user share one visible browser and new tabs should not take focus.",
+          "reloadable": true,
+          "type": "boolean"
+        },
         "blockedUrlPattern": {
           "coerce": {
             "function": {
@@ -61,7 +67,7 @@
           "coerce": {
             "function": {
               "name": "coerce",
-              "source": "(url) => {\n            if (!url) {\n                return;\n            }\n            try {\n                new URL(url);\n            }\n            catch {\n                throw new Error(`Provided browserUrl ${url} is not valid URL.`);\n            }\n            return url;\n        }"
+              "source": "(url) => {\n            if (!url) {\n                return;\n            }\n            let parsed;\n            try {\n                parsed = new URL(url);\n            }\n            catch {\n                throw new Error(`Provided browserUrl ${url} is not valid URL.`);\n            }\n            // `new URL('localhost:9222')` parses with the scheme `localhost:`, but\n            // the browser URL is fetched over HTTP to discover the WebSocket\n            // endpoint, so only http: and https: can work.\n            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {\n                throw new Error(`Provided browserUrl ${url} must use http:// or https:// protocol.`);\n            }\n            return url;\n        }"
             }
           },
           "description": "Connect to a running, debuggable Chrome instance (e.g. `http://127.0.0.1:9222`). For more details see: https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md#connecting-to-a-running-chrome-instance.",
@@ -252,7 +258,7 @@
         },
         "fileNavigations": {
           "default": true,
-          "describe": "Set to false to disallow navigating to file: URLs. When disabled, new_page, navigate_page and the slim navigate tool reject file: URLs, including view-source: URLs that target them. This restricts navigations the server performs. It is not a filesystem sandbox: it does not affect pages the browser already had open when the server connected, and the browser can reach the filesystem by other means. Use OS sandboxing for full filesystem confinement.",
+          "describe": "Set to false to disallow navigating to file: URLs. When disabled, new_page, navigate_page, the slim navigate tool, install_pwa and launch_pwa reject file: URLs, including view-source: URLs that target them. This restricts navigations the server performs. It is not a filesystem sandbox: it does not affect pages the browser already had open when the server connected, and the browser can reach the filesystem by other means. Use OS sandboxing for full filesystem confinement.",
           "reloadable": true,
           "type": "boolean"
         },
@@ -413,7 +419,7 @@
           "coerce": {
             "function": {
               "name": "coerce",
-              "source": "(arg) => {\n            if (arg === undefined) {\n                return;\n            }\n            const [width, height] = arg.split('x').map(Number);\n            if (!Number.isInteger(width) ||\n                !Number.isInteger(height) ||\n                width <= 0 ||\n                height <= 0) {\n                throw new Error('Invalid viewport. Expected format is `1280x720` with positive integer width and height.');\n            }\n            return {\n                width,\n                height,\n            };\n        }"
+              "source": "(arg) => {\n            if (arg === undefined) {\n                return;\n            }\n            const parts = arg.split('x');\n            const [width, height] = parts.map(Number);\n            if (parts.length !== 2 ||\n                !Number.isInteger(width) ||\n                !Number.isInteger(height) ||\n                width <= 0 ||\n                height <= 0) {\n                throw new Error('Invalid viewport. Expected format is `1280x720` with positive integer width and height.');\n            }\n            return {\n                width,\n                height,\n            };\n        }"
             }
           },
           "describe": "Initial viewport size for the Chrome instances started by the server. For example, `1280x720`. In headless mode, max size is 3840x2160px.",

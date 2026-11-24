@@ -1,7 +1,7 @@
 {
-  "version": "1.13.0",
+  "version": "1.14.0",
   "src": {
-    "url": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.13.0.tgz",
-    "hash": "sha256-kVjEtKh5LLUirkb3buqpSRzgRhajrpcimhYnfgKkrqQ="
+    "url": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.14.0.tgz",
+    "hash": "sha256-bC6yvfxN0O12KAT+CGibjcIXu5NaWD4CN8nMNHzez4o="
   }
 }

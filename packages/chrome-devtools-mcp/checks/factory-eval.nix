@@ -15,6 +15,7 @@
     pkgs = pkgs // {ai = (pkgs.ai or {}) // {mcpServers = ((pkgs.ai or {}).mcpServers or {}) // {chrome-devtools-mcp = pkgs.hello;};};};
   };
   settings = {
+    backgroundNewPages = true;
     executablePath = "/run/examples/chrome";
     performanceCrux = false;
     redactNetworkHeaders = true;
@@ -25,6 +26,7 @@
     workspace = ["/run/examples/project" "/run/examples/documents"];
   };
   expectedArgs = [
+    "--backgroundNewPages=true"
     "--executablePath=/run/examples/chrome"
     "--performanceCrux=false"
     "--redactNetworkHeaders=true"
@@ -115,6 +117,7 @@ in {
         {
           expected = [
             "--autoConnect=false"
+            "--backgroundNewPages=true"
             "--executablePath=/run/examples/chrome"
             "--isolated=false"
             "--performanceCrux=false"
