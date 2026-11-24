@@ -1,7 +1,7 @@
 # pyright: strict
 """Exercise the suite's comparisons with a working Reader and one deliberate fault at a time."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from io import StringIO
@@ -105,14 +105,37 @@ class SuiteTests(unittest.TestCase):
                     self.assertIn("success/direct: import output", err.getvalue())
                     self.assertNotIn("loading", err.getvalue())
 
-    def test_suite_refuses_a_pair_that_skips_a_declared_transport(self) -> None:
-        """69. Reject a missing CPA case and a case for an undeclared transport before selection."""
-        self.assertEqual(set(SYNTHETIC.cases), {
+            for module, source, extra_labels in (
+                ("noisy_import_exit", "print('loading')\nraise SystemExit(0)", ["import output"]),
+                ("silent_import_exit", "raise SystemExit(0)", []),
+                ("reader_exit", "import sys\nfrom pathlib import Path\ndef main(env, clock):\n"
+                 "    print(Path(env['CREDENTIAL_FILE']).read_text())\n    sys.exit(0)", ["leak"]),
+            ):
+                (Path(tmp) / f"{module}.py").write_text(source)
+                entry = f"{module}:main"
+                expected = [f"{case.name}: {label}" for label in (*extra_labels, "missing request", "trace", "result")]
+                with self.subTest(module=module, caller="differences"):
+                    self.assertEqual(differences(SYNTHETIC.inputs, case, entry), expected)
+                out, err = StringIO(), StringIO()
+                with self.subTest(module=module, caller="run"), redirect_stdout(out), redirect_stderr(err):
+                    self.assertEqual(run_cases([str(DIRECTORY), entry, case.name]), 1)
+                    self.assertEqual(out.getvalue(), "")
+                    self.assertEqual(err.getvalue().splitlines(), expected)
+
+    def assert_synthetic_case_ids(self, case_ids: Iterable[str]) -> None:
+        """Check the full synthetic grid even if a transport disappears from both fixture files."""
+        self.assertEqual(set(case_ids), {
             "optional-failure/cpa", "optional-failure/direct",
             "primary-failure/cpa", "primary-failure/direct",
             "success/cpa", "success/direct",
             "unreadable-credential/cpa", "unreadable-credential/direct",
         })
+
+    def test_suite_refuses_a_pair_that_skips_a_declared_transport(self) -> None:
+        """69. Reject a missing CPA case and a case for an undeclared transport before selection."""
+        self.assert_synthetic_case_ids(SYNTHETIC.cases)
+        with self.assertRaises(AssertionError):
+            self.assert_synthetic_case_ids(name for name in SYNTHETIC.cases if not name.endswith("/cpa"))
         with TemporaryDirectory() as tmp:
             directory = Path(tmp)
             (directory / "expected.json").write_bytes((DIRECTORY / "expected.json").read_bytes())
