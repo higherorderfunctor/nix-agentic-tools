@@ -8,6 +8,7 @@
   ...
 }: let
   inherit (pkgs) lib;
+  inherit (import ../../lib/usage-python.nix {inherit pkgs;}) usagePython;
   generated = generatedLib pkgs;
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
   treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../../lib/treefmt-module.nix).config;
@@ -143,11 +144,6 @@
       inherit (args) runtime;
       cpaRoutes = args.cpaRoutes or {};
     };
-    python-stack = pkgs.ai.generic.python-stack;
-    # The helper imports the shared Reader runner from its Python environment.
-    credentialUsageModule = import ../../../credential-usage/lib/python-module.nix {inherit pkgs python-stack;};
-    # The packaged `usage` modules import CPA's credential transport.
-    cpaUsageModule = import ../../../cliproxyapi/lib/python-module.nix {inherit pkgs python-stack;};
     manifest = pkgs.writeText "delegate-routing-${args.runtime}-manifest.json" (builtins.toJSON (
       if args.sessionPool != null && !(builtins.hasAttr args.sessionPool pools)
       then throw "delegate-routing.runtimes.${args.runtime}.sessionPool: unknown pool `${args.sessionPool}`"
@@ -161,7 +157,7 @@
     helper = (import ../../../../lib/strict-shell-application.nix pkgs) {
       name = "delegate-routing-plan";
       text = ''
-        exec ${python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule cpaUsageModule])}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
+        exec ${usagePython}/bin/python3 ${../../scripts}/delegate-routing-plan.py "$@" --manifest ${manifest} --reader-shell ${pkgs.bash}/bin/bash
       '';
     };
     helperCommand = lib.getExe helper;

@@ -3,8 +3,8 @@
 # type-checks strictly beside the generic transport it shares.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
-  credentialUsageModule = import ../../credential-usage/lib/python-module.nix {inherit pkgs python-stack;};
-  cpaUsageModule = import ../lib/python-module.nix {inherit pkgs python-stack;};
+  credentialUsageModule = (import ../../credential-usage/lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
+  cpaUsageModule = (import ../lib/default.nix {inherit (pkgs) lib;}).ai.cliproxyapi.pythonModule {inherit pkgs python-stack;};
   usagePython = python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule cpaUsageModule]);
   strict = ''
     set -euETo pipefail

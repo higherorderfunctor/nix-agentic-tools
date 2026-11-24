@@ -1,6 +1,6 @@
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
-  credentialUsageModule = import ./lib/python-module.nix {inherit pkgs python-stack;};
+  credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
   usagePython = python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule]);
   strict = ''
     set -euETo pipefail
