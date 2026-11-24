@@ -39,13 +39,12 @@
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
       # key, the map is still found beside the engine's hook exit-code effect
-      # table, and an absent map, a non-literal entry and two maps each fail by
-      # name.
+      # table. Check the diagnostics for zero or two maps and non-literal entries.
       kiro-hook-triggers-fixtures = let
         # One frozen trigger map bound to `binding`, its `SessionStart` entry
-        # spelled `key:value`. The `computed` case passes a non-literal value;
-        # every other case builds its bundle from this map.
+        # spelled `key:value` so the fixtures can vary quoting and literalness.
         triggerMap = binding: key: value: "var ${binding}=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        computedMap = triggerMap "M" "SessionStart" "\"Session\"+\"Start\"";
         # The engine's hook exit-code effect table: keyed by trigger names like
         # the map, but its values are objects or a shared reference.
         exitCodeTable = "var N={0:\"none\",1:\"none\",2:\"none\",other:\"none\"};var E=Object.freeze({SessionStart:{0:\"stdout\",1:\"none\",2:\"none\",other:\"none\"},SessionEnd:N,Stop:{0:\"stop-decision\",1:\"keep-working\",2:\"none\",other:\"none\",decidesWhenUnfinished:!0},PreToolUse:{0:\"permission-decision\",1:\"none\",2:\"block\",other:\"none\"}});";
@@ -61,7 +60,10 @@
           jq=${pkgs.jq}/bin/jq
           printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M")} > quoted.js
           printf '%s' 'var M=Object.freeze({});' > absent.js
-          printf '%s' ${pkgs.lib.escapeShellArg (triggerMap "M" "SessionStart" "\"Session\"+\"Start\"")} > computed.js
+          printf '%s' ${pkgs.lib.escapeShellArg computedMap} > computed.js
+          # A locator that accepts a computed map beside the effect table
+          # would succeed where the production bundle should be refused.
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + computedMap)} > exit-codes-computed.js
           # The table comes first, as in the 3.6.0 bundle, so a locator that
           # takes the first `SessionStart` object picks the table here.
           printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + triggerMap "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
@@ -74,7 +76,7 @@
           ${extract} exit-codes.js > exit-codes.json
           [ "$("$jq" -c '.hookTriggers' exit-codes.json)" = '["Manual","PostFileCreate","PostFileDelete","PostFileSave","PostTaskExec","PostToolUse","PreTaskExec","PreToolUse","SessionEnd","SessionStart","Stop","UserPromptSubmit"]' ]
           [ "$("$jq" -c '.hookTriggerAliases' exit-codes.json)" = '{"agentSpawn":"SessionStart"}' ]
-          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2"; do
+          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2" exit-codes-computed:"absent or ambiguous (0 of 2"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
             # Two statements: the left side of `&&` is exempt from errexit, so
@@ -169,41 +171,46 @@
               },
           }
           data = json.dumps(manifest, indent=2).encode()
-          treatment = json.dumps({
-              "groups": {"kiro-cli-team": ["account"]},
-              feature: {"treatment": ["@kiro-cli-team"]},
-          }, indent=2).encode()
           prefix = b"\x7fELF" + data + b"\0"
 
-          # Counting the treatment-group row would make this patch refuse.
-          path.write_bytes(prefix + treatment)
-          extracted = run_script(extract_script, path)
-          assert extracted.returncode == 0, extracted
-          assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
-              "patchable": True,
-              "unmatchedSites": 0,
-          }, extracted
-          patched = run_script(patch_script, feature, root)
-          assert patched.returncode == 0, patched
-          patched_manifest, patched_treatment = path.read_bytes().split(b"\0", 1)
-          assert len(patched_manifest) == len(prefix) - 1
-          assert patched_treatment == treatment
-          entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
-          assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
+          # Counting treatment-only rows would make these patches refuse.
+          for treatment_groups in (["@kiro-cli-team"], [], ["@kiro-cli-team", 'escaped"string']):
+              treatment = json.dumps({
+                  "groups": {"kiro-cli-team": ["account"]},
+                  feature: {"treatment": treatment_groups},
+              }, indent=2).encode()
+              path.write_bytes(prefix + treatment)
+              extracted = run_script(extract_script, path)
+              assert extracted.returncode == 0, extracted
+              assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+                  "patchable": True,
+                  "unmatchedSites": 0,
+              }, extracted
+              patched = run_script(patch_script, feature, root)
+              assert patched.returncode == 0, patched
+              patched_manifest, patched_treatment = path.read_bytes().split(b"\0", 1)
+              assert len(patched_manifest) == len(prefix) - 1
+              assert patched_treatment == treatment
+              entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
+              assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
 
-          # Ignoring every row named "treatment" would allow a partial patch.
-          unknown = json.dumps({feature: {"treatment": "@kiro-cli-team"}}, indent=2).encode()
-          blob = prefix + unknown
-          path.write_bytes(blob)
-          extracted = run_script(extract_script, path)
-          assert extracted.returncode == 0, extracted
-          assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
-              "patchable": False,
-              "unmatchedSites": 1,
-          }, extracted
-          refused = run_script(patch_script, feature, root)
-          assert refused.returncode == 1 and "Refusing to half-patch." in refused.stderr, refused
-          assert path.read_bytes() == blob
+          # Matching only the opening of the row or list would allow partial patches.
+          for row in (
+              {"treatment": "@kiro-cli-team"},
+              {"treatment": ["@kiro-cli-team", 5]},
+              {"treatment": ["@kiro-cli-team"], **manifest[feature]},
+          ):
+              blob = prefix + json.dumps({feature: row}, indent=2).encode()
+              path.write_bytes(blob)
+              extracted = run_script(extract_script, path)
+              assert extracted.returncode == 0, extracted
+              assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+                  "patchable": False,
+                  "unmatchedSites": 1,
+              }, extracted
+              refused = run_script(patch_script, feature, root)
+              assert refused.returncode == 1 and "Refusing to half-patch." in refused.stderr, refused
+              assert path.read_bytes() == blob
 
           for blob, error in [
               (data + b"\0" + json.dumps({"other": {"description": ""}}, indent=2).encode(),

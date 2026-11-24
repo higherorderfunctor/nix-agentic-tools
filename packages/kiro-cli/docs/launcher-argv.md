@@ -2,10 +2,11 @@
 
 <!-- cspell:ignore avante codecompanion cutover vwalways walways wnever -->
 
-> **Last verified:** 2026-11-06 — Kiro CLI 3.0.0 ships one `kiro-cli` binary.
-> The wrapper always prepends `--v3` and adds `--agent-engine=v3` to `acp`
-> (before an end-of-options `--`, else last) unless the caller passed an
-> `--agent-engine`; it injects no trust flag. Its subcommand scan skips the
+> **Last verified:** 2026-11-24 — Kiro CLI 3.6.0 embeds treatment-group rows
+> alongside the rollout manifest. Kiro CLI has shipped one `kiro-cli` binary
+> since 3.0.0. The wrapper always prepends `--v3` and adds `--agent-engine=v3`
+> to `acp` (before an end-of-options `--`, else last) unless the caller passed
+> an `--agent-engine`; it injects no trust flag. Its subcommand scan skips the
 > values of the top-level options the binary's `--help` lists as taking one.
 > Four consumer options (`ai.kiro.cli.chat.{mode,wrap,requireMcpStartup}` and
 > `ai.kiro.cli.acp.authMethod`) add their flag the same way, and a bare launch
@@ -464,10 +465,12 @@ are extracted into the aggregate facts under `packages/kiro-cli/extracted/`.
 `ai.kiro.cli.features.<name>.enable` exposes those names; restricted entries are
 enabled by a length-preserving patch through `passthru.withRolloutFeatures`, and
 entries already available to every user preserve the stock package. Patch
-feasibility comes from `rolloutPatchability.<name>.patchable`. Each
-`"<name>": {` site must match the rollout entry shape. The matcher skips
-treatment-group rows whose first field opens with `"treatment": [`. Enabling an
-unpatchable feature fails at evaluation and names the extracted flag.
+feasibility comes from `rolloutPatchability.<name>.patchable`. A rollout site
+starts with `"<name>": {`. The matcher skips the treatment-group rows introduced
+in Kiro CLI 3.6.0 when the whole row contains just a `treatment` field with a
+list of strings, which may be empty. Every remaining site must match the rollout
+entry shape. Enabling an unpatchable feature fails at evaluation and names the
+extracted flag.
 
 Workflows have no rollout entry since 3.1.0 and need no binary patch.
 `cli.workflows.enable` still requires the global `chat.enableWorkflows` setting;

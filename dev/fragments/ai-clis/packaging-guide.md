@@ -1,9 +1,10 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-11-06 — Kiro 3.0.0's payload and its Linux FHS env are
-> owned here. Two native package shards per system exclude patched Kiro; its
-> required validation legs use Ubuntu when kiro-scope finds no relevant changes.
-> The committed devenv package lists contain no kiro-cli entry with either CI
+> **Last verified:** 2026-11-24 — Kiro CLI 3.6.0 embeds treatment-group rows
+> alongside the rollout manifest. This repository owns the payload and Linux FHS
+> env. Two native package shards per system exclude patched Kiro; its required
+> validation legs use Ubuntu when kiro-scope finds no relevant changes. The
+> committed devenv package lists contain no kiro-cli entry with either CI
 > setting; local runtime opt-ins are separate.
 
 ### Overview
@@ -143,14 +144,14 @@ short sets retain readable names. The extractor locates each manifest root and
 parses its JSON, copying every entry field except the unused description.
 Missing manifests and disagreeing copies fail extraction. State readers reject
 unknown fields; internal treatment must also be 100% to preserve the stock
-package. A rollout site starts with `"<name>": {`. The matcher skips
-treatment-group rows whose first field opens with `"treatment": [`, a shape
-embedded since Kiro 3.6.0. `rolloutPatchability` records whether all remaining
-sites match the shared entry regex and counts any unmatched sites. An
-unpatchable feature is rejected at module evaluation with its name and the
-extracted flag if it needs a patch. Counts remain per platform; modules read
-only the aggregate flag. A patched canary contains modified proprietary bytes,
-so it must never be republished.
+package. A rollout site starts with `"<name>": {`. The matcher skips the
+treatment-group rows introduced in Kiro CLI 3.6.0 when the whole row contains
+just a `treatment` field with a list of strings, which may be empty.
+`rolloutPatchability` records whether all remaining sites match the shared entry
+regex and counts any unmatched sites. An unpatchable feature is rejected at
+module evaluation with its name and the extracted flag if it needs a patch.
+Counts remain per platform; modules read only the aggregate flag. A patched
+canary contains modified proprietary bytes, so it must never be republished.
 
 **Excluding it from `ci.yml`'s native package shards is necessary and NOT
 sufficient.** That was the whole mitigation from #665 (2026-08-01), and the

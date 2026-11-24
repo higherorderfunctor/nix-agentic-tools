@@ -1,3 +1,4 @@
+# cspell:ignore bfnrt
 rec {
   # SINGLE definition of "which file is the kiro chat binary", shared by the
   # read-only extractor (`mkKiroExtract`) and the in-place patcher
@@ -92,10 +93,20 @@ rec {
         )
 
     def rollout_sites(mapped, name):
-        """Find manifest entries and count unmatched sites for extraction and patching."""
+        """Return manifest matches and the unmatched-site count for a feature.
+
+        Extraction and patching count each '"<name>": {' in the mapped binary
+        as a site, except rows containing only a treatment string list. Those
+        rows list group assignments and carry no rollout settings to patch.
+        """
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
-        # Kiro 3.6.0 also embeds treatment groups keyed by feature name.
-        sites = len(re.findall(key + rb'(?!\n    "treatment": \[)', mapped))
+        json_string = rb'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
+        treatment_row = (
+            rb'\n    "treatment": \['
+            rb'(?:\n      ' + json_string + rb'(?:,\n      ' + json_string + rb')*\n    )?'
+            rb'\]\n  \}'
+        )
+        sites = len(re.findall(key + rb'(?!' + treatment_row + rb')', mapped))
         hits = list(entry_re(name).finditer(mapped))
         return hits, sites - len(hits)
 
