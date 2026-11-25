@@ -143,10 +143,10 @@ ai.credentialUsage.readers.claude.cpa = {
 };
 ```
 
-The command opens the key file at runtime. The packaged command and generated
-skill carry its filename. Set `pin` to select an eligible CPA auth index. When
-the `cpa` setting is unset, the Reader chooses from the current CPA environment
-or local Claude configuration.
+The command carries the filename and opens the key file at runtime. The
+generated skill references the command. Set `pin` to select an eligible CPA auth
+index. When the `cpa` setting is unset, the Reader chooses from the current CPA
+environment or local Claude configuration.
 
 To select another Reader, define the leaf at ordinary priority:
 
@@ -216,8 +216,9 @@ does, with three differences a real socket needs:
 - It accepts `observedAt` as any UTC instant inside the run, because the
   subprocess reads the real clock.
 
-The driver also checks direct cases that stop before sending a request. The
-imported suite checks all direct requests with its fake transport.
+Claude's command check also supplies an offline build of the command. The driver
+uses it for direct preflight cases that should send no requests. The imported
+suite checks all direct requests with its fake transport.
 
 ## Checks
 

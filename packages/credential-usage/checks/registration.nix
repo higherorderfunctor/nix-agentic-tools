@@ -1,4 +1,5 @@
 # Readers register by module merging, and every constructor resolves the same selection.
+# cspell:ignore rfile wfile
 {
   harness,
   lib,
@@ -17,6 +18,10 @@
   };
   # An ordinary derivation stands in for another owner's packaged Reader.
   fill = pkgs.hello;
+  claude = (import ../../../lib/strict-shell-application.nix pkgs) {
+    name = "claude";
+    text = "printf '%s\\n' '2.1.0 (Claude Code)'";
+  };
   # Owners default every leaf, as Claude's own module does.
   owner = id: {
     ai.credentialUsage.readers.${id} = lib.mapAttrs (_: lib.mkDefault) {
@@ -37,6 +42,7 @@
   binding.ai.credentialUsage.readers.claude.cpa = {
     endpoint = "http://127.0.0.1:49264/selected";
     managementKeyFile = "/dev/stdin";
+    pin = "selected";
     policy = {
       retries = 1;
       timeout = 0.25;
@@ -91,13 +97,14 @@
     ))
   backends;
 in {
-  checks.credential-usage-registration = pkgs.runCommand "credential-usage-registration" {nativeBuildInputs = [pkgs.python3];} ''
+  checks.credential-usage-registration = pkgs.runCommand "credential-usage-registration" {nativeBuildInputs = [claude pkgs.python3];} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     mkdir "$out"
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: path: "ln -s ${path} \"$out/${name}\"") checks)}
     python3 -I - <<'PYTHON'
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import json
     import os
     import secrets
     import subprocess
@@ -107,10 +114,26 @@ in {
     finished = Event()
 
     class Discovery(BaseHTTPRequestHandler):
+        def reply(self, value):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(value).encode())
+
         def do_GET(self):
-            requests.append((self.path, self.headers.get("Authorization")))
-            # A silent peer forces the selected HTTP timeout and retry count.
-            finished.wait(10)
+            requests.append((self.path, self.headers.get("Authorization"), None))
+            if len(requests) == 1:
+                # A silent peer forces the selected HTTP timeout and retry.
+                finished.wait(10)
+                return
+            self.reply({"files": [
+                {"account_type": "oauth", "provider": "claude", "auth_index": index}
+                for index in ("other", "selected")
+            ]})
+
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append((self.path, self.headers.get("Authorization"), payload["auth_index"]))
+            self.reply({"status_code": 503, "body": "private response"})
 
     key = secrets.token_hex(32)
     with ThreadingHTTPServer(("127.0.0.1", 49264), Discovery) as server:
@@ -124,8 +147,14 @@ in {
             finished.set()
             server.shutdown()
     assert result.returncode == 1 and not result.stdout
-    assert result.stderr == "usage: claude proxy binding unavailable\n"
-    assert requests == [("/selected/v0/management/auth-files", f"Bearer {key}")] * 2
+    assert result.stderr == "usage: claude usage request failed\n"
+    # 34, 40, 121–124. Retrying discovery must preserve the bound endpoint,
+    # runtime key and chosen auth index even with two eligible logins.
+    assert requests == [
+        ("/selected/v0/management/auth-files", f"Bearer {key}", None),
+        ("/selected/v0/management/auth-files", f"Bearer {key}", None),
+        ("/selected/v0/management/api-call", f"Bearer {key}", "selected"),
+    ]
     PYTHON
   '';
 }
