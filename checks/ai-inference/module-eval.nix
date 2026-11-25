@@ -278,7 +278,7 @@ in {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
         # Both clients can reach the login. Only Claude can spill over to the paid key.
-        codexOptIn = pickerModels:
+        codexOptIn = routes:
           evaluate backend (instanceChange {
             credentials = {
               codex.oauth = {
@@ -292,11 +292,13 @@ in {
                 priority = -1;
               };
             };
-            clientKeys.personal.routes = lib.mkForce [((route "codex") // {inherit pickerModels;}) (route "paid")];
+            clientKeys.personal.routes = lib.mkForce routes;
             clientKeys.work.routes = lib.mkForce [(route "codex")];
           });
-        opted = codexOptIn ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
-        plain = codexOptIn [];
+        codexPickerRoute = (route "codex") // {pickerModels = ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];};
+        opted = codexOptIn [codexPickerRoute (route "paid")];
+        paidFirst = codexOptIn [(route "paid") codexPickerRoute];
+        plain = codexOptIn [(route "codex") (route "paid")];
         expectedPicker = {
           modelPicker.options = map (model: {
             inherit model;
@@ -419,6 +421,33 @@ in {
               resolvedInference = opted.config.ai.claude.normalized.settings.inference;
             }
             == expectedPicker.modelPicker.options;
+          "paid route first supplies both shared picker descriptions" = let
+            settingsWithPicker =
+              if backend == "hm"
+              then claudeSettings paidFirst
+              else launcherSettings paidFirst;
+          in
+            failedMessages paidFirst
+            == []
+            && settingsWithPicker.modelPicker.options
+            == [
+              {
+                model = "gpt-6.2-astra";
+                description = "paid through CLIProxyAPI";
+              }
+              {
+                model = "gpt-6.2-sol";
+                description = "paid through CLIProxyAPI";
+              }
+              {
+                model = "gpt-6-luna";
+                description = "codex through CLIProxyAPI";
+              }
+              {
+                model = "gpt-6.1-terra";
+                description = "codex through CLIProxyAPI";
+              }
+            ];
           "OAuth picker in Claude user settings" = backend != "hm" || (claudeSettings opted).modelPicker == expectedPicker.modelPicker;
           "OAuth picker in Claude launcher settings only" = backend == "hm" || (launcherSettings opted == expectedPicker && !((claudeSettings opted) ? modelPicker));
           "picker models preserve CPA config and Codex files" = rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;

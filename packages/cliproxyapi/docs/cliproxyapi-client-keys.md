@@ -1,8 +1,11 @@
 ## CLIProxyAPI instance client keys and routes
 
-> **Last verified:** 2026-11-07 — carries the proposed architecture decision for
-> named routing; named client keys generate CPA access keys and allowlist rules
-> from credential routes. Conflicting hand-written entries are refused.
+> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> Credential names in row descriptions are for display only.
+>
+> Named routing verified 2026-11-07 — named client keys generate CPA access keys
+> and allowlist rules from credential routes. Conflicting hand-written entries
+> are refused.
 
 ## Architecture decisions
 
@@ -54,7 +57,8 @@ Set `pickerModels` on an OAuth route to add raw ids to Claude Code's model
 picker, for example
 `routes = [{credential = "codex"; pickerModels = ["gpt-6.2-sol"];}]`. The
 default is an empty list. Each id must be nonempty and contain no whitespace.
-API-key routes get their rows from the credential's declared models.
+API-key routes get their rows from the credential's declared models. A nonempty
+`pickerModels` on an API-key route fails evaluation.
 
 When routes share an id, the first route supplies the row's description. That
 description is for display only. CPA uses the client's grants and the requested

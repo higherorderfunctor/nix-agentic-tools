@@ -321,7 +321,7 @@
   });
   # A raw upstream model id as a picker row names it: non-empty, with no
   # whitespace for a harness to trim into a different id.
-  modelIdType = types.strMatching "[^[:space:]]+" // {description = "a model id without whitespace";};
+  pickerModelIdType = types.strMatching "[^[:space:]]+" // {description = "a model id without whitespace";};
   clientKeyType = types.submodule {
     options = {
       key = mkOption {
@@ -341,9 +341,9 @@
               description = "Name in this Instance's credentials. Routes preserve this list's order without promising CPA fallback order.";
             };
             pickerModels = mkOption {
-              type = types.listOf modelIdType;
+              type = types.listOf pickerModelIdType;
               default = [];
-              description = "Raw upstream model ids to show in Claude Code's `/model` picker for this OAuth route. The first route listing an id supplies its description. CPA selects an eligible credential from the client's grants. API-key routes get their rows from their declared models.";
+              description = "Raw upstream model ids to show in Claude Code's `/model` picker for this OAuth route. The first route listing an id supplies its description. CPA selects an eligible credential from the client's grants. API-key routes get their rows from their declared models. A nonempty pickerModels on an API-key route fails evaluation.";
             };
           };
         });

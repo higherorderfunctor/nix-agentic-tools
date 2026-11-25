@@ -1,8 +1,12 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
-> **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
-> a secret account email; named API-key credentials can select the built-in Z.ai
-> or OpenCode Go vendor defaults and a priority, and serve per-API models.
+> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> Credential names in row descriptions are for display only.
+>
+> Credential options verified 2026-10-30 — OAuth upstream credentials require
+> vendor and a secret account email; named API-key credentials can select the
+> built-in Z.ai or OpenCode Go vendor defaults and a priority, and serve per-API
+> models.
 
 How a harness selects an instance and its client key is in
 `dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
@@ -70,15 +74,16 @@ subscription login and API key, allow both in the client's routes and set
 default-priority OAuth login and use the API key when that login is unavailable.
 For an OpenAI Platform key backing Codex OAuth in Claude Code, grant its
 Responses route only to the Claude client key. Priority `-1` permits paid
-spillover on any retryable failure, including quota exhaustion. Codex CLI can
-use a Platform key, but its separate client key receives only the routes
-explicitly granted to it. If both priorities are 0, CPA selects within that tier
-using `routing.strategy`. OAuth priority lives in CPA's login file metadata, so
-`oauth.priority` is not a Nix option; this declaration never edits login files.
-For Codex and xAI WebSocket requests, CPA can prefer a WebSocket-capable
-credential even at a lower priority than an HTTP-only credential. Existing
-session affinity can keep using a bound credential after a higher-priority one
-recovers. Per-client routing order/fallback and account prefixes are deferred.
+spillover on any retryable failure, including quota exhaustion. Codex CLI
+supports Platform keys. Its client key can use only its own grants, and this
+setup grants the Platform key to Claude alone. If both priorities are 0, CPA
+selects within that tier using `routing.strategy`. OAuth priority lives in CPA's
+login file metadata, so `oauth.priority` is not a Nix option; this declaration
+never edits login files. For Codex and xAI WebSocket requests, CPA can prefer a
+WebSocket-capable credential even at a lower priority than an HTTP-only
+credential. Existing session affinity can keep using a bound credential after a
+higher-priority one recovers. Per-client routing order/fallback and account
+prefixes are deferred.
 
 Built-in vendor definitions live in `packages/cliproxyapi/lib/vendors/`, with
 one file per vendor and an explicit `default.nix` index. Each vendor reads its

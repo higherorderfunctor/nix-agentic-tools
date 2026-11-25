@@ -8,8 +8,8 @@
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
 # managed launcher. The same launcher guarantees untrusted-project directory access.
 #
-# CLIProxyAPI's lowering turns each routed upstream credential's models into
-# `/model` picker rows; where each backend delivers them, and why, is in
+# CLIProxyAPI builds `/model` picker rows from API-key routes' declared models
+# and OAuth routes' pickerModels. Backend delivery and its rationale are in
 # dev/fragments/ai-inference/ai-inference-runtimes.md.
 {
   lib,

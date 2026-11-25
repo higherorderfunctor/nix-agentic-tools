@@ -1,6 +1,9 @@
 ## ai.settings.inference runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-10-30 — each runtime's inference library
+> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> Credential names in row descriptions are for display only.
+>
+> Runtime behavior verified 2026-10-30 — each runtime's inference library
 > (`packages/<owner>/lib/inference.nix`) holds one lowering per backend (only
 > `cliproxyapi`, which also lowers external selections) and asserts on any
 > other; lowerings derive native values at `mkDefault`. Claude's helper and
@@ -73,7 +76,7 @@ schema has no model-name pattern, and the builder keeps a row unless its check
 allowlist) or `MF` (a first-party-only lookup that returns null off
 `api.anthropic.com`); none rejects such an id. Gateway discovery keeps only ids
 matching `/(claude|anthropic)/i`, which is why rows use `modelPicker` and not
-discovery. If CPA also advertises the model under an encoded Claude id, Claude
+discovery. If CPA also advertises the model under a cloaked Anthropic ID, Claude
 can show that discovery entry alongside the explicit raw id. Selecting a row
 passes validation before the server probe, so it works while the proxy is down.
 A consumer `availableModels` that omits the id, or a matching `deniedModels`,
