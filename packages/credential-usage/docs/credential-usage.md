@@ -186,14 +186,14 @@ binding.instance(deadline)
 ```
 
 Without the variable, or with a value that is not a finite number, there is no
-deadline and the policy timeout is the only bound.
+deadline and only the HTTP library's socket timeout applies.
 
-With a deadline, each request gets the smaller of the policy timeout and the
-time left, less a margin of 0.5 seconds. `DirectHttp` waits that long for the
-whole request, retries included, and then raises `RequestFailure`. The margin
-leaves the Reader time to print its envelope. Once it is used up, the transport
-raises `RequestFailure` without a network call. CPA management calls and
-`api-call` pass through the same `DirectHttp`.
+With a deadline, each request gets the time left less a margin of 0.5 seconds,
+capped by the policy timeout. `DirectHttp` waits that long for the whole
+request, retries included, and then raises `RequestFailure`. The margin leaves
+the Reader time to print its envelope. Once it is used up, the transport raises
+`RequestFailure` without a network call. CPA management calls and `api-call`
+pass through the same `DirectHttp`.
 
 Send required reads before optional ones, and let an optional read fail through
 `RequestFailure` into its slot's `unknown` reason. A slow or stalled optional

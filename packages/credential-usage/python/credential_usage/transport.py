@@ -50,7 +50,7 @@ def reader_deadline(environ: Mapping[str, str]) -> float | None:
     """Return the instant the runner's seconds run out, counted from now, or None when it sets none.
 
     The runner exports the seconds left in DEADLINE_VARIABLE. An unset or
-    unreadable value leaves the policy timeout as the only bound.
+    unreadable value leaves only the HTTP library's socket timeout.
     """
     try:
         left = math.inf if (seconds := environ.get(DEADLINE_VARIABLE)) is None else float(seconds)
@@ -131,9 +131,10 @@ class DirectHttp:
             return self.send(request, budget)
         # A name lookup or a trickling reply ignores the socket timeout, so this thread keeps time.
         reply: Future[HttpResponse] = Future()
+        started = time.monotonic()
         Thread(target=deliver, args=(reply, lambda: self.send(request, budget)), daemon=True).start()
         try:
-            return reply.result(timeout=budget)
+            return reply.result(timeout=budget - (time.monotonic() - started))
         except TimeoutError:
             raise RequestFailure("HTTP request deadline passed") from None
 

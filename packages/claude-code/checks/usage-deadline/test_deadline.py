@@ -35,7 +35,6 @@ sys.path.insert(0, str(SUITE))
 from suite import Case, Pair, Replay, ScriptedNetwork, captured_stream, case_environment
 
 DEADLINE = 5
-MARGIN = 0.5
 PROFILE_STALL = str(PROFILE_URL)
 PREPAID_STALL = "https://api.anthropic.com/api/oauth/organizations/org-123/prepaid/credits"
 TIMEOUT = "timeout"
@@ -57,14 +56,10 @@ class Outcome(NamedTuple):
     sent: int
 
 
-def part(envelope: Mapping[str, JsonValue], name: str) -> JsonValue | None:
-    """Return the windows, the balances or the credits slot state of an envelope or its expectation."""
-    if name == "credits":
-        states = envelope["slotStates"]
-        if not isinstance(states, dict):
-            return None
-        envelope = states
-    return envelope.get(name)
+def credits_state(envelope: Mapping[str, JsonValue]) -> JsonValue | None:
+    """Return the credits slot state of a printed envelope."""
+    states = envelope["slotStates"]
+    return states["credits"] if isinstance(states, dict) else None
 
 
 class DeadlineTests(unittest.TestCase):
@@ -125,7 +120,7 @@ class DeadlineTests(unittest.TestCase):
     def observed_windows(self, transport: str) -> JsonValue | None:
         """Return the windows the pair records for the case the Reader ran."""
         case: Case = Pair.read(PAIR).cases[f"grant-optional-terms/{transport}"]
-        return part(case.expected.result, "windows")
+        return case.expected.result["windows"]
 
     def assert_printed(self, outcome: Outcome) -> Mapping[str, JsonValue]:
         """Require a successful, silent Reader and return its public envelope."""
@@ -148,10 +143,10 @@ class DeadlineTests(unittest.TestCase):
                 outcome = self.replay(transport, deadline, Stall(None), policy)
                 result = self.assert_printed(outcome)
                 self.assertEqual((outcome.timeouts, outcome.sent), (waits, len(waits)))
-                self.assertEqual(part(result, "credits"), {"state": "unknown", "reason": credits} if credits != "observed" else {"state": "observed"})
+                self.assertEqual(credits_state(result), {"state": "unknown", "reason": credits} if credits != "observed" else {"state": "observed"})
         with self.subTest("an exhausted deadline sends nothing", transport="cpa"):
             outcome = self.replay("cpa", 1.5, Stall(None))
-            self.assertEqual(self.assert_failed(outcome), "usage: claude usage request failed\n")
+            self.assert_failed(outcome, "usage: claude usage request failed\n")
             self.assertEqual((outcome.timeouts, outcome.sent), ([1.0], 1))
 
     def test_stalled_optional_read_leaves_credits_unknown_and_keeps_windows(self) -> None:
@@ -166,23 +161,23 @@ class DeadlineTests(unittest.TestCase):
                 outcome = self.replay(transport, DEADLINE, Stall(url))
                 result = self.assert_printed(outcome)
                 self.assertEqual((outcome.timeouts, outcome.sent), (waits, len(waits)))
-                self.assertEqual(part(result, "windows"), self.observed_windows(transport))
-                self.assertEqual(part(result, "balances"), [])
-                self.assertEqual(part(result, "credits"), {"state": "unknown", "reason": credits})
+                self.assertEqual(result["windows"], self.observed_windows(transport))
+                self.assertEqual(result["balances"], [])
+                self.assertEqual(credits_state(result), {"state": "unknown", "reason": credits})
 
     def test_stalled_required_read_fails_before_the_deadline(self) -> None:
         """129. Waiting the configured timeout past the deadline lets the runner kill the Reader instead of its own failure."""
         for transport, waits in (("direct", [4.5]), ("cpa", [4.5, 3.5])):
             with self.subTest(transport=transport):
                 outcome = self.replay(transport, DEADLINE, Stall(str(USAGE_URL)))
-                self.assertEqual(self.assert_failed(outcome), "usage: claude usage request failed\n")
+                self.assert_failed(outcome, "usage: claude usage request failed\n")
                 self.assertEqual((outcome.timeouts, outcome.sent), (waits, len(waits)))
 
-    def assert_failed(self, outcome: Outcome) -> str:
-        """Require a Reader that failed before the deadline and return its one public failure line."""
+    def assert_failed(self, outcome: Outcome, line: str) -> None:
+        """Require a Reader that failed before the deadline with exactly one public failure line."""
         self.assertEqual(outcome.status, 1, "the runner killed the Reader at its deadline")
         self.assertTrue(outcome.out == "", "the Reader printed an envelope before failing")
-        return outcome.err
+        self.assertTrue(outcome.err == line, "the failure line differs")
 
 
 if __name__ == "__main__":

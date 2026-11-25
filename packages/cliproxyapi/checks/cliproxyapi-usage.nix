@@ -14,11 +14,13 @@ in {
   checks.cliproxyapi-usage-transport = pkgs.runCommand "cliproxyapi-usage-transport" {nativeBuildInputs = [usagePython];} ''
     ${strict}
     python3 -I -B ${./transport}/test_transport.py
+    python3 -I -B ${./transport}/test_deadline.py
     touch "$out"
   '';
   checks.cliproxyapi-usage-types = pkgs.runCommand "cliproxyapi-usage-types" {nativeBuildInputs = [pkgs.pyright usagePython];} ''
     ${strict}
     pyright --project ${../usage} --pythonpath "$(command -v python3)"
+    pyright --pythonpath "$(command -v python3)" ${./transport}/test_deadline.py
     touch "$out"
   '';
 }
