@@ -5,13 +5,13 @@ Owner checks call `main` with a pair directory and a packaged command. Each CPA
 case gets a local HTTP server that answers the scenario's requests. An owner
 can also provide a build of the command that forbids sockets to check direct
 preflight cases. The same pair checks all direct requests in the imported suite.
+A failed comparison prints the case, then the whole expected and observed objects.
 """
 
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.metadata import version
-import json
 from pathlib import Path
 import re
 import subprocess
@@ -25,7 +25,10 @@ from pydantic import JsonValue, TypeAdapter, ValidationError
 # Isolated Python omits the script directory, which holds the shared suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from suite import Case, Document, IncompletePair, Inputs, Pair, Reply, Request, ScriptedNetwork, case_environment, private_strings, public_result, same_json
+from suite import (
+    Case, Difference, Document, IncompletePair, Inputs, Pair, Reply, Request, ScriptedNetwork, case_environment, conceal, diff_of,
+    hidden_text, public_result, same_json,
+)
 
 WireRequest = tuple[str, str, dict[str, str], bytes]
 ORIGIN = re.compile(r"https?://[^/]+")
@@ -94,18 +97,14 @@ def stamped(document: Document | None, started: datetime, finished: datetime) ->
     return document | {"observedAt": OBSERVED_AT}
 
 
-def installed_differences(inputs: Inputs, case: Case, command: str) -> list[str]:
-    """Run the installed command once and return a safe label for each failed comparison."""
-    errors: list[str] = []
+def installed_differences(inputs: Inputs, case: Case, command: str) -> list[Difference]:
+    """Run the installed command once and return a safe report for each failed comparison."""
+    errors: list[Difference] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     credentials = inputs.credentials | case.scenario.credentials
-    masks = {
-        spelling: f"[credential:{name}]"
-        for name, content in credentials.items()
-        for value in private_strings(content)
-        for spelling in (value, json.dumps(value)[1:-1])
-    }
+    masks, private = hidden_text(credentials, replies)
     network = ScriptedNetwork(inputs.now, replies, masks)
+    redact = conceal(masks | dict.fromkeys(private, "[private]"))
     server = ReplayServer(replies)
     thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
@@ -145,24 +144,21 @@ def installed_differences(inputs: Inputs, case: Case, command: str) -> list[str]
             headers={network.mask(k): network.mask(v) for k, v in reader_headers(headers).items()}, body=payload,
         )
 
-    private = [*masks, *(value for reply in replies if reply.private or not 200 <= reply.status < 300
-                         for value in private_strings(reply.body))]
-    if any(secret in stream or json.dumps(secret)[1:-1] in stream for stream in (out, err) for secret in private):
-        errors.append("leak")
+    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
+        errors.append(Difference(f"{case.name}: leak"))
     if len(server.received) != len(replies):
-        errors.append("extra request" if len(server.received) > len(replies) else "missing request")
-    if not same_json(
-        [request.model_dump() for request in map(wire, server.received)],
-        [request.model_dump() for request in case.expected.requests],
-    ):
-        errors.append("trace")
+        errors.append(Difference(f"{case.name}: extra request" if len(server.received) > len(replies) else f"{case.name}: missing request"))
+    expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
+    trace: JsonValue = [request.model_dump() for request in map(wire, server.received)]
+    if not same_json(trace, expected_trace):
+        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
     expected = dict(case.expected.result)
     if "observedAt" in expected:
         expected["observedAt"] = OBSERVED_AT
     observed = stamped(public_result(status, out.replace(server.origin, fixture), err), started, finished)
     if not same_json(observed, expected):
-        errors.append("result")
-    return [f"{case.name}: {error}" for error in errors]
+        errors.append(Difference(f"{case.name}: result", diff_of(expected, observed, redact)))
+    return errors
 
 
 def main(args: Sequence[str]) -> int:

@@ -2,25 +2,12 @@
   "description": "A bound Reader requires allowance and can report credits on either transport.",
   "transports": ["cpa", "direct"],
   "now": "2026-11-01T00:00:00Z",
-  "credentials": {
-    "login": "{\"token\":\"sample-private-value\"}"
-  },
-  "executables": {
-    "reader-plan": "printf '%s\\n' standard"
-  },
+  "credentials": { "login": "{\"token\":\"sample-private-value\"}" },
+  "executables": { "reader-plan": "printf '%s\\n' standard" },
   "replies": {
-    "allowance": {
-      "status": 200,
-      "body": "{\"used\":23}"
-    },
-    "wallet": {
-      "status": 200,
-      "body": "[]"
-    },
-    "failed": {
-      "status": 503,
-      "body": "private upstream detail"
-    },
+    "allowance": { "status": 200, "body": "{\"used\":23}" },
+    "wallet": { "status": 200, "body": "[]" },
+    "failed": { "status": 503, "body": "private upstream detail" },
     "proxy-allowance": {
       "status": 200,
       "body": "{\"status_code\":200,\"body\":\"{\\\"used\\\":23}\"}"
@@ -37,68 +24,32 @@
   },
   "scenarios": {
     "success": {
+      "extends": null,
+      "env": { "CREDENTIAL_FILE": "${credentials:login}" },
       "direct": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "direct"
-        },
+        "env": { "TRANSPORT": "direct" },
         "replies": ["allowance", "wallet"]
       },
       "cpa": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "cpa"
-        },
+        "env": { "TRANSPORT": "cpa" },
         "replies": ["proxy-allowance", "proxy-wallet"]
       }
     },
     "optional-failure": {
-      "direct": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "direct"
-        },
-        "replies": ["allowance", "failed"]
-      },
-      "cpa": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "cpa"
-        },
-        "replies": ["proxy-allowance", "proxy-failed"]
-      }
+      "extends": "success",
+      "direct": { "replies": ["allowance", "failed"] },
+      "cpa": { "replies": ["proxy-allowance", "proxy-failed"] }
     },
     "primary-failure": {
-      "direct": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "direct"
-        },
-        "replies": ["failed"]
-      },
-      "cpa": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}",
-          "TRANSPORT": "cpa"
-        },
-        "replies": ["proxy-failed"]
-      }
+      "extends": null,
+      "env": { "CREDENTIAL_FILE": "${credentials:login}" },
+      "direct": { "env": { "TRANSPORT": "direct" }, "replies": ["failed"] },
+      "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": ["proxy-failed"] }
     },
     "unreadable-credential": {
-      "direct": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}.missing",
-          "TRANSPORT": "direct"
-        },
-        "replies": []
-      },
-      "cpa": {
-        "env": {
-          "CREDENTIAL_FILE": "${credentials:login}.missing",
-          "TRANSPORT": "cpa"
-        },
-        "replies": []
-      }
+      "extends": "primary-failure",
+      "env": { "CREDENTIAL_FILE": "${credentials:login}.missing" },
+      "replies": []
     }
   }
 }

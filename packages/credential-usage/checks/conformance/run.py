@@ -12,7 +12,7 @@ from suite import IncompletePair, Pair, differences
 
 
 def main(args: Sequence[str]) -> int:
-    """Run the selected cases and report a safe diagnostic for each difference."""
+    """Run the selected cases and print each failed comparison with the whole objects that differed."""
     if len(args) not in (2, 3):
         print("usage: run.py <pair directory> <module>:<function> [all | <scenario>/<transport>]", file=sys.stderr)
         return 1

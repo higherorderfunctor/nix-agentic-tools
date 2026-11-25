@@ -168,31 +168,42 @@ reaches the packaged command from every constructor.
 ## Conformance suite
 
 Give your fill an importable command entry `main(env, clock) -> int` and one
-fixture directory. In `input.json`, supply a description, the supported
-transports, a UTC start time (`now` ending in `Z`), named HTTP replies (status
-and literal body text), credential file contents and Bash program bodies in
-`executables`. Each named scenario supplies `env` and an ordered list of reply
-names on every declared transport. Use `${credentials:name}` for a private file
-path and `${bin}` for the program directory. Use `${credentialsDir}` for the
-directory containing credential files, including dotfiles such as
-`.credentials.json`. A scenario can add or replace a file for one transport by
-supplying its own `credentials` map. Credential names can include
-subdirectories, such as `.claude/.credentials.json`, and each path must be
-relative and free of `.` and `..` components. `PATH` starts with the program
-directory.
+fixture directory with `input.json` and `expected.json`. Both files list the
+same scenarios in the same shape. In each case, the fields beside `extends`
+change both transports and `direct` or `cpa` change that transport alone. A full
+case (`"extends": null`) is complete on every transport. Any other case names
+the full case it `extends` and lists only what differs from it. The suite builds
+each case's complete scenario and expectation with one merge rule, which the
+module docstring of `checks/conformance/suite.py` states.
 
-In `expected.json`, write each scenario and transport's complete `requests` and
-`result` by hand. Include the method, URL, headers and body for each HTTP call.
-Write JSON request bodies as JSON values. Use `[credential:name]` where the
-request carries a credential. The clock advances one second per call. Compare
-the JSON values exactly as the Reader prints them, including URL spelling and
-UTC timestamps. For a failure, expect empty stdout and one stderr line, written
-as `{"failed":"usage: <reason>"}`. Choose a fixed public phrase for the reason.
-The suite checks both streams for credentials and failed response bodies. Set
+`input.json` also supplies a description, the supported transports, a UTC start
+time (`now` ending in `Z`), named HTTP replies (status and literal body text),
+credential file contents and Bash program bodies in `executables`. A full
+scenario supplies `env` and an ordered list of reply names on each transport.
+Use `${credentials:name}` for a private file path and `${bin}` for the program
+directory. Use `${credentialsDir}` for the directory containing credential
+files, including dotfiles such as `.credentials.json`. A scenario can add or
+replace a file for one transport by supplying its own `credentials` map.
+Credential names can include subdirectories, such as
+`.claude/.credentials.json`, and each path must be relative and free of `.` and
+`..` components. `PATH` starts with the program directory.
+
+In `expected.json`, write each full case's complete `requests` and `result` by
+hand. Include the method, URL, headers and body for each HTTP call. Write JSON
+request bodies as JSON values. Use `[credential:name]` where the request carries
+a credential. The clock advances one second per call. Compare the JSON values
+exactly as the Reader prints them, including URL spelling and UTC timestamps.
+For a failure, expect empty stdout and one stderr line, written as
+`{"failed":"usage: <reason>"}`. Choose a fixed public phrase for the reason. The
+suite checks both streams for credentials and failed response bodies. Set
 `"private": true` on a named reply when an upstream failure arrives inside a
 successful HTTP response. Every non-2xx reply is private automatically. Keep the
 whole private body and each of its JSON string values, including strings inside
 nested JSON text, out of both streams. The Reader must also load silently.
+
+A failed case prints its name, `trace` or `result`, and a diff of the whole
+expected and observed objects. Private strings appear in that diff as
+`[credential:name]` or `[private]`.
 
 From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`
