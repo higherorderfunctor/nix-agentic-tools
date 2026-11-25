@@ -202,12 +202,19 @@ whole private body and each of its JSON string values, including strings inside
 nested JSON text, out of both streams. The Reader must also load silently.
 
 A failed case prints its name, `trace` or `result`, and a diff of the whole
-expected and observed objects. Private strings appear in that diff as
-`[credential:name]` or `[private]`. So does any object or array that JSON in a
-credential file or in a private or failed reply parses to, even when a Reader
-sends it back as a request body. A JSON object that is not a valid envelope, or
-whose instant falls outside the run, still fails its case; the diff shows that
-object as printed.
+expected and observed objects. The diff follows one display contract, which the
+module docstring of `checks/conformance/suite.py` states. Each member of a
+credential file or of a private or failed reply is replaced where it appears in
+the diff: a string, key, number or boolean becomes `[credential:name]` or
+`[private]`, at any depth, inside a request body, and inside JSON a Reader
+carries in a string, however it respells that JSON. A private number, boolean or
+key is also replaced inside other strings, such as a failure line. The object
+and the public members around a private member stay visible. When the two sides
+differ only in members the diff withholds, the report names their paths instead
+of printing an empty diff. The comparison itself uses the recorded objects, not
+the displayed copy. A JSON object that is not a valid envelope, or whose instant
+falls outside the run, still fails its case; the diff shows that object as
+printed.
 
 From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`
