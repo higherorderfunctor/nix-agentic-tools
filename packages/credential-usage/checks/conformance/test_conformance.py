@@ -2,7 +2,7 @@
 # cspell:ignore replys
 """Exercise the suite's comparisons with a working Reader and one deliberate fault at a time."""
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from io import StringIO
@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE))
 
 from credential_usage.transport import DirectHttp, HttpRequest, HttpResponse
 from run import main as run_cases
-from standalone import main as run_installed
+from standalone import installed_differences, main as run_installed
 from suite import Case, IncompletePair, Pair, differences
 
 
@@ -29,6 +29,12 @@ DIRECTORY = HERE / "synthetic" / "cases"
 SYNTHETIC = Pair.read(DIRECTORY)
 ENTRY = "synthetic.cli:main"
 PRIVATE_BODY = '{"training-only-account":9123,"note":"private account detail"}'
+MASKED_BODY = '+      "[private]": "[private]",\n+      "[private]": "[private]"\n'
+NOTE_ONLY = {"note": "public note"}
+ECHO = {
+    "method": "POST", "url": "https://reader.example/echo",
+    "headers": {"Accept": "application/json", "Authorization": "Bearer [credential:login]"},
+}
 
 BROKEN_RESULT = """unreadable-credential/direct: result
 --- expected
@@ -477,7 +483,62 @@ class SuiteTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
-    """Each runner's own entry point keeps private reply members out of what it prints and diffs what a Reader printed."""
+    """Each runner's own comparison keeps every private member out of what it prints and diffs what a Reader printed."""
+
+    def private_pair(self, directory: Path, replies: Mapping[str, str], requests: Mapping[str, Sequence[Mapping[str, object]]]) -> Pair:
+        """Write the synthetic pair with each named reply's body replaced and the requests of `primary-failure` on each named transport replaced; return the pair."""
+        data = json.loads((DIRECTORY / "input.json").read_bytes())
+        hoped = json.loads((DIRECTORY / "expected.json").read_bytes())
+        for name, body in replies.items():
+            data["replies"][name]["body"] = body
+        for transport, sent in requests.items():
+            hoped["primary-failure"][transport]["requests"] = sent
+        data["scenarios"]["primary-failure"]["cpa"]["env"]["PROXY"] = "https://proxy.example"
+        (directory / "input.json").write_text(json.dumps(data))
+        (directory / "expected.json").write_text(json.dumps(hoped))
+        return Pair.read(directory)
+
+    def echoing_reader(self, directory: Path, body: object) -> str:
+        """Write a Reader that sends `body` to the echo endpoint and fails with the expected public line; return its entry."""
+        (directory / "echoing_reader.py").write_text(
+            "import json\nimport sys\nfrom pathlib import Path\nimport urllib3\n\n\n"
+            "def main(env, clock):\n"
+            '    token = json.loads(Path(env["CREDENTIAL_FILE"]).read_text())["token"]\n'
+            f'    urllib3.request("POST", "https://reader.example/echo", body=json.dumps({body!r}),'
+            ' headers={"Accept": "application/json", "Authorization": "Bearer " + token})\n'
+            "    print('usage: observation unavailable', file=sys.stderr)\n    return 1\n"
+        )
+        return "echoing_reader:main"
+
+    def installed_command(self, directory: Path, body: object | None, failure: str) -> str:
+        """Write an installed command that sends `body` to the proxy when given and fails with `failure`; return its path."""
+        source = [
+            f"#!{sys.executable}", "import json", "import os", "import pathlib", "import sys", "import urllib3", "",
+            'if "PROXY" not in os.environ:', "    raise SystemExit(1)",
+        ]
+        if body is not None:
+            source += [
+                'token = json.loads(pathlib.Path(os.environ["CREDENTIAL_FILE"]).read_text())["token"]',
+                "urllib3.request(",
+                '    "POST", os.environ["PROXY"] + "/v0/management/api-call",',
+                f"    body=json.dumps({body!r}).encode(),",
+                '    headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},',
+                ")",
+            ]
+        command = directory / "command"
+        command.write_text("\n".join([*source, f"print({failure!r}, file=sys.stderr)", "raise SystemExit(1)", ""]))
+        command.chmod(0o700)
+        return str(command)
+
+    def assert_trace_report(self, pair: Pair, entry: str, report: str) -> None:
+        """Run the imported comparison and compare its whole report with `report`."""
+        sent = differences(pair.inputs, pair.cases["primary-failure/direct"], entry)
+        self.assertEqual("\n".join(map(str, sent)) + "\n", report)
+
+    def assert_installed_report(self, pair: Pair, case: str, command: str, report: str) -> None:
+        """Run the installed comparison for one case and compare its whole report with `report`."""
+        sent = installed_differences(pair.inputs, pair.cases[case], command)
+        self.assertEqual("\n".join(map(str, sent)) + "\n", report)
 
     def assert_no_private_member(self, report: str, body: str) -> None:
         """Fail when the report spells a key or a scalar value of the JSON object."""
@@ -501,7 +562,7 @@ class RunnerTests(unittest.TestCase):
                 status = run_cases([tmp, "echoing_reader:main", "primary-failure/direct"])
             self.assertEqual((status, out.getvalue()), (1, ""))
             self.assertIn("primary-failure/direct: trace\n", err.getvalue())
-            self.assertIn('+    "body": "[private]",\n', err.getvalue())
+            self.assertIn(MASKED_BODY, err.getvalue())
             self.assert_no_private_member(err.getvalue(), PRIVATE_BODY)
 
     def test_installed_runner_masks_a_private_reply_sent_back_as_a_request(self) -> None:
@@ -529,9 +590,200 @@ class RunnerTests(unittest.TestCase):
                 status = run_installed([tmp, str(command)])
             self.assertEqual((status, out.getvalue()), (1, ""))
             self.assertIn("primary-failure/cpa: trace\n", err.getvalue())
-            self.assertIn('+    "body": "[private]",\n', err.getvalue())
+            self.assertIn(MASKED_BODY, err.getvalue())
             self.assert_no_private_member(err.getvalue(), PRIVATE_BODY)
             self.assertNotIn("sample-private-value", err.getvalue())
+
+    def test_imported_runner_masks_a_private_number_and_boolean_inside_a_request_body(self) -> None:
+        """Rubric 6, D1–D2. A number and a boolean are private members; the public member beside them stays visible."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"ceiling": 9123, "waived": true}'}, {"direct": [ECHO | {"body": NOTE_ONLY}]})
+            entry = self.echoing_reader(directory, {"note": "public note", "limit": 9123, "enabled": True})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+--- expected
++++ observed
+@@ -1,13 +1,15 @@
+ [
+   {
+     "body": {
++      "enabled": "[private]",
++      "limit": "[private]",
+       "note": "public note"
+     },
+     "headers": {
+       "Accept": "application/json",
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "POST",
+     "url": "https://reader.example/echo"
+   }
+ ]
+""",
+            )
+
+    def test_imported_runner_masks_a_private_key(self) -> None:
+        """Rubric 6, D1. A key of a private reply is private as a key, and as a token inside a string the Reader writes."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"training-only-account": "hidden"}'}, {"direct": [ECHO | {"body": NOTE_ONLY}]})
+            entry = self.echoing_reader(directory, {"note": "public note", "training-only-account": "renamed value", "reason": "training-only-account rejected"})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+--- expected
++++ observed
+@@ -1,13 +1,15 @@
+ [
+   {
+     "body": {
+-      "note": "public note"
++      "[private]": "renamed value",
++      "note": "public note",
++      "reason": "[private] rejected"
+     },
+     "headers": {
+       "Accept": "application/json",
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "POST",
+     "url": "https://reader.example/echo"
+   }
+ ]
+""",
+            )
+
+    def test_imported_runner_masks_a_nested_subtree_of_a_private_object(self) -> None:
+        """Rubric 6, D1–D2. A nested private subtree shown alone loses its key and number, not the public member beside it."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"account": {"ceiling": 9123}}'}, {"direct": [ECHO | {"body": NOTE_ONLY}]})
+            entry = self.echoing_reader(directory, {"note": "public note", "ceiling": 9123})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+--- expected
++++ observed
+@@ -1,13 +1,14 @@
+ [
+   {
+     "body": {
++      "[private]": "[private]",
+       "note": "public note"
+     },
+     "headers": {
+       "Accept": "application/json",
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "POST",
+     "url": "https://reader.example/echo"
+   }
+ ]
+""",
+            )
+
+    def test_imported_runner_shows_a_public_member_beside_a_private_one(self) -> None:
+        """Rubric 6, D2. A private single-member object beside a public method does not hide the method that differs."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"state": 0}'}, {"direct": [ECHO | {"body": {"method": "POST", "state": 0}}]})
+            entry = self.echoing_reader(directory, {"method": "GET", "state": 0})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+--- expected
++++ observed
+@@ -1,14 +1,14 @@
+ [
+   {
+     "body": {
+       "[private]": "[private]",
+-      "method": "POST"
++      "method": "GET"
+     },
+     "headers": {
+       "Accept": "application/json",
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "POST",
+     "url": "https://reader.example/echo"
+   }
+ ]
+""",
+            )
+
+    def test_imported_runner_names_the_withheld_members_that_differ(self) -> None:
+        """Rubric 6, D3. Two values that differ only in a withheld member must not print an empty diff."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"state": 0, "ceiling": 1}'}, {"direct": [ECHO | {"body": {"method": "GET", "state": 0}}]})
+            entry = self.echoing_reader(directory, {"method": "GET", "state": 1})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+expected and observed differ only in withheld members at: $[0].body.[private]
+""",
+            )
+
+    def test_installed_runner_masks_a_private_number_inside_a_failure_line(self) -> None:
+        """Rubric 6, D1. A private number does not appear as a token inside a free-text failure line."""
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"proxy-failed": '{"status_code": 503, "body": "{\\"limit\\": 9123}"}'}, {"cpa": []})
+            command = self.installed_command(directory, None, "usage: ceiling 9123 is not allowed")
+            self.assert_installed_report(
+                pair, "primary-failure/cpa", command,
+                """primary-failure/cpa: missing request
+primary-failure/cpa: result
+--- expected
++++ observed
+@@ -1,3 +1,3 @@
+ {
+-  "failed": "usage: observation unavailable"
++  "failed": "usage: ceiling [private] is not allowed"
+ }
+""",
+            )
+
+    def test_installed_runner_masks_private_json_echoed_as_a_respelled_string(self) -> None:
+        """Rubric 6, D1. Private JSON carried in a string is masked whatever its whitespace and key order."""
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            proxy_call = {
+                "method": "POST", "url": "https://proxy.example/v0/management/api-call",
+                "headers": {"Content-Type": "application/json", "Authorization": "Bearer [credential:login]"}, "body": NOTE_ONLY,
+            }
+            pair = self.private_pair(
+                directory, {"proxy-failed": '{"status_code": 503, "body": "{\\"ceiling\\": 9123, \\"waived\\": true}"}'}, {"cpa": [proxy_call]},
+            )
+            command = self.installed_command(directory, {"note": "public note", "limits": '{  "waived": true,   "ceiling": 9123 }'}, "usage: observation unavailable")
+            self.assert_installed_report(
+                pair, "primary-failure/cpa", command,
+                """primary-failure/cpa: trace
+--- expected
++++ observed
+@@ -1,13 +1,17 @@
+ [
+   {
+     "[private]": {
++      "limits" (JSON text): {
++        "[private]": "[private]",
++        "[private]": "[private]"
++      },
+       "note": "public note"
+     },
+     "headers": {
+       "Authorization": "Bearer [credential:login]",
+       "Content-Type": "application/json"
+     },
+     "method": "POST",
+     "url": "https://proxy.example/v0/management/api-call"
+   }
+ ]
+""",
+            )
 
     def test_installed_runner_diffs_a_result_stamped_outside_the_run(self) -> None:
         """71–72, 74. An instant outside the run is no accepted result, yet the fields the Reader printed belong in the diff."""

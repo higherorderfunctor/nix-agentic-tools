@@ -5,7 +5,8 @@ Owner checks call `main` with a pair directory and a packaged command. Each CPA
 case gets a local HTTP server that answers the scenario's requests. An owner
 can also provide a build of the command that forbids sockets to check direct
 preflight cases. The same pair checks all direct requests in the imported suite.
-A failed comparison prints the case, then the whole expected and observed objects with private content replaced.
+A failed comparison prints the case, then the whole expected and observed objects, each private member replaced
+under the display contract the suite's module docstring states.
 """
 
 from collections.abc import Sequence
