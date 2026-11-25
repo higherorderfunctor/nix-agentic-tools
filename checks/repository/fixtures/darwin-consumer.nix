@@ -69,7 +69,14 @@
         }
         // config.ai.webex-mcp.mcpServers;
       programs = {
-        delegate-routing.enable = true;
+        # Every enabled runtime must select a family; these keep it valid.
+        delegate-routing = {
+          enable = true;
+          runtimes = {
+            kimchi.models = [{vendors = ["anthropic"];}];
+            kiro.models = [{vendors = ["anthropic"];}];
+          };
+        };
         peer-communication.enable = true;
         semble.enable = true;
         stacked-workflows.enable = true;
