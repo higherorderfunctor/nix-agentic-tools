@@ -7,7 +7,6 @@
 # already writes (user on Home Manager, project on devenv) carries them and a
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
 # managed launcher. The same launcher guarantees untrusted-project directory access.
-# CLIProxyAPI sets family defaults in `settings.env` from the extracted catalog.
 #
 # CLIProxyAPI builds `/model` picker rows from API-key routes' declared models
 # and OAuth routes' pickerModels. Backend delivery and its rationale are in
@@ -15,8 +14,6 @@
 {
   lib,
   pkgs,
-  # Checks can pass a partial map without changing the extracted catalog.
-  latestPerFamily ? import ./extracted-fact.nix {inherit lib;} "latestPerFamily",
 }: let
   keyHelper = import ../../../lib/ai/inference/key-helper.nix {inherit lib pkgs;};
   inferenceLib = import ../../../lib/ai/inference {inherit lib;};
@@ -27,16 +24,6 @@
     resolvedInference,
   }: let
     inherit (resolvedInference) credentials key url;
-    # Claude only reads these family overrides. A new catalog family need not have one.
-    familyVariables = {
-      fable = "ANTHROPIC_DEFAULT_FABLE_MODEL";
-      haiku = "ANTHROPIC_DEFAULT_HAIKU_MODEL";
-      opus = "ANTHROPIC_DEFAULT_OPUS_MODEL";
-      sonnet = "ANTHROPIC_DEFAULT_SONNET_MODEL";
-    };
-    familyDefaults =
-      lib.mapAttrs' (family: model: lib.nameValuePair familyVariables.${family} model)
-      (builtins.intersectAttrs familyVariables latestPerFamily);
     helper = keyHelper {
       inherit key;
       option = "ai.claude.settings.inference.key";
@@ -78,18 +65,16 @@
       {
         apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
         disableClaudeAiConnectors = true;
-        env =
-          familyDefaults
-          // {
-            ANTHROPIC_API_KEY = "";
-            ANTHROPIC_AUTH_TOKEN = "";
-            ANTHROPIC_BASE_URL = url;
-            ANTHROPIC_CUSTOM_HEADERS = "";
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
-            CLAUDE_CODE_USE_BEDROCK = "";
-            CLAUDE_CODE_USE_FOUNDRY = "";
-            CLAUDE_CODE_USE_VERTEX = "";
-          };
+        env = {
+          ANTHROPIC_API_KEY = "";
+          ANTHROPIC_AUTH_TOKEN = "";
+          ANTHROPIC_BASE_URL = url;
+          ANTHROPIC_CUSTOM_HEADERS = "";
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+          CLAUDE_CODE_USE_BEDROCK = "";
+          CLAUDE_CODE_USE_FOUNDRY = "";
+          CLAUDE_CODE_USE_VERTEX = "";
+        };
       }
       // lib.optionalAttrs (backend == "hm" && rows != []) {modelPicker.options = rows;};
   };
