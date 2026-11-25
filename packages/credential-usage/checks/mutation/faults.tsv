@@ -1,10 +1,9 @@
 module	behavior	original line	faulty line
-credential_usage/envelope.py	23	    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, field_title_generator=lambda name, _: name)	    model_config = ConfigDict(extra="allow", allow_inf_nan=False, field_title_generator=lambda name, _: name)
 credential_usage/envelope.py	5	    schemaVersion: Annotated[int, Field(ge=1, le=1)]	    schemaVersion: Annotated[int, Field(ge=1, le=2)]
 credential_usage/envelope.py	6	    accountedSpend: SlotState	    accountedSpend: SlotState = Unsupported(state="unsupported")
 credential_usage/envelope.py	6	    grants: SlotState	    grants: SlotState = Observed(state="observed")
 credential_usage/envelope.py	13	        Field(min_length=1, json_schema_extra={"additionalProperties": False}),	        Field(min_length=0, json_schema_extra={"additionalProperties": False}),
-credential_usage/envelope.py	29	    observedAt: Instant	    observedAt: Instant | None = None
+claude_code/usage/claude.py	29	        schemaVersion=1, account=account, binding=binding, observedAt=clock(), pool="claude",	        schemaVersion=1, account=account, binding=binding, observedAt=datetime.fromtimestamp(clock().timestamp() - 1, UTC), pool="claude",
 credential_usage/envelope.py	17	    windowSeconds: Annotated[float, Field(gt=0)]	    windowSeconds: Annotated[float, Field(gt=-1)]
 credential_usage/envelope.py	25	Percent = Annotated[float, Field(ge=0, le=100)]	Percent = Annotated[float, Field(ge=0, le=101)]
 credential_usage/envelope.py	104	Quantity = Annotated[int, Field(ge=0)]	Quantity = Annotated[int, Field(ge=-1)]
@@ -21,9 +20,9 @@ claude_code/usage/claude.py	79	USAGE_URL = HttpUrl("https://api.anthropic.com/ap
 claude_code/usage/claude.py	80	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1")	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/usage?cedar_ember=1")
 claude_code/usage/claude.py	89	    utilization: Used = Field(default=None, alias="percent")	    utilization: Used = Field(default=None, alias="utilization")
 claude_code/usage/claude.py	88	        default=None, validation_alias=AliasPath("scope", "model", "display_name")	        default=None, validation_alias=AliasPath("scope", "model", "absent")
-claude_code/usage/claude.py	89	    five_hour: ReportedMeter = None	    five_hour: ReportedMeter = Field(default=None, validation_alias="seven_day")
+claude_code/usage/claude.py	90	            "5h": self.five_hour.window(18000, None) if self.five_hour else missing,	            "5h": (self.five_hour.model_copy(update={"resets_at": self.seven_day.resets_at}) if self.seven_day else self.five_hour).window(18000, None) if self.five_hour else missing,
 claude_code/usage/claude.py	88	    seven_day_opus: ReportedMeter = None	    seven_day_opus: ReportedMeter = Field(default=None, validation_alias="seven_day")
-claude_code/usage/claude.py	88	    limits: tuple[Annotated[Limit, BeforeValidator(limit_object_or_empty)], ...] = ()	    limits: tuple[Annotated[Limit, BeforeValidator(limit_object_or_empty)], ...] = Field(default=(), validation_alias="no_limits")
+claude_code/usage/claude.py	91	    severity: Annotated[str | None, invalid_as(None)] = None	    severity: Annotated[str | None, invalid_as(None)] = Field(default=None, validation_alias="status")
 claude_code/usage/claude.py	94	    organization_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9-]+$")] = Field(	    organization_id: Annotated[str, Field(pattern=r"^.*$")] = Field(
 claude_code/usage/claude.py	93	        validation_alias=AliasPath("organization", "uuid")	        validation_alias=AliasPath("organization", "name")
 claude_code/usage/claude.py	102	    currency: Literal["USD"]	    currency: Literal["USD", "EUR"]
@@ -31,7 +30,7 @@ claude_code/usage/claude.py	99	    expires_at: VendorExpiry | None = None	    ex
 claude_code/usage/claude.py	102	    remaining_amount_minor_units: Annotated[float, Field(ge=0, allow_inf_nan=False)]	    remaining_amount_minor_units: Annotated[float, Field(ge=-1, allow_inf_nan=False)]
 claude_code/usage/claude.py	102	    promo_tranches: list[Tranche]	    promo_tranches: list[Tranche] = Field(default_factory=list)
 claude_code/usage/claude.py	102	    tranches: list[Tranche]	    tranches: list[Tranche] = Field(default_factory=list)
-claude_code/usage/claude.py	106	VendorExpiry = Annotated[Instant, BeforeValidator(expiry_from_epoch_seconds)]	VendorExpiry = Instant
+claude_code/usage/claude.py	106	    ends_at: VendorExpiry | None = None	    ends_at: Instant | None = None
 claude_code/usage/claude.py	104	    resets_left: Annotated[Quantity, BeforeValidator(integral_float_as_int)]	    resets_left: Annotated[Quantity, BeforeValidator(lambda value: int(value) if isinstance(value, (int, float)) else value)]
 claude_code/usage/claude.py	103	            handle=self.id, remaining=self.resets_left, requiresLimit=self.use_requires_limit,	            handle=self.clears[0] if self.clears else self.id, remaining=self.resets_left, requiresLimit=self.use_requires_limit,
 claude_code/usage/claude.py	107	            kind="grant", clears=self.clears, effect=self.effect, eligible=eligible,	            kind="grant", clears=self.clears[:1], effect=self.effect, eligible=eligible,
