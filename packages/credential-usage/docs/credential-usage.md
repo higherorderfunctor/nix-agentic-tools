@@ -188,21 +188,23 @@ binding.instance(deadline)
 Without the variable, or with a value that is not a finite number, there is no
 deadline and the policy timeout is the only bound.
 
-With a deadline, `DirectHttp` gives each request the smaller of the policy
-timeout and the time left, less a margin of 0.5 seconds, shared evenly among the
-retries. The margin leaves the Reader time to print its envelope. Once that is
-nothing, the transport raises `RequestFailure` without a network call. CPA
-management calls and `api-call` pass through the same `DirectHttp`.
+With a deadline, each request gets the smaller of the policy timeout and the
+time left, less a margin of 0.5 seconds. `DirectHttp` waits that long for the
+whole request, retries included, and then raises `RequestFailure`. The margin
+leaves the Reader time to print its envelope. Once it is used up, the transport
+raises `RequestFailure` without a network call. CPA management calls and
+`api-call` pass through the same `DirectHttp`.
 
 Send required reads before optional ones, and let an optional read fail through
 `RequestFailure` into its slot's `unknown` reason. A slow or stalled optional
-request then costs only its own slot, and the runner never kills the Reader
-before it reports what it observed.
+request then costs only its own slot: a request that outlasts its wait is left
+running on a background thread while the Reader goes on.
 
 Keep each policy timeout at or below the deadline of the consumer running the
 Reader. Under the runner a larger timeout changes nothing, because the deadline
-bounds the request. The timeout limits the wait for a connection and each socket
-read, so a reply that keeps trickling bytes can outlast it.
+bounds the request. The margin stands in for the Reader's own start-up, which
+runs before it reads the variable, and for the time it spends outside the
+transport.
 
 ## Conformance suite
 

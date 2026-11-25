@@ -29,7 +29,7 @@ class CpaBinding(FrozenModel):
     policy: HttpPolicy = HttpPolicy()
 
     def instance(self, deadline: float | None = None) -> "CpaInstance":
-        """Load the management key only when running the Reader and keep its calls inside the deadline."""
+        """Load the management key only when running the Reader, with its calls bounded by the deadline."""
         key = Path(self.managementKeyFile).read_bytes().decode().removesuffix("\n")
         if not key or "\n" in key or "\r" in key:
             raise RequestFailure("invalid management key file")

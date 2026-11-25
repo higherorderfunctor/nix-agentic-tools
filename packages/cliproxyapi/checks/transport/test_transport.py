@@ -1,8 +1,11 @@
 """Compare offline CPA request traces and direct HTTP calls to their expected wire contracts."""
 
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sys
+from threading import Event, Thread
+import time
 import unittest
 from typing import NamedTuple
 from unittest.mock import ANY, patch
@@ -21,7 +24,7 @@ if (packages / "credential-usage" / "python").is_dir():
 
 from mock import RecordingTransport
 from cliproxyapi.usage.transport import CpaInstance, UnknownBinding
-from credential_usage.transport import DirectHttp, HttpPolicy, HttpRequest, RequestFailure
+from credential_usage.transport import DEADLINE_MARGIN, DirectHttp, HttpPolicy, HttpRequest, RequestFailure
 
 
 class Case(NamedTuple):
@@ -48,6 +51,39 @@ class Fixture(BaseModel):
 
 fixture = Fixture.model_validate_json((CASES / "input.json").read_bytes())
 expected = json.loads((CASES / "expected.json").read_bytes())
+
+
+class TrickleServer(ThreadingHTTPServer):
+    """Answer one request, then send its body one byte at a time until the test ends."""
+
+    daemon_threads = True
+    stop = Event()
+    bytes_left = 200
+
+    def __init__(self) -> None:
+        super().__init__(("127.0.0.1", 0), TrickleHandler)
+
+
+class TrickleHandler(BaseHTTPRequestHandler):
+    """Keep each socket read short so the client's socket timeout never fires."""
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Keep the fixture server's access log out of the check's output."""
+
+    def do_POST(self) -> None:
+        if not isinstance(self.server, TrickleServer):
+            raise TypeError("TrickleHandler serves a TrickleServer only")
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        self.send_response(200)
+        self.send_header("Content-Length", str(self.server.bytes_left))
+        self.end_headers()
+        while self.server.bytes_left > 0 and not self.server.stop.wait(0.05):
+            try:
+                self.wfile.write(b"x")
+                self.wfile.flush()
+            except OSError:
+                return
+            self.server.bytes_left -= 1
 
 
 class TransportTests(unittest.TestCase):
@@ -111,6 +147,26 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises(RequestFailure) as failure:
                 client.request(request)
             self.assertEqual(str(failure.exception), expected["direct"][name])
+
+    def test_direct_http_stops_waiting_at_the_deadline(self) -> None:
+        """127. A trickling reply never trips the socket timeout, so removing the caller's wait lets it run to the end."""
+        TrickleServer.stop.clear()
+        TrickleServer.bytes_left = 200
+        with TrickleServer() as server:
+            Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+            try:
+                url = HttpUrl(f"http://127.0.0.1:{server.server_port}/usage")
+                deadline = 0.5 + DEADLINE_MARGIN
+                client = DirectHttp(url, SecretStr("local-only"), HttpPolicy(timeout=30), time.monotonic() + deadline)
+                started = time.monotonic()
+                with self.assertRaisesRegex(RequestFailure, "^HTTP request deadline passed$"):
+                    client.request(HttpRequest(method="POST", url=url, body="query"))
+                # The reply needs ten seconds; anything well past the half-second wait is the library keeping time.
+                self.assertLess(time.monotonic() - started, 3)
+            finally:
+                TrickleServer.stop.set()
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == "__main__":

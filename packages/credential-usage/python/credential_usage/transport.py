@@ -1,8 +1,10 @@
 """Usage Readers send HTTP requests through a transport bound to one credential."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from concurrent.futures import Future
 from dataclasses import dataclass
 import math
+from threading import Thread
 import time
 from typing import Annotated, Literal, Protocol, Self
 
@@ -45,7 +47,7 @@ DEADLINE_MARGIN = 0.5
 
 
 def reader_deadline(environ: Mapping[str, str]) -> float | None:
-    """Return the monotonic instant the runner kills this Reader, or None when it sets no limit.
+    """Return the instant the runner's seconds run out, counted from now, or None when it sets none.
 
     The runner exports the seconds left in DEADLINE_VARIABLE. An unset or
     unreadable value leaves the policy timeout as the only bound.
@@ -96,6 +98,14 @@ class HttpPolicy(FrozenModel):
     timeout: float = Field(default=10, gt=0, allow_inf_nan=False)
 
 
+def deliver(reply: Future[HttpResponse], send: Callable[[], HttpResponse]) -> None:
+    """Hand the reply, or its failure, to the thread that is waiting for it."""
+    try:
+        reply.set_result(send())
+    except BaseException as error:
+        reply.set_exception(error)
+
+
 @dataclass(frozen=True)
 class DirectHttp:
     """Send the local bearer token only to this origin, including when CPA is the origin."""
@@ -106,19 +116,28 @@ class DirectHttp:
     deadline: float | None = None
 
     def request_timeout(self) -> float:
-        """Return how long the next request may wait, or refuse it once the deadline is too close.
-
-        Every retry waits again, so the time left is shared out among the attempts.
-        """
+        """Return how long the next request may wait, or refuse it once the deadline is too close."""
         if self.deadline is None:
             return self.policy.timeout
-        left = (self.deadline - time.monotonic() - DEADLINE_MARGIN) / (self.policy.retries + 1)
-        budget = min(self.policy.timeout, left)
-        if budget <= 0:
+        left = self.deadline - time.monotonic() - DEADLINE_MARGIN
+        if left <= 0:
             raise RequestFailure("HTTP request deadline passed")
-        return budget
+        return min(self.policy.timeout, left)
 
     def request(self, request: HttpRequest) -> HttpResponse:
+        """Send the request and wait no longer than its timeout, retries included."""
+        budget = self.request_timeout()
+        if self.deadline is None:
+            return self.send(request, budget)
+        # A name lookup or a trickling reply ignores the socket timeout, so this thread keeps time.
+        reply: Future[HttpResponse] = Future()
+        Thread(target=deliver, args=(reply, lambda: self.send(request, budget)), daemon=True).start()
+        try:
+            return reply.result(timeout=budget)
+        except TimeoutError:
+            raise RequestFailure("HTTP request deadline passed") from None
+
+    def send(self, request: HttpRequest, timeout: float) -> HttpResponse:
         """Apply the binding and let the HTTP library retry network failures without redirects."""
         try:
             response = urllib3.request(
@@ -128,7 +147,7 @@ class DirectHttp:
                     self.endpoint, self.token.get_secret_value()
                 ),
                 body=request.body,
-                timeout=self.request_timeout(),
+                timeout=timeout,
                 redirect=False,
                 retries=Retry(
                     total=self.policy.retries,
