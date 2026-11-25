@@ -49,7 +49,7 @@
     },
     "browser": {
       "default": "",
-      "description": "What browser glab should run when opening links. This global config cannot be overridden by hostname.",
+      "description": "What browser glab should run when opening links. This global config cannot be overridden by hostname. A repository's local configuration cannot set it.",
       "envVars": ["GLAB_BROWSER", "BROWSER"],
       "fallback": false,
       "keyring": false,
@@ -250,7 +250,7 @@
     },
     "editor": {
       "default": "",
-      "description": "What editor glab should run when creating issues, merge requests, etc. This global config cannot be overridden by hostname.",
+      "description": "What editor glab should run when creating issues, merge requests, etc. This global config cannot be overridden by hostname. A repository's local configuration cannot set it.",
       "envVars": ["GLAB_EDITOR", "VISUAL", "EDITOR"],
       "fallback": false,
       "keyring": false,
@@ -272,7 +272,7 @@
     },
     "glab_pager": {
       "default": "",
-      "description": "Your desired pager command to use, such as 'less -R'. Takes precedence over the PAGER environment variable. GLAB_PAGER takes precedence over both.",
+      "description": "Your desired pager command to use, such as 'less -R'. Takes precedence over the PAGER environment variable. GLAB_PAGER takes precedence over both. A repository's local configuration cannot set it.",
       "envVars": ["GLAB_PAGER"],
       "fallback": false,
       "keyring": false,
