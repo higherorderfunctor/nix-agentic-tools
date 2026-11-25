@@ -38,22 +38,49 @@
   in
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
-      # key; an absent map and a non-literal entry each fail by name.
+      # key, the map is still found beside the engine's hook exit-code effect
+      # table, and zero maps, two maps and non-literal entries each fail with
+      # their own diagnostic.
       kiro-hook-triggers-fixtures = let
-        bundle = key: value: "var M=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        # One frozen trigger map bound to `binding`, its `SessionStart` entry
+        # spelled `key:value` so the fixtures can vary quoting and literalness.
+        triggerMap = binding: key: value: "var ${binding}=Object.freeze({${key}:${value},SessionEnd:\"SessionEnd\",Stop:\"Stop\",PreToolUse:\"PreToolUse\",PostToolUse:\"PostToolUse\",PreTaskExec:\"PreTaskExec\",PostTaskExec:\"PostTaskExec\",UserPromptSubmit:\"UserPromptSubmit\",PostFileCreate:\"PostFileCreate\",PostFileSave:\"PostFileSave\",PostFileDelete:\"PostFileDelete\",Manual:\"Manual\",agentSpawn:\"SessionStart\"});";
+        computedMap = triggerMap "M" "SessionStart" "\"Session\"+\"Start\"";
+        # The engine's hook exit-code effect table: keyed by trigger names like
+        # the map, but its values are objects or a shared reference.
+        exitCodeTable = "var N={0:\"none\",1:\"none\",2:\"none\",other:\"none\"};var E=Object.freeze({SessionStart:{0:\"stdout\",1:\"none\",2:\"none\",other:\"none\"},SessionEnd:N,Stop:{0:\"stop-decision\",1:\"keep-working\",2:\"none\",other:\"none\",decidesWhenUnfinished:!0},PreToolUse:{0:\"permission-decision\",1:\"none\",2:\"block\",other:\"none\"}});";
         extract = (import ../lib/packaging.nix).kiroHookTriggersExtractScript pkgs;
+        # A trigger map whose every entry is a literal, with the `SessionStart`
+        # key quoted. The `quoted` case checks that a quoted key is the same
+        # key; `ambiguous` puts two of these in one bundle.
+        literalMap = binding: triggerMap binding "\"SessionStart\"" "\"SessionStart\"";
       in
         pkgs.runCommand "kiro-hook-triggers-fixtures" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           jq=${pkgs.jq}/bin/jq
-          printf '%s' ${pkgs.lib.escapeShellArg (bundle "\"SessionStart\"" "\"SessionStart\"")} > quoted.js
+          printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M")} > quoted.js
           printf '%s' 'var M=Object.freeze({});' > absent.js
-          printf '%s' ${pkgs.lib.escapeShellArg (bundle "SessionStart" "\"Session\"+\"Start\"")} > computed.js
+          printf '%s' ${pkgs.lib.escapeShellArg computedMap} > computed.js
+          # A locator that accepts a computed map beside the effect table
+          # would succeed where the production bundle should be refused.
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + computedMap)} > exit-codes-computed.js
+          # The table comes first, as in the 3.6.0 bundle, so a locator that
+          # takes the first `SessionStart` object picks the table here.
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + triggerMap "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
+          # A locator that takes the first or the last map instead of failing
+          # succeeds here.
+          printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M" + literalMap "N")} > ambiguous.js
+          # The effect table alone is an absent map, not a map with a computed
+          # entry: a locator that diagnoses any lone candidate as non-literal fails.
+          printf '%s' ${pkgs.lib.escapeShellArg exitCodeTable} > table-only.js
           ${extract} quoted.js > quoted.json
           [ "$("$jq" '.hookTriggers | length' quoted.json)" = 12 ]
           [ "$("$jq" -r '.hookTriggerAliases.agentSpawn' quoted.json)" = SessionStart ]
-          for case in absent:"hook trigger map is absent" computed:"non-literal entry"; do
+          ${extract} exit-codes.js > exit-codes.json
+          [ "$("$jq" -c '.hookTriggers' exit-codes.json)" = '["Manual","PostFileCreate","PostFileDelete","PostFileSave","PostTaskExec","PostToolUse","PreTaskExec","PreToolUse","SessionEnd","SessionStart","Stop","UserPromptSubmit"]' ]
+          [ "$("$jq" -c '.hookTriggerAliases' exit-codes.json)" = '{"agentSpawn":"SessionStart"}' ]
+          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2" exit-codes-computed:"absent or ambiguous (0 of 2" table-only:"absent or ambiguous (0 of 1"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
             # Two statements: the left side of `&&` is exempt from errexit, so
@@ -119,21 +146,94 @@
         refuses "v3 gone from acp --agent-engine" "no longer lists v3" 's/v2, v1, v3/v2, v1/' acp.txt
         touch "$out"
       '';
-      kiro-rollout-fixtures = pkgs.runCommand "kiro-rollout-fixtures" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${pkgs.python3}/bin/python3 - ${(import ../lib/packaging.nix).kiroRolloutExtractScript pkgs} <<'PY'
-        import json, pathlib, subprocess, sys
-        manifest = {"example_rollout": {"description": "", "treatment_percent": 10, "internal_treatment_percent": 50}}
-        data = json.dumps(manifest, indent=2).encode()
-        path = pathlib.Path("binary")
-        for blob, error in [(data + b'\0' + json.dumps({"other": {"description": ""}}, indent=2).encode(), "conflicting rollout copies"), (b"no manifest", "no rollout manifest found"), (data[:-2], "rollout manifest end not found")]:
-            path.write_bytes(blob)
-            result = subprocess.run([sys.executable, sys.argv[1], str(path)], capture_output=True, text=True)
-            assert result.returncode == 1 and error in result.stderr, result
-        PY
-        touch "$out"
-      '';
+      # Exercise both rollout scripts on synthetic payloads so extraction and
+      # patch refusal agree about which embedded rows are manifest sites.
+      kiro-rollout-fixtures = let
+        inherit (import ../lib/packaging.nix) kiroRolloutExtractScript kiroRolloutPatchScript;
+      in
+        pkgs.runCommand "kiro-rollout-fixtures" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${pkgs.python3}/bin/python3 - \
+            ${kiroRolloutExtractScript pkgs} ${kiroRolloutPatchScript pkgs} <<'PY'
+          import json, pathlib, subprocess, sys
+
+          extract_script, patch_script = sys.argv[1:]
+          feature = "example_rollout"
+          root = pathlib.Path("payload")
+          root.mkdir()
+          path = root / "binary"
+
+          def run_script(script, *args):
+              """Run a rollout script on the fixture and capture its diagnostics."""
+              return subprocess.run([sys.executable, script, *args], capture_output=True, text=True)
+
+          manifest = {
+              feature: {
+                  "description": "Enable the example rollout for selected accounts",
+                  "treatment_percent": 10,
+              },
+          }
+          data = json.dumps(manifest, indent=2).encode()
+          prefix = b"\x7fELF" + data + b"\0"
+
+          # Counting treatment-only rows would make these patches refuse.
+          for treatment_groups in (["@kiro-cli-team"], [], ["@kiro-cli-team", 'escaped"string']):
+              treatment = json.dumps({
+                  "groups": {"kiro-cli-team": ["account"]},
+                  feature: {"treatment": treatment_groups},
+              }, indent=2).encode()
+              path.write_bytes(prefix + treatment)
+              extracted = run_script(extract_script, path)
+              assert extracted.returncode == 0, extracted
+              assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+                  "patchable": True,
+                  "unmatchedSites": 0,
+              }, extracted
+              patched = run_script(patch_script, feature, root)
+              assert patched.returncode == 0, patched
+              patched_manifest, patched_treatment = path.read_bytes().split(b"\0", 1)
+              assert len(patched_manifest) == len(prefix) - 1
+              assert patched_treatment == treatment
+              entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
+              assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
+
+          # Matching only the opening of the row or list would allow partial
+          # patches; skipping a treatment row in any layout but the one 3.6.0
+          # ships would stop the match failing closed.
+          only_treatment = {feature: {"treatment": ["@kiro-cli-team"]}}
+          for blob in (
+              *(prefix + json.dumps({feature: row}, indent=2).encode() for row in (
+                  {"treatment": "@kiro-cli-team"},
+                  {"treatment": ["@kiro-cli-team", 5]},
+                  {"treatment": ["@kiro-cli-team"], **manifest[feature]},
+              )),
+              prefix + json.dumps(only_treatment).encode(),
+              prefix + json.dumps(only_treatment, indent=4).encode(),
+          ):
+              path.write_bytes(blob)
+              extracted = run_script(extract_script, path)
+              assert extracted.returncode == 0, extracted
+              assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
+                  "patchable": False,
+                  "unmatchedSites": 1,
+              }, extracted
+              refused = run_script(patch_script, feature, root)
+              assert refused.returncode == 1 and "Refusing to half-patch." in refused.stderr, refused
+              assert path.read_bytes() == blob
+
+          for blob, error in [
+              (data + b"\0" + json.dumps({"other": {"description": ""}}, indent=2).encode(),
+               "conflicting rollout copies"),
+              (b"no manifest", "no rollout manifest found"),
+              (data[:-2], "rollout manifest end not found"),
+          ]:
+              path.write_bytes(blob)
+              result = run_script(extract_script, path)
+              assert result.returncode == 1 and error in result.stderr, result
+          PY
+          touch "$out"
+        '';
     }
     // mkOwnerCheck {
       dir = ../extracted;

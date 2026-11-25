@@ -1,10 +1,10 @@
 ## Kiro feature availability and client settings
 
-> **Last verified:** 2026-11-07 — measured on Kiro CLI 3.1.0: workflows have no
-> rollout entry and `chat.enableWorkflows` is the only gate. Rollout state
-> retains every manifest field except description; coverage rejects unknown
-> fields and requires both public and internal treatment to be 100% before
-> preserving the stock package.
+> **Last verified:** 2026-11-24 — Kiro CLI 3.6.0 embeds treatment-group rows
+> alongside the rollout manifest. Since Kiro CLI 3.1.0, workflows use only the
+> `chat.enableWorkflows` client setting. Rollout state retains every manifest
+> field except description; coverage rejects unknown fields and requires both
+> public and internal treatment to be 100% before preserving the stock package.
 
 Workflows were generally available behind a 100% rollout from **Kiro CLI
 2.26.0**. In **3.1.0** the rollout gate is gone: the TUI bundle reads the client
@@ -64,22 +64,24 @@ the caller, while no `features.workflows` switch exists on 3.1.0 because the
 rollout entry is gone; `chat.enableWorkflows` is the only workflows gate.
 
 The aggregate `rolloutStates.<name>` facts retain every manifest field except
-description, including internal treatment percentage.
-`rolloutPatchability.<name>.patchable` records whether every feature site
-matches the shared entry matcher. Enabling a feature that needs a patch but is
-measured unpatchable fails at evaluation, naming that fact. The unmatched-site
-count remains per platform and is not read by modules. The owner drift check
-compares fresh measurements with the committed facts; there is no hand-copied
-state table because it adds no human judgment. A single predicate in
-`extract/rollout-coverage.nix` derives whether a patch is needed: 100% public
-and internal treatment for all users on the stable channel preserves the stock
-derivation; omitted internal treatment follows public treatment, and absent or
-null segment and channel fields mean all and stable. Unknown state fields fail
-evaluation at this reader. Restricted features require a package exposing
-`passthru.withRolloutFeatures`. The CI rollout canary patches every measured
-patchable feature that still needs a patch to prove byte feasibility, matching
-consumer package selection. The package constructor sorts and deduplicates
-direct callers' feature lists.
+description, including internal treatment percentage. A rollout site starts with
+`"<name>": {`. The matcher skips the treatment-group rows introduced in Kiro CLI
+3.6.0 when the whole row contains just a `treatment` field with a list of
+strings, which may be empty. `rolloutPatchability.<name>.patchable` records
+whether every remaining site matches the shared entry matcher. Enabling a
+feature that needs a patch but is measured unpatchable fails at evaluation,
+naming that fact. The unmatched-site count remains per platform and is not read
+by modules. The owner drift check compares fresh measurements with the committed
+facts; there is no hand-copied state table because it adds no human judgment. A
+single predicate in `extract/rollout-coverage.nix` derives whether a patch is
+needed: 100% public and internal treatment for all users on the stable channel
+preserves the stock derivation; omitted internal treatment follows public
+treatment, and absent or null segment and channel fields mean all and stable.
+Unknown state fields fail evaluation at this reader. Restricted features require
+a package exposing `passthru.withRolloutFeatures`. The CI rollout canary patches
+every measured patchable feature that still needs a patch to prove byte
+feasibility, matching consumer package selection. The package constructor sorts
+and deduplicates direct callers' feature lists.
 
 `cli.native.settings.chat.keybindings` generates nullable string options from
 every extracted `chat.keybindings.*` setting key. Known keys reject non-string

@@ -1,3 +1,4 @@
+# cspell:ignore bfnrt
 rec {
   # SINGLE definition of "which file is the kiro chat binary", shared by the
   # read-only extractor (`mkKiroExtract`) and the in-place patcher
@@ -64,7 +65,8 @@ rec {
                     if not handle.read(4).startswith(KIRO_EXEC_MAGIC):
                         continue
                     # mmap for the same reason the patcher uses it: the target
-                    # is a ~556 MB binary and read() would peak that much RSS
+                    # is a binary of hundreds of MB (209 MB on Linux, 417 MB
+                    # universal Darwin at 3.6.0) and read() would peak that much RSS
                     # on a builder to look for a few hundred bytes. `find`
                     # scans the mapping through the buffer protocol, so nothing
                     # is materialized.
@@ -91,11 +93,24 @@ rec {
             rb'  \}'
         )
 
-    # Every `"<name>": {` site must match entry_re. Returns the matches and the
-    # count of sites that did not match.
     def rollout_sites(mapped, name):
+        """Return manifest matches and the unmatched-site count for a feature.
+
+        Extraction and patching count each '"<name>": {' in the mapped binary
+        as a site, except rows containing only a treatment string list. Those
+        rows list group assignments and carry no rollout settings to patch.
+        The match is layout-exact (the pretty-printed form 3.6.0 ships), so a
+        compact or re-indented treatment row still counts as an unmatched site
+        and fails closed.
+        """
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
-        sites = len(re.findall(key, mapped))
+        json_string = rb'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
+        treatment_row = (
+            rb'\n    "treatment": \['
+            rb'(?:\n      ' + json_string + rb'(?:,\n      ' + json_string + rb')*\n    )?'
+            rb'\]\n  \}'
+        )
+        sites = len(re.findall(key + rb'(?!' + treatment_row + rb')', mapped))
         hits = list(entry_re(name).finditer(mapped))
         return hits, sites - len(hits)
 
@@ -302,11 +317,12 @@ rec {
     ${pkgs.jq}/bin/jq -S -s '.[0] * .[1]' ${static} help.json > "$out"
   '';
 
-  # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
-  # `treatment_percent: 100` / `segment: "all"` with no `channel` gate.
+  # Given a payload tree and feature names, rewrite the rollout entries in place
+  # to `treatment_percent: 100` / `segment: "all"` and print the patched paths
+  # for the package wrapper to re-sign. The fixture runs this script directly.
   #
   # Length preservation is the whole trick, and it is not fussiness: the
-  # manifest sits in rodata inside a ~556 MB ELF, so growing it by even one
+  # manifest sits in rodata inside a binary of hundreds of MB, so growing it by even one
   # byte would move section offsets and require a relink we cannot do. The
   # `description` field is unused by the gating logic, so it serves as the
   # padding reservoir — shrink or grow it to absorb the delta exactly.
@@ -322,11 +338,8 @@ rec {
   # count does not equal the number of sites patched, aborts the build. A
   # half-patched binary is worse than an unpatched one, because which of the
   # duplicate manifest copies is consulted is not observable from here.
-  mkKiroRolloutPatch = {
-    features,
-    pkgs,
-  }: let
-    script = pkgs.writeText "kiro-rollout-patch.py" ''
+  kiroRolloutPatchScript = pkgs:
+    pkgs.writeText "kiro-rollout-patch.py" ''
       ${kiroChatLocatorPy}
       ${kiroRolloutEntryPy}
       import sys
@@ -339,7 +352,7 @@ rec {
       features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
 
-      # mmap, not read()+bytearray. The target is a ~556 MB ELF, and the
+      # mmap, not read()+bytearray. The target is hundreds of MB, and the
       # read-then-copy shape peaked over 1 GB per file, which is enough to
       # make a small CI builder fail on a patch that changes ~200 bytes. The
       # rewrite is length-preserving, so an in-place mapped edit is exactly
@@ -413,10 +426,16 @@ rec {
       for p in patched_paths:
           print(p)
     '';
-  in ''
+
+  # Run the rollout patcher for the selected features and re-sign its output
+  # paths on Darwin after the in-place rewrite.
+  mkKiroRolloutPatch = {
+    features,
+    pkgs,
+  }: ''
     # Walks all of "$out", not "$out/bin", so the patch does not depend on
     # where the payload installs its binary; the locator selects it by content.
-    kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${script} \
+    kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${kiroRolloutPatchScript pkgs} \
       ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out")
     ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
       # Patching a Mach-O invalidates its code signature, and arm64 macOS
