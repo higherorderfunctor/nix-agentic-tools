@@ -419,7 +419,20 @@ for (const [name, key, expected] of [
   [
     "model-catalog.js.txt",
     "catalog",
-    ["claude-opus-4", "claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
+    [
+      {
+        ids: [
+          "claude-opus-4",
+          "claude-haiku-5",
+          "claude-opus-5",
+          "claude-sonnet-5",
+        ],
+        latestPerFamily: {
+          fable: "claude-fable-fixture",
+          extra: "claude-extra-fixture",
+        },
+      },
+    ],
   ],
   [
     "model-pins.js.txt",
@@ -476,6 +489,48 @@ for (const [name, diagnostic] of [
   );
 }
 
+// A valid catalog row identifies the owner even when its defaults are malformed.
+for (const [name, fields, diagnostic] of [
+  ["absent map", "", "expected literal latest_per_family map"],
+  [
+    "duplicate map",
+    "latest_per_family:{},latest_per_family:{}",
+    "catalog: duplicate property",
+  ],
+  [
+    "prototype setter",
+    'latest_per_family:{__proto__:"id"}',
+    "latest_per_family: prototype setter",
+  ],
+  ["dynamic value", "latest_per_family:{a:call()}", "expected string for a"],
+  [
+    "duplicate family",
+    'latest_per_family:{a:"one","a":"two"}',
+    "latest_per_family: duplicate property",
+  ],
+  [
+    "spread",
+    "latest_per_family:{...defaults}",
+    "latest_per_family: unsupported property form",
+  ],
+  [
+    "computed key",
+    'latest_per_family:{[family]:"value"}',
+    "latest_per_family: unsupported property form",
+  ],
+]) {
+  let error = "";
+  try {
+    L.locateModelSites(
+      `var decoy={latest_per_family:{}},C={models:[{id:"claude-opus-5",family:"opus"}],${fields}};`,
+      ts,
+    );
+  } catch (e) {
+    error = e.message;
+  }
+  check(`family defaults: refuses ${name}`, error.includes(diagnostic), error);
+}
+
 // Drive the graph reader too: these refusals prevent a newly committed raw
 // from blessing missing sites, ambiguity, total retirement or a stray family.
 const graph = fs.mkdtempSync(path.join(os.tmpdir(), "claude-model-facts-"));
@@ -486,6 +541,10 @@ try {
     "graph: subtracts retirement membership and sorts aliases",
     JSON.stringify(L.modelFacts(graph, ts)) ===
       JSON.stringify({
+        latestPerFamily: {
+          fable: "claude-fable-fixture",
+          extra: "claude-extra-fixture",
+        },
         launchEffortPins: [
           "unpinFable5LaunchEffort",
           "unpinOpus47LaunchEffort",
@@ -511,17 +570,17 @@ try {
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-4",family:"opus"}];',
+      'var C={models:[{id:"claude-opus-4",family:"opus"}],latest_per_family:{}};',
       "every catalog id is marked retired",
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-5",family:"opus"}];',
+      'var C={models:[{id:"claude-opus-5",family:"opus"}],latest_per_family:{}};',
       "no 'haiku' id",
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-5",family:"opus"},{id:"claude-stray"}];',
+      'var C={models:[{id:"claude-opus-5",family:"opus"},{id:"claude-stray"}],latest_per_family:{}};',
       "entry without literal id/family",
     ],
   ]) {

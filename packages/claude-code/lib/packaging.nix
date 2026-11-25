@@ -127,6 +127,7 @@ rec {
       '{
          effortLevels: $census[0].legacy.effortLevels,
          hookEvents: $census[0].legacy.hookEvents,
+         latestPerFamily: $census[0].legacy.latestPerFamily,
          launchEffortPins: $census[0].legacy.launchEffortPins,
          models: $census[0].legacy.models,
          settings: $census[0].settings,
