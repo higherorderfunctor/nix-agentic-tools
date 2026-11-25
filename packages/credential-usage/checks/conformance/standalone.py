@@ -2,9 +2,9 @@
 """Replay a fixture pair through an installed Reader command.
 
 Owner checks call `main` with a pair directory and a packaged command. Each CPA
-case gets a local HTTP server that answers the scenario's requests. Direct
-cases that stop before sending a request exercise the installed command's
-preflight. The same pair checks all direct requests in the imported suite.
+case gets a local HTTP server that answers the scenario's requests. An owner
+can also provide a build of the command that forbids sockets to check direct
+preflight cases. The same pair checks all direct requests in the imported suite.
 """
 
 from collections.abc import Sequence
@@ -167,19 +167,28 @@ def installed_differences(inputs: Inputs, case: Case, command: str) -> list[str]
 
 def main(args: Sequence[str]) -> int:
     """Replay the pair's cases that can run without contacting a vendor."""
-    if len(args) != 2:
-        print("usage: standalone.py <pair directory> <Reader command>", file=sys.stderr)
+    if len(args) not in (2, 3):
+        print("usage: standalone.py <pair directory> <CPA command> [<offline direct command>]", file=sys.stderr)
         return 1
     try:
         pair = Pair.read(Path(args[0]))
     except IncompletePair as error:
         print(error, file=sys.stderr)
         return 1
-    cases = [case for name, case in pair.cases.items() if name.endswith("/cpa") or not case.expected.requests]
-    if not cases:
+    runs = [(case, args[1]) for name, case in pair.cases.items() if name.endswith("/cpa")]
+    if len(args) == 3:
+        direct = [
+            (case, args[2]) for name, case in pair.cases.items()
+            if name.endswith("/direct") and not case.expected.requests
+        ]
+        if not direct:
+            print("pair: no direct preflight cases for the offline command", file=sys.stderr)
+            return 1
+        runs.extend(direct)
+    if not runs:
         print("pair: no cases can run through the installed command", file=sys.stderr)
         return 1
-    errors = [error for case in cases for error in installed_differences(pair.inputs, case, args[1])]
+    errors = [error for case, command in runs for error in installed_differences(pair.inputs, case, command)]
     for error in errors:
         print(error, file=sys.stderr)
     return int(bool(errors))
