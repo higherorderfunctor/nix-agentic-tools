@@ -727,6 +727,19 @@ expected and observed differ only in withheld members at: $[0].body.[private]
 """,
             )
 
+    def test_imported_runner_names_a_withheld_string_whose_text_changed(self) -> None:
+        """Rubric 6, D3. A string that differs only in masked words must name its path, not print a bare marker."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"from": "alpha", "to": "beta"}'}, {"direct": [ECHO | {"body": {"note": "usage: alpha denied"}}]})
+            entry = self.echoing_reader(directory, {"note": "usage: beta denied"})
+            self.assert_trace_report(
+                pair, entry,
+                """primary-failure/direct: trace
+expected and observed differ only in withheld members at: $[0].body.note
+""",
+            )
+
     def test_installed_runner_masks_a_private_number_inside_a_failure_line(self) -> None:
         """Rubric 6, D1. A private number does not appear as a token inside a free-text failure line."""
         with TemporaryDirectory() as tmp:
@@ -746,6 +759,45 @@ primary-failure/cpa: result
  }
 """,
             )
+
+    def test_installed_runner_masks_a_respelled_private_number_inside_a_failure_line(self) -> None:
+        """Rubric 6, D1. A private number written as a decimal or an exponent is still that number."""
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"proxy-failed": '{"status_code": 503, "body": "{\\"limit\\": 9123}"}'}, {"cpa": []})
+            command = self.installed_command(directory, None, "usage: ceiling 9.123e3 (9123.0) is not allowed")
+            self.assert_installed_report(
+                pair, "primary-failure/cpa", command,
+                """primary-failure/cpa: missing request
+primary-failure/cpa: result
+--- expected
++++ observed
+@@ -1,3 +1,3 @@
+ {
+-  "failed": "usage: observation unavailable"
++  "failed": "usage: ceiling [private] ([private]) is not allowed"
+ }
+""",
+            )
+
+    def test_imported_runner_flags_an_escaped_private_string_on_a_stream(self) -> None:
+        """Rubric 6. A private string printed with its quotes escaped is still a leak."""
+        with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
+            directory = Path(tmp)
+            pair = self.private_pair(directory, {"failed": '{"detail": "quota \\"exceeded\\""}'}, {"direct": [ECHO | {"body": NOTE_ONLY}]})
+            (directory / "printing_reader.py").write_text(
+                r"""import sys
+import urllib3
+
+
+def main(env, clock):
+    urllib3.request("POST", "https://reader.example/echo", body="{}")
+    print(r'detail: quota \"exceeded\"', file=sys.stdout)
+    sys.exit(1)
+"""
+            )
+            sent = differences(pair.inputs, pair.cases["primary-failure/direct"], "printing_reader:main")
+            self.assertEqual([error.label for error in sent][:1], ["primary-failure/direct: leak"])
 
     def test_installed_runner_masks_private_json_echoed_as_a_respelled_string(self) -> None:
         """Rubric 6, D1. Private JSON carried in a string is masked whatever its whitespace and key order."""

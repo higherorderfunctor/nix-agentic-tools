@@ -15,11 +15,13 @@ A failed comparison prints a diagnostic under one public display contract, which
   string, number or boolean at any depth, not as a member of JSON carried inside a string, and not
   re-serialized with other whitespace or key order.
 - D2. Masking is per member. Hiding a private member never hides the object, array or public sibling
-  around it. A public field that explains a failure stays visible.
+  around it. A public field that explains a failure stays visible, unless its value equals a private
+  member; the report then names that path.
 - D3. A failed comparison never prints an empty diff. When two sides differ only in withheld members,
   the report names each path whose values were withheld and says they differ.
-- D4. The comparison keeps the originals. Masking happens only in the copy that is rendered, in both
-  runners, for the request trace and for the result.
+- D4. Comparison precedes masking. A recorded request already carries `[credential:name]` in place of
+  each credential, as the fixture format requires. The private-data masking happens only in the copy
+  that is rendered, in both runners, for the request trace and the result.
 """
 
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
@@ -322,7 +324,10 @@ class Redaction(NamedTuple):
                 inside = json_inside(item) if spell_json_text else None
                 if isinstance(inside, dict | list):
                     return block(inside, path, f"{head.removesuffix(': ')} (JSON text): ", depth)
-                return head + json.dumps(self.text(item))
+                shown = self.text(item)
+                if shown != item:
+                    hidden.append(path)
+                return head + json.dumps(shown)
             if not isinstance(item, dict | list):
                 return head + json.dumps(item)
             if not item:
@@ -357,19 +362,27 @@ def redaction(credentials: CredentialFiles, replies: Sequence[Reply]) -> Redacti
     members = files.joined(collected(
         private_members(reply.body, "[private]") for reply in replies if reply.private or not 200 <= reply.status < 300
     ))
-    tokens = list(members.keys.items())
-    tokens += [(json.dumps(whole_numbers(number)), mark) for number, mark in members.numbers.items()]
-    tokens += [("true" if truth else "false", mark) for truth, mark in members.truths.items()]
+    tokens = list(members.keys.items()) + [("true" if truth else "false", mark) for truth, mark in members.truths.items()]
     return Redaction(
         credential_text=conceal(files.strings),
         members=members,
-        text=conceal(members.strings, tokens),
-        spellings=tuple(members.strings),
+        text=conceal(members.strings, tokens, members.numbers),
+        spellings=tuple(dict.fromkeys(
+            spelling for text in members.strings for spelling in (text, json.dumps(text)[1:-1])
+        )),
     )
 
 
-def conceal(strings: Mapping[str, str], tokens: Sequence[tuple[str, str]] = ()) -> Callable[[str], str]:
-    """Return a function that replaces each private spelling and each private key, number or boolean standing as a whole token, longest first.
+NUMBER = re.compile(r"(?<![\w.-])[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w.-])")
+
+
+def respelled(text: str, numbers: Mapping[float, str]) -> str:
+    """Replace each number in `text` that equals a private one, whatever its decimal or exponent spelling."""
+    return NUMBER.sub(lambda match: numbers.get(float(match[0]), match[0]), text)
+
+
+def conceal(strings: Mapping[str, str], tokens: Sequence[tuple[str, str]] = (), numbers: Mapping[float, str] = {}) -> Callable[[str], str]:
+    """Return a function that replaces each private number, then each private spelling and each private key or boolean standing as a whole token, longest first.
 
     One pass scans the original text only, so no placeholder it writes is replaced again. A private string is
     also matched in its JSON-escaped spelling, for a string carried inside a displayed key.
@@ -383,7 +396,7 @@ def conceal(strings: Mapping[str, str], tokens: Sequence[tuple[str, str]] = ()) 
         return lambda text: text
     marks = {spelling: mark for spelling, _, mark in reversed(parts)}
     pattern = re.compile("|".join(item for _, item, _ in sorted(parts, key=lambda part: len(part[0]), reverse=True)))
-    return lambda text: pattern.sub(lambda match: marks[match[0]], text)
+    return lambda text: pattern.sub(lambda match: marks[match[0]], respelled(text, numbers))
 
 
 class ScriptedNetwork:
