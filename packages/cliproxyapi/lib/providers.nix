@@ -1,4 +1,5 @@
-# One API → CPA credential-family table for named upstream API-key credentials.
+# The shared library and instance modules use this table to turn named
+# credentials into CPA family blocks and per-client routing rules.
 {
   lib,
   catalog ? null,
@@ -58,6 +59,11 @@
     responses = {
       family = "codex";
       key.disable-codex-cloaking = true;
+      options.modelContextLengths = mkOption {
+        type = types.attrsOf types.ints.positive;
+        default = {};
+        description = "Context window in tokens for each exact upstream Responses model name. Each name must appear in the effective models list before maker exclusions.";
+      };
       provider = _: "codex";
     };
   };
@@ -154,6 +160,16 @@
     then provider.apis.${api}.models
     else lib.defaultTo provider.models provider.apis.${api}.models;
 
+  # Check Responses metadata when the credential option is read, while its
+  # effective list still includes models the instance will exclude by maker.
+  refuseUnlistedContextLengths = name: provider: let
+    lengths = provider.apis.responses.modelContextLengths or {};
+    unknown = lib.subtractLists (lib.defaultTo [] (modelsOf provider "responses")) (builtins.attrNames lengths);
+  in
+    if provider == null || lengths == {} || unknown == []
+    then provider
+    else throw "credentials.${name}.apiKey.apis.responses.modelContextLengths names unlisted Responses models: ${lib.concatStringsSep ", " unknown}";
+
   # Exact canonical ids win; scoped aliases never borrow another vendor's spelling.
   canonical = vendor: spelling: let
     mappings =
@@ -238,7 +254,9 @@
   # its vendor's, already references; CPA applies a group's headers to each
   # of its keys (internal/config/config_v8.go, sharedKeyFields).
   blocks = headers: name: provider:
-    lib.mapAttrs' (api: value:
+    lib.mapAttrs' (api: value: let
+      contextLengths = value.modelContextLengths or {};
+    in
       lib.nameValuePair apis.${api}.family [
         ({
             inherit name;
@@ -247,7 +265,11 @@
             models = map (model:
               if apis.${api}.modelObjects
               then lib.filterAttrs (_: value: value != null) model
-              else {name = model;}) (lib.defaultTo [] (modelsOf provider api));
+              else
+                {name = model;}
+                // lib.optionalAttrs (api == "responses" && contextLengths ? ${model}) {
+                  max-context-length = contextLengths.${model};
+                }) (lib.defaultTo [] (modelsOf provider api));
           }
           // lib.filterAttrs (_: field: field != null) (lib.getAttrs (apis.${api}.fields or []) value)
           // lib.optionalAttrs (headers != {}) {inherit headers;}
@@ -263,10 +285,15 @@
     kind = "apikey";
     provider = apis.${api}.provider name;
   };
-  credentialType = types.submodule ({config, ...}: {
+  credentialType = types.submodule ({
+    config,
+    name,
+    ...
+  }: {
     options = {
       apiKey = mkOption {
         type = types.nullOr apiKeyType;
+        apply = refuseUnlistedContextLengths name;
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
@@ -319,6 +346,9 @@
       };
     };
   });
+  # A raw upstream model id as a picker row names it: non-empty, with no
+  # whitespace for a harness to trim into a different id.
+  pickerModelIdType = types.strMatching "[^[:space:]]+" // {description = "a model id without whitespace";};
   clientKeyType = types.submodule {
     options = {
       key = mkOption {
@@ -336,6 +366,11 @@
             credential = mkOption {
               type = types.str;
               description = "Name in this Instance's credentials. Routes preserve this list's order without promising CPA fallback order.";
+            };
+            pickerModels = mkOption {
+              type = types.listOf pickerModelIdType;
+              default = [];
+              description = "Raw upstream model ids to show in Claude Code's `/model` picker for this OAuth route. The first route listing an id supplies its description. CPA selects an eligible credential from the client's grants. API-key routes get their rows from their declared models. A nonempty pickerModels on an API-key route fails evaluation.";
             };
           };
         });
@@ -370,6 +405,8 @@
           accounts = [credential.oauth.account];
         };
       }
+    else if choice.pickerModels != []
+    then {problem = "${path}: API-key credential `${choice.credential}` takes its picker rows from its declared models; remove pickerModels.";}
     else if api == null
     then {problem = "${path}: API-key credential `${choice.credential}` needs api because it does not serve exactly one API.";}
     else if !(lib.elem api available)

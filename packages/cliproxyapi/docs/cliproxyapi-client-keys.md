@@ -1,16 +1,19 @@
 ## CLIProxyAPI instance client keys and routes
 
-> **Last verified:** 2026-11-07 — carries the proposed architecture decision for
-> named routing; named client keys generate CPA access keys and allowlist rules
-> from credential routes. Conflicting hand-written entries are refused.
+> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> Credential names in row descriptions are for display only.
+>
+> Named routing verified 2026-11-07 — named client keys generate CPA access keys
+> and allowlist rules from credential routes. Conflicting hand-written entries
+> are refused.
 
 ## Architecture decisions
 
 - **PROPOSAL (not yet vetted): CPA instances own named routing.** Each
   `ai.cliproxyapi.instances.<name>` declares upstream `credentials` and
   `clientKeys` once. Each client key routes only to named upstream credentials;
-  OAuth rules carry exact auth-file IDs, API-key rules carry exact base URLs,
-  and one API table lowers those credentials. A Harness selects
+  OAuth rules match the named account, API-key rules carry exact base URLs, and
+  one API table lowers those credentials. A Harness selects
   `settings.inference = {instance; clientKey;}` without publishing keys or
   rules. External `url` + `key` selections add nothing to Instances. See
   `lib/ai/inference/default.nix`, `packages/cliproxyapi/lib/providers.nix` and
@@ -49,6 +52,19 @@ URL remain separate grants. The client key and rules stay available for
 `POST /v1/passthrough`, while the entire route is omitted from harness inference
 credentials and model lists. See `cliproxyapi-passthrough.md` for the named Nix
 shape, envelope options and secret path references.
+
+Set `pickerModels` on an OAuth route to add raw ids to Claude Code's model
+picker, for example
+`routes = [{credential = "codex"; pickerModels = ["gpt-6.2-sol"];}]`. The
+default is an empty list. Each id must be nonempty and contain no whitespace.
+API-key routes get their rows from the credential's declared models. A nonempty
+`pickerModels` on an API-key route fails evaluation.
+
+When routes share an id, the first route supplies the row's description. That
+description is for display only. CPA uses the client's grants and the requested
+model to select an eligible credential. The login's plan and catalog determine
+which models its account can serve. Adding a picker row changes neither the
+account's eligibility nor the client's grants.
 
 `credentials.<name>.exclusive` is an opt-in check scoped to each enabled
 instance's client key. If either of two distinct routed credentials sets it to

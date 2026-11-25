@@ -1,8 +1,14 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
-> **Last verified:** 2026-10-30 — OAuth upstream credentials require vendor and
-> a secret account email; named API-key credentials can select the built-in Z.ai
-> or OpenCode Go vendor defaults and a priority, and serve per-API models.
+> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> Credential names in row descriptions are for display only. The
+> `module-ai-inference-instance-clients` check verifies the per-model windows
+> set by `apiKey.apis.responses.modelContextLengths`.
+>
+> Credential options verified 2026-10-30 — OAuth upstream credentials require
+> vendor and a secret account email; named API-key credentials can select the
+> built-in Z.ai or OpenCode Go vendor defaults and a priority, and serve per-API
+> models.
 
 How a harness selects an instance and its client key is in
 `dev/fragments/ai-inference/ai-inference.md`; this covers the upstream
@@ -48,6 +54,48 @@ provider, `kind = "apikey"`, and exact `base-urls`.
 a different catalog per API; every served API needs one of the two, or
 evaluation fails.
 
+### Context windows for a Responses credential
+
+Set `apiKey.apis.responses.modelContextLengths` to advertise a context window in
+tokens for a listed upstream model. Use its exact name from the Responses
+`models` list (or the credential's list if Responses inherits it). An unlisted
+name fails evaluation. An omitted entry emits a name-only row. Maker exclusions
+also remove the corresponding rows.
+
+For a Platform key backing Codex OAuth in Claude Code, use the smaller window
+supported by both routes for each shared model. Without `max-context-length` on
+the Platform key, CPA can advertise its 200000-token default to Claude Code
+through the shared model registry row. Apply the CPA credential and Claude
+Code's per-model compaction settings in the same activation:
+
+```nix
+let
+  gptContextWindows = {
+    "gpt-6.2-astra" = 272000;
+    "gpt-6.2-sol" = 500000;
+  };
+in {
+  ai.cliproxyapi.instances.main.credentials.personal-openai.apiKey = {
+    apis.responses = {
+      base-url = "https://api.openai.com/v1";
+      modelContextLengths = gptContextWindows;
+      models = builtins.attrNames gptContextWindows;
+    };
+    key = sopsFile "openai-api-key";
+    priority = -1;
+  };
+  ai.claude.native.settings.modelSettings =
+    lib.mapAttrs (_: window: {autoCompactWindow = window;}) gptContextWindows;
+}
+```
+
+Here `sopsFile` is the consumer's helper for a sops-nix secret reference. Keep
+`claude-sonnet-5` in the models on the granted Anthropic key for Claude Code's
+billed auto-mode classifier, even when that model is absent from the main
+picker.
+
+### Provider URLs and routing
+
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
 their family must have printable edges, and blocks in that family cannot share
@@ -56,10 +104,10 @@ API-key credential names use letters, digits, `.`, `_` and `-`, starting with a
 letter or digit, so Go and Nix normalize their compatibility-provider identities
 alike.
 
-`normalized.settings.inference.credentials` is `[{name; models;}]` in client
-route order, each with the models of the route's resolved API. Claude turns
-declared API-key models into `/model` picker rows; Codex discovers CPA's catalog
-without per-credential `-p` profiles
+`normalized.settings.inference.credentials` lists each route's credential name
+and resolved API models in client route order. An OAuth route that lists raw
+picker ids also carries `pickerModels`. Claude uses both sources for its picker.
+Codex discovers CPA's catalog without per-credential `-p` profiles
 (`dev/fragments/ai-inference/ai-inference-runtimes.md`). Route list order is
 preserved in generated rules and picker rows; it does not define CPA priority or
 fallback. `apiKey.priority` is an optional integer, omitted from CPA config when
@@ -68,13 +116,17 @@ the requested model; credentials in cooldown are skipped. For an overlapping
 subscription login and API key, allow both in the client's routes and set
 `credentials.claude-api-personal.apiKey.priority = -1` to prefer the
 default-priority OAuth login and use the API key when that login is unavailable.
-If both priorities are 0, CPA selects within that tier using `routing.strategy`.
-OAuth priority lives in CPA's login file metadata, so `oauth.priority` is not a
-Nix option; this declaration never edits login files. For Codex and xAI
-WebSocket requests, CPA can prefer a WebSocket-capable credential even at a
-lower priority than an HTTP-only credential. Existing session affinity can keep
-using a bound credential after a higher-priority one recovers. Per-client
-routing order/fallback and account prefixes are deferred.
+For an OpenAI Platform key backing Codex OAuth in Claude Code, grant its
+Responses route only to the Claude client key. Priority `-1` permits paid
+spillover on any retryable failure, including quota exhaustion. Codex CLI
+supports Platform keys through its own client-key grants. If both priorities are
+0, CPA selects within that tier using `routing.strategy`. OAuth priority lives
+in CPA's login file metadata, so `oauth.priority` is not a Nix option; this
+declaration never edits login files. For Codex and xAI WebSocket requests, CPA
+can prefer a WebSocket-capable credential even at a lower priority than an
+HTTP-only credential. Existing session affinity can keep using a bound
+credential after a higher-priority one recovers. Per-client routing
+order/fallback and account prefixes are deferred.
 
 Built-in vendor definitions live in `packages/cliproxyapi/lib/vendors/`, with
 one file per vendor and an explicit `default.nix` index. Each vendor reads its

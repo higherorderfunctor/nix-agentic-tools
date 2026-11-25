@@ -209,6 +209,22 @@ in {
         ]) ["devenv" "hm"]
     );
     module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
+      # Exercise the public renderer with the shape used before module defaults
+      # supplied modelContextLengths. Only the module checks get those defaults.
+      legacyBlocks = (import ../../packages/cliproxyapi/lib {inherit lib;}).cliproxyapi.providers.lower pkgs {
+        legacy = {
+          vendor = null;
+          apiKey = {
+            apis.responses = {
+              base-url = "https://legacy.example/v1";
+              models = ["legacy-model"];
+            };
+            key = clientKey "legacy";
+            models = null;
+            priority = null;
+          };
+        };
+      };
       problems = lib.concatMap (backend: let
         result = evaluate backend {};
         settings = rendered result;
@@ -229,8 +245,15 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        claudeLauncher = lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages);
-        pickerFile = lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" (claudeLauncher.buildCommand or ""));
+        # Read the settings file passed to Claude by the generated devenv launcher.
+        launcherSettings = evaluation: let
+          launcher = lib.findFirst (package: package.name or "" == "claude-code-inference") null evaluation.config.packages;
+          matches = builtins.split "--settings ([^ ']+)" (launcher.buildCommand or "");
+          path = lib.findFirst lib.isList [] matches;
+        in
+          if path == []
+          then {}
+          else builtins.fromJSON (builtins.readFile (lib.head path));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
         # One credential whose APIs serve different models; the
@@ -270,6 +293,74 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
+        inheritedContext = evaluate backend (instanceChange {
+          credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = 200000;
+        });
+        paidModels = [
+          {
+            name = "gpt-6.2-astra";
+            max-context-length = 272000;
+          }
+          {
+            name = "gpt-6.2-sol";
+            max-context-length = 500000;
+          }
+        ];
+        paidBlock = result: lib.findFirst (entry: entry.name == "paid") null (rendered result).api-keys.codex;
+        # Both clients can reach the login. Only Claude can spill over to the paid key.
+        codexGrants = routes:
+          instanceChange {
+            credentials = {
+              codex.oauth = {
+                account = redact.file "/fixture/codex-account";
+                vendor = "codex";
+              };
+              paid.apiKey = {
+                apis.responses = {
+                  base-url = "https://api.openai.com/v1";
+                  modelContextLengths = {
+                    "gpt-6.2-astra" = 272000;
+                    "gpt-6.2-sol" = 500000;
+                  };
+                  models = ["gpt-6.2-astra" "gpt-6.2-sol"];
+                };
+                key = redact.file "/fixture/openai-api-key";
+                priority = -1;
+              };
+            };
+            clientKeys.personal.routes = lib.mkForce routes;
+            clientKeys.work.routes = lib.mkForce [(route "codex")];
+          };
+        codexOptIn = routes: evaluate backend (codexGrants routes);
+        codexPickerRoute = (route "codex") // {pickerModels = ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];};
+        opted = codexOptIn [codexPickerRoute (route "paid")];
+        filteredPaid = evaluate backend (lib.recursiveUpdate (codexGrants [(route "paid")]) {
+          catalog.models.fixture-excluded = {
+            maker = "fixture-maker";
+            source = ["Responses context fixture"];
+          };
+          cliproxyapi.instances.clients.credentials.paid = {
+            excludeMakers = ["fixture-maker"];
+            apiKey.apis.responses = {
+              models = ["fixture-excluded" "gpt-6.2-sol" "gpt-6.2-astra"];
+              modelContextLengths.fixture-excluded = 12345;
+            };
+          };
+        });
+        paidFirst = codexOptIn [(route "paid") codexPickerRoute];
+        plain = codexOptIn [(route "codex") (route "paid")];
+        expectedPickerRow = credential: model: {
+          inherit model;
+          description = "${credential} through CLIProxyAPI";
+        };
+        expectedPicker = {
+          modelPicker.options = map (expectedPickerRow "codex") ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
+        };
+        codexAccountRule = {
+          accounts = [(redact.file "/fixture/codex-account")];
+          kind = "oauth";
+          provider = "codex";
+        };
         checks = {
           "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
           "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
@@ -351,9 +442,125 @@ in {
                 models = ["split-chat"];
               }
             ];
-          "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
+          "Claude user picker" = backend != "hm" || ((claudeSettings result).modelPicker.options or null) == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
-          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile != null && builtins.fromJSON (builtins.readFile (lib.head pickerFile)) == {modelPicker.options = rows;});
+          "Claude devenv picker follows routes" = backend == "hm" || launcherSettings result == {modelPicker.options = rows;};
+          "Responses context windows match the upstream IDs" = (paidBlock opted).models == paidModels;
+          "maker exclusions remove annotated models before rendering and grants" =
+            failedMessages filteredPaid
+            == []
+            && (paidBlock filteredPaid).models == lib.reverseList paidModels
+            && filteredPaid.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "paid";
+                models = ["gpt-6.2-sol" "gpt-6.2-astra"];
+              }
+            ];
+          "only Responses annotates inherited models with configured context lengths" =
+            failedMessages inheritedContext
+            == []
+            && (lib.head (rendered inheritedContext).api-keys.codex).models
+            == [
+              {
+                name = "glm-5.3";
+                max-context-length = 200000;
+              }
+              {name = "glm-5.3-flash";}
+            ]
+            && (lib.head (rendered inheritedContext).api-keys.claude).models
+            == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
+          "Responses context lengths must be positive integers" = lib.all (length:
+            rejectsType (instanceChange {
+              credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = length;
+            })) [0 (-1) "272000"];
+          "Responses context lengths reject IDs outside the API override" = rejectsType (instanceChange {
+            credentials.zhipuai.apiKey.apis.responses = {
+              models = ["glm-5.3-flash"];
+              modelContextLengths."glm-5.3" = 100;
+            };
+          });
+          "inherited Responses list refuses an unlisted context length" = rejectsType (instanceChange {
+            credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-9" = 100;
+          });
+          "Responses without context lengths use name-only rows" =
+            (lib.head settings.api-keys.codex).models == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
+          "OAuth picker fixture accepted" = failedMessages opted == [] && failedMessages plain == [];
+          "OAuth picker metadata stays on its selected route" =
+            opted.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                models = [];
+                name = "codex";
+                pickerModels = ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
+              }
+              {
+                models = ["gpt-6.2-astra" "gpt-6.2-sol"];
+                name = "paid";
+              }
+            ]
+            && opted.config.ai.codex.normalized.settings.inference.credentials
+            == [
+              {
+                models = [];
+                name = "codex";
+              }
+            ];
+          "library lists each raw id once with its first route" =
+            (import ../../packages/claude-code/lib/inference.nix {inherit lib pkgs;}).modelPickerOptions {
+              inherit backend;
+              resolvedInference = opted.config.ai.claude.normalized.settings.inference;
+            }
+            == expectedPicker.modelPicker.options;
+          "paid route first supplies both shared picker descriptions" = let
+            settingsWithPicker =
+              if backend == "hm"
+              then claudeSettings paidFirst
+              else launcherSettings paidFirst;
+          in
+            failedMessages paidFirst
+            == []
+            && (settingsWithPicker.modelPicker.options or null)
+            == [
+              (expectedPickerRow "paid" "gpt-6.2-astra")
+              (expectedPickerRow "paid" "gpt-6.2-sol")
+              (expectedPickerRow "codex" "gpt-6-luna")
+              (expectedPickerRow "codex" "gpt-6.1-terra")
+            ];
+          "OAuth picker in Claude user settings" = backend != "hm" || ((claudeSettings opted).modelPicker or null) == expectedPicker.modelPicker;
+          "OAuth picker in Claude launcher settings only" = backend == "hm" || (launcherSettings opted == expectedPicker && !((claudeSettings opted) ? modelPicker));
+          "picker models preserve CPA config and Codex files" = rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;
+          "only Claude has the paid route" =
+            (rendered opted).access.key-allowlist
+            == [
+              {
+                api-key = clientKey "personal";
+                credentials = [
+                  codexAccountRule
+                  {
+                    base-urls = ["https://api.openai.com/v1"];
+                    kind = "apikey";
+                    provider = "codex";
+                  }
+                ];
+              }
+              {
+                api-key = clientKey "work";
+                credentials = [codexAccountRule];
+              }
+            ];
+          "API-key route refuses pickerModels" = let
+            apiKeyRoute =
+              (route "zhipuai")
+              // {
+                api = "anthropic";
+                pickerModels = ["gpt-6.2-sol"];
+              };
+          in
+            refused backend "API-key credential `zhipuai` takes its picker rows from its declared models; remove pickerModels" (instanceChange {clientKeys.personal.routes = lib.mkForce [(route "personal") apiKeyRoute];});
+          "blank or spaced picker model id refused" =
+            lib.all (pickerModels: rejectsType (instanceChange {clientKeys.personal.routes = lib.mkForce [((route "personal") // {inherit pickerModels;})];}))
+            [[""] [" "] ["gpt 6"] ["gpt-6.2-sol" "\t"]];
           "client key hand-written access refused" = refused backend "lists ai.cliproxyapi.instances.clients.clientKeys.personal.key by hand" (instanceChange {settings.access.api-keys = [(clientKey "personal")];});
           "client key hand-written rule refused" = refused backend "hand-written entry for ai.cliproxyapi.instances.clients.clientKeys.personal.key" (instanceChange {
             settings.access.key-allowlist = [
@@ -497,7 +704,8 @@ in {
       in
         lib.mapAttrsToList (name: _: "${backend}: ${name}") (lib.filterAttrs (_: holds: !holds) checks)) ["devenv" "hm"];
     in
-      lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
+      lib.assertMsg ((lib.head legacyBlocks.codex).models == [{name = "legacy-model";}]) "legacy public renderer changed the name-only Responses row"
+      && lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
 
     # The authentication key requires a redact reference at both scopes;
     # cleartext and the retired credential branches cannot enter normalization.

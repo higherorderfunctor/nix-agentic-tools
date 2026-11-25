@@ -8,8 +8,8 @@
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
 # managed launcher. The same launcher guarantees untrusted-project directory access.
 #
-# CLIProxyAPI's lowering turns each routed upstream credential's models into
-# `/model` picker rows; where each backend delivers them, and why, is in
+# CLIProxyAPI builds `/model` picker rows from API-key routes' declared models
+# and OAuth routes' pickerModels. Backend delivery and its rationale are in
 # dev/fragments/ai-inference/ai-inference-runtimes.md.
 {
   lib,
@@ -28,15 +28,21 @@
       inherit key;
       option = "ai.claude.settings.inference.key";
     };
-    # One row per model of each routed upstream credential, in route order.
-    # Claude labels a row with its model id when it has no label.
-    rows = lib.concatMap (credential:
-      map (model: {
-        description = "${credential.name} through CLIProxyAPI";
-        inherit model;
-      })
-      credential.models)
-    credentials;
+    # The picker shows each raw id once. Route order chooses its description
+    # because several granted credentials can serve the same request.
+    rows =
+      lib.foldl' (listed: row:
+        if lib.any (known: known.model == row.model) listed
+        then listed
+        else listed ++ [row])
+      []
+      (lib.concatMap (credential:
+        map (model: {
+          description = "${credential.name} through CLIProxyAPI";
+          inherit model;
+        })
+        (credential.models ++ (credential.pickerModels or [])))
+      credentials);
     # toFile: the rows hold no store paths, and evaluation can read it back.
     picker = builtins.toFile "claude-inference-model-picker.json" (builtins.toJSON {modelPicker.options = rows;});
   in {
