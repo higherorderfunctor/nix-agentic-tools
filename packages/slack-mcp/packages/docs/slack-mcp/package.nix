@@ -5,9 +5,9 @@
   ...
 }: let
   inherit (pkgs) lib;
-  snapshotDate = "2026-11-18";
-  contentHash = "sha256-Hti11tswZFiV1SeXwMOhD/yM3GPHdCKw7piyG8gkx38=";
-  hash = "sha256-qp+aj89WIQlASvWHTdhGNf4nhMFWPgXLaz+QgRjAgkw=";
+  snapshotDate = "2026-11-25";
+  contentHash = "sha256-rFnzUsUaZ8CwEdgocZiKKCiGM0rrHKScvSHXstXWsbI=";
+  hash = "sha256-IM9+6s78Z08UOnc2IelsiPc9t3BWr/Sk8+l8rdSNr7w=";
   snapshot = (webDocsLib {inherit pkgs;}).mkSnapshot {
     name = "slack-mcp-documentation";
     inherit contentHash hash snapshotDate;
