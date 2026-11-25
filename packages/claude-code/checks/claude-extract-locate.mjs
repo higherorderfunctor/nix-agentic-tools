@@ -419,7 +419,22 @@ for (const [name, key, expected] of [
   [
     "model-catalog.js.txt",
     "catalog",
-    ["claude-opus-4", "claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
+    [
+      {
+        ids: [
+          "claude-fable-fixture",
+          "claude-extra-fixture",
+          "claude-opus-4",
+          "claude-haiku-5",
+          "claude-opus-5",
+          "claude-sonnet-5",
+        ],
+        latestPerFamily: {
+          fable: "claude-fable-fixture",
+          extra: "claude-extra-fixture",
+        },
+      },
+    ],
   ],
   [
     "model-pins.js.txt",
@@ -476,6 +491,75 @@ for (const [name, diagnostic] of [
   );
 }
 
+const opusRow = '{id:"claude-opus-5",family:"opus"}';
+const catalog = (fields) =>
+  `var decoy={latest_per_family:{}},C={models:[${opusRow}],${fields}};`;
+for (const [name, source, diagnostic] of [
+  [
+    "borrowing a decoy map",
+    catalog(""),
+    "expected literal latest_per_family map",
+  ],
+  [
+    "keeping the last map",
+    catalog("latest_per_family:{},latest_per_family:{}"),
+    "catalog: duplicate property",
+  ],
+  [
+    "treating the prototype setter as a family",
+    catalog('latest_per_family:{__proto__:"id"}'),
+    "latest_per_family: prototype setter",
+  ],
+  [
+    "skipping a dynamic default",
+    catalog("latest_per_family:{a:call()}"),
+    "expected string for a",
+  ],
+  [
+    "keeping the last family default",
+    catalog('latest_per_family:{a:"one","a":"two"}'),
+    "latest_per_family: duplicate property",
+  ],
+  [
+    "ignoring spread defaults",
+    catalog("latest_per_family:{...defaults}"),
+    "latest_per_family: unsupported property form",
+  ],
+  [
+    "ignoring computed family keys",
+    catalog('latest_per_family:{[family]:"value"}'),
+    "latest_per_family: unsupported property form",
+  ],
+  [
+    "accepting defaults beside a non-models array",
+    `var C={aliases:[${opusRow}],latest_per_family:{}};`,
+    "expected catalog models property",
+  ],
+  [
+    "keeping the last catalog entry id",
+    'var C={models:[{id:"claude-opus-4",id:"claude-opus-5",family:"opus"}],latest_per_family:{}};',
+    "model catalog entry: duplicate property",
+  ],
+  [
+    "keeping the last retirement date table",
+    'var R={"claude-opus-5":{modelName:"Opus",retirementDates:{},retirementDates:{}}};',
+    'retirement row "claude-opus-5": duplicate property',
+  ],
+  [
+    "accepting a default outside the catalog",
+    catalog('latest_per_family:{opus:"claude-opus-9"}'),
+    "opus names unknown catalog id claude-opus-9",
+  ],
+]) {
+  let error = "";
+  try {
+    L.locateModelSites(source, ts);
+  } catch (e) {
+    error = e.message;
+  }
+  check(`model facts: rejects ${name}`, error.includes(diagnostic), error);
+}
+
 // Drive the graph reader too: these refusals prevent a newly committed raw
 // from blessing missing sites, ambiguity, total retirement or a stray family.
 const graph = fs.mkdtempSync(path.join(os.tmpdir(), "claude-model-facts-"));
@@ -483,14 +567,24 @@ try {
   for (const name of ["model-catalog", "model-pins", "model-retired"])
     fs.writeFileSync(path.join(graph, `${name}.js`), fixture(`${name}.js.txt`));
   check(
-    "graph: subtracts retirement membership and sorts aliases",
+    "graph: passes through latestPerFamily and returns sorted non-retired aliases",
     JSON.stringify(L.modelFacts(graph, ts)) ===
       JSON.stringify({
+        latestPerFamily: {
+          fable: "claude-fable-fixture",
+          extra: "claude-extra-fixture",
+        },
         launchEffortPins: [
           "unpinFable5LaunchEffort",
           "unpinOpus47LaunchEffort",
         ],
-        models: ["claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
+        models: [
+          "claude-extra-fixture",
+          "claude-fable-fixture",
+          "claude-haiku-5",
+          "claude-opus-5",
+          "claude-sonnet-5",
+        ],
       }),
   );
   for (const [name, source, diagnostic] of [
@@ -511,17 +605,17 @@ try {
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-4",family:"opus"}];',
+      'var C={models:[{id:"claude-opus-4",family:"opus"}],latest_per_family:{}};',
       "every catalog id is marked retired",
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-5",family:"opus"}];',
+      'var C={models:[{id:"claude-opus-5",family:"opus"}],latest_per_family:{}};',
       "no 'haiku' id",
     ],
     [
       "model-catalog",
-      'var C=[{id:"claude-opus-5",family:"opus"},{id:"claude-stray"}];',
+      'var C={models:[{id:"claude-opus-5",family:"opus"},{id:"claude-stray"}],latest_per_family:{}};',
       "entry without literal id/family",
     ],
   ]) {

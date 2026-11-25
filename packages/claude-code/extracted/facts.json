@@ -9,6 +9,11 @@
     "systems": ["x86_64-linux"],
     "type": "list"
   },
+  "latestPerFamily": {
+    "source": "static",
+    "systems": ["x86_64-linux"],
+    "type": "object"
+  },
   "launchEffortPins": {
     "source": "static",
     "systems": ["x86_64-linux"],

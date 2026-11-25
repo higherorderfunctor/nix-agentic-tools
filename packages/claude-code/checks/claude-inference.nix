@@ -1,7 +1,9 @@
 # cspell:ignore urandom wfile
 # `ai.settings.inference` delivered to Claude Code (packages/claude-code/lib/inference.nix):
 # the `url` form in each backend's settings.json, reference-reading helpers,
-# cleared inherited credentials, quiet defaults, and the guards.
+# cleared inherited credentials, quiet defaults, and the guards. Family-default
+# checks cover the measured catalog, consumer overrides, unselected inference,
+# and a partial catalog with an unknown family.
 {
   harness,
   lib,
@@ -42,6 +44,8 @@
   };
   installed = result: builtins.head (result.config.home.packages or result.config.packages);
   settingsFor = eval: key: claudeSettings (eval (withClaude (urlForm key)));
+  # Include all default variables so an invented family or metadata key fails the comparison.
+  familyEnv = env: lib.filterAttrs (name: _: lib.hasPrefix "ANTHROPIC_DEFAULT_" name) env;
   quiet = settings:
     settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     == "1"
@@ -58,6 +62,51 @@ in {
         && settings.env.ANTHROPIC_API_KEY == ""
         && settings.env.ANTHROPIC_AUTH_TOKEN == "")
       (map (settingsFor eval) (builtins.attrValues keys))))
+
+    # Compare the delivered settings with the measured catalog, not the lowering's table.
+    (perBackend "family-defaults" (eval: let
+      measured = import ../lib/extracted-fact.nix {inherit lib;} "latestPerFamily";
+      expected =
+        lib.mapAttrs' (family: model: lib.nameValuePair "ANTHROPIC_DEFAULT_${lib.toUpper family}_MODEL" model)
+        (builtins.intersectAttrs {
+            fable = null;
+            haiku = null;
+            opus = null;
+            sonnet = null;
+          }
+          measured);
+      selected = urlForm keys.file;
+      delivered = config: familyEnv ((claudeSettings (eval (withClaude config))).env or {});
+      override.ANTHROPIC_DEFAULT_FABLE_MODEL = "consumer-model";
+    in
+      lib.assertMsg (expected != {}) "measured catalog has no supported family defaults"
+      && lib.assertMsg (delivered selected == expected) "CPA family defaults differ from the measured catalog"
+      && lib.assertMsg (delivered (lib.recursiveUpdate selected {ai.claude.native.settings.env = override;}) == expected // override) "consumer override did not replace just the fable default"
+      && lib.assertMsg (delivered {} == {}) "unselected inference set family defaults"))
+
+    # An incomplete catalog with an unfamiliar family must emit only the known key.
+    {
+      module-claude-inference-partial-family-defaults = mkTest "claude-inference-partial-family-defaults" (let
+        lowering = import ../lib/inference.nix {
+          inherit lib pkgs;
+          latestPerFamily = {
+            haiku = "fixture-haiku";
+            unknown = "fixture-unknown";
+          };
+        };
+        resolvedInference = (evalHm (withClaude (urlForm keys.file))).config.ai.claude.normalized.settings.inference;
+        result = lib.evalModules {
+          modules = [
+            {options.ai.claude.native.settings = lib.mkOption {type = lib.types.anything;};}
+            (lowering.config {
+              backend = "hm";
+              inherit resolvedInference;
+            })
+          ];
+        };
+      in
+        familyEnv result.config.ai.claude.native.settings.env == {ANTHROPIC_DEFAULT_HAIKU_MODEL = "fixture-haiku";});
+    }
 
     # The quiet defaults and proxy-derived leaves yield to a consumer's
     # value. A selection no longer warns that Claude ignores

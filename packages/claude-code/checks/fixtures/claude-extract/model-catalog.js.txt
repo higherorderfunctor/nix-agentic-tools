@@ -1,1 +1,2 @@
-var C=[{id:"claude-opus-4",family:"opus"},{id:"claude-haiku-5",family:"haiku",provider_ids:{first_party:"claude-haiku-5-20261010"}},{family:"opus",id:"claude-opus-5"},{id:"claude-sonnet-5",family:"sonnet"}];
+var schema={latest_per_family:z.record(z.string())},decoy={latest_per_family:{other:"wrong"}};
+var C={models:[{id:"claude-fable-fixture",family:"fable"},{id:"claude-extra-fixture",family:"extra"},{id:"claude-opus-4",family:"opus"},{id:"claude-haiku-5",family:"haiku",provider_ids:{first_party:"claude-haiku-5-20261010"}},{family:"opus",id:"claude-opus-5"},{id:"claude-sonnet-5",family:"sonnet"}],defaults:{},best:"opus",latest_per_family:{fable:"claude-fable-fixture",extra:"claude-extra-fixture"},alias_migration:{}};
