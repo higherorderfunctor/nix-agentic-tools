@@ -774,14 +774,14 @@ JSON-only. All-failed choices retain reasons and exit non-zero. `--now` fixes
 the UTC snapshot for offline tests. No TTY inference, catalog command, live
 probe or delegate launch occurs.
 
-Run these suites with `pydantic` v2, `urllib3` and `hypothesis` installed. CI
-runs the first two as `credential-usage-runner` and
-`cliproxyapi-usage-transport` and the last as `delegate-routing-plan-runtime`.
+Run the first two suites with `pydantic` v2 and `urllib3` installed. CI runs
+them as `credential-usage-runner` and `cliproxyapi-usage-transport`. The
+`delegate-routing-plan-runtime` build supplies its interpreter and fixtures.
 
 ```bash
 python3 ../credential-usage/checks/runner/test_runner.py
 python3 ../cliproxyapi/checks/transport/test_transport.py
-python3 checks/routing-plan-runtime.py scripts/delegate-routing-plan.py checks/fixtures/routing-readers.json checks/fixtures/codex-models-cache.json
+flock /tmp/nat-vm-spike.lock systemd-run --user --scope -q -p CPUQuota=200% -p MemoryMax=6G nix build --max-jobs 1 --cores 2 --no-link .#checks.x86_64-linux.delegate-routing-plan-runtime
 ```
 
 The routing suite exercises fake Readers and hand-written expectations,

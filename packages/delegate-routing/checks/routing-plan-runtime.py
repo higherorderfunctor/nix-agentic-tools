@@ -21,18 +21,12 @@ import unittest
 from unittest.mock import call, patch
 
 from hypothesis import given, settings, strategies as st
+from suite import Pair
 
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
-CLAUDE_USAGE_PAIR = Path(os.environ.get("CLAUDE_USAGE_PAIR", SOURCE.parent.parents[1] / "claude-code/usage/cases"))
 sys.path.insert(0, str(SOURCE.parent))
-# A checkout run imports the owner's source, here and in the child interpreters
-# this suite spawns; the Nix check imports its installed module.
-package = SOURCE.parent.parents[1] / "credential-usage" / "python"
-if package.is_dir():
-    sys.path.insert(0, str(package))
-    os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, (str(package), os.environ.get("PYTHONPATH"))))
 spec = importlib.util.spec_from_file_location("routing_plan", SOURCE)
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
@@ -1572,8 +1566,8 @@ class Routing(unittest.TestCase):
     def test_measures_the_versioned_reader_output(self):
         """Behavior 4. A changed common field, such as an object in place of balances, breaks measurement."""
         # The packaged command check verifies that the Reader prints this result.
-        expected = json.loads((CLAUDE_USAGE_PAIR / "expected.json").read_text())
-        stdout = json.dumps(expected["allowance-windows"]["cpa"]["result"])
+        pair = Pair.read(Path(os.environ["CLAUDE_USAGE_PAIR"]))
+        stdout = json.dumps(pair.cases["allowance-windows/cpa"].expected.result)
         result, _ = self.run_plan(outputs={"reader-outside": stdout}, now=helper.utc("2030-03-17T12:46:40.123456Z"))
         pool = result["pools"]["outside"]
         self.assertEqual(pool["status"], "measured")
