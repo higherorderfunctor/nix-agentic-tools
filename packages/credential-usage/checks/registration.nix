@@ -11,12 +11,14 @@
   mergeReaders = (import ../lib/default.nix).ai.credential-usage.mergeReaders {inherit pkgs lib;};
   inherit ((import ../../claude-code/lib/default.nix).ai.claude-code) usageModule usageReader;
   # Expectations read Claude's library, never the registration under test.
-  shipped = usageReader {
-    inherit pkgs;
-    python-stack = pkgs.ai.generic.python-stack;
-    # The shipped Reader bundles no CLI; it reads the `claude` on PATH.
-    claude = pkgs.emptyDirectory;
-  };
+  shipped = binding:
+    usageReader ({
+        inherit pkgs;
+        python-stack = pkgs.ai.generic.python-stack;
+        # The shipped Reader bundles no CLI; it reads the `claude` on PATH.
+        claude = pkgs.emptyDirectory;
+      }
+      // binding);
   # An ordinary derivation stands in for another owner's packaged Reader.
   fill = pkgs.hello;
   claude = (import ../../../lib/strict-shell-application.nix pkgs) {
@@ -31,16 +33,25 @@
       transports = ["cpa"];
     };
   };
-  # Real backend imports exercise both wrappers.
-  backends = {
-    devenv = harness.evalDevenvModules;
-    hm = harness.evalHmModules;
+  moduleReaders = evaluate: contributions: overrides:
+    (evaluate (contributions ++ [{ai.credentialUsage.readers = overrides;}])).config.ai.credentialUsage.readers;
+  constructors = {
+    devenv = moduleReaders harness.evalDevenvModules;
+    hm = moduleReaders harness.evalHmModules;
+    standalone = contributions: overrides:
+      mergeReaders {
+        contributions = [usageModule] ++ contributions;
+        inherit overrides;
+      };
   };
-  registered = evaluate: modules: (evaluate modules).config.ai.credentialUsage.readers;
   exe = reader: lib.getExe reader.package;
-  selection.ai.credentialUsage.readers.claude.package = fill;
-  conflict.ai.credentialUsage.readers.claude.package = lib.mkDefault fill;
-  binding.ai.credentialUsage.readers.claude.cpa = {
+  selection.claude.package = fill;
+  conflict = {ai.credentialUsage.readers.claude.package = lib.mkDefault fill;};
+  direct.policy = {
+    retries = 2;
+    timeout = 0.375;
+  };
+  cpa = {
     endpoint = "http://127.0.0.1:49264/selected";
     managementKeyFile = "/dev/stdin";
     pin = "selected";
@@ -49,54 +60,46 @@
       timeout = 0.25;
     };
   };
-  merged = contributions: overrides: mergeReaders {inherit contributions overrides;};
-  selected = (merged [usageModule] binding.ai.credentialUsage.readers).claude;
-  # Each case fails on the wrong implementation its comment names.
-  cases = backend: let
-    registered' = registered backends.${backend};
+  selected = (constructors.standalone [] {claude = {inherit cpa;};}).claude;
+  cases = resolve: let
+    readers = resolve [(owner "sample")] {};
+    directReader = (resolve [] {claude = {inherit direct;};}).claude;
   in {
-    # 119. Both ids keep their own package: a fixed vendor switch drops the new id.
+    # 119. A fixed vendor switch drops the second owner's id or substitutes Claude for it.
     "a second owner registers a selectable fill" =
-      builtins.all (readers:
-        builtins.attrNames readers
-        == ["claude" "sample"]
-        && exe readers.sample == lib.getExe fill
-        && readers.sample.endpoint == "https://owner.example"
-        && readers.sample.transports == ["cpa"]
-        && exe readers.claude == lib.getExe shipped
-        && readers.claude.endpoint == "https://api.anthropic.com"
-        && readers.claude.transports == ["direct" "cpa"])
-      [
-        (registered' [(owner "sample")])
-        (merged [usageModule (owner "sample")] {})
-      ];
-    # 120. Two owners default one id: letting the last owner win evaluates here.
-    # Only the package differs. Force its executable without forcing a whole derivation.
+      builtins.attrNames readers
+      == ["claude" "sample"]
+      && exe readers.sample == lib.getExe fill
+      && readers.sample.endpoint == "https://owner.example"
+      && readers.sample.transports == ["cpa"]
+      && exe readers.claude == lib.getExe (shipped {})
+      && readers.claude.endpoint == "https://api.anthropic.com"
+      && readers.claude.transports == ["direct" "cpa"];
+    # 120. Letting the last owner win would resolve the conflicting package.
     "two concrete fills for one id fail evaluation" =
-      builtins.all (readers: !(builtins.tryEval (exe readers.claude)).success)
-      [
-        (registered' [conflict])
-        (merged [usageModule conflict] {})
-      ];
-    # 121. An explicit selection wins and the shipped command is the same everywhere:
-    # a constructor that ignores the selection returns the shipped command instead.
-    "standalone, Home Manager and devenv resolve the same selected reader" =
-      exe (registered' [selection]).claude
+      !(builtins.tryEval (exe (resolve [conflict] {}).claude)).success;
+    # 121. Ignoring the explicit package returns the shipped command instead.
+    "explicit package selection wins" =
+      exe (resolve [] selection).claude
       == lib.getExe fill
-      && exe (merged [usageModule] selection.ai.credentialUsage.readers).claude == lib.getExe fill
-      && exe (registered' []).claude == lib.getExe shipped
-      && exe (merged [usageModule] {}).claude == lib.getExe shipped;
-    # All constructors select the command executed by the transport check below.
-    "the registered binding selects the same executable" =
-      exe (registered' [binding]).claude == exe selected && exe selected != lib.getExe shipped;
+      && exe (resolve [] {}).claude == lib.getExe (shipped {});
+    # 121, 123. Selecting a different command for the same binding drops its policy.
+    # Compare each constructor with the owner's bound command, also exercised on the wire.
+    "the registered binding selects the configured command" =
+      exe (resolve [] {claude = {inherit cpa;};}).claude
+      == lib.getExe (shipped {inherit cpa;})
+      && exe selected != lib.getExe (shipped {})
+      && directReader.direct == direct
+      && exe directReader == lib.getExe (shipped {inherit direct;})
+      && exe directReader != lib.getExe (shipped {});
   };
-  failures = backend: lib.attrNames (lib.filterAttrs (_: passed: !passed) (cases backend));
+  failures = backend: lib.attrNames (lib.filterAttrs (_: passed: !passed) (cases constructors.${backend}));
   # Independent evaluations name the backend and each failed case.
   checks = lib.mapAttrs (backend: _:
     harness.mkTest "credential-usage-registration-${backend}" (
       lib.assertMsg (failures backend == []) "${backend}: ${lib.concatStringsSep "; " (failures backend)}"
     ))
-  backends;
+  constructors;
 in {
   checks.credential-usage-registration = pkgs.runCommand "credential-usage-registration" {nativeBuildInputs = [claude python];} ''
     set -euETo pipefail

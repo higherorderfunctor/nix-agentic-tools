@@ -4,7 +4,13 @@
   python-stack,
   claude ? pkgs.ai.claude-code,
   cpa ? null,
+  direct ? null,
 }: let
+  publicPolicy = binding:
+    builtins.intersectAttrs {
+      retries = null;
+      timeout = null;
+    } (binding.policy or {});
   moduleArgs = {inherit pkgs python-stack;};
   claudeModule = (import ./default.nix).ai.claude-code.pythonModule moduleArgs;
   cpaModule = (import ../../cliproxyapi/lib/default.nix {inherit (pkgs) lib;}).ai.cliproxyapi.pythonModule moduleArgs;
@@ -19,11 +25,11 @@ in
         export CLAUDE_USAGE_CPA_BINDING=${pkgs.lib.escapeShellArg (builtins.toJSON {
           inherit (cpa) endpoint managementKeyFile;
           pin = cpa.pin or null;
-          policy = builtins.intersectAttrs {
-            retries = null;
-            timeout = null;
-          } (cpa.policy or {});
+          policy = publicPolicy cpa;
         })}
+      ''
+      + pkgs.lib.optionalString (direct != null) ''
+        export CLAUDE_USAGE_DIRECT_POLICY=${pkgs.lib.escapeShellArg (builtins.toJSON (publicPolicy direct))}
       ''
       + ''exec ${python}/bin/python3 -I -m claude_code.usage.cli "$@"'';
   }

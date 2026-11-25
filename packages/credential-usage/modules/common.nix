@@ -1,7 +1,20 @@
 # Declares `ai.credentialUsage.readers.<id>`, the registry that fill owners
 # contribute their Readers to. Home Manager and devenv import this file, and
 # `lib/readers.nix` evaluates it for callers that build outside a module tree.
-{lib, ...}: {
+{lib, ...}: let
+  policy = {
+    retries = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 0;
+      description = "Network retries per HTTP request.";
+    };
+    timeout = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 75;
+      description = "HTTP timeout per request in seconds.";
+    };
+  };
+in {
   options.ai.credentialUsage.readers = lib.mkOption {
     type = lib.types.attrsOf (lib.types.submodule {
       options = {
@@ -23,20 +36,14 @@
                 default = null;
                 description = "CPA auth index to select from the Reader's eligible accounts.";
               };
-              policy = {
-                retries = lib.mkOption {
-                  type = lib.types.ints.unsigned;
-                  default = 0;
-                  description = "Network retries per management request.";
-                };
-                timeout = lib.mkOption {
-                  type = lib.types.numbers.positive;
-                  default = 75;
-                  description = "HTTP timeout per management request in seconds.";
-                };
-              };
+              inherit policy;
             };
           });
+        };
+        direct = lib.mkOption {
+          default = null;
+          description = "HTTP policy for requests using the Reader's local credential.";
+          type = lib.types.nullOr (lib.types.submodule {options = {inherit policy;};});
         };
         package = lib.mkOption {
           type = lib.types.package;

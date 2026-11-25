@@ -42,7 +42,6 @@ NOSYSTEM
 NPROCESSORS
 nullish
 omitempty
-pydantic
 ONLN
 OPENROUTER
 osascript
@@ -51,6 +50,7 @@ Patchelf
 pluginhost
 pnpmfile
 preexec
+pydantic
 PYTHONDONTWRITEBYTECODE
 qll
 setitimer

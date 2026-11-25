@@ -10,7 +10,7 @@
   aiPkgs = pkgs // {ai = config.ai.internal.packages;};
   reader = (import ../lib/default.nix).ai.claude-code.usageReader {
     pkgs = aiPkgs;
-    inherit (config.ai.credentialUsage.readers.claude) cpa;
+    inherit (config.ai.credentialUsage.readers.claude) cpa direct;
     inherit (aiPkgs.ai.generic) python-stack;
     # The Reader reads the version of the `claude` already on PATH, as the
     # Codex helper reads `codex`. Bundling this flake's CLI would put an unfree

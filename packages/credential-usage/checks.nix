@@ -1,9 +1,10 @@
 # Exercise the installed Reader module against public envelopes and process captures.
-# Schema equality and model validation of the documented bytes use the same contract.
+# Validate the published schema independently against the example and each successful golden.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
   credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
-  usagePython = python-stack.withPackages (ps: [ps.pydantic ps.urllib3 credentialUsageModule]);
+  usagePackages = ps: [ps.pydantic ps.urllib3 credentialUsageModule];
+  usagePython = python-stack.withPackages usagePackages;
   synthetic = (import ./lib/default.nix).ai.credential-usage.conformanceCheck {
     inherit pkgs python-stack;
     name = "credential-usage-conformance";
@@ -21,7 +22,7 @@ in {
       buildCommand =
         old.buildCommand
         + ''
-          python3 -I -B ${./checks/conformance}/test_conformance.py -v
+          python3 -I -B ${./checks/conformance}/test_conformance.py -v SuiteTests
         '';
     });
     credential-usage-contract =
@@ -40,13 +41,14 @@ in {
     '';
     credential-usage-schema =
       pkgs.runCommand "credential-usage-schema" {
-        nativeBuildInputs = [pkgs.biome usagePython];
+        nativeBuildInputs = [pkgs.biome (python-stack.withPackages (ps: usagePackages ps ++ [ps.jsonschema]))];
         USAGE_DOC = ./docs/credential-usage.md;
       } ''
         ${strict}
         python3 -I -B ${./checks/schema/generate_schema.py} > schema.json
         diff -u ${./schema/usage-envelope.schema.json} schema.json
-        python3 -I -B ${./checks/contract}/test_envelope.py TestEnvelope.test_requires_supported_schema_version
+        python3 -I -B ${./checks}/schema/validate_schema.py ${./schema/usage-envelope.schema.json} \
+          ${(import ../claude-code/lib/default.nix).ai.claude-code.usagePair} ${./checks/conformance/synthetic/cases}
         touch "$out"
       '';
     credential-usage-types = pkgs.runCommand "credential-usage-types" {nativeBuildInputs = [pkgs.pyright synthetic.python];} ''

@@ -56,14 +56,20 @@ class Expected(BaseModel):
     offsetFraction: str
 
 
+def documented_example() -> str:
+    """Read the single JSON example in the public usage envelope section."""
+    section = DOC.read_text().split("## The usage envelope\n", 1)[1].split("\n## ", 1)[0]
+    [example] = re.findall(r"^```json\n(.*?)\n```$", section, re.M | re.S)
+    return example
+
+
 class TestEnvelope(unittest.TestCase):
     """Run each named decision on literal changes to the documented envelope."""
 
     @classmethod
     def setUpClass(cls) -> None:
         """Load the published example and both case files once for this suite."""
-        section = DOC.read_text().split("## The usage envelope\n", 1)[1].split("\n## ", 1)[0]
-        [cls.example] = re.findall(r"^```json\n(.*?)\n```$", section, re.M | re.S)
+        cls.example = documented_example()
         cls.cases = TypeAdapter(dict[str, dict[str, Case]]).validate_json((CASES / "input.json").read_bytes())
         cls.expected = Expected.model_validate_json((CASES / "expected.json").read_bytes())
 
@@ -86,7 +92,7 @@ class TestEnvelope(unittest.TestCase):
     def test_requires_one_json_document(self) -> None:
         """1–2. Reject malformed JSON and trailing accounts instead of returning a first result."""
         self.check_cases("document")
-        with self.assertRaises(ValidationError):
+        with self.subTest(case="truncated"), self.assertRaises(ValidationError):
             Envelope.model_validate_json(self.example.rstrip().removesuffix("}"))
 
     def test_requires_supported_schema_version(self) -> None:

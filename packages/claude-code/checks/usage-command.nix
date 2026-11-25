@@ -16,7 +16,7 @@
   # Install the replay at startup, leaving the production origin and command intact.
   offline = python-stack.pkgs.toPythonModule (
     pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.pth" ''
-      import runpy; runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](0, 75)
+      import runpy; runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](2, 0.375)
     ''
   );
   offlineStack =
@@ -28,6 +28,10 @@
     inherit pkgs;
     python-stack = offlineStack;
     claude = pkgs.emptyDirectory;
+    direct.policy = {
+      retries = 2;
+      timeout = 0.375;
+    };
   };
 in {
   checks.claude-code-usage-command =

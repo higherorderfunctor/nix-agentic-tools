@@ -9,11 +9,11 @@ import subprocess
 import sys
 from typing import Annotated, NamedTuple
 
-from pydantic import Field, HttpUrl, SecretStr, ValidationError
+from pydantic import Field, HttpUrl, Json, SecretStr, ValidationError
 
 from cliproxyapi.usage.transport import CpaBinding, UnknownBinding
 from credential_usage.envelope import Account, Binding
-from credential_usage.transport import DirectHttp, FrozenModel, RequestFailure, Transport
+from credential_usage.transport import DirectHttp, FrozenModel, HttpPolicy, RequestFailure, Transport
 
 from .claude import VENDOR, read_usage
 
@@ -22,6 +22,7 @@ class Settings(FrozenModel):
     """Read just the environment variables that locate a Claude or CPA credential."""
 
     CLAUDE_USAGE_CPA_BINDING: str | None = None
+    CLAUDE_USAGE_DIRECT_POLICY: Json[HttpPolicy] = HttpPolicy()
     HOME: str | None = None
     CLAUDE_CONFIG_DIR: str | None = None
     DELEGATE_USAGE_CPA_CLAUDE_URL: str | None = None
@@ -61,7 +62,8 @@ def direct_account(settings: Settings) -> BoundAccount:
     except (OSError, ValueError):
         raise RequestFailure("claude credentials unavailable") from None
     return BoundAccount(
-        DirectHttp(VENDOR, login.claudeAiOauth.accessToken), Binding(transport="direct", endpoint=VENDOR),
+        DirectHttp(VENDOR, login.claudeAiOauth.accessToken, settings.CLAUDE_USAGE_DIRECT_POLICY),
+        Binding(transport="direct", endpoint=VENDOR),
         Account(auth_index=None, name=None, plan=None),
     )
 

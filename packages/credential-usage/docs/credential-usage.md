@@ -147,7 +147,10 @@ ai.credentialUsage.readers.claude.cpa = {
 The command carries the filename and opens the key file at runtime. The
 generated skill references the command. Set `pin` to select an eligible CPA auth
 index. When the `cpa` setting is unset, the Reader chooses from the current CPA
-environment or local Claude configuration.
+environment or local Claude configuration. Set
+`ai.credentialUsage.readers.claude.direct.policy` to configure the timeout and
+retry count for local OAuth requests to `https://api.anthropic.com`. Both
+policies default to a 75-second timeout and zero retries.
 
 To select another Reader, define the leaf at ordinary priority:
 
@@ -236,7 +239,8 @@ suite checks all direct requests with its fake transport.
 
 `credential-usage-conformance` exercises the suite against working and broken
 Readers. `credential-usage-contract` checks envelope decisions.
-`credential-usage-schema` checks the published schema and example.
+`credential-usage-schema` validates the documented example and successful Claude
+and synthetic fixtures against the published schema.
 `credential-usage-registration` checks that Home Manager, devenv and standalone
 construction resolve the same Reader, that a second owner can register one and
 that two owners of one id fail evaluation. `credential-usage-runner` checks
