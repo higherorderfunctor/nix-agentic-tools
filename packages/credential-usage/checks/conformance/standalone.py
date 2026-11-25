@@ -5,8 +5,7 @@ Owner checks call `main` with a pair directory and a packaged command. Each CPA
 case gets a local HTTP server that answers the scenario's requests. An owner
 can also provide a build of the command that forbids sockets to check direct
 preflight cases. The same pair checks all direct requests in the imported suite.
-A failed comparison prints the case, then the whole expected and observed objects, each private member replaced
-under the display contract the suite's module docstring states.
+A failed comparison prints the case, then the whole expected and observed objects.
 """
 
 from collections.abc import Sequence
@@ -27,8 +26,8 @@ from pydantic import JsonValue, TypeAdapter, ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from suite import (
-    Case, Difference, Document, IncompletePair, Inputs, Pair, PublicOutput, Reply, Request, ScriptedNetwork, case_environment, diff_of,
-    public_result, redaction, result_difference, same_json,
+    Case, Difference, Document, IncompletePair, Inputs, Pair, Reply, Request, ScriptedNetwork, case_environment, conceal, diff_of,
+    hidden_text, public_result, same_json,
 )
 
 WireRequest = tuple[str, str, dict[str, str], bytes]
@@ -103,8 +102,9 @@ def installed_differences(inputs: Inputs, case: Case, command: str) -> list[Diff
     errors: list[Difference] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     credentials = inputs.credentials | case.scenario.credentials
-    redactor = redaction(credentials, replies)
-    network = ScriptedNetwork(inputs.now, replies, redactor.credential_text)
+    masks, private = hidden_text(credentials, replies)
+    network = ScriptedNetwork(inputs.now, replies, masks)
+    redact = conceal(masks | dict.fromkeys(private, "[private]"))
     server = ReplayServer(replies)
     thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
@@ -134,31 +134,30 @@ def installed_differences(inputs: Inputs, case: Case, command: str) -> list[Diff
         method, target, headers, raw = request
         payload: JsonValue = None
         if raw:
-            text = network.credential_text(raw.decode(errors="replace"))
+            text = network.mask(raw.decode(errors="replace"))
             try:
                 payload = TypeAdapter(JsonValue).validate_json(text)
             except ValidationError:
                 payload = text
         return Request(
-            method=network.credential_text(method), url=network.credential_text(fixture + target),
-            headers={network.credential_text(k): network.credential_text(v) for k, v in reader_headers(headers).items()}, body=payload,
+            method=network.mask(method), url=network.mask(fixture + target),
+            headers={network.mask(k): network.mask(v) for k, v in reader_headers(headers).items()}, body=payload,
         )
 
-    if any(secret in stream for stream in (out, err) for secret in redactor.spellings):
+    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
         errors.append(Difference(f"{case.name}: leak"))
     if len(server.received) != len(replies):
         errors.append(Difference(f"{case.name}: extra request" if len(server.received) > len(replies) else f"{case.name}: missing request"))
     expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
     trace: JsonValue = [request.model_dump() for request in map(wire, server.received)]
     if not same_json(trace, expected_trace):
-        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redactor)))
+        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
     expected = dict(case.expected.result)
     if "observedAt" in expected:
         expected["observedAt"] = OBSERVED_AT
-    output = public_result(status, out.replace(server.origin, fixture), err)
-    result = result_difference(case.name, expected, PublicOutput(stamped(output.accepted, started, finished), output.printed), redactor)
-    if result is not None:
-        errors.append(result)
+    observed = stamped(public_result(status, out.replace(server.origin, fixture), err), started, finished)
+    if not same_json(observed, expected):
+        errors.append(Difference(f"{case.name}: result", diff_of(expected, observed, redact)))
     return errors
 
 
