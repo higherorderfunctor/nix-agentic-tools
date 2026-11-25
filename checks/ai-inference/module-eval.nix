@@ -293,6 +293,9 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
+        inheritedContext = evaluate backend (instanceChange {
+          credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = 200000;
+        });
         paidModels = [
           {
             name = "gpt-6.2-astra";
@@ -453,6 +456,19 @@ in {
                 models = ["gpt-6.2-sol" "gpt-6.2-astra"];
               }
             ];
+          "only Responses annotates inherited models with configured context lengths" =
+            failedMessages inheritedContext
+            == []
+            && (lib.head (rendered inheritedContext).api-keys.codex).models
+            == [
+              {
+                name = "glm-5.3";
+                max-context-length = 200000;
+              }
+              {name = "glm-5.3-flash";}
+            ]
+            && (lib.head (rendered inheritedContext).api-keys.claude).models
+            == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
           "Responses context lengths must be positive integers" = lib.all (length:
             rejectsType (instanceChange {
               credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = length;

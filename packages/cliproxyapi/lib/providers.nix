@@ -162,7 +162,7 @@
 
   # Check Responses metadata when the credential option is read, while its
   # effective list still includes models the instance will exclude by maker.
-  validateResponseModels = provider: let
+  refuseUnlistedContextLengths = provider: let
     lengths = provider.apis.responses.modelContextLengths or {};
     unknown = lib.subtractLists (lib.defaultTo [] (modelsOf provider "responses")) (builtins.attrNames lengths);
   in
@@ -289,7 +289,7 @@
     options = {
       apiKey = mkOption {
         type = types.nullOr apiKeyType;
-        apply = validateResponseModels;
+        apply = refuseUnlistedContextLengths;
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };
