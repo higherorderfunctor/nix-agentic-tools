@@ -101,16 +101,8 @@ def stamped(document: Document | None, started: datetime, finished: datetime) ->
 
 
 def install_direct_replay(retries: int, timeout: float) -> None:
-    """The check-only interpreter installs its socket guard and the script for one run."""
-    def reject_socket(event: str, _: object) -> None:
-        if event in {"socket.connect", "socket.getaddrinfo", "socket.sendmsg", "socket.sendto"}:
-            os._exit(97)
-
-    sys.addaudithook(reject_socket)
-    directory = os.environ.get("USAGE_DIRECT_REPLAY")
-    if directory is None:
-        return
-    root = Path(directory)
+    """Install one fixture script after the check-only interpreter has guarded sockets."""
+    root = Path(os.environ["USAGE_DIRECT_REPLAY"])
     replies, masks = json.loads((root / "replay.json").read_text())
     network = ScriptedNetwork(datetime.now(UTC), [Reply(*reply) for reply in replies], masks)
 

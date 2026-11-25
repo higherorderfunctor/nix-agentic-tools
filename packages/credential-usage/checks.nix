@@ -41,10 +41,11 @@ in {
     '';
     credential-usage-schema =
       pkgs.runCommand "credential-usage-schema" {
-        nativeBuildInputs = [pkgs.biome (python-stack.withPackages (ps: usagePackages ps ++ [ps.jsonschema]))];
+        nativeBuildInputs = [pkgs.biome pkgs.pyright (python-stack.withPackages (ps: usagePackages ps ++ [ps.jsonschema]))];
         USAGE_DOC = ./docs/credential-usage.md;
       } ''
         ${strict}
+        pyright --project ${./checks}/schema --pythonpath "$(command -v python3)"
         python3 -I -B ${./checks/schema/generate_schema.py} > schema.json
         diff -u ${./schema/usage-envelope.schema.json} schema.json
         python3 -I -B ${./checks}/schema/validate_schema.py ${./schema/usage-envelope.schema.json} \

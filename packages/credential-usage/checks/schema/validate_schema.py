@@ -1,10 +1,13 @@
+# pyright: strict
 """Validate the documented bytes and the fill authors' literal public results against the shipped schema."""
 
 import json
 from pathlib import Path
 import sys
+from typing import cast
 
 from jsonschema import Draft202012Validator
+from jsonschema.protocols import Validator
 
 CHECKS = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(CHECKS / "contract"), str(CHECKS / "conformance")]
@@ -17,7 +20,7 @@ def main(schema: Path, pairs: list[Path]) -> None:
     """Behavior 3. Detect a published schema that rejects a valid example or golden result."""
     published = json.loads(schema.read_bytes())
     Draft202012Validator.check_schema(published)
-    validator = Draft202012Validator(published, format_checker=Draft202012Validator.FORMAT_CHECKER)
+    validator = cast(Validator, Draft202012Validator(published, format_checker=Draft202012Validator.FORMAT_CHECKER))
     validator.validate(json.loads(documented_example()))
     for directory in pairs:
         results = {

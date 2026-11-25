@@ -181,16 +181,21 @@ each case's complete scenario and expectation with one merge rule, which the
 module docstring of `checks/conformance/suite.py` states.
 
 `input.json` also supplies a description, the supported transports, a UTC start
-time (`now` ending in `Z`), named HTTP replies (status and literal body text),
-credential file contents and Bash program bodies in `executables`. A full
-scenario supplies `env` and an ordered list of reply names on each transport.
-Use `${credentials:name}` for a private file path and `${bin}` for the program
-directory. Use `${credentialsDir}` for the directory containing credential
-files, including dotfiles such as `.credentials.json`. A scenario can add or
-replace a file for one transport by supplying its own `credentials` map.
-Credential names can include subdirectories, such as
-`.claude/.credentials.json`, and each path must be relative and free of `.` and
-`..` components. `PATH` starts with the program directory.
+time (`now` ending in `Z`), named HTTP replies, credential file contents and
+Bash program bodies in `executables`. A full scenario supplies `env` and an
+ordered list of reply names on each transport. Use `${credentials:name}` for a
+private file path and `${bin}` for the program directory. Use
+`${credentialsDir}` for the directory containing credential files, including
+dotfiles such as `.credentials.json`. A scenario can add or replace a file for
+one transport by supplying its own `credentials` map. Credential names can
+include subdirectories, such as `.claude/.credentials.json`, and each path must
+be relative and free of `.` and `..` components. `PATH` starts with the program
+directory.
+
+Each HTTP reply has a status and can set its own privacy flag. The body is
+literal text or a CPA wrapper such as
+`{"status_code":200,"body_from":"primary"}`, where `primary` names a reply with
+literal body text.
 
 In `expected.json`, write each full case's complete `requests` and `result` by
 hand. Include the method, URL, headers and body for each HTTP call. Write JSON
@@ -218,11 +223,11 @@ testing, set `READER_PAIR` and `READER_ENTRY` and collect
 `test_conformance.py::GoldenCases` with pytest. Each scenario and transport has
 its own selectable test.
 
-`python3 standalone.py <pair> <command>` runs the installed executable instead
-of an imported entry. Each CPA case gets a local HTTP server that answers with
-the scenario's replies in order and records every request. The driver compares
-the recorded requests and the printed result with the pair, as the imported run
-does, with three differences a real socket needs:
+`python3 standalone.py <pair> <CPA command> [<offline direct command>]` runs the
+installed executable instead of an imported entry. Each CPA case gets a local
+HTTP server that answers with the scenario's replies in order and records every
+request. The driver compares the recorded requests and the printed result with
+the pair, as the imported run does, with three differences a real socket needs:
 
 - It repoints the scenario's proxy origin to the server and restores the
   fixture's origin before comparing.
@@ -231,9 +236,10 @@ does, with three differences a real socket needs:
 - It accepts `observedAt` as any UTC instant inside the run, because the
   subprocess reads the real clock.
 
-Claude's command check also supplies an offline build of the command. The driver
-uses it for direct preflight cases that should send no requests. The imported
-suite checks all direct requests with its fake transport.
+Claude's command check supplies an offline build for all direct cases. It
+replays the same replies at the HTTP client boundary and refuses socket calls.
+Direct requests keep the vendor origin, and both installed commands use the
+subprocess clock.
 
 ## Checks
 

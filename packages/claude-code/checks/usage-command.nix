@@ -13,10 +13,18 @@
     ps.urllib3
     (credentialUsage.pythonModule {inherit pkgs python-stack;})
   ]);
-  # Install the replay at startup, leaving the production origin and command intact.
+  # Install the socket guard even in a probe interpreter without replay dependencies.
+  guard = pkgs.writeText "reader-offline.py" ''
+    import os
+    import sys
+    def reject_socket(event, _):
+        if event in {"socket.connect", "socket.getaddrinfo", "socket.sendmsg", "socket.sendto"}:
+            os._exit(97)
+    sys.addaudithook(reject_socket)
+  '';
   offline = python-stack.pkgs.toPythonModule (
     pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.pth" ''
-      import runpy; runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](2, 0.375)
+      import os, runpy; runpy.run_path("${guard}"); os.getenv("USAGE_DIRECT_REPLAY") and runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](2, 0.375)
     ''
   );
   offlineStack =
