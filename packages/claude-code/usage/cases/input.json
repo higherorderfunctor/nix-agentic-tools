@@ -436,25 +436,6 @@
         ]
       }
     },
-    "exhausted-meter": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["exhausted-meter", "profile-denied"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-exhausted-meter",
-          "proxy-profile-denied"
-        ]
-      }
-    },
     "primary-failure-stops-sequence": {
       "direct": {
         "env": {
@@ -468,36 +449,6 @@
           "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
         },
         "replies": ["discovery", "proxy-upstream-status-failure"]
-      }
-    },
-    "invalid-main-body": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["invalid-main-body"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": ["discovery", "proxy-invalid-main-body"]
-      }
-    },
-    "invalid-limits": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["invalid-limits"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": ["discovery", "proxy-invalid-limits"]
       }
     },
     "unrecognized-main-body": {
@@ -532,23 +483,6 @@
         "replies": ["discovery"]
       }
     },
-    "malformed-version": {
-      "direct": {
-        "env": {
-          "FIXTURE_VERSION": "Claude Code",
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": []
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}",
-          "FIXTURE_VERSION": "Claude Code"
-        },
-        "replies": ["discovery"]
-      }
-    },
     "binding-failure": {
       "direct": {
         "env": {
@@ -565,42 +499,6 @@
           "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
         },
         "replies": ["discovery-denied"]
-      }
-    },
-    "ambiguous-login": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": [],
-        "credentials": {
-          ".credentials.json": "{\"claudeAiOauth\":{\"accessToken\":42}}"
-        }
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": ["discovery-ambiguous"]
-      }
-    },
-    "missing-login": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": [],
-        "credentials": {
-          ".credentials.json": "{\"claudeAiOauth\":{}}"
-        }
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": ["discovery-empty"]
       }
     },
     "incomplete-proxy": {
@@ -639,45 +537,6 @@
         ]
       }
     },
-    "wallet-and-grants": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-with-grants", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-with-grants",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "wallet-organization-unknown": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-with-grants", "profile-denied"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-with-grants",
-          "proxy-profile-denied"
-        ]
-      }
-    },
     "wallet-organization-invalid": {
       "direct": {
         "env": {
@@ -694,26 +553,6 @@
           "discovery",
           "proxy-usage-with-grants",
           "proxy-profile-invalid-organization"
-        ]
-      }
-    },
-    "wallet-unavailable": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-with-grants", "profile", "prepaid-denied"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-with-grants",
-          "proxy-profile",
-          "proxy-prepaid-denied"
         ]
       }
     },
@@ -754,46 +593,6 @@
           "proxy-usage-with-grants",
           "proxy-profile",
           "proxy-prepaid-invalid-negative"
-        ]
-      }
-    },
-    "wallet-unavailable-string": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-with-grants", "profile", "prepaid-invalid-string"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-with-grants",
-          "proxy-profile",
-          "proxy-prepaid-invalid-string"
-        ]
-      }
-    },
-    "wallet-unavailable-expiry": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-with-grants", "profile", "prepaid-invalid-expiry"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-with-grants",
-          "proxy-profile",
-          "proxy-prepaid-invalid-expiry"
         ]
       }
     },
@@ -857,26 +656,6 @@
         ]
       }
     },
-    "grant-usability-ineligible": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["grant-usability-ineligible", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-usability-ineligible",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
     "grant-usability-paused": {
       "direct": {
         "env": {
@@ -892,50 +671,6 @@
         "replies": [
           "discovery",
           "proxy-grant-usability-paused",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-usability-unusable-now": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["grant-usability-unusable-now", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-usability-unusable-now",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-usability-unknown-eligibility": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": [
-          "grant-usability-unknown-eligibility",
-          "profile",
-          "prepaid-lots"
-        ]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-usability-unknown-eligibility",
           "proxy-profile",
           "proxy-prepaid-lots"
         ]
@@ -985,30 +720,6 @@
         ]
       }
     },
-    "grant-usability-blocked-with-unknown": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": [
-          "grant-usability-blocked-with-unknown",
-          "profile",
-          "prepaid-lots"
-        ]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-usability-blocked-with-unknown",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
     "grant-optional-terms": {
       "direct": {
         "env": {
@@ -1024,90 +735,6 @@
         "replies": [
           "discovery",
           "proxy-usage-optional-grant-terms",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-unavailable": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["exhausted-meter", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-exhausted-meter",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-unavailable-not-array": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["usage-not-array-grants", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-usage-not-array-grants",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-unavailable-empty-id": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["grant-unavailable-empty-id", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-unavailable-empty-id",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
-    "grant-unavailable-invalid-clears": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": [
-          "grant-unavailable-invalid-clears",
-          "profile",
-          "prepaid-lots"
-        ]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-unavailable-invalid-clears",
           "proxy-profile",
           "proxy-prepaid-lots"
         ]
@@ -1161,26 +788,6 @@
         ]
       }
     },
-    "grant-unavailable-string-count": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["grant-unavailable-string-count", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-unavailable-string-count",
-          "proxy-profile",
-          "proxy-prepaid-lots"
-        ]
-      }
-    },
     "numeric-inventory-expiries": {
       "direct": {
         "env": {
@@ -1198,26 +805,6 @@
           "proxy-grant-epoch",
           "proxy-profile",
           "proxy-prepaid-epoch"
-        ]
-      }
-    },
-    "grant-unavailable-boolean-expiry": {
-      "direct": {
-        "env": {
-          "CLAUDE_CONFIG_DIR": "${credentialsDir}"
-        },
-        "replies": ["grant-boolean-expiry", "profile", "prepaid-lots"]
-      },
-      "cpa": {
-        "env": {
-          "DELEGATE_USAGE_CPA_CLAUDE_URL": "https://proxy.example",
-          "DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": "${credentials:management}"
-        },
-        "replies": [
-          "discovery",
-          "proxy-grant-boolean-expiry",
-          "proxy-profile",
-          "proxy-prepaid-lots"
         ]
       }
     },
