@@ -136,6 +136,7 @@ in {
     delegate-routing-plan-runtime =
       pkgs.runCommand "delegate-routing-plan-runtime" {
         nativeBuildInputs = [pkgs.bash routingTestPython];
+        CLAUDE_USAGE_PAIR = ../claude-code/usage/cases;
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

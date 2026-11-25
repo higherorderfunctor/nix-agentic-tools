@@ -25,6 +25,7 @@ from hypothesis import given, settings, strategies as st
 SOURCE = Path(sys.argv.pop(1)).resolve()
 FIXTURE = Path(sys.argv.pop(1)).resolve()
 CODEX_CACHE = Path(sys.argv.pop(1)).resolve()
+CLAUDE_USAGE_PAIR = Path(os.environ.get("CLAUDE_USAGE_PAIR", SOURCE.parent.parents[1] / "claude-code/usage/cases"))
 sys.path.insert(0, str(SOURCE.parent))
 # A checkout run imports the owner's source, here and in the child interpreters
 # this suite spawns; the Nix check imports its installed module.
@@ -1567,6 +1568,17 @@ class Routing(unittest.TestCase):
                 result, _ = self.run_plan(outputs={"reader-outside": stream({"5h": window(remaining, 18000, reset)})})
                 self.assertEqual(result["pools"]["outside"]["status"], "unmeasured")
                 self.assertEqual(result["pools"]["outside"]["windowErrors"]["5h"], "expired reset or reset beyond window duration")
+
+    def test_measures_the_versioned_reader_output(self):
+        """Behavior 4. A changed common field, such as an object in place of balances, breaks measurement."""
+        # The packaged command check verifies that the Reader prints this result.
+        expected = json.loads((CLAUDE_USAGE_PAIR / "expected.json").read_text())
+        stdout = json.dumps(expected["allowance-windows"]["cpa"]["result"])
+        result, _ = self.run_plan(outputs={"reader-outside": stdout}, now=helper.utc("2030-03-17T12:46:40.123456Z"))
+        pool = result["pools"]["outside"]
+        self.assertEqual(pool["status"], "measured")
+        self.assertEqual(pool["buffer"], 0.39)
+        self.assertEqual(pool["pace"], 0.77)
 
     def test_live_claude_scopes_preserve_pool_measurement(self):
         # Wrong: any colon makes the pool unmeasured, or scopes set pool pace/buffer.

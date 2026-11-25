@@ -1,7 +1,5 @@
 # shellcheck shell=bash
 # cspell:ignore fromdateiso noproxy todateiso
-readonly delegate_usage_claude_url='https://api.anthropic.com/api/oauth/usage'
-readonly delegate_usage_claude_beta='oauth-2025-04-20'
 readonly delegate_usage_opencode_url='https://opencode.ai/zen/go/v1/usage'
 readonly delegate_usage_zhipuai_url='https://api.z.ai/api/monitor/usage/quota/limit'
 # API-key vendors: the upstream hostname and base-URL path prefix that identify
@@ -58,31 +56,7 @@ usage_project() {
        account: {auth_index: ($account.auth_index // null),
                  name: ($account.email // $account.name // $account.auth_index // null),
                  plan: null}, windows: {}, balances: [], bonuses: []} as $base
-    | if $vendor == "claude" then
-        if has("five_hour") | not then error("claude usage") else . end
-        | . as $usage
-        | $base + {
-            windows: ([
-              {seconds: 18000, scope: null, value: .five_hour},
-              {seconds: 604800, scope: null, value: .seven_day},
-              {seconds: 604800, scope: "opus", value: .seven_day_opus},
-              {seconds: 604800, scope: "sonnet", value: .seven_day_sonnet}
-              | select(.value != null)
-              | named_window(.seconds; .scope; .value.utilization; .value.resets_at;
-                  if .seconds == 604800 and .scope == null then
-                    ([$usage.limits[]? | select(.kind == "weekly_all") | .severity][0] // null) else null end)
-            ] + [
-              .limits[]? | select(.kind == "weekly_scoped")
-              | named_window(604800; (.scope.model.display_name | ascii_downcase);
-                  .percent; .resets_at; if .is_active then "active" else "inactive" end)
-            ] | from_entries),
-            balances: [ .spend | select(. != null)
-              | {kind: "extra_usage", remaining: ((.limit.amount_minor - .used.amount_minor) / pow(10; .limit.exponent)),
-                 unit: .limit.currency, expiresAt: null}],
-            bonuses: [.promo_credits | select(type == "object") | select(.count | type == "number")
-              | {kind: "promo_credits", count: .count, expiresAt: null}]
-          }
-      elif $vendor == "codex" then
+    | if $vendor == "codex" then
         (.rate_limit // .rateLimits // error("codex usage")) as $limits
         | ($limits.credits // .credits) as $credits
         | (.rate_limit_reset_credits // .rateLimitResetCredits) as $reset
@@ -228,17 +202,14 @@ except (AttributeError, TypeError, ValueError):
 			request=$("$request_builder" <<<"$account") || usage_cpa_error 'invalid vendor request'
 		else
 			request=$(jq -cn --argjson account "$account" --arg vendor "$vendor" \
-				--arg claude_url "$delegate_usage_claude_url" --arg claude_beta "$delegate_usage_claude_beta" \
 				--arg opencode_url "$delegate_usage_opencode_url" --arg zhipuai_url "$delegate_usage_zhipuai_url" '{
       auth_index: $account.auth_index,
       method: "GET",
-      url: (if $vendor == "claude" then $claude_url
-            elif $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
+      url: (if $vendor == "codex" then "https://chatgpt.com/backend-api/wham/usage"
             elif $vendor == "opencode" then $opencode_url
             else $zhipuai_url end),
       header: ({Authorization: "Bearer $TOKEN$", "Content-Type": "application/json"} +
-        if $vendor == "claude" then {"anthropic-beta": $claude_beta}
-        elif $vendor == "zhipuai" then {"Accept-Language": "en-US,en"}
+        if $vendor == "zhipuai" then {"Accept-Language": "en-US,en"}
         elif $vendor == "opencode" then {Accept: "application/json"}
         else {"User-Agent": "codex-tui"} +
           if ($account.id_token.chatgpt_account_id // "") != ""
