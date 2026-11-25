@@ -63,7 +63,7 @@ in {
         && settings.env.ANTHROPIC_AUTH_TOKEN == "")
       (map (settingsFor eval) (builtins.attrValues keys))))
 
-    # Compare the delivered settings with the measured catalog, not the lowering's output.
+    # Expect the measured Fable value, independently of how the lowering builds the settings.
     (perBackend "family-defaults" (eval: let
       measured = import ../lib/extracted-fact.nix {inherit lib;} "latestPerFamily";
       expected.ANTHROPIC_DEFAULT_FABLE_MODEL = measured.fable;
@@ -71,7 +71,8 @@ in {
       delivered = config: familyEnv ((claudeSettings (eval (withClaude config))).env or {});
       override.ANTHROPIC_DEFAULT_FABLE_MODEL = "consumer-model";
     in
-      lib.assertMsg (delivered selected == expected) "CPA must pin measured Fable only, not Haiku, Opus or Sonnet"
+      lib.assertMsg (measured ? fable) "measured catalog has no Fable entry"
+      && lib.assertMsg (delivered selected == expected) "CPA must pin measured Fable only, not Haiku, Opus or Sonnet"
       && lib.assertMsg (delivered (lib.recursiveUpdate selected {ai.claude.native.settings.env = override;}) == override) "consumer override did not replace just the fable default"
       && lib.assertMsg (delivered {} == {}) "unselected inference set family defaults"))
 

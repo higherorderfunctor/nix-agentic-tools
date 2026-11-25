@@ -28,7 +28,7 @@
   }: let
     inherit (resolvedInference) credentials key url;
     # A pin replaces the native description and pricing with a "Custom <Family> model"
-    # row. Only Fable's native alias lags its latest model in this release.
+    # row. Only Fable's native alias lags its latest model in Claude Code 2.1.332.
     fableDefault = lib.optionalAttrs (latestPerFamily ? fable) {
       ANTHROPIC_DEFAULT_FABLE_MODEL = latestPerFamily.fable;
     };

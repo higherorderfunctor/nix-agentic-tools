@@ -57,9 +57,10 @@ a `mkDefault`, so a consumer's own value for one, such as
 
 CLIProxyAPI pins only Fable, using the latest Fable model ID in the pinned
 Claude Code bundle. If the catalog has no Fable entry, it sets no family
-default. Only Fable’s native alias lags its latest model in this release.
-Pinning Haiku, Opus or Sonnet would replace its native picker description and
-pricing with a “Custom” model row. To override just Fable, set
+default. In Claude Code 2.1.332, only Fable’s native alias lags its latest
+model. The pin replaces Fable’s native picker description and pricing with a
+“Custom Fable model” row. Haiku, Opus and Sonnet remain unpinned and keep their
+native descriptions and pricing. To override just Fable, set
 `ai.claude.native.settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL` to the model ID
 you want. Use Nix rather than a shell export: Claude Code can overwrite the
 exported value with its settings `env`. An override can change the family’s
