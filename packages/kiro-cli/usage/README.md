@@ -591,10 +591,11 @@ kiro_value_options="$(nix eval --impure --raw --expr '
 The suite uses small temporary fixtures and removes them afterward. It does not
 read real transcripts, databases, logs, captured payloads, or credentials.
 Fake-flow contracts validate the addon boundary and streaming behavior. The
-`kiro-usage-mitm-transport` Nix check also runs `pkgs.mitmproxy` against a
-loopback fake upstream, checking immediate first-byte delivery, exact compressed
-payloads and stored SQLite rows for an SSE `/v1/responses` call and an AWS
-event-stream GenerateAssistantResponse RPC call (`POST /` with its
-`x-amz-target`), including the latter's credits, context, token columns and
-stored events, and that a `POST /` with another target is not captured. Live
-Kiro and TLS interception remain untested.
+`kiro-usage-mitm-transport` Nix check also runs the same pinned
+`ai.generic.mitmproxy` as the managed service against a loopback fake upstream,
+checking immediate first-byte delivery, exact compressed payloads and stored
+SQLite rows for an SSE `/v1/responses` call and an AWS event-stream
+GenerateAssistantResponse RPC call (`POST /` with its `x-amz-target`), including
+the latter's credits, context, token columns and stored events, and that a
+`POST /` with another target is not captured. Live Kiro and TLS interception
+remain untested.
