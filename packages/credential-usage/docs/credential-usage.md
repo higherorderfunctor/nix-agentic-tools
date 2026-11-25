@@ -211,10 +211,12 @@ carries in a string, however it respells that JSON. A private number, boolean or
 key is also replaced inside other strings, such as a failure line. The object
 and the public members around a private member stay visible. When the two sides
 differ only in members the diff withholds, the report names their paths instead
-of printing an empty diff. The comparison itself uses the recorded objects, not
-the displayed copy. A JSON object that is not a valid envelope, or whose instant
-falls outside the run, still fails its case; the diff shows that object as
-printed.
+of printing an empty diff; a public member whose value equals a private one is
+withheld too. A private number is replaced whatever its decimal or exponent
+spelling. The comparison itself uses the recorded objects, not the displayed
+copy; a recorded request already carries `[credential:name]` in place of each
+credential. A JSON object that is not a valid envelope, or whose instant falls
+outside the run, still fails its case; the diff shows that object as printed.
 
 From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`
