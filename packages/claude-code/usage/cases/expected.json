@@ -528,6 +528,7 @@
       ]
     }
   },
+  "invalid-main-body": { "extends": "unrecognized-main-body" },
   "invalid-limits": { "extends": "unrecognized-main-body" },
   "malformed-version": {
     "extends": "unrecognized-main-body",
@@ -569,6 +570,27 @@
     }
   },
   "ambiguous-login": {
+    "extends": "unrecognized-main-body",
+    "direct": {
+      "requests": [],
+      "result": { "failed": "usage: claude credentials unavailable" }
+    },
+    "cpa": {
+      "requests": [
+        {
+          "method": "GET",
+          "url": "https://proxy.example/v0/management/auth-files",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer [credential:management]"
+          },
+          "body": null
+        }
+      ],
+      "result": { "failed": "usage: claude proxy requires one eligible login" }
+    }
+  },
+  "missing-login": {
     "extends": "unrecognized-main-body",
     "direct": {
       "requests": [],
@@ -1081,6 +1103,29 @@
       ]
     }
   },
+  "grant-usability-unusable-now": {
+    "extends": "grant-optional-terms",
+    "result": {
+      "bonuses": [
+        {
+          "kind": "grant",
+          "handle": "opaque/handle",
+          "remaining": 2,
+          "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+          "effect": null,
+          "eligible": true,
+          "expiresAt": "2030-03-17T17:46:40Z",
+          "funding": "promotional",
+          "givesBackWeekly": false,
+          "requiresLimit": true,
+          "scope": null,
+          "startsAt": null,
+          "usable": false,
+          "weeklyResetsAt": "2030-03-24T17:46:40Z"
+        }
+      ]
+    }
+  },
   "grant-usability-unknown-eligibility": {
     "extends": "grant-optional-terms",
     "result": {
@@ -1200,6 +1245,29 @@
           "scope": null,
           "startsAt": null,
           "usable": null,
+          "weeklyResetsAt": "2030-03-24T17:46:40Z"
+        }
+      ]
+    }
+  },
+  "grant-usability-blocked-with-unknown": {
+    "extends": "grant-optional-terms",
+    "result": {
+      "bonuses": [
+        {
+          "kind": "grant",
+          "handle": "opaque/handle",
+          "remaining": 2,
+          "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+          "effect": null,
+          "eligible": null,
+          "expiresAt": "2030-03-17T17:46:40Z",
+          "funding": "promotional",
+          "givesBackWeekly": false,
+          "requiresLimit": true,
+          "scope": null,
+          "startsAt": null,
+          "usable": false,
           "weeklyResetsAt": "2030-03-24T17:46:40Z"
         }
       ]
@@ -1411,6 +1479,15 @@
           "name": "sample@example.test"
         },
         "observedAt": "2026-11-24T12:00:04Z"
+      }
+    }
+  },
+  "grant-unavailable-not-array": {
+    "extends": "grant-optional-terms",
+    "result": {
+      "bonuses": [],
+      "slotStates": {
+        "grants": { "state": "unknown", "reason": "grants-unavailable" }
       }
     }
   },
