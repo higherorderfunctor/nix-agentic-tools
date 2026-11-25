@@ -1,0 +1,14 @@
+{
+  "alreadyBuiltCheck": "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-kiro-kas-dispatch.drv",
+  "checkDrvs": ["/nix/store/44444444444444444444444444444444-check.drv"],
+  "compilerBuilds": [
+    "/nix/store/lr95v7cva6q8zj6x3c3n9sha1nvfxm42-python3.14-mitmproxy-rs-0.12.16.drv"
+  ],
+  "downloads": [
+    "/nix/store/ssjhrnz22a40hdg2wxpzlbbi1hybqr5j-mitmproxy_macos-0.12.16-py3-none-any.whl.drv"
+  ],
+  "homeServices": "/nix/store/f4wnbls124iagnb8lmrdqv5ws1rqscwg-darwin-fixture-home-services.drv",
+  "packageDrvs": [
+    "/nix/store/11111111111111111111111111111111-native-package.drv"
+  ]
+}

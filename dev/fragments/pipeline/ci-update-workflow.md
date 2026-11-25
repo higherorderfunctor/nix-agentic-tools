@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-29 — PR CI publishes only regeneration deltas,
-> including successful owners after another owner fails; Darwin runs serially.
+> **Last verified:** 2026-11-25 — the Darwin evaluation job also checks uncached
+> fixed outputs outside the native package build graph.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -386,7 +386,28 @@ drvPath reached 2928 MiB in 161 s and failed on
 `module-glab-keyring-sync-hm-wiring`, a Linux-only assertion no CI leg had
 evaluated before. A second run reached 3064 MiB. Linux-only checks now omit
 their names on Darwin; a later leak whose evaluation fails on Darwin fails the
-drvPath step. A leak that only fails when built is not caught here.
+drvPath step. This job does not build the checks.
+
+Evaluation instantiates fixed-output derivations without checking the bytes they
+will download. The cache gate reuses the check drvPaths and adds the Darwin CI
+packages and the Home Manager and devenv consumer fixture. The fixture uses the
+same locked Home Manager source as the service-ordering fixture, without a
+producer input that downstream consumers would have to lock. The dry-run must
+list the fixture-only `home-services` root; otherwise the gate cannot trust the
+plan parser.
+
+The gate uses the CI substituters and verifies planned fixed-output builds
+outside the `ciPackages` closure and the checks already built by `kiro-patched`.
+It skips local-only derivations and the checks' own top-level derivations;
+`preferLocalBuild` alone does not exclude a fetcher. The gate disables Nix's
+fallback to a local build after a substitute download fails, so that a cache
+error cannot turn a download check into a compiler build.
+
+Uncached compiler builds can mean Hydra is still catching up: they are warnings,
+not builds. If a fetcher itself requires an uncached build outside the selected
+fixed outputs, the gate warns and does not verify its hash. Nix reports hash
+mismatches as failures; the step summary records wall time even on failure. This
+protects the repository's pin, not consumers on other nixpkgs pins or overlays.
 
 ### Name evaluation budget
 

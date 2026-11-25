@@ -1,9 +1,7 @@
 ## Linting
 
-> **Last verified:** 2026-11-06 — a rule violated twice becomes a gate; local
-> and CI cspell hooks tolerate batches excluded entirely by ignorePaths while
-> still failing spelling errors; the separate shellcheck backend retains its
-> empty-corpus guard. Full lineage:
+> **Last verified:** 2026-11-25 — the Darwin fixed-output gate has an offline
+> Linux check, not a commit hook. Full lineage:
 > `git show f7189d05:dev/fragments/monorepo/linting.md`.
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
@@ -21,6 +19,13 @@ hook without CI coverage. From that table the repo derives:
 | `checks.formatting`        | treefmt's formatter check                                      | every tracked file selected by treefmt                      | required `test` context         |
 | `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`                     | every matching tracked file                                 | required `test` context         |
 | `checks.shellcheck-corpus` | validator with the specialized corpus backend                  | every tracked extension- or shebang-identified shell script | required `test` context         |
+
+The Darwin fixed-output gate depends on live caches and Darwin derivations, so
+it runs in `checks-eval-darwin`, not as a hook. The Linux check matrix runs the
+offline `checks.darwin-cache-gate-filter` workspace check. It uses trimmed real
+Nix plan rows and derivation metadata alongside synthetic controls to verify
+that an uncached download survives the filters, compiler builds are reported but
+not run, and an unrecognized plan fails rather than passing silently.
 
 The manual stage belongs to the devenv diagnostic. It contains treefmt plus the
 code validators and therefore excludes convco, gitleaks, treefmt-restage, and
