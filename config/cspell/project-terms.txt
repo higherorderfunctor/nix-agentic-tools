@@ -283,6 +283,8 @@ installables
 ints
 ironsh
 isaacphi
+isclose
+isinstance
 iterdump
 iterm
 jandedobbeleer
@@ -370,6 +372,7 @@ multimodel
 multiset
 multisets
 multivar
+mutmut
 mystor
 napi
 narinfo

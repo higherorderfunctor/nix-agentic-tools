@@ -235,3 +235,28 @@ checkout:
 ```bash
 python3 checks/runner/test_runner.py
 ```
+
+## Mutation review
+
+From the repository root, run the manual pass on writable copies of the envelope
+and Claude fill with the pinned Python environment:
+
+```bash
+env -u HTTPS_PROXY -u HTTP_PROXY -u https_proxy -u http_proxy \
+  flock -w 600 /tmp/nat-vm-spike.lock \
+  systemd-run --user --scope -q -p CPUQuota=200% -p MemoryMax=6G \
+  nix build --max-jobs 1 --cores 2 --no-link --print-out-paths --impure --expr '
+    let
+      repo = builtins.getFlake (toString ./.);
+      pkgs = import repo.inputs.nixpkgs {
+        system = builtins.currentSystem;
+        overlays = [ repo.overlays.default ];
+      };
+    in pkgs.callPackage ./packages/credential-usage/checks/mutation.nix {}'
+```
+
+The output directory contains mutmut statuses in `generated.txt`, diffs for
+generated survivors in `surviving-diffs.txt`, and named fault outcomes with
+behavior IDs in `named.tsv`. In `matrix.tsv`, match a failed test call to a
+passing baseline call. Mutmut selects generated runs by function coverage. Every
+named fault runs the full selection.

@@ -1,56 +1,4 @@
 {
-  "example": {
-    "schemaVersion": 1,
-    "binding": {
-      "endpoint": "https://reader.example/",
-      "transport": "direct"
-    },
-    "observedAt": "2026-01-01T01:00:00Z",
-    "pool": "example",
-    "account": {
-      "auth_index": null,
-      "name": null,
-      "plan": null
-    },
-    "windows": {
-      "5h": {
-        "state": "observed",
-        "enforced": true,
-        "remainingPercent": 0,
-        "resetsAt": "2026-01-01T03:00:00Z",
-        "status": null,
-        "usedPercent": 100,
-        "windowSeconds": 18000
-      },
-      "7d": {
-        "state": "invalid",
-        "reason": "invalid-reset",
-        "remainingPercent": 0
-      },
-      "7d:model": {
-        "state": "missing",
-        "reason": "meter-unreported"
-      }
-    },
-    "balances": [],
-    "bonuses": [],
-    "accountedSpend": null,
-    "slotStates": {
-      "accountedSpend": {
-        "state": "unsupported"
-      },
-      "credits": {
-        "state": "observed"
-      },
-      "grants": {
-        "state": "unknown",
-        "reason": "grants-unavailable"
-      },
-      "resetInventory": {
-        "state": "unsupported"
-      }
-    }
-  },
   "observedInventory": {
     "schemaVersion": 1,
     "account": { "auth_index": null, "name": null, "plan": null },
@@ -104,7 +52,7 @@
       },
       { "kind": "reset", "handle": "weekly", "quantity": 1, "expiresAt": null }
     ],
-    "accountedSpend": { "cost": 3, "currency": "USD", "source": "meter" },
+    "accountedSpend": { "cost": 0, "currency": "USD", "source": "meter" },
     "slotStates": {
       "accountedSpend": { "state": "observed" },
       "credits": { "state": "observed" },

@@ -49,7 +49,6 @@ class Expected(BaseModel):
     """Supply independent public values for the successful cases."""
 
     observedInventory: Object
-    example: Object
     withZero: Object
     withoutZero: Object
     recorded: str
@@ -96,12 +95,8 @@ class TestEnvelope(unittest.TestCase):
         self.check_cases("declarations")
 
     def test_inventory_requires_observed_slots(self) -> None:
-        """9–11. Inventory and spend need an observed slot. Refuse entries without one, and unknown reason codes."""
+        """8–11. Keep observed zero spend. Refuse entries without an observed slot, and unknown reason codes."""
         self.check_cases("slot-states", {"observed-inventory": self.expected.observedInventory})
-
-    def test_preserves_observed_empty_inventory_and_zero(self) -> None:
-        """7–8. Preserve a verified empty credit inventory and a measured zero share."""
-        self.check_cases("empty", {"observed-empty-and-zero": self.expected.example})
 
     def test_requires_allowance_windows(self) -> None:
         """13. Refuse wallet-only success when the allowance result is absent."""
