@@ -162,13 +162,13 @@
 
   # Check Responses metadata when the credential option is read, while its
   # effective list still includes models the instance will exclude by maker.
-  refuseUnlistedContextLengths = provider: let
+  refuseUnlistedContextLengths = name: provider: let
     lengths = provider.apis.responses.modelContextLengths or {};
     unknown = lib.subtractLists (lib.defaultTo [] (modelsOf provider "responses")) (builtins.attrNames lengths);
   in
     if provider == null || lengths == {} || unknown == []
     then provider
-    else throw "apiKey.apis.responses.modelContextLengths names unlisted Responses models: ${lib.concatStringsSep ", " unknown}";
+    else throw "credentials.${name}.apiKey.apis.responses.modelContextLengths names unlisted Responses models: ${lib.concatStringsSep ", " unknown}";
 
   # Exact canonical ids win; scoped aliases never borrow another vendor's spelling.
   canonical = vendor: spelling: let
@@ -285,11 +285,15 @@
     kind = "apikey";
     provider = apis.${api}.provider name;
   };
-  credentialType = types.submodule ({config, ...}: {
+  credentialType = types.submodule ({
+    config,
+    name,
+    ...
+  }: {
     options = {
       apiKey = mkOption {
         type = types.nullOr apiKeyType;
-        apply = refuseUnlistedContextLengths;
+        apply = refuseUnlistedContextLengths name;
         default = null;
         description = "An API-key upstream credential declared in Nix, with its models and APIs.";
       };

@@ -63,8 +63,10 @@ name fails evaluation. An omitted entry emits a name-only row. Maker exclusions
 also remove the corresponding rows.
 
 For a Platform key backing Codex OAuth in Claude Code, use the smaller window
-supported by both routes for each shared model. Apply the CPA credential and
-Claude Code's per-model compaction settings in the same activation:
+supported by both routes for each shared model. Without `max-context-length` on
+the Platform key, CPA can advertise its 200000-token default to Claude Code
+through the shared model registry row. Apply the CPA credential and Claude
+Code's per-model compaction settings in the same activation:
 
 ```nix
 let

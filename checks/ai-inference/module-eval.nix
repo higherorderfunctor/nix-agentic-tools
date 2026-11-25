@@ -349,11 +349,12 @@ in {
         });
         paidFirst = codexOptIn [(route "paid") codexPickerRoute];
         plain = codexOptIn [(route "codex") (route "paid")];
+        expectedPickerRow = credential: model: {
+          inherit model;
+          description = "${credential} through CLIProxyAPI";
+        };
         expectedPicker = {
-          modelPicker.options = map (model: {
-            inherit model;
-            description = "codex through CLIProxyAPI";
-          }) ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
+          modelPicker.options = map (expectedPickerRow "codex") ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
         };
         codexAccountRule = {
           accounts = [(redact.file "/fixture/codex-account")];
@@ -441,7 +442,7 @@ in {
                 models = ["split-chat"];
               }
             ];
-          "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
+          "Claude user picker" = backend != "hm" || ((claudeSettings result).modelPicker.options or null) == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
           "Claude devenv picker follows routes" = backend == "hm" || launcherSettings result == {modelPicker.options = rows;};
           "Responses context windows match the upstream IDs" = (paidBlock opted).models == paidModels;
@@ -478,6 +479,9 @@ in {
               models = ["glm-5.3-flash"];
               modelContextLengths."glm-5.3" = 100;
             };
+          });
+          "inherited Responses list refuses an unlisted context length" = rejectsType (instanceChange {
+            credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-9" = 100;
           });
           "Responses without context lengths use name-only rows" =
             (lib.head settings.api-keys.codex).models == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
@@ -516,26 +520,14 @@ in {
           in
             failedMessages paidFirst
             == []
-            && settingsWithPicker.modelPicker.options
+            && (settingsWithPicker.modelPicker.options or null)
             == [
-              {
-                model = "gpt-6.2-astra";
-                description = "paid through CLIProxyAPI";
-              }
-              {
-                model = "gpt-6.2-sol";
-                description = "paid through CLIProxyAPI";
-              }
-              {
-                model = "gpt-6-luna";
-                description = "codex through CLIProxyAPI";
-              }
-              {
-                model = "gpt-6.1-terra";
-                description = "codex through CLIProxyAPI";
-              }
+              (expectedPickerRow "paid" "gpt-6.2-astra")
+              (expectedPickerRow "paid" "gpt-6.2-sol")
+              (expectedPickerRow "codex" "gpt-6-luna")
+              (expectedPickerRow "codex" "gpt-6.1-terra")
             ];
-          "OAuth picker in Claude user settings" = backend != "hm" || (claudeSettings opted).modelPicker == expectedPicker.modelPicker;
+          "OAuth picker in Claude user settings" = backend != "hm" || ((claudeSettings opted).modelPicker or null) == expectedPicker.modelPicker;
           "OAuth picker in Claude launcher settings only" = backend == "hm" || (launcherSettings opted == expectedPicker && !((claudeSettings opted) ? modelPicker));
           "picker models preserve CPA config and Codex files" = rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;
           "only Claude has the paid route" =

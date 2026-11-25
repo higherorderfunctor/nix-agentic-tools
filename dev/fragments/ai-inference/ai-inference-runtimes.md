@@ -80,9 +80,9 @@ discovery. If CPA also advertises the model under a cloaked Anthropic ID, Claude
 can show that discovery entry alongside the explicit raw id. Selecting a row
 passes validation before the server probe, so it works while the proxy is down.
 A consumer `availableModels` that omits the id, or a matching `deniedModels`,
-hides the row. Claude's handling of the unknown id once selected (context
-window, effort defaults) is not covered; `behavesAs` is the lever and the rows
-leave it unset.
+hides the row. Set `modelSettings.<id>.autoCompactWindow` in Claude Code's
+native settings to compact at the window supported by the model's routes. The
+picker rows leave `behavesAs` unset.
 
 ### Codex (`packages/chatgpt-codex/lib/inference.nix`)
 
