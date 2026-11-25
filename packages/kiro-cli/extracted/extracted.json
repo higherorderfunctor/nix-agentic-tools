@@ -525,11 +525,13 @@
     "SessionEnd",
     "SessionStart",
     "Stop",
+    "SubagentStop",
     "UserPromptSubmit"
   ],
   "rolloutFeatures": [
     "background_execution",
     "c2s",
+    "fullscreen_default",
     "infra_safety",
     "kmux",
     "kvim",
@@ -546,6 +548,12 @@
   "rolloutPatchability": {
     "background_execution": { "patchable": true, "unmatchedSites": 0 },
     "c2s": { "patchable": true, "unmatchedSites": 0 },
+    "fullscreen_default": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
     "infra_safety": { "patchable": true, "unmatchedSites": 0 },
     "kmux": { "patchable": true, "unmatchedSites": 0 },
     "kvim": { "patchable": true, "unmatchedSites": 0 },
@@ -590,6 +598,7 @@
       "segment": "internal",
       "treatment_percent": 100
     },
+    "fullscreen_default": { "channel": "nightly", "treatment_percent": 100 },
     "infra_safety": { "segment": "internal", "treatment_percent": 100 },
     "kmux": {
       "channel": "nightly",
@@ -611,7 +620,7 @@
     "memory_import": {
       "channel": "nightly",
       "segment": "internal",
-      "treatment_percent": 0
+      "treatment_percent": 100
     },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
@@ -642,6 +651,7 @@
     "chat.disableAutoCompaction",
     "chat.disableTrustAllConfirmation",
     "chat.disableWrap",
+    "chat.enableAutoBackground",
     "chat.enableC2s",
     "chat.enableCustomSpinnerVerbs",
     "chat.enableInfraSafetyEnforce",
@@ -656,6 +666,7 @@
     "chat.historyMode",
     "chat.keybindings.cancelStream",
     "chat.keybindings.closeMenu",
+    "chat.keybindings.kmuxKeys",
     "chat.keybindings.kmuxPrefix",
     "chat.keybindings.moveToBackground",
     "chat.keybindings.quit",
@@ -663,6 +674,7 @@
     "chat.keybindings.toggleSessionDashboard",
     "chat.keybindings.viewDiagram",
     "chat.kmux.hiddenSidebarPanels",
+    "chat.kmux.idleStopMinutes",
     "chat.memories.scope",
     "chat.memories.sortBy",
     "chat.memories.sortDirection",
@@ -671,6 +683,7 @@
     "chat.modelPicker.lastUsed",
     "chat.modelPicker.sortBy",
     "chat.notificationMethod",
+    "chat.notificationSound",
     "chat.outputStyle",
     "chat.preserveScrollback",
     "chat.screenReader",
@@ -708,6 +721,7 @@
     "chat.turnUsage.time",
     "chat.uiMode",
     "chat.verbosity.lite",
+    "chat.verbosity.saved",
     "chat.verbosity.tui",
     "chat.workflow.continueInterrupted",
     "chat.workflowLaunch",
