@@ -209,6 +209,22 @@ in {
         ]) ["devenv" "hm"]
     );
     module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
+      # Exercise the public renderer with the shape used before module defaults
+      # supplied modelContextLengths. Only the module checks get those defaults.
+      legacyBlocks = (import ../../packages/cliproxyapi/lib {inherit lib;}).cliproxyapi.providers.lower pkgs {
+        legacy = {
+          vendor = null;
+          apiKey = {
+            apis.responses = {
+              base-url = "https://legacy.example/v1";
+              models = ["legacy-model"];
+            };
+            key = clientKey "legacy";
+            models = null;
+            priority = null;
+          };
+        };
+      };
       problems = lib.concatMap (backend: let
         result = evaluate backend {};
         settings = rendered result;
@@ -277,26 +293,57 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
+        paidModels = [
+          {
+            name = "gpt-6.2-astra";
+            max-context-length = 272000;
+          }
+          {
+            name = "gpt-6.2-sol";
+            max-context-length = 500000;
+          }
+        ];
+        paidBlock = result: lib.findFirst (entry: entry.name == "paid") null (rendered result).api-keys.codex;
         # Both clients can reach the login. Only Claude can spill over to the paid key.
-        codexOptIn = routes:
-          evaluate backend (instanceChange {
+        codexGrants = routes:
+          instanceChange {
             credentials = {
               codex.oauth = {
                 account = redact.file "/fixture/codex-account";
                 vendor = "codex";
               };
               paid.apiKey = {
-                apis.responses.base-url = "https://api.openai.com/v1";
+                apis.responses = {
+                  base-url = "https://api.openai.com/v1";
+                  modelContextLengths = {
+                    "gpt-6.2-astra" = 272000;
+                    "gpt-6.2-sol" = 500000;
+                  };
+                  models = ["gpt-6.2-astra" "gpt-6.2-sol"];
+                };
                 key = redact.file "/fixture/openai-api-key";
-                models = ["gpt-6.2-astra" "gpt-6.2-sol"];
                 priority = -1;
               };
             };
             clientKeys.personal.routes = lib.mkForce routes;
             clientKeys.work.routes = lib.mkForce [(route "codex")];
-          });
+          };
+        codexOptIn = routes: evaluate backend (codexGrants routes);
         codexPickerRoute = (route "codex") // {pickerModels = ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];};
         opted = codexOptIn [codexPickerRoute (route "paid")];
+        filteredPaid = evaluate backend (lib.recursiveUpdate (codexGrants [(route "paid")]) {
+          catalog.models.fixture-excluded = {
+            maker = "fixture-maker";
+            source = ["Responses context fixture"];
+          };
+          cliproxyapi.instances.clients.credentials.paid = {
+            excludeMakers = ["fixture-maker"];
+            apiKey.apis.responses = {
+              models = ["fixture-excluded" "gpt-6.2-sol" "gpt-6.2-astra"];
+              modelContextLengths.fixture-excluded = 12345;
+            };
+          };
+        });
         paidFirst = codexOptIn [(route "paid") codexPickerRoute];
         plain = codexOptIn [(route "codex") (route "paid")];
         expectedPicker = {
@@ -394,6 +441,30 @@ in {
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
           "Claude devenv picker follows routes" = backend == "hm" || launcherSettings result == {modelPicker.options = rows;};
+          "Responses context windows match the upstream IDs" = (paidBlock opted).models == paidModels;
+          "maker exclusions remove annotated models before rendering and grants" =
+            failedMessages filteredPaid
+            == []
+            && (paidBlock filteredPaid).models == lib.reverseList paidModels
+            && filteredPaid.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "paid";
+                models = ["gpt-6.2-sol" "gpt-6.2-astra"];
+              }
+            ];
+          "Responses context lengths must be positive integers" = lib.all (length:
+            rejectsType (instanceChange {
+              credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = length;
+            })) [0 (-1) "272000"];
+          "Responses context lengths reject IDs outside the API override" = rejectsType (instanceChange {
+            credentials.zhipuai.apiKey.apis.responses = {
+              models = ["glm-5.3-flash"];
+              modelContextLengths."glm-5.3" = 100;
+            };
+          });
+          "Responses without context lengths use name-only rows" =
+            (lib.head settings.api-keys.codex).models == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
           "OAuth picker fixture accepted" = failedMessages opted == [] && failedMessages plain == [];
           "OAuth picker metadata stays on its selected route" =
             opted.config.ai.claude.normalized.settings.inference.credentials
@@ -625,7 +696,8 @@ in {
       in
         lib.mapAttrsToList (name: _: "${backend}: ${name}") (lib.filterAttrs (_: holds: !holds) checks)) ["devenv" "hm"];
     in
-      lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
+      lib.assertMsg ((lib.head legacyBlocks.codex).models == [{name = "legacy-model";}]) "legacy public renderer changed the name-only Responses row"
+      && lib.assertMsg (problems == []) (lib.concatStringsSep "; " problems));
 
     # The authentication key requires a redact reference at both scopes;
     # cleartext and the retired credential branches cannot enter normalization.

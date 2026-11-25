@@ -52,6 +52,52 @@ provider, `kind = "apikey"`, and exact `base-urls`.
 a different catalog per API; every served API needs one of the two, or
 evaluation fails.
 
+### Context windows for a Responses credential
+
+Set `apiKey.apis.responses.modelContextLengths` to advertise a context window in
+tokens for a listed upstream model. Use its exact name from the Responses
+`models` list (or the credential's list if Responses inherits it). An unlisted
+name fails evaluation. An omitted entry emits a name-only row. Maker exclusions
+also remove the corresponding rows.
+
+For a Platform key backing Codex OAuth in Claude Code, use the smaller window
+supported by both routes for each shared model. Apply the CPA credential and
+Claude Code's per-model compaction settings in the same activation:
+
+```nix
+let
+  gptContextWindows = {
+    "gpt-6.2-astra" = 272000;
+    "gpt-6.2-sol" = 500000;
+  };
+in {
+  ai.cliproxyapi.instances.main.credentials.personal-openai.apiKey = {
+    apis.responses = {
+      base-url = "https://api.openai.com/v1";
+      modelContextLengths = gptContextWindows;
+      models = builtins.attrNames gptContextWindows;
+    };
+    key = sopsFile "openai-api-key";
+    priority = -1;
+  };
+  ai.claude.native.settings.modelSettings =
+    lib.mapAttrs (_: window: {autoCompactWindow = window;}) gptContextWindows;
+}
+```
+
+Here `sopsFile` is the consumer's helper for a sops-nix secret reference. Grant
+`personal-openai` only to the Claude client key alongside its Codex OAuth route.
+Keep `claude-sonnet-5` in the models on the granted Anthropic key for Claude
+Code's billed auto-mode classifier, even when that model is absent from the main
+picker.
+
+At rollout, inspect both client-scoped CPA catalogs. With the normal Claude
+launcher, select each shared GPT ID, check the compaction window Claude Code
+reports for it, and record an automatic compact and a resumed tool turn. Check
+classifier verdict availability on the installed Claude Code release.
+
+### Provider URLs and routing
+
 CPA trims base URLs with Go's `strings.TrimSpace`, which Nix cannot reproduce
 for every Unicode space. Provider URLs are printable ASCII, hand-written URLs in
 their family must have printable edges, and blocks in that family cannot share
