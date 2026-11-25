@@ -203,7 +203,11 @@ nested JSON text, out of both streams. The Reader must also load silently.
 
 A failed case prints its name, `trace` or `result`, and a diff of the whole
 expected and observed objects. Private strings appear in that diff as
-`[credential:name]` or `[private]`.
+`[credential:name]` or `[private]`. So does any object or array that JSON in a
+credential file or in a private or failed reply parses to, even when a Reader
+sends it back as a request body. A JSON object that is not a valid envelope, or
+whose instant falls outside the run, still fails its case; the diff shows that
+object as printed.
 
 From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`

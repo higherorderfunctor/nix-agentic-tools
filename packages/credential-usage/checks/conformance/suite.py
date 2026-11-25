@@ -90,20 +90,20 @@ class CaseEntry(FixtureModel):
     cpa: Document = Field(default_factory=dict)
     direct: Document = Field(default_factory=dict)
 
-    def written(self, transport: TransportName) -> Document:
+    def changes_on(self, transport: TransportName) -> Document:
         """Return what the entry changes on one transport: the shared fields, then that transport's own."""
         return merged(cast(Document, self.model_extra), self.cpa if transport == "cpa" else self.direct)
 
 
-def built(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
-    """Return each entry's complete object on every transport, built from the full case it extends."""
+def expanded(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
+    """Return each entry's complete object on every transport, expanded from the full case it extends."""
     objects: dict[str, dict[TransportName, Document]] = {}
     for name, entry in entries.items():
         if entry.extends is None:
-            objects[name] = {transport: entry.written(transport) for transport in transports}
+            objects[name] = {transport: entry.changes_on(transport) for transport in transports}
     for name, entry in entries.items():
         if entry.extends is not None:
-            objects[name] = {transport: merged(objects[entry.extends][transport], entry.written(transport)) for transport in transports}
+            objects[name] = {transport: merged(objects[entry.extends][transport], entry.changes_on(transport)) for transport in transports}
     return objects
 
 
@@ -154,7 +154,7 @@ class IncompletePair(ValueError):
     """Carry only public case identifiers to the runner when a fixture cannot be replayed."""
 
 
-def described(error: ValidationError) -> str:
+def invalid_fields(error: ValidationError) -> str:
     """Name each invalid field of a built case without repeating its value."""
     return "; ".join(f"{'.'.join(map(str, part['loc']))}: {part['msg']}" for part in error.errors())
 
@@ -185,8 +185,8 @@ class Pair(NamedTuple):
             for piece in (scenario_entry, expected_entry):
                 if (piece.model_fields_set & TRANSPORTS) - declared:
                     raise IncompletePair(f"{name}: transport coverage differs")
-        scenario_objects = built(inputs.scenarios, inputs.transports)
-        expected_objects = built(expectations, inputs.transports)
+        scenario_objects = expanded(inputs.scenarios, inputs.transports)
+        expected_objects = expanded(expectations, inputs.transports)
         cases: dict[str, Case] = {}
         for name in inputs.scenarios:
             for transport in inputs.transports:
@@ -195,53 +195,109 @@ class Pair(NamedTuple):
                     scenario = Scenario.model_validate(scenario_objects[name][transport])
                     expectation = Expected.model_validate(expected_objects[name][transport])
                 except ValidationError as error:
-                    raise IncompletePair(f"{key}: {described(error)}") from None
+                    raise IncompletePair(f"{key}: {invalid_fields(error)}") from None
                 if any(reply not in inputs.replies for reply in scenario.replies):
                     raise IncompletePair(f"{key}: unknown reply")
                 cases[key] = Case(key, scenario, expectation)
         return cls(inputs, cases)
 
 
-def private_strings(content: str) -> Iterator[str]:
-    """Find literal private text and strings a Reader can extract from nested JSON."""
-    if not content:
-        return
-    yield content
-    if content.strip() and content.strip() != content:
-        yield content.strip()
+class PrivateContent(NamedTuple):
+    """What one private document keeps out of a diagnostic: its text spellings and the objects and arrays its JSON parses to."""
+
+    spellings: frozenset[str]
+    trees: tuple[JsonValue, ...]
+
+
+def private_content(text: str) -> PrivateContent:
+    """Collect the literal text, each string inside its JSON and each non-empty object or array its JSON parses to, nested JSON text included."""
+    if not text:
+        return PrivateContent(frozenset(), ())
+    spellings = {text}
+    if text.strip() and text.strip() != text:
+        spellings.add(text.strip())
     try:
-        parsed = TypeAdapter(JsonValue).validate_json(content)
+        parsed = TypeAdapter(JsonValue).validate_json(text)
     except ValidationError:
-        return
-
-    def strings(value: JsonValue) -> Iterator[str]:
-        if isinstance(value, str) and value:
-            yield from private_strings(value)
-        elif isinstance(value, dict):
-            for part in value.values():
-                yield from strings(part)
-        elif isinstance(value, list):
-            for part in value:
-                yield from strings(part)
-
-    yield from strings(parsed)
+        return PrivateContent(frozenset(spellings), ())
+    trees: list[JsonValue] = [parsed] if isinstance(parsed, dict | list) and parsed else []
+    for value in string_values(parsed):
+        deeper = private_content(value)
+        spellings |= deeper.spellings
+        trees += deeper.trees
+    return PrivateContent(frozenset(spellings), tuple(trees))
 
 
-def hidden_text(credentials: CredentialFiles, replies: Sequence[Reply]) -> tuple[dict[str, str], list[str]]:
-    """Map each credential spelling to its placeholder and list each spelling a failed reply keeps out of output."""
-    masks = {
-        spelling: f"[credential:{name}]"
-        for name, content in credentials.items()
-        for value in private_strings(content)
-        for spelling in (value, json.dumps(value)[1:-1])
-    }
-    private = [
-        spelling
-        for reply in replies if reply.private or not 200 <= reply.status < 300
-        for value in private_strings(reply.body)
-        for spelling in (value, json.dumps(value)[1:-1])
-    ]
-    return masks, private
+def string_values(value: JsonValue) -> Iterator[str]:
+    """Yield each non-empty string the JSON object or array carries as a value, at any depth."""
+    if isinstance(value, str) and value:
+        yield value
+    elif isinstance(value, dict):
+        for part in value.values():
+            yield from string_values(part)
+    elif isinstance(value, list):
+        for part in value:
+            yield from string_values(part)
+
+
+def same_json(left: JsonValue, right: JsonValue) -> bool:
+    """Compare JSON values without treating true as 1 or false as 0 in Python."""
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(same_json(value, right[key]) for key, value in left.items())
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(same_json(a, b) for a, b in zip(left, right))
+    return isinstance(left, bool) == isinstance(right, bool) and left == right
+
+
+def carries(value: JsonValue, tree: JsonValue) -> bool:
+    """Tell whether a JSON object or array holds every member of a private object or array."""
+    if isinstance(tree, dict) and isinstance(value, dict):
+        return tree.keys() <= value.keys() and all(same_json(value[key], member) for key, member in tree.items())
+    if isinstance(tree, list) and isinstance(value, list):
+        return all(any(same_json(element, member) for element in value) for member in tree)
+    return False
+
+
+class Redaction(NamedTuple):
+    """Replace what one case keeps private: each credential by its file name, each failed or private reply by `[private]`."""
+
+    credential_text: Callable[[str], str]
+    private_text: Callable[[str], str]
+    private_json: Callable[[JsonValue], JsonValue]
+    spellings: tuple[str, ...]
+
+
+def redaction(credentials: CredentialFiles, replies: Sequence[Reply]) -> Redaction:
+    """Collect from each credential file and each failed or private reply what a diagnostic must replace, and with what."""
+    credential_marks: dict[str, str] = {}
+    reply_marks: dict[str, str] = {}
+    documents = [(f"[credential:{name}]", content, credential_marks) for name, content in credentials.items()]
+    documents += [("[private]", reply.body, reply_marks) for reply in replies if reply.private or not 200 <= reply.status < 300]
+    trees: list[tuple[JsonValue, str]] = []
+    for placeholder, body, marks in documents:
+        content = private_content(body)
+        for value in content.spellings:
+            for spelling in (value, json.dumps(value)[1:-1]):
+                marks[spelling] = placeholder
+        trees += [(tree, placeholder) for tree in content.trees]
+
+    def private_json(value: JsonValue) -> JsonValue:
+        """Replace each object or array that carries a private one with its placeholder, and recurse into the others."""
+        placeholder = next((mark for tree, mark in trees if carries(value, tree)), None)
+        if placeholder is not None:
+            return placeholder
+        if isinstance(value, dict):
+            return {key: private_json(part) for key, part in value.items()}
+        if isinstance(value, list):
+            return [private_json(part) for part in value]
+        return value
+
+    return Redaction(
+        credential_text=conceal(credential_marks),
+        private_text=conceal(credential_marks | reply_marks),
+        private_json=private_json,
+        spellings=tuple(credential_marks | reply_marks),
+    )
 
 
 def conceal(values: Mapping[str, str]) -> Callable[[str], str]:
@@ -259,10 +315,10 @@ def conceal(values: Mapping[str, str]) -> Callable[[str], str]:
 class ScriptedNetwork:
     """Serve one reply per HTTP call and stamp observations with the completed call count."""
 
-    def __init__(self, start: datetime, replies: list[Reply], masks: Mapping[str, str]):
+    def __init__(self, start: datetime, replies: list[Reply], credential_text: Callable[[str], str]):
         self.start = start
         self.replies = replies
-        self.mask = conceal(masks)
+        self.credential_text = credential_text
         self.requests: list[Request] = []
 
     def clock(self) -> datetime:
@@ -276,12 +332,12 @@ class ScriptedNetwork:
         payload: JsonValue = None
         if body is not None:
             try:
-                payload = TypeAdapter(JsonValue).validate_json(self.mask(body))
+                payload = TypeAdapter(JsonValue).validate_json(self.credential_text(body))
             except ValidationError:
-                payload = self.mask(body)
+                payload = self.credential_text(body)
         self.requests.append(Request(
-            method=self.mask(method), url=self.mask(url),
-            headers={self.mask(k): self.mask(v) for k, v in (headers or {}).items()}, body=payload,
+            method=self.credential_text(method), url=self.credential_text(url),
+            headers={self.credential_text(k): self.credential_text(v) for k, v in (headers or {}).items()}, body=payload,
         ))
         if len(self.requests) > len(self.replies):
             raise AssertionError("extra request")
@@ -340,27 +396,29 @@ def captured_stream(fd: Literal[1, 2]) -> Generator[TextIO]:
             os.close(saved)
 
 
-def public_result(status: int | None, out: str, err: str) -> Document | None:
-    """Decode one successful envelope or an exact public failure line as the command's consumer."""
-    if status == 0:
-        try:
-            document = TypeAdapter(Document).validate_json(out, strict=True)
-            Envelope.model_validate(document)
-            return document
-        except ValidationError:
-            return None
-    if status is not None and not out and re.fullmatch(r"usage: [^\r\n]+\n", err):
-        return {"failed": err[:-1]}
-    return None
+class PublicOutput(NamedTuple):
+    """A command's public output: what its consumer accepts, and the JSON object it printed, a valid envelope or not."""
+
+    accepted: Document | None
+    printed: Document | None
 
 
-def same_json(left: JsonValue, right: JsonValue) -> bool:
-    """Compare JSON objects without treating true as 1 or false as 0 in Python."""
-    if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(same_json(v, right[k]) for k, v in left.items())
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(same_json(a, b) for a, b in zip(left, right))
-    return isinstance(left, bool) == isinstance(right, bool) and left == right
+def public_result(status: int | None, out: str, err: str) -> PublicOutput:
+    """Read stdout as the command's consumer does: one envelope, or one public failure line, or nothing accepted."""
+    if status != 0:
+        if status is not None and not out and re.fullmatch(r"usage: [^\r\n]+\n", err):
+            return PublicOutput({"failed": err[:-1]}, None)
+        return PublicOutput(None, None)
+    try:
+        printed = TypeAdapter(Document).validate_json(out, strict=True)
+    except ValidationError:
+        return PublicOutput(None, None)
+    try:
+        Envelope.model_validate(printed)
+    except ValidationError:
+        # An object that is not an envelope is no result for the consumer; a diff still shows what was printed.
+        return PublicOutput(None, printed)
+    return PublicOutput(printed, printed)
 
 
 class Difference(NamedTuple):
@@ -384,11 +442,21 @@ def whole_numbers(value: JsonValue) -> JsonValue:
     return value
 
 
-def diff_of(expected: JsonValue, observed: JsonValue, mask: Callable[[str], str]) -> str:
-    """Diff the complete expected and observed objects with every private string replaced."""
-    before = mask(json.dumps(whole_numbers(expected), indent=2, sort_keys=True)).splitlines()
-    after = mask(json.dumps(whole_numbers(observed), indent=2, sort_keys=True)).splitlines()
+def diff_of(expected: JsonValue, observed: JsonValue, redactor: Redaction) -> str:
+    """Diff copies of the complete expected and observed objects with every private spelling, object and array replaced; the comparison keeps the originals."""
+
+    def rendered(value: JsonValue) -> str:
+        return redactor.private_text(json.dumps(whole_numbers(redactor.private_json(value)), indent=2, sort_keys=True))
+
+    before, after = rendered(expected).splitlines(), rendered(observed).splitlines()
     return "\n".join(unified_diff(before, after, "expected", "observed", n=len(before), lineterm=""))
+
+
+def result_difference(case: str, expected: JsonValue, output: PublicOutput, redactor: Redaction) -> Difference | None:
+    """Compare a whole public result; when the consumer accepted nothing, diff the object that was printed instead."""
+    if same_json(output.accepted, expected):
+        return None
+    return Difference(f"{case}: result", diff_of(expected, output.accepted if output.accepted is not None else output.printed, redactor))
 
 
 def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
@@ -396,9 +464,8 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
     errors: list[Difference] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     credentials = inputs.credentials | case.scenario.credentials
-    masks, private = hidden_text(credentials, replies)
-    network = ScriptedNetwork(inputs.now, replies, masks)
-    redact = conceal(masks | dict.fromkeys(private, "[private]"))
+    redactor = redaction(credentials, replies)
+    network = ScriptedNetwork(inputs.now, replies, redactor.credential_text)
     with TemporaryDirectory() as tmp:
         env = case_environment(Path(tmp), inputs.executables, case.scenario.env, credentials)
         with (
@@ -426,15 +493,15 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
             stderr.seek(0)
             out, err = stdout.read(), stderr.read()
 
-    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
+    if any(secret in stream for stream in (out, err) for secret in redactor.spellings):
         errors.append(Difference(f"{case.name}: leak"))
     if len(network.requests) != len(replies):
         errors.append(Difference(f"{case.name}: extra request" if len(network.requests) > len(replies) else f"{case.name}: missing request"))
     expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
     trace: JsonValue = [request.model_dump() for request in network.requests]
     if not same_json(trace, expected_trace):
-        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
-    observed = public_result(status, out, err)
-    if not same_json(observed, case.expected.result):
-        errors.append(Difference(f"{case.name}: result", diff_of(case.expected.result, observed, redact)))
+        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redactor)))
+    result = result_difference(case.name, case.expected.result, public_result(status, out, err), redactor)
+    if result is not None:
+        errors.append(result)
     return errors
