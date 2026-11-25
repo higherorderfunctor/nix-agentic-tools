@@ -776,8 +776,8 @@ export function locate(root, ts) {
   };
 }
 
-// Find catalog aliases, family defaults, retirements and launch guards for
-// modelFacts. Parse candidate chunks without executing the CLI.
+// Catalog aliases, retirement membership and launch guards are outside the
+// settings schema. Parse only content candidates, never execute these chunks.
 export function locateModelSites(src, ts) {
   const sites = { catalog: [], pins: [], retired: [] };
   if (
@@ -798,8 +798,6 @@ export function locateModelSites(src, ts) {
       "claude-extract: PROBE failure: model facts chunk does not parse",
     );
   const literal = (n) => (n && ts.isStringLiteral(n) ? n.text : null);
-  // Map literal property names to their values for the site readers. Candidate
-  // scans ignore other forms; a named site rejects them and duplicate keys.
   const properties = (n, location) => {
     if (
       location &&
@@ -810,55 +808,13 @@ export function locateModelSites(src, ts) {
       throw new Error(
         `claude-extract: PROBE failure: ${location}: unsupported property form`,
       );
-    const fields = new Map(
+    return new Map(
       n.properties
         .filter(ts.isPropertyAssignment)
         .filter((p) => !ts.isComputedPropertyName(p.name))
         .map((p) => [p.name.text, p.initializer]),
     );
-    if (location && fields.size !== n.properties.length)
-      throw new Error(
-        `claude-extract: PROBE failure: ${location}: duplicate property`,
-      );
-    return fields;
   };
-  // For the catalog site, read family defaults beside its models array.
-  // Reject malformed maps and defaults that do not name one of its ids.
-  function latestPerFamily(models, ids) {
-    const field = models.parent;
-    const owner = field.parent;
-    if (
-      !ts.isPropertyAssignment(field) ||
-      field.name.text !== "models" ||
-      !ts.isObjectLiteralExpression(owner)
-    )
-      throw new Error(
-        "claude-extract: PROBE failure: expected catalog models property",
-      );
-    const map = properties(owner, "catalog").get("latest_per_family");
-    if (!map || !ts.isObjectLiteralExpression(map))
-      throw new Error(
-        "claude-extract: PROBE failure: expected literal latest_per_family map",
-      );
-    return Object.fromEntries(
-      Array.from(properties(map, "latest_per_family"), ([family, value]) => {
-        // In an object literal __proto__ sets the prototype, not a family.
-        if (family === "__proto__")
-          throw new Error(
-            "claude-extract: PROBE failure: latest_per_family: prototype setter",
-          );
-        if (!ts.isStringLiteral(value))
-          throw new Error(
-            `claude-extract: PROBE failure: latest_per_family: expected string for ${family}`,
-          );
-        if (!ids.includes(value.text))
-          throw new Error(
-            `claude-extract: PROBE failure: latest_per_family: ${family} names unknown catalog id ${value.text}`,
-          );
-        return [family, value.text];
-      }),
-    );
-  }
   const alias = (id) =>
     typeof id === "string" && /^claude-[a-z0-9.-]+$/.test(id);
   function walk(n) {
@@ -877,7 +833,7 @@ export function locateModelSites(src, ts) {
           );
         for (const entry of n.elements)
           properties(entry, "model catalog entry");
-        sites.catalog.push({ ids, latestPerFamily: latestPerFamily(n, ids) });
+        sites.catalog.push(ids);
       }
     }
     if (ts.isObjectLiteralExpression(n)) {
@@ -980,8 +936,6 @@ export function locateModelSites(src, ts) {
   return sites;
 }
 
-// Combine unique sites across the unpacked graph for the census; ambiguous
-// anchors must fail the release update rather than publish plausible defaults.
 export function modelFacts(root, ts) {
   const hits = { catalog: [], pins: [], retired: [] };
   for (const name of fs.readdirSync(root)) {
@@ -1005,8 +959,9 @@ export function modelFacts(root, ts) {
       );
   const retired = new Set(hits.retired[0].sites[0]);
   // Presence, not the build-time clock, removes announced retirements.
-  const { ids, latestPerFamily } = hits.catalog[0].sites[0];
-  const models = [...new Set(ids)].filter((id) => !retired.has(id)).sort();
+  const models = [...new Set(hits.catalog[0].sites[0])]
+    .filter((id) => !retired.has(id))
+    .sort();
   if (!models.length)
     throw new Error(
       "claude-extract: PROBE failure: every catalog id is marked retired (anchors disagree; refusing to emit an empty model enum)",
@@ -1021,9 +976,5 @@ export function modelFacts(root, ts) {
       throw new Error(
         `claude-extract: PROBE failure: no '${family}' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family); extracted set was: ${models.join(" ")}`,
       );
-  return {
-    latestPerFamily,
-    launchEffortPins: [...new Set(hits.pins[0].sites)].sort(),
-    models,
-  };
+  return { launchEffortPins: [...new Set(hits.pins[0].sites)].sort(), models };
 }
