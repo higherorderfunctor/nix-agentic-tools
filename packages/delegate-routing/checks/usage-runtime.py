@@ -18,20 +18,6 @@ SCRIPTS = Path(sys.argv.pop(1))
 SECRET = 'management-"quoted\\key'
 # Endpoint shapes from the investigation; all values and identities are synthetic.
 RESET = "2030-03-17T17:46:40Z"
-CLAUDE = {
-    "five_hour": {"utilization": 23, "resets_at": "2030-03-17T17:46:40.123456+00:00"},
-    "seven_day": {"utilization": 61, "resets_at": RESET},
-    "seven_day_opus": {"utilization": 12, "resets_at": RESET},
-    "seven_day_sonnet": None,
-    "limits": [
-        {"kind": "weekly_all", "percent": 61, "severity": "warning", "resets_at": RESET, "is_active": True},
-        {"kind": "weekly_scoped", "percent": 32, "resets_at": RESET,
-         "scope": {"model": {"display_name": "Fable"}}, "is_active": False},
-    ],
-    "spend": {"used": {"amount_minor": 1250, "currency": "USD", "exponent": 2},
-              "limit": {"amount_minor": 20000, "currency": "USD", "exponent": 2}},
-    "promo_credits": None,
-}
 CODEX = {
     "plan_type": "test-plan",
     "rate_limit": {"primary_window": {"used_percent": 37, "reset_at": 1900000000, "limit_window_seconds": 604800},
@@ -85,7 +71,7 @@ class UsageTests(unittest.TestCase):
         self.home = Path(self.temp.name)
         self.helpers = {}
         header = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
-        for vendor in ["claude", "codex", "opencode", "zhipuai"]:
+        for vendor in ["codex", "opencode", "zhipuai"]:
             helper = self.home / f"{vendor}-usage"
             helper.write_text(header + (SCRIPTS / "usage-cpa.sh").read_text() + "\n" + (SCRIPTS / f"{vendor}-usage.sh").read_text())
             helper.chmod(0o755)
@@ -99,7 +85,7 @@ class UsageTests(unittest.TestCase):
         self.files = [self.account("claude", "a"), self.account("codex", "b")]
         self.configs = {"claude": [], "openai-compatibility": []}
         self.requests = []
-        self.usage = copy.deepcopy({"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE, "zhipuai": ZHIPUAI})
+        self.usage = copy.deepcopy({"codex": CODEX, "opencode": OPENCODE, "zhipuai": ZHIPUAI})
         self.resets = copy.deepcopy(CODEX_RESETS)
         self.reset_failure = None
         self.management_redirect = None
@@ -154,8 +140,8 @@ class UsageTests(unittest.TestCase):
                         if owner.reset_failure == "malformed":
                             response = {}
                     else:
-                        vendor = ("cloudflare" if "api.cloudflare.com" in body["url"] else "zhipuai" if "api.z.ai" in body["url"] else "opencode" if "opencode.ai" in body["url"]
-                                  else "claude" if "anthropic.com" in body["url"] else "codex")
+                        vendor = ("cloudflare" if "api.cloudflare.com" in body["url"] else "zhipuai" if "api.z.ai" in body["url"]
+                                  else "opencode" if "opencode.ai" in body["url"] else "codex")
                         response = owner.envelope or {"status_code": 200, "body": json.dumps(owner.usage[vendor])}
                 else:
                     self.send_error(404)
@@ -215,8 +201,6 @@ class UsageTests(unittest.TestCase):
             self.assertIsInstance(window["windowSeconds"], (int, float))
             seconds = window["windowSeconds"]
             self.assertEqual(name.split(":", 1)[0], "daily" if vendor == "cloudflare" else {18000: "5h", 604800: "7d"}.get(seconds, "monthly" if 2419200 <= seconds <= 2678400 else f"{seconds}s"))
-            if vendor == "claude":
-                self.assertEqual(seconds, 18000 if name == "5h" else 604800)
             self.assertIsInstance(window["usedPercent"], (int, float))
             self.assertEqual(window["remainingPercent"], 100 - window["usedPercent"])
             self.assertTrue(window["status"] is None or isinstance(window["status"], str))
@@ -656,29 +640,22 @@ os.execv({real!r}, [{real!r}] + sys.argv[1:])
         self.files.append(self.account("codex", "c", id_token={"chatgpt_account_id": "account-c"}))
         self.files.append(dict(self.account("codex", "disabled"), disabled=True))
         self.files.append(dict(self.account("codex", "api-key"), account_type="api_key"))
-        for vendor, expected in [("claude", ["a"]), ("codex", ["b", "c"])]:
-            with self.subTest(vendor=vendor):
-                self.requests.clear()
-                result = self.run_helper(vendor)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stderr, "")
-                values = [json.loads(block) for block in result.stdout.replace("}\n{", "}\0{").split("\0")]
-                self.assertEqual([item["account"]["auth_index"] for item in values], expected)
-                for method, path, headers, body in self.requests:
-                    self.assertEqual(headers["Authorization"], f"Bearer {SECRET}")
-                    self.assertNotIn("usage-queue", path)
-                    if method == "POST":
-                        self.assertEqual(body["header"]["Authorization"], "Bearer $TOKEN$")
-                        self.assertEqual(body["method"], "GET")
-                        expected_url = "https://api.anthropic.com/api/oauth/usage" if vendor == "claude" else "https://chatgpt.com/backend-api/wham/usage"
-                        self.assertIn(body["url"], [expected_url] + (["https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"] if vendor == "codex" else []))
-                if vendor == "claude":
-                    self.assertEqual(values[0]["windows"]["5h"]["usedPercent"], 23)
-                    self.assertEqual(self.requests[1][3]["header"]["anthropic-beta"], "oauth-2025-04-20")
-                else:
-                    self.assertEqual(values[0]["windows"]["7d"]["remainingPercent"], 63)
-                    self.assertEqual(len(self.requests), 5)
-                    self.assertEqual(self.requests[-1][3]["header"]["Chatgpt-Account-Id"], "account-c")
+        self.requests.clear()
+        result = self.run_helper("codex")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        values = [json.loads(block) for block in result.stdout.replace("}\n{", "}\0{").split("\0")]
+        self.assertEqual([item["account"]["auth_index"] for item in values], ["b", "c"])
+        for method, path, headers, body in self.requests:
+            self.assertEqual(headers["Authorization"], f"Bearer {SECRET}")
+            self.assertNotIn("usage-queue", path)
+            if method == "POST":
+                self.assertEqual(body["header"]["Authorization"], "Bearer $TOKEN$")
+                self.assertEqual(body["method"], "GET")
+                self.assertIn(body["url"], ["https://chatgpt.com/backend-api/wham/usage", "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"])
+        self.assertEqual(values[0]["windows"]["7d"]["remainingPercent"], 63)
+        self.assertEqual(len(self.requests), 5)
+        self.assertEqual(self.requests[-1][3]["header"]["Chatgpt-Account-Id"], "account-c")
 
     def test_keys_never_reach_tool_arguments_or_environment(self):
         binary = self.home / "bin"
@@ -797,55 +774,6 @@ print({json.dumps(json.dumps(ZHIPUAI))})
         result = self.run_helper("zhipuai")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid vendor usage response", result.stderr)
-
-    def test_claude_windows_spend_and_optional_promo(self):
-        value = json.loads(self.run_helper("claude").stdout)
-        self.assertEqual(set(value["windows"]), {"5h", "7d", "7d:opus", "7d:fable"})
-        self.assertEqual(value["windows"]["5h"]["resetsAt"], RESET)
-        self.assertEqual(value["windows"]["7d"]["status"], "warning")
-        self.assertEqual(value["windows"]["7d:opus"]["usedPercent"], 12)
-        self.assertEqual(value["windows"]["7d:fable"]["usedPercent"], 32)
-        self.assertEqual(value["windows"]["7d:fable"]["status"], "inactive")
-        self.assertEqual(value["balances"], [{"kind": "extra_usage", "remaining": 187.5, "unit": "USD", "expiresAt": None}])
-        self.assertIsNone(value["account"]["plan"])
-        self.assertEqual(value["bonuses"], [])
-        usage = self.usage["claude"]
-        usage.update(five_hour=None, seven_day=None, seven_day_opus=None,
-                     seven_day_sonnet={"utilization": 18, "resets_at": "2030-03-17T10:46:40-07:00"}, spend=None)
-        usage["limits"][1]["is_active"] = True
-        for promo, expected in [(None, []), ([], []), ("unknown", []), (2, []), ({"unknown": 3}, []),
-                                ({"count": 4}, [{"kind": "promo_credits", "count": 4, "expiresAt": None}])]:
-            with self.subTest(promo=promo):
-                usage["promo_credits"] = promo
-                value = json.loads(self.run_helper("claude").stdout)
-                self.assertEqual(set(value["windows"]), {"7d:sonnet", "7d:fable"})
-                self.assertEqual(value["windows"]["7d:sonnet"]["resetsAt"], RESET)
-                self.assertEqual(value["windows"]["7d:fable"]["status"], "active")
-                self.assertEqual(value["balances"], [])
-                self.assertEqual(value["bonuses"], expected)
-
-    def test_direct_claude_matches_proxy(self):
-        credentials = self.home / "claude"
-        credentials.mkdir()
-        (credentials / ".credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "direct-fixture-token"}}))
-        executable = self.home / "bin/curl"
-        executable.parent.mkdir()
-        executable.write_text(f"#!{sys.executable}\n" + f'''import sys
-config = sys.stdin.read()
-assert "Authorization: Bearer direct-fixture-token" in config
-assert "--config" in sys.argv
-assert "direct-fixture-token" not in " ".join(sys.argv)
-print({json.dumps(json.dumps(CLAUDE))})
-''')
-        executable.chmod(0o755)
-        direct = self.run_helper("claude", cpa=False, CLAUDE_CONFIG_DIR=str(credentials), PATH=str(executable.parent) + os.pathsep + self.env["PATH"])
-        self.assertEqual(direct.returncode, 0, direct.stderr)
-        self.assertNotIn("direct-fixture-token", direct.stdout + direct.stderr)
-        value = json.loads(direct.stdout)
-        self.assertEqual(value["account"], {"auth_index": None, "name": None, "plan": None})
-        proxy = json.loads(self.run_helper("claude").stdout)
-        proxy["account"] = value["account"]
-        self.assertEqual(value, proxy)
 
     def test_codex_balances_and_expiring_resets_on_both_paths(self):
         self.direct_codex()
@@ -1024,11 +952,9 @@ print({json.dumps(json.dumps(OPENCODE))})
         # request headers; -q must keep curl from reading it. The refused proxy
         # keeps the real vendor URLs offline.
         (self.home / ".curlrc").write_text(f"verbose\nurl = \"{self.url}/curlrc-probe\"\n")
-        (self.home / ".claude").mkdir()
-        (self.home / ".claude/.credentials.json").write_text(json.dumps({"claudeAiOauth": {"accessToken": "direct-private-key"}}))
         self.key.write_text("direct-private-key")
         offline = {"https_proxy": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1", "CURL_HOME": str(self.home)}
-        for vendor, extra in [("claude", {}), ("opencode", {"OPENCODE_API_KEY_FILE": str(self.key)}),
+        for vendor, extra in [("opencode", {"OPENCODE_API_KEY_FILE": str(self.key)}),
                               ("zhipuai", {"ZAI_API_KEY_FILE": str(self.key)})]:
             with self.subTest(vendor=vendor):
                 self.requests.clear()
@@ -1039,10 +965,10 @@ print({json.dumps(json.dumps(OPENCODE))})
 
     def test_partial_configuration(self):
         for env in [
-            {"DELEGATE_USAGE_CPA_CLAUDE_URL": self.url},
-            {"DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE": str(self.key)},
+            {"DELEGATE_USAGE_CPA_CODEX_URL": self.url},
+            {"DELEGATE_USAGE_CPA_CODEX_MANAGEMENT_KEY_FILE": str(self.key)},
         ]:
-            result = self.run_helper("claude", cpa=False, **env)
+            result = self.run_helper("codex", cpa=False, **env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("requires both", result.stderr)
             self.assertEqual(self.requests, [])
