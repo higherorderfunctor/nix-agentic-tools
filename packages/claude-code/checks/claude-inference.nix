@@ -1,7 +1,9 @@
 # cspell:ignore urandom wfile
 # `ai.settings.inference` delivered to Claude Code (packages/claude-code/lib/inference.nix):
 # the `url` form in each backend's settings.json, reference-reading helpers,
-# cleared inherited credentials, quiet defaults, and the guards.
+# cleared inherited credentials, quiet defaults, and the guards. Family-default
+# checks cover the measured catalog, consumer overrides, unselected inference,
+# and a partial catalog with an unknown family.
 {
   harness,
   lib,
@@ -77,7 +79,8 @@ in {
       delivered = config: familyEnv ((claudeSettings (eval (withClaude config))).env or {});
       override.ANTHROPIC_DEFAULT_FABLE_MODEL = "consumer-model";
     in
-      lib.assertMsg (delivered selected == expected) "CPA family defaults differ from the measured catalog"
+      lib.assertMsg (expected != {}) "measured catalog has no supported family defaults"
+      && lib.assertMsg (delivered selected == expected) "CPA family defaults differ from the measured catalog"
       && lib.assertMsg (delivered (lib.recursiveUpdate selected {ai.claude.native.settings.env = override;}) == expected // override) "consumer override did not replace just the fable default"
       && lib.assertMsg (delivered {} == {}) "unselected inference set family defaults"))
 

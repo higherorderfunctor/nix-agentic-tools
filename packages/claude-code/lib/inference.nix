@@ -7,6 +7,7 @@
 # already writes (user on Home Manager, project on devenv) carries them and a
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
 # managed launcher. The same launcher guarantees untrusted-project directory access.
+# CLIProxyAPI uses the extracted model catalog to set the family defaults in `settings.env`.
 #
 # CLIProxyAPI builds `/model` picker rows from API-key routes' declared models
 # and OAuth routes' pickerModels. Backend delivery and its rationale are in
@@ -14,6 +15,8 @@
 {
   lib,
   pkgs,
+  # The latest model ID for each family comes from the extracted catalog by default.
+  # Checks pass a partial map to test missing families without changing the catalog.
   latestPerFamily ? let
     facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
