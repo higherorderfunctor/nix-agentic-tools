@@ -331,7 +331,7 @@
     },
     "InvalidWindow": {
       "additionalProperties": false,
-      "description": "Keep a measured zero when the reset is invalid.",
+      "description": "Keep a measured zero when the window duration or reset is invalid.",
       "properties": {
         "state": {
           "const": "invalid",
@@ -339,7 +339,12 @@
           "type": "string"
         },
         "reason": {
-          "enum": ["conflicting-meter", "invalid-reset", "invalid-utilization"],
+          "enum": [
+            "conflicting-meter",
+            "invalid-duration",
+            "invalid-reset",
+            "invalid-utilization"
+          ],
           "title": "reason",
           "type": "string"
         },

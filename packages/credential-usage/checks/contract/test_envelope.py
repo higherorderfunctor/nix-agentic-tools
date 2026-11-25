@@ -48,7 +48,8 @@ class Case(BaseModel):
 class Expected(BaseModel):
     """Supply independent public values for the successful cases."""
 
-    observedInventory: Object
+    model_config = ConfigDict(extra="forbid", strict=True)
+    withDurationZero: Object
     withZero: Object
     withoutZero: Object
     recorded: str
@@ -85,6 +86,8 @@ class TestEnvelope(unittest.TestCase):
     def test_requires_one_json_document(self) -> None:
         """1–2. Reject malformed JSON and trailing accounts instead of returning a first result."""
         self.check_cases("document")
+        with self.assertRaises(ValidationError):
+            Envelope.model_validate_json(self.example.rstrip().removesuffix("}"))
 
     def test_requires_supported_schema_version(self) -> None:
         """3, 5. Decode the published example and refuse missing or unsupported versions."""
@@ -96,7 +99,10 @@ class TestEnvelope(unittest.TestCase):
 
     def test_inventory_requires_observed_slots(self) -> None:
         """8–11. Keep observed zero spend. Refuse entries without an observed slot, and unknown reason codes."""
-        self.check_cases("slot-states", {"observed-inventory": self.expected.observedInventory})
+        self.check_cases(
+            "slot-states", {"observed-inventory": ["observed", 0]},
+            lambda env: [env.slotStates.accountedSpend.state, env.accountedSpend.cost if env.accountedSpend else None],
+        )
 
     def test_requires_allowance_windows(self) -> None:
         """13. Refuse wallet-only success when the allowance result is absent."""
@@ -111,10 +117,13 @@ class TestEnvelope(unittest.TestCase):
         self.check_cases("duration")
 
     def test_invalid_windows_keep_only_a_proven_zero(self) -> None:
-        """18–24. Keep zero for an invalid reset and reject it for conflicts or invalid utilization."""
+        """18–24. Keep zero for invalid timing and reject it for conflicts or invalid utilization."""
         self.check_cases(
             "invalid",
-            {"unproven": self.expected.withoutZero, "zero": self.expected.withZero},
+            {
+                "invalid-duration-with-zero": self.expected.withDurationZero,
+                "unproven": self.expected.withoutZero, "zero": self.expected.withZero,
+            },
             lambda envelope: envelope.windows["7d"].model_dump(mode="json"),
         )
 

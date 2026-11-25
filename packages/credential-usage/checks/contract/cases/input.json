@@ -41,6 +41,9 @@
     "free-text-reason": {
       "changes": { "slotStates.grants.reason": "unavailable-response" }
     },
+    "observed-without-spend": {
+      "changes": { "slotStates.accountedSpend": { "state": "observed" } }
+    },
     "observed-inventory": {
       "changes": {
         "balances": [
@@ -212,6 +215,9 @@
     }
   },
   "invalid": {
+    "invalid-duration-with-zero": {
+      "changes": { "windows.7d.reason": "invalid-duration" }
+    },
     "conflict-with-zero": {
       "changes": { "windows.7d.reason": "conflicting-meter" }
     },

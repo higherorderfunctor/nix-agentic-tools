@@ -1,64 +1,8 @@
 {
-  "observedInventory": {
-    "schemaVersion": 1,
-    "account": { "auth_index": null, "name": null, "plan": null },
-    "binding": { "transport": "direct", "endpoint": "https://reader.example/" },
-    "pool": "example",
-    "observedAt": "2026-01-01T01:00:00Z",
-    "windows": {
-      "5h": {
-        "state": "observed",
-        "enforced": true,
-        "remainingPercent": 0,
-        "usedPercent": 100,
-        "resetsAt": "2026-01-01T03:00:00Z",
-        "status": null,
-        "windowSeconds": 18000
-      },
-      "7d": {
-        "state": "invalid",
-        "reason": "invalid-reset",
-        "remainingPercent": 0
-      },
-      "7d:model": { "state": "missing", "reason": "meter-unreported" }
-    },
-    "balances": [
-      {
-        "kind": "credit",
-        "amount": 1.25,
-        "expiresAt": null,
-        "funding": "purchased",
-        "scope": "account",
-        "unit": "USD",
-        "usable": true
-      }
-    ],
-    "bonuses": [
-      {
-        "kind": "grant",
-        "handle": "example",
-        "remaining": 2,
-        "funding": "promotional",
-        "clears": ["5h"],
-        "eligible": true,
-        "usable": true,
-        "effect": null,
-        "expiresAt": null,
-        "givesBackWeekly": null,
-        "requiresLimit": null,
-        "scope": null,
-        "startsAt": null,
-        "weeklyResetsAt": null
-      },
-      { "kind": "reset", "handle": "weekly", "quantity": 1, "expiresAt": null }
-    ],
-    "accountedSpend": { "cost": 0, "currency": "USD", "source": "meter" },
-    "slotStates": {
-      "accountedSpend": { "state": "observed" },
-      "credits": { "state": "observed" },
-      "grants": { "state": "observed" },
-      "resetInventory": { "state": "observed" }
-    }
+  "withDurationZero": {
+    "state": "invalid",
+    "reason": "invalid-duration",
+    "remainingPercent": 0
   },
   "withoutZero": {
     "state": "invalid",

@@ -103,17 +103,17 @@ class ObservedWindow(ContractModel):
 
 
 class InvalidWindow(ContractModel):
-    """Keep a measured zero when the reset is invalid."""
+    """Keep a measured zero when the window duration or reset is invalid."""
 
     state: Literal["invalid"]
-    reason: Literal["conflicting-meter", "invalid-reset", "invalid-utilization"]
+    reason: Literal["conflicting-meter", "invalid-duration", "invalid-reset", "invalid-utilization"]
     remainingPercent: Annotated[float, Field(ge=0, le=0)] | MISSING = MISSING
 
     @model_validator(mode="after")
-    def zero_requires_invalid_reset(self) -> Self:
+    def zero_requires_invalid_timing(self) -> Self:
         """A conflict or invalid utilization leaves remaining capacity unknown."""
-        if self.remainingPercent is not MISSING and self.reason != "invalid-reset":
-            raise ValueError("only an invalid reset can retain a measured zero")
+        if self.remainingPercent is not MISSING and self.reason not in ("invalid-duration", "invalid-reset"):
+            raise ValueError("only invalid timing can retain a measured zero")
         return self
 
 
@@ -229,8 +229,8 @@ class Envelope(ContractModel):
         states = self.slotStates
         if self.balances and not isinstance(states.credits, Observed):
             raise ValueError("credit lots require observed credits")
-        if self.accountedSpend is not None and not isinstance(states.accountedSpend, Observed):
-            raise ValueError("cost requires observed accounted spend")
+        if (self.accountedSpend is not None) != isinstance(states.accountedSpend, Observed):
+            raise ValueError("observed accounted spend requires a measurement and only this state permits one")
         for bonus in self.bonuses:
             state = states.grants if isinstance(bonus, Grant) else states.resetInventory
             if not isinstance(state, Observed):
