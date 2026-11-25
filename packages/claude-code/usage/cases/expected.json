@@ -480,6 +480,10 @@
             "status": "inactive",
             "usedPercent": 32,
             "windowSeconds": 604800
+          },
+          "7d:extra": {
+            "state": "invalid",
+            "reason": "invalid-utilization"
           }
         },
         "accountedSpend": null,
@@ -592,6 +596,10 @@
             "status": "inactive",
             "usedPercent": 32,
             "windowSeconds": 604800
+          },
+          "7d:extra": {
+            "state": "invalid",
+            "reason": "invalid-utilization"
           }
         },
         "accountedSpend": null,
@@ -3613,6 +3621,15 @@
             "kind": "credit",
             "amount": 0,
             "expiresAt": null,
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
+          {
+            "kind": "credit",
+            "amount": 0,
+            "expiresAt": null,
             "funding": "purchased",
             "scope": null,
             "unit": "USD",
@@ -3766,6 +3783,15 @@
         },
         "accountedSpend": null,
         "balances": [
+          {
+            "kind": "credit",
+            "amount": 0,
+            "expiresAt": null,
+            "funding": "promotional",
+            "scope": null,
+            "unit": "USD",
+            "usable": null
+          },
           {
             "kind": "credit",
             "amount": 0,
@@ -5252,6 +5278,22 @@
             "startsAt": null,
             "usable": null,
             "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "absent-paused",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": null,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
           }
         ],
         "slotStates": {
@@ -5397,6 +5439,22 @@
           {
             "kind": "grant",
             "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": null,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "absent-paused",
             "remaining": 2,
             "clears": ["five_hour", "seven_day", "unrecognized_meter"],
             "effect": null,
@@ -5532,6 +5590,22 @@
             "startsAt": null,
             "usable": null,
             "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "absent-usable-now",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": null,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
           }
         ],
         "slotStates": {
@@ -5677,6 +5751,22 @@
           {
             "kind": "grant",
             "handle": "opaque/handle",
+            "remaining": 2,
+            "clears": ["five_hour", "seven_day", "unrecognized_meter"],
+            "effect": null,
+            "eligible": true,
+            "expiresAt": "2030-03-17T17:46:40Z",
+            "funding": "promotional",
+            "givesBackWeekly": false,
+            "requiresLimit": true,
+            "scope": null,
+            "startsAt": null,
+            "usable": null,
+            "weeklyResetsAt": "2030-03-24T17:46:40Z"
+          },
+          {
+            "kind": "grant",
+            "handle": "absent-usable-now",
             "remaining": 2,
             "clears": ["five_hour", "seven_day", "unrecognized_meter"],
             "effect": null,

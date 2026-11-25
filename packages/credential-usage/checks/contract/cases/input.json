@@ -78,7 +78,7 @@
             "quantity": 1
           }
         ],
-        "accountedSpend": { "cost": 3, "currency": "USD", "source": "meter" },
+        "accountedSpend": { "cost": 0, "currency": "USD", "source": "meter" },
         "slotStates.accountedSpend": { "state": "observed" },
         "slotStates.grants": { "state": "observed" },
         "slotStates.resetInventory": { "state": "observed" }
@@ -149,9 +149,6 @@
     "unknown-without-reason": {
       "omit": ["slotStates.grants.reason"]
     }
-  },
-  "empty": {
-    "observed-empty-and-zero": {}
   },
   "allowance": {
     "empty-windows": {
