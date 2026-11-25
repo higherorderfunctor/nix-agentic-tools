@@ -3,7 +3,7 @@
   inherit (pkgs) lib;
   inherit (pkgs.ai.generic) python-stack;
   credentialUsage = (import ../../credential-usage/lib/default.nix).ai.credential-usage;
-  inherit ((import ../lib/default.nix).ai.claude-code) usageModule usageReader;
+  inherit ((import ../lib/default.nix).ai.claude-code) usageModule usagePair usageReader;
   reader =
     (credentialUsage.mergeReaders {inherit pkgs lib;} {
       contributions = [usageModule];
@@ -13,24 +13,12 @@
     ps.urllib3
     (credentialUsage.pythonModule {inherit pkgs python-stack;})
   ]);
-  # Direct cases have a fixed vendor origin. Fail any attempted socket before
-  # the Reader can swallow the failure or contact that origin.
-  offline = python-stack.pkgs.toPythonModule (pkgs.symlinkJoin {
-    name = "claude-usage-offline";
-    paths = [
-      (pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.pth" "import reader_offline\n")
-      (pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.py" ''
-        import os
-        import sys
-
-        def reject_socket(event, _args):
-            if event in {"socket.connect", "socket.getaddrinfo", "socket.sendmsg", "socket.sendto"}:
-                os._exit(97)
-
-        sys.addaudithook(reject_socket)
-      '')
-    ];
-  });
+  # Install the replay at startup, leaving the production origin and command intact.
+  offline = python-stack.pkgs.toPythonModule (
+    pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.pth" ''
+      import runpy; runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](0, 75)
+    ''
+  );
   offlineStack =
     python-stack
     // {
@@ -54,7 +42,7 @@ in {
       else
         test "$?" -eq 97
       fi
-      python3 -I -B ${../../credential-usage/checks/conformance}/standalone.py ${../usage/cases} ${lib.getExe reader} ${lib.getExe directReader}
+      python3 -I -B ${credentialUsage.standaloneCheck} ${usagePair} ${lib.getExe reader} ${lib.getExe directReader}
       touch "$out"
     '';
 }

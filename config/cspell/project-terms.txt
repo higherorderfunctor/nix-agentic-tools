@@ -9,6 +9,7 @@ bootout
 callees
 CFFIXED
 chatcmpl
+classmethod
 cliproxy
 CLOEXEC
 CLOUDSDK
@@ -41,6 +42,7 @@ NOSYSTEM
 NPROCESSORS
 nullish
 omitempty
+pydantic
 ONLN
 OPENROUTER
 osascript

@@ -2,7 +2,6 @@
 [tool.mutmut]
 source_paths = ["claude_code", "credential_usage"]
 only_mutate = ["claude_code/usage/claude.py", "credential_usage/envelope.py"]
-also_copy = ["cliproxyapi"]
 # Record every failing test for a mutant, including those after the first kill.
 pytest_add_cli_args = ["--maxfail=0", "--tb=no"]
 

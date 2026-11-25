@@ -9,11 +9,11 @@ credential_usage/envelope.py	25	Percent = Annotated[float, Field(ge=0, le=100)]	
 credential_usage/envelope.py	104	Quantity = Annotated[int, Field(ge=0)]	Quantity = Annotated[int, Field(ge=-1)]
 credential_usage/envelope.py	100	    amount: Annotated[float, Field(ge=0)]	    amount: Annotated[float, Field(ge=1)]
 credential_usage/envelope.py	20	    remainingPercent: Annotated[float, Field(ge=0, le=0)] | MISSING = MISSING	    remainingPercent: Annotated[float, Field(ge=0, le=1)] | MISSING = MISSING
-credential_usage/envelope.py	19	    reason: Literal["conflicting-meter", "invalid-reset", "invalid-utilization"]	    reason: Literal["conflicting-meter", "invalid-reset-fault", "invalid-utilization"]
+credential_usage/envelope.py	19	    reason: Literal["conflicting-meter", "invalid-duration", "invalid-reset", "invalid-utilization"]	    reason: Literal["conflicting-meter", "invalid-duration", "invalid-reset-fault", "invalid-utilization"]
 credential_usage/envelope.py	16	        if not isclose(self.usedPercent + self.remainingPercent, 100):	        if False:
-credential_usage/envelope.py	21	        if self.remainingPercent is not MISSING and self.reason != "invalid-reset":	        if False:
+credential_usage/envelope.py	21	        if self.remainingPercent is not MISSING and self.reason not in ("invalid-duration", "invalid-reset"):	        if False:
 credential_usage/envelope.py	11	        if self.balances and not isinstance(states.credits, Observed):	        if False:
-credential_usage/envelope.py	11	        if self.accountedSpend is not None and not isinstance(states.accountedSpend, Observed):	        if False:
+credential_usage/envelope.py	11	        if (self.accountedSpend is not None) != isinstance(states.accountedSpend, Observed):	        if False:
 credential_usage/envelope.py	11	            if not isinstance(state, Observed):	            if False:
 claude_code/usage/claude.py	78	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1")	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/claude_cli/usage?cedar_ember=1&skip_spend=1")
 claude_code/usage/claude.py	79	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1")	USAGE_URL = HttpUrl("https://api.anthropic.com/api/oauth/usage?skip_spend=1")
@@ -46,3 +46,6 @@ claude_code/usage/claude.py	7	    ], Observed(state="observed")	    ], Observed(
 claude_code/usage/claude.py	7	            grants=Observed(state="observed") if inventory else Unknown(state="unknown", reason="grants-unavailable"),	            grants=Observed(state="observed") if inventory and inventory.grants else Unknown(state="unknown", reason="grants-unavailable"),
 claude_code/usage/claude.py	100	        *(lot.credit_lot("promotional") for lot in prepaid.promo_tranches),	        *(lot.credit_lot("promotional") for lot in prepaid.promo_tranches if lot.remaining_amount_minor_units),
 credential_usage/envelope.py	8	    cost: Annotated[float, Field(ge=0)]	    cost: Annotated[float, Field(gt=0)]
+credential_usage/envelope.py	1	    schemaVersion: Annotated[int, Field(ge=1, le=1)]	    schemaVersion: Annotated[int, Field(ge=1, le=1)]; model_validate_json = classmethod(lambda cls, data: super(Envelope, cls).model_validate_json(__import__("json").dumps(__import__("pydantic_core").from_json(data, allow_partial=True))))
+credential_usage/envelope.py	29	    observedAt: Instant	    observedAt: Instant = Field(default_factory=lambda: datetime.now(UTC))
+credential_usage/envelope.py	30	    observedAt: Instant	    observedAt: Annotated[Instant, BeforeValidator(lambda value: datetime.now(UTC) if isinstance(value, str) and value.endswith("Z") else value)]

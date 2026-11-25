@@ -13,6 +13,7 @@ from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
 from difflib import unified_diff
+from functools import cached_property
 from importlib import import_module
 import json
 import os
@@ -55,11 +56,27 @@ class FixtureModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
 
 
-class Reply(FixtureModel):
-    """Deliver the scripted status and literal HTTP response text."""
+class WrappedBody(FixtureModel):
+    """Write a CPA wrapper whose inner body already has a literal fixture."""
+
+    status_code: Annotated[int, Field(ge=100, le=599)]
+    body_from: str
+
+
+class ReplyFixture(FixtureModel):
+    """Declare the HTTP status and body, including explicit private replies."""
+
     status: Annotated[int, Field(ge=100, le=599)]
-    body: str
+    body: str | WrappedBody
     private: bool = False
+
+
+class Reply(NamedTuple):
+    """Deliver the resolved status and exact HTTP response text."""
+
+    status: int
+    body: str
+    private: bool
 
 
 def merged(base: Document, override: Document) -> Document:
@@ -90,20 +107,20 @@ class CaseEntry(FixtureModel):
     cpa: Document = Field(default_factory=dict)
     direct: Document = Field(default_factory=dict)
 
-    def written(self, transport: TransportName) -> Document:
+    def transport_overrides(self, transport: TransportName) -> Document:
         """Return what the entry changes on one transport: the shared fields, then that transport's own."""
         return merged(cast(Document, self.model_extra), self.cpa if transport == "cpa" else self.direct)
 
 
-def built(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
+def expanded_cases(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
     """Return each entry's complete object on every transport, built from the full case it extends."""
     objects: dict[str, dict[TransportName, Document]] = {}
     for name, entry in entries.items():
         if entry.extends is None:
-            objects[name] = {transport: entry.written(transport) for transport in transports}
+            objects[name] = {transport: entry.transport_overrides(transport) for transport in transports}
     for name, entry in entries.items():
         if entry.extends is not None:
-            objects[name] = {transport: merged(objects[entry.extends][transport], entry.written(transport)) for transport in transports}
+            objects[name] = {transport: merged(objects[entry.extends][transport], entry.transport_overrides(transport)) for transport in transports}
     return objects
 
 
@@ -113,10 +130,25 @@ class Inputs(FixtureModel):
     description: str
     transports: Annotated[list[TransportName], Field(min_length=1)]
     now: datetime
-    replies: dict[str, Reply]
+    reply_fixtures: dict[str, ReplyFixture] = Field(alias="replies")
     credentials: CredentialFiles
     executables: dict[FileName, str]
     scenarios: Annotated[dict[FileName, CaseEntry], Field(min_length=1)]
+
+    @cached_property
+    def replies(self) -> dict[str, Reply]:
+        """Resolve wrapper references against literal bodies before replay."""
+        replies: dict[str, Reply] = {}
+        for name, fixture in self.reply_fixtures.items():
+            body = fixture.body
+            if isinstance(body, WrappedBody):
+                source = self.reply_fixtures.get(body.body_from)
+                if source is None or not isinstance(source.body, str):
+                    raise IncompletePair(f"{name}: wrapper requires a literal reply body")
+                body = json.dumps({"status_code": body.status_code, "body": source.body},
+                                  ensure_ascii=False, separators=(",", ":"))
+            replies[name] = Reply(fixture.status, body, fixture.private)
+        return replies
 
     @field_validator("now", mode="before")
     @classmethod
@@ -169,6 +201,7 @@ class Pair(NamedTuple):
     def read(cls, directory: Path) -> "Pair":
         """Match every scenario on every declared transport to exactly one expectation."""
         inputs = Inputs.model_validate_json((directory / "input.json").read_bytes())
+        replies = inputs.replies
         expectations = TypeAdapter(dict[FileName, CaseEntry]).validate_json(
             (directory / "expected.json").read_bytes(), strict=True
         )
@@ -185,8 +218,8 @@ class Pair(NamedTuple):
             for piece in (scenario_entry, expected_entry):
                 if (piece.model_fields_set & TRANSPORTS) - declared:
                     raise IncompletePair(f"{name}: transport coverage differs")
-        scenario_objects = built(inputs.scenarios, inputs.transports)
-        expected_objects = built(expectations, inputs.transports)
+        scenario_objects = expanded_cases(inputs.scenarios, inputs.transports)
+        expected_objects = expanded_cases(expectations, inputs.transports)
         cases: dict[str, Case] = {}
         for name in inputs.scenarios:
             for transport in inputs.transports:
@@ -196,7 +229,7 @@ class Pair(NamedTuple):
                     expectation = Expected.model_validate(expected_objects[name][transport])
                 except ValidationError as error:
                     raise IncompletePair(f"{key}: {described(error)}") from None
-                if any(reply not in inputs.replies for reply in scenario.replies):
+                if any(reply not in replies for reply in scenario.replies):
                     raise IncompletePair(f"{key}: unknown reply")
                 cases[key] = Case(key, scenario, expectation)
         return cls(inputs, cases)
@@ -256,6 +289,21 @@ def conceal(values: Mapping[str, str]) -> Callable[[str], str]:
     return swap
 
 
+def recorded_request(
+    mask: Callable[[str], str], method: str, url: str, headers: Mapping[str, str], body: str | None,
+) -> Request:
+    """Mask the trace and compare a JSON request body as data when it is present."""
+    payload: JsonValue = None
+    if body is not None:
+        payload = mask(body)
+        try:
+            payload = TypeAdapter(JsonValue).validate_json(payload)
+        except ValidationError:
+            pass
+    return Request(method=mask(method), url=mask(url), body=payload,
+                   headers={mask(key): mask(value) for key, value in headers.items()})
+
+
 class ScriptedNetwork:
     """Serve one reply per HTTP call and stamp observations with the completed call count."""
 
@@ -273,16 +321,7 @@ class ScriptedNetwork:
         body: str | None = None, **_: object,
     ) -> HTTPResponse:
         """Record before replying so even a Reader that catches an extra request fails its case."""
-        payload: JsonValue = None
-        if body is not None:
-            try:
-                payload = TypeAdapter(JsonValue).validate_json(self.mask(body))
-            except ValidationError:
-                payload = self.mask(body)
-        self.requests.append(Request(
-            method=self.mask(method), url=self.mask(url),
-            headers={self.mask(k): self.mask(v) for k, v in (headers or {}).items()}, body=payload,
-        ))
+        self.requests.append(recorded_request(self.mask, method, url, headers or {}, body))
         if len(self.requests) > len(self.replies):
             raise AssertionError("extra request")
         reply = self.replies[len(self.requests) - 1]
@@ -344,10 +383,10 @@ def public_result(status: int | None, out: str, err: str) -> Document | None:
     """Decode one successful envelope or an exact public failure line as the command's consumer."""
     if status == 0:
         try:
-            document = TypeAdapter(Document).validate_json(out, strict=True)
+            document: object = json.loads(out)
             Envelope.model_validate(document)
-            return document
-        except ValidationError:
+            return cast(Document, document)
+        except (ValueError, RecursionError):
             return None
     if status is not None and not out and re.fullmatch(r"usage: [^\r\n]+\n", err):
         return {"failed": err[:-1]}
@@ -391,16 +430,49 @@ def diff_of(expected: JsonValue, observed: JsonValue, mask: Callable[[str], str]
     return "\n".join(unified_diff(before, after, "expected", "observed", n=len(before), lineterm=""))
 
 
+class Replay(NamedTuple):
+    """Prepare the same fixture credentials and response script for either capture path."""
+
+    credentials: CredentialFiles
+    replies: list[Reply]
+    masks: dict[str, str]
+    private: list[str]
+
+    @classmethod
+    def for_case(cls, inputs: Inputs, case: Case) -> "Replay":
+        credentials = inputs.credentials | case.scenario.credentials
+        replies = [inputs.replies[name] for name in case.scenario.replies]
+        masks, private = hidden_text(credentials, replies)
+        return cls(credentials, replies, masks, private)
+
+    def compare(
+        self, case: Case, out: str, err: str, requests: Sequence[Request],
+        expected_result: Document, observed: Document | None,
+    ) -> list[Difference]:
+        """Compare raw streams and count, then the entire public trace and result."""
+        errors: list[Difference] = []
+        redact = conceal(self.masks | dict.fromkeys(self.private, "[private]"))
+        if any(secret in stream for stream in (out, err) for secret in [*self.masks, *self.private]):
+            errors.append(Difference(f"{case.name}: leak"))
+        if len(requests) != len(self.replies):
+            kind = "extra request" if len(requests) > len(self.replies) else "missing request"
+            errors.append(Difference(f"{case.name}: {kind}"))
+        expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
+        trace: JsonValue = [request.model_dump() for request in requests]
+        if not same_json(trace, expected_trace):
+            errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
+        if not same_json(observed, expected_result):
+            errors.append(Difference(f"{case.name}: result", diff_of(expected_result, observed, redact)))
+        return errors
+
+
 def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
     """Run the actual command and return one safe report for every failed comparison."""
     errors: list[Difference] = []
-    replies = [inputs.replies[name] for name in case.scenario.replies]
-    credentials = inputs.credentials | case.scenario.credentials
-    masks, private = hidden_text(credentials, replies)
-    network = ScriptedNetwork(inputs.now, replies, masks)
-    redact = conceal(masks | dict.fromkeys(private, "[private]"))
+    replay = Replay.for_case(inputs, case)
+    network = ScriptedNetwork(inputs.now, replay.replies, replay.masks)
     with TemporaryDirectory() as tmp:
-        env = case_environment(Path(tmp), inputs.executables, case.scenario.env, credentials)
+        env = case_environment(Path(tmp), inputs.executables, case.scenario.env, replay.credentials)
         with (
             patch.dict(sys.modules),
             patch.dict(os.environ, env, clear=True),
@@ -426,15 +498,4 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
             stderr.seek(0)
             out, err = stdout.read(), stderr.read()
 
-    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
-        errors.append(Difference(f"{case.name}: leak"))
-    if len(network.requests) != len(replies):
-        errors.append(Difference(f"{case.name}: extra request" if len(network.requests) > len(replies) else f"{case.name}: missing request"))
-    expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
-    trace: JsonValue = [request.model_dump() for request in network.requests]
-    if not same_json(trace, expected_trace):
-        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
-    observed = public_result(status, out, err)
-    if not same_json(observed, case.expected.result):
-        errors.append(Difference(f"{case.name}: result", diff_of(case.expected.result, observed, redact)))
-    return errors
+    return errors + replay.compare(case, out, err, network.requests, case.expected.result, public_result(status, out, err))

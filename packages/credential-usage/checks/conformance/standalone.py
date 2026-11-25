@@ -2,9 +2,8 @@
 """Replay a fixture pair through an installed Reader command.
 
 Owner checks call `main` with a pair directory and a packaged command. Each CPA
-case gets a local HTTP server that answers the scenario's requests. An owner
-can also provide a build of the command that forbids sockets to check direct
-preflight cases. The same pair checks all direct requests in the imported suite.
+case gets a local HTTP server. The direct command installs an offline HTTP
+replay at startup and refuses sockets while preserving the vendor origin.
 A failed comparison prints the case, then the whole expected and observed objects.
 """
 
@@ -13,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.metadata import version
 from pathlib import Path
+import json
+import os
 import re
 import subprocess
 import sys
@@ -20,14 +21,16 @@ from tempfile import TemporaryDirectory
 from threading import Thread
 from typing import Any
 
-from pydantic import JsonValue, TypeAdapter, ValidationError
+import urllib3
+from urllib3.response import HTTPResponse
+from urllib3.util import Retry
 
 # Isolated Python omits the script directory, which holds the shared suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from suite import (
-    Case, Difference, Document, IncompletePair, Inputs, Pair, Reply, Request, ScriptedNetwork, case_environment, conceal, diff_of,
-    hidden_text, public_result, same_json,
+    Case, Difference, Document, IncompletePair, Inputs, Pair, Replay, Reply, Request, ScriptedNetwork,
+    case_environment, conceal, public_result, recorded_request,
 )
 
 WireRequest = tuple[str, str, dict[str, str], bytes]
@@ -97,68 +100,91 @@ def stamped(document: Document | None, started: datetime, finished: datetime) ->
     return document | {"observedAt": OBSERVED_AT}
 
 
-def installed_differences(inputs: Inputs, case: Case, command: str) -> list[Difference]:
-    """Run the installed command once and return a safe report for each failed comparison."""
-    errors: list[Difference] = []
-    replies = [inputs.replies[name] for name in case.scenario.replies]
-    credentials = inputs.credentials | case.scenario.credentials
-    masks, private = hidden_text(credentials, replies)
-    network = ScriptedNetwork(inputs.now, replies, masks)
-    redact = conceal(masks | dict.fromkeys(private, "[private]"))
-    server = ReplayServer(replies)
+def install_direct_replay(retries: int, timeout: float) -> None:
+    """The check-only interpreter installs its socket guard and the script for one run."""
+    def reject_socket(event: str, _: object) -> None:
+        if event in {"socket.connect", "socket.getaddrinfo", "socket.sendmsg", "socket.sendto"}:
+            os._exit(97)
+
+    sys.addaudithook(reject_socket)
+    directory = os.environ.get("USAGE_DIRECT_REPLAY")
+    if directory is None:
+        return
+    root = Path(directory)
+    replies, masks = json.loads((root / "replay.json").read_text())
+    network = ScriptedNetwork(datetime.now(UTC), [Reply(*reply) for reply in replies], masks)
+
+    def request(method: str, url: str, **kwargs: Any) -> HTTPResponse:
+        policy = kwargs.get("retries")
+        if not isinstance(policy, Retry) or policy.total != retries or kwargs.get("timeout") != timeout:
+            os._exit(98)
+        try:
+            return network.request(method, url, **kwargs)
+        finally:
+            with (root / "requests.jsonl").open("a") as trace:
+                trace.write(network.requests[-1].model_dump_json() + "\n")
+
+    setattr(urllib3, "request", request)
+
+
+def run_installed(command: str, env: dict[str, str]) -> tuple[int | None, str, str, datetime, datetime]:
+    """Capture stdout, stderr and the completed process interval."""
+    started = datetime.now(UTC)
+    try:
+        process = subprocess.run([command], env=env, capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        # Exception text can include a command path.
+        return None, "", "", started, datetime.now(UTC)
+    return process.returncode, process.stdout, process.stderr, started, datetime.now(UTC)
+
+
+def replay_cpa(
+    case: Case, replay: Replay, command: str, env: dict[str, str],
+) -> tuple[tuple[int | None, str, str, datetime, datetime], list[Request], str, str]:
+    """Capture the installed CPA command's real loopback HTTP requests."""
+    origins = {value for value in env.values() if ORIGIN.fullmatch(value)}
+    if len(origins) > 1:
+        raise IncompletePair(f"{case.name}: more than one origin to repoint")
+    fixture = next(iter(origins), "")
+    server = ReplayServer(replay.replies)
     thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
     try:
-        with TemporaryDirectory() as tmp:
-            env = case_environment(Path(tmp), inputs.executables, case.scenario.env, credentials)
-            origins = {value for value in env.values() if ORIGIN.fullmatch(value)}
-            if len(origins) > 1:
-                raise IncompletePair(f"{case.name}: more than one origin to repoint")
-            pointed = {key: server.origin if ORIGIN.fullmatch(value) else value for key, value in env.items()}
-            started = datetime.now(UTC)
-            try:
-                process = subprocess.run([command], env=pointed, capture_output=True, text=True, timeout=30, check=False)
-            except (OSError, subprocess.TimeoutExpired):
-                # Exception text can include a command path; the case reports only a failed result.
-                status, out, err = None, "", ""
-            else:
-                status, out, err = process.returncode, process.stdout, process.stderr
-            finished = datetime.now(UTC)
+        pointed = {key: server.origin if ORIGIN.fullmatch(value) else value for key, value in env.items()}
+        output = run_installed(command, pointed)
     finally:
         server.shutdown()
         server.server_close()
-    fixture = next(iter(origins), "")
+    mask = conceal(replay.masks)
 
-    def wire(request: WireRequest) -> Request:
-        """Mask credentials in one recorded request, read a present body as JSON and restore the fixture's origin."""
-        method, target, headers, raw = request
-        payload: JsonValue = None
-        if raw:
-            text = network.mask(raw.decode(errors="replace"))
-            try:
-                payload = TypeAdapter(JsonValue).validate_json(text)
-            except ValidationError:
-                payload = text
-        return Request(
-            method=network.mask(method), url=network.mask(fixture + target),
-            headers={network.mask(k): network.mask(v) for k, v in reader_headers(headers).items()}, body=payload,
-        )
+    requests = [
+        recorded_request(mask, method, fixture + target, reader_headers(headers), raw.decode(errors="replace") if raw else None)
+        for method, target, headers, raw in server.received
+    ]
+    return output, requests, server.origin, fixture
 
-    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
-        errors.append(Difference(f"{case.name}: leak"))
-    if len(server.received) != len(replies):
-        errors.append(Difference(f"{case.name}: extra request" if len(server.received) > len(replies) else f"{case.name}: missing request"))
-    expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
-    trace: JsonValue = [request.model_dump() for request in map(wire, server.received)]
-    if not same_json(trace, expected_trace):
-        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
+
+def installed_differences(inputs: Inputs, case: Case, command: str) -> list[Difference]:
+    """Run the packaged command with the replay for this transport and compare its public behavior."""
+    replay = Replay.for_case(inputs, case)
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        env = case_environment(root, inputs.executables, case.scenario.env, replay.credentials)
+        if case.name.endswith("/direct"):
+            (root / "replay.json").write_text(json.dumps([replay.replies, replay.masks]))
+            trace = root / "requests.jsonl"
+            trace.touch()
+            output = run_installed(command, env | {"USAGE_DIRECT_REPLAY": tmp})
+            requests = [Request.model_validate_json(line) for line in trace.read_text().splitlines()]
+            origin = fixture = ""
+        else:
+            output, requests, origin, fixture = replay_cpa(case, replay, command, env)
+    status, out, err, started, finished = output
     expected = dict(case.expected.result)
     if "observedAt" in expected:
         expected["observedAt"] = OBSERVED_AT
-    observed = stamped(public_result(status, out.replace(server.origin, fixture), err), started, finished)
-    if not same_json(observed, expected):
-        errors.append(Difference(f"{case.name}: result", diff_of(expected, observed, redact)))
-    return errors
+    observed = stamped(public_result(status, out.replace(origin, fixture) if origin else out, err), started, finished)
+    return replay.compare(case, out, err, requests, expected, observed)
 
 
 def main(args: Sequence[str]) -> int:
@@ -175,10 +201,10 @@ def main(args: Sequence[str]) -> int:
     if len(args) == 3:
         direct = [
             (case, args[2]) for name, case in pair.cases.items()
-            if name.endswith("/direct") and not case.expected.requests
+            if name.endswith("/direct")
         ]
         if not direct:
-            print("pair: no direct preflight cases for the offline command", file=sys.stderr)
+            print("pair: no direct cases for the offline command", file=sys.stderr)
             return 1
         runs.extend(direct)
     if not runs:

@@ -6,5 +6,6 @@
     mergeReaders = import ./readers.nix;
     pythonModule = import ./python-module.nix;
     readerModule = ../modules/common.nix;
+    standaloneCheck = "${../checks/conformance}/standalone.py";
   };
 }

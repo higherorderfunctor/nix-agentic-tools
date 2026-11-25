@@ -38,7 +38,7 @@
     },
     "proxy-allowance-windows": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":23,\\\"resets_at\\\":\\\"2030-03-17T10:46:40.123456-07:00\\\"},\\\"seven_day\\\":{\\\"utilization\\\":61,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day_opus\\\":{\\\"utilization\\\":12,\\\"resets_at\\\":\\\"2030-03-19T02:00:00Z\\\"},\\\"seven_day_sonnet\\\":null,\\\"limits\\\":[{\\\"kind\\\":\\\"weekly_all\\\",\\\"percent\\\":61,\\\"severity\\\":\\\"warning\\\",\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"is_active\\\":true},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":32,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"is_active\\\":false}],\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2},\\\"limit\\\":{\\\"amount_minor\\\":20000,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"promo_credits\\\":null}\"}"
+      "body": { "status_code": 200, "body_from": "allowance-windows" }
     },
     "optional-meter-reported": {
       "status": 200,
@@ -46,7 +46,7 @@
     },
     "proxy-optional-meter-reported": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":null,\\\"seven_day\\\":null,\\\"seven_day_opus\\\":null,\\\"seven_day_sonnet\\\":{\\\"utilization\\\":18,\\\"resets_at\\\":\\\"2030-03-17T10:46:40-07:00\\\"},\\\"limits\\\":[{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":32,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"is_active\\\":true}]}\"}"
+      "body": { "status_code": 200, "body_from": "optional-meter-reported" }
     },
     "malformed-meter": {
       "status": 200,
@@ -54,7 +54,7 @@
     },
     "proxy-malformed-meter": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":\\\"23\\\",\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":null,\\\"seven_day_opus\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":\\\"broken reset\\\"},\\\"seven_day_sonnet\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":7},\\\"limits\\\":[{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":32,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"is_active\\\":false},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":100.5,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Extra\\\"}}}],\\\"cedar_ember\\\":{}}\"}"
+      "body": { "status_code": 200, "body_from": "malformed-meter" }
     },
     "upstream-status-failure": {
       "status": 429,
@@ -101,7 +101,7 @@
     },
     "proxy-conflicting-meters": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":23,\\\"resets_at\\\":\\\"2030-03-17T10:46:40.123456-07:00\\\",\\\"report_revision\\\":2},\\\"seven_day\\\":{\\\"utilization\\\":61,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day_opus\\\":{\\\"utilization\\\":12,\\\"resets_at\\\":\\\"2030-03-19T02:00:00Z\\\"},\\\"seven_day_sonnet\\\":null,\\\"limits\\\":[{\\\"kind\\\":\\\"weekly_all\\\",\\\"percent\\\":61,\\\"severity\\\":[],\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"is_active\\\":true,\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":5}}},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"percent\\\":32,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"is_active\\\":false},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Opus\\\"}},\\\"percent\\\":79,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"is_active\\\":\\\"true\\\",\\\"report_revision\\\":2},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Fable\\\"}},\\\"percent\\\":3,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\"},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Sonnet\\\"}},\\\"percent\\\":42,\\\"resets_at\\\":\\\"2030-03-18T05:30:00Z\\\",\\\"is_active\\\":\\\"true\\\",\\\"severity\\\":7,\\\"report_revision\\\":2},42,{\\\"kind\\\":{},\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"Sonnet\\\"}}},{\\\"kind\\\":\\\"weekly_scoped\\\",\\\"scope\\\":{\\\"model\\\":{\\\"display_name\\\":\\\"bad:name\\\"}}}],\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2},\\\"limit\\\":{\\\"amount_minor\\\":20000,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"promo_credits\\\":null,\\\"report_revision\\\":2}\"}"
+      "body": { "status_code": 200, "body_from": "conflicting-meters" }
     },
     "profile-denied": {
       "status": 403,
@@ -127,7 +127,10 @@
     },
     "proxy-profile-invalid-organization": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"organization\\\":{\\\"uuid\\\":\\\"org/other\\\"}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "profile-invalid-organization"
+      }
     },
     "profile": {
       "status": 200,
@@ -135,7 +138,7 @@
     },
     "proxy-profile": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"organization\\\":{\\\"uuid\\\":\\\"org-123\\\",\\\"display_name\\\":\\\"Fixture\\\"},\\\"revision\\\":2}\"}"
+      "body": { "status_code": 200, "body_from": "profile" }
     },
     "usage-with-grants": {
       "status": 200,
@@ -143,7 +146,7 @@
     },
     "proxy-usage-with-grants": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": { "status_code": 200, "body_from": "usage-with-grants" }
     },
     "prepaid-lots": {
       "status": 200,
@@ -151,7 +154,7 @@
     },
     "proxy-prepaid-lots": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":7600,\\\"expires_at\\\":null}],\\\"revision\\\":3}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-lots" }
     },
     "prepaid-invalid-currency": {
       "status": 200,
@@ -159,7 +162,7 @@
     },
     "proxy-prepaid-invalid-currency": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}],\\\"tranches\\\":[{\\\"currency\\\":\\\"EUR\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-invalid-currency" }
     },
     "prepaid-invalid-negative": {
       "status": 200,
@@ -167,7 +170,7 @@
     },
     "proxy-prepaid-invalid-negative": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":-1,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-invalid-negative" }
     },
     "prepaid-invalid-string": {
       "status": 200,
@@ -175,7 +178,7 @@
     },
     "proxy-prepaid-invalid-string": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":\\\"1\\\",\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-invalid-string" }
     },
     "prepaid-invalid-expiry": {
       "status": 200,
@@ -183,7 +186,7 @@
     },
     "proxy-prepaid-invalid-expiry": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"unreadable\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-invalid-expiry" }
     },
     "prepaid-incomplete": {
       "status": 200,
@@ -191,7 +194,7 @@
     },
     "proxy-prepaid-incomplete": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-incomplete" }
     },
     "prepaid-zero": {
       "status": 200,
@@ -199,7 +202,7 @@
     },
     "proxy-prepaid-zero": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":0,\\\"expires_at\\\":null}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":0,\\\"expires_at\\\":null},{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":125,\\\"expires_at\\\":\\\"2030-03-17T17:46:40Z\\\"}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-zero" }
     },
     "prepaid-empty": {
       "status": 200,
@@ -207,7 +210,7 @@
     },
     "proxy-prepaid-empty": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[],\\\"tranches\\\":[]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-empty" }
     },
     "usage-empty-grants": {
       "status": 200,
@@ -215,7 +218,7 @@
     },
     "proxy-usage-empty-grants": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"grants\\\":[]}}\"}"
+      "body": { "status_code": 200, "body_from": "usage-empty-grants" }
     },
     "grant-usability-ineligible": {
       "status": 200,
@@ -223,7 +226,7 @@
     },
     "proxy-grant-usability-ineligible": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":false,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": { "status_code": 200, "body_from": "grant-usability-ineligible" }
     },
     "grant-usability-paused": {
       "status": 200,
@@ -231,7 +234,7 @@
     },
     "proxy-grant-usability-paused": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":true,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":true,\\\"use_requires_limit\\\":false,\\\"scope\\\":[\\\"five_hour\\\"],\\\"effect\\\":\\\"clear\\\"}]}}\"}"
+      "body": { "status_code": 200, "body_from": "grant-usability-paused" }
     },
     "grant-usability-unusable-now": {
       "status": 200,
@@ -239,7 +242,10 @@
     },
     "proxy-grant-usability-unusable-now": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":false,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-usability-unusable-now"
+      }
     },
     "grant-usability-unknown-eligibility": {
       "status": 200,
@@ -247,7 +253,10 @@
     },
     "proxy-grant-usability-unknown-eligibility": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":null,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-usability-unknown-eligibility"
+      }
     },
     "grant-usability-unknown-pause": {
       "status": 200,
@@ -255,7 +264,10 @@
     },
     "proxy-grant-usability-unknown-pause": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":null,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"absent-paused\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-usability-unknown-pause"
+      }
     },
     "grant-usability-unknown-usable-now": {
       "status": 200,
@@ -263,7 +275,10 @@
     },
     "proxy-grant-usability-unknown-usable-now": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":null,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"absent-usable-now\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-usability-unknown-usable-now"
+      }
     },
     "grant-usability-blocked-with-unknown": {
       "status": 200,
@@ -271,7 +286,10 @@
     },
     "proxy-grant-usability-blocked-with-unknown": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":null,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":true,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-usability-blocked-with-unknown"
+      }
     },
     "usage-optional-grant-terms": {
       "status": 200,
@@ -279,7 +297,7 @@
     },
     "proxy-usage-optional-grant-terms": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"grants\\\":[{\\\"id\\\":\\\"other/handle\\\",\\\"clears\\\":[\\\"future_target\\\"],\\\"resets_left\\\":3.0,\\\"starts_at\\\":\\\"2030-03-10T17:46:40Z\\\"},{\\\"id\\\":\\\"weekly/handle\\\",\\\"clears\\\":[\\\"seven_day\\\"],\\\"resets_left\\\":0,\\\"ends_at\\\":\\\"2030-03-31T08:00:00Z\\\",\\\"usable_now\\\":false}]}}\"}"
+      "body": { "status_code": 200, "body_from": "usage-optional-grant-terms" }
     },
     "usage-not-array-grants": {
       "status": 200,
@@ -287,7 +305,7 @@
     },
     "proxy-usage-not-array-grants": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"grants\\\":{}}}\"}"
+      "body": { "status_code": 200, "body_from": "usage-not-array-grants" }
     },
     "grant-unavailable-empty-id": {
       "status": 200,
@@ -295,7 +313,7 @@
     },
     "proxy-grant-unavailable-empty-id": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": { "status_code": 200, "body_from": "grant-unavailable-empty-id" }
     },
     "grant-unavailable-invalid-clears": {
       "status": 200,
@@ -303,7 +321,10 @@
     },
     "proxy-grant-unavailable-invalid-clears": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",2],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]},\\\"limits\\\":{\\\"private\\\":\\\"private limits shape\\\"}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-unavailable-invalid-clears"
+      }
     },
     "grant-unavailable-fractional-count": {
       "status": 200,
@@ -311,7 +332,10 @@
     },
     "proxy-grant-unavailable-fractional-count": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":1.25,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-unavailable-fractional-count"
+      }
     },
     "grant-unavailable-negative-count": {
       "status": 200,
@@ -319,7 +343,10 @@
     },
     "proxy-grant-unavailable-negative-count": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":-1,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-unavailable-negative-count"
+      }
     },
     "grant-unavailable-string-count": {
       "status": 200,
@@ -327,7 +354,10 @@
     },
     "proxy-grant-unavailable-string-count": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":\\\"2\\\",\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":\\\"2030-03-17T17:46:40Z\\\",\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": {
+        "status_code": 200,
+        "body_from": "grant-unavailable-string-count"
+      }
     },
     "grant-epoch": {
       "status": 200,
@@ -335,7 +365,7 @@
     },
     "proxy-grant-epoch": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":86400,\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true},{\\\"id\\\":\\\"fractional\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":-0.25,\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": { "status_code": 200, "body_from": "grant-epoch" }
     },
     "prepaid-epoch": {
       "status": 200,
@@ -343,7 +373,7 @@
     },
     "proxy-prepaid-epoch": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"promo_tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":2345,\\\"expires_at\\\":0}],\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":7600,\\\"expires_at\\\":null}],\\\"revision\\\":3}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-epoch" }
     },
     "grant-boolean-expiry": {
       "status": 200,
@@ -351,7 +381,7 @@
     },
     "proxy-grant-boolean-expiry": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"five_hour\\\":{\\\"utilization\\\":100,\\\"resets_at\\\":\\\"2030-03-17T17:46:40Z\\\"},\\\"seven_day\\\":{\\\"utilization\\\":0,\\\"resets_at\\\":null},\\\"spend\\\":{\\\"used\\\":{\\\"amount_minor\\\":1250,\\\"currency\\\":\\\"USD\\\",\\\"exponent\\\":2}},\\\"cedar_ember\\\":{\\\"eligible\\\":true,\\\"weekly_resets_at\\\":\\\"2030-03-24T17:46:40Z\\\",\\\"grants\\\":[{\\\"id\\\":\\\"opaque/handle\\\",\\\"type\\\":\\\"full\\\",\\\"label\\\":\\\"Account reset\\\",\\\"resets_left\\\":2,\\\"resets_total\\\":3,\\\"clears\\\":[\\\"five_hour\\\",\\\"seven_day\\\",\\\"unrecognized_meter\\\"],\\\"ends_at\\\":true,\\\"starts_at\\\":null,\\\"paused\\\":false,\\\"usable_now\\\":true,\\\"gives_back_weekly\\\":false,\\\"use_requires_limit\\\":true}]}}\"}"
+      "body": { "status_code": 200, "body_from": "grant-boolean-expiry" }
     },
     "prepaid-purchased-only": {
       "status": 200,
@@ -359,7 +389,7 @@
     },
     "proxy-prepaid-purchased-only": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"tranches\\\":[{\\\"currency\\\":\\\"USD\\\",\\\"remaining_amount_minor_units\\\":7600,\\\"expires_at\\\":null}]}\"}"
+      "body": { "status_code": 200, "body_from": "prepaid-purchased-only" }
     }
   },
   "scenarios": {

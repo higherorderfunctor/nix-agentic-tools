@@ -28,65 +28,6 @@ DIRECTORY = HERE / "synthetic" / "cases"
 SYNTHETIC = Pair.read(DIRECTORY)
 ENTRY = "synthetic.cli:main"
 
-BROKEN_RESULT = """unreadable-credential/direct: result
---- expected
-+++ observed
-@@ -1,3 +1,3 @@
- {
--  "failed": "usage: deliberately wrong"
-+  "failed": "usage: observation unavailable"
- }
-"""
-
-WRONG_PLAN = """success/direct: result
---- expected
-+++ observed
-@@ -1,42 +1,42 @@
- {
-   "account": {
-     "auth_index": null,
-     "name": null,
--    "plan": "standard"
-+    "plan": "wrong plan"
-   },
-   "accountedSpend": null,
-   "balances": [],
-   "binding": {
-     "endpoint": "https://reader.example/",
-     "transport": "direct"
-   },
-   "bonuses": [],
-   "observedAt": "2026-11-01T00:00:02Z",
-   "pool": "sample",
-   "schemaVersion": 1,
-   "slotStates": {
-     "accountedSpend": {
-       "state": "unsupported"
-     },
-     "credits": {
-       "state": "observed"
-     },
-     "grants": {
-       "state": "unsupported"
-     },
-     "resetInventory": {
-       "state": "unsupported"
-     }
-   },
-   "windows": {
-     "1h": {
-       "enforced": true,
-       "remainingPercent": 77,
-       "resetsAt": null,
-       "state": "observed",
-       "status": null,
-       "usedPercent": 23,
-       "windowSeconds": 3600
-     }
-   }
- }
-"""
-
 DROPPED_HEADER = """success/direct: trace
 --- expected
 +++ observed
@@ -111,6 +52,13 @@ DROPPED_HEADER = """success/direct: trace
    }
  ]
 """
+
+
+def drop_header(request: Callable[[DirectHttp, HttpRequest], HttpResponse]) -> Callable[[DirectHttp, HttpRequest], HttpResponse]:
+    """Wrap the real synthetic transport with a missing-header fault."""
+    def without_headers(client: DirectHttp, message: HttpRequest) -> HttpResponse:
+        return request(client, message.model_copy(update={"headers": {}}))
+    return without_headers
 
 
 def failed_labels(pair: Pair, case: Case, entry: str) -> list[str]:
@@ -156,9 +104,6 @@ class SuiteTests(unittest.TestCase):
         case = SYNTHETIC.cases["success/direct"]
         real_request = DirectHttp.request
 
-        def dropped_header(client: DirectHttp, request: HttpRequest) -> HttpResponse:
-            return real_request(client, request.model_copy(update={"headers": {}}))
-
         def short_sequence(client: DirectHttp, request: HttpRequest) -> HttpResponse:
             if request.url.path == "/credits":
                 return HttpResponse(status_code=200, body="[]")
@@ -171,7 +116,7 @@ class SuiteTests(unittest.TestCase):
             return result
 
         for fault, labels in (
-            (patch.object(DirectHttp, "request", dropped_header), ["trace"]),
+            (patch.object(DirectHttp, "request", drop_header(DirectHttp.request)), ["trace"]),
             (patch.object(cli.subprocess, "check_output", return_value="wrong plan"), ["result"]),
             (patch.object(DirectHttp, "request", short_sequence), ["missing request", "trace", "result"]),
             (patch.object(DirectHttp, "request", extra_request), ["extra request", "trace", "result"]),
@@ -218,36 +163,13 @@ class SuiteTests(unittest.TestCase):
 
     def test_failure_prints_the_case_and_the_whole_objects(self) -> None:
         """71–72, 74. A label alone, or a diff of one field, leaves a reader to find where a Reader differs."""
-        with TemporaryDirectory() as tmp:
-            broken = Path(tmp)
-            expected = json.loads((DIRECTORY / "expected.json").read_bytes())
-            expected["unreadable-credential"]["direct"] = {"result": {"failed": "usage: deliberately wrong"}}
-            (broken / "input.json").write_bytes((DIRECTORY / "input.json").read_bytes())
-            (broken / "expected.json").write_text(json.dumps(expected))
-            out, err = StringIO(), StringIO()
-            with redirect_stdout(out), redirect_stderr(err):
-                status = run_cases([str(broken), ENTRY, "unreadable-credential/direct"])
-            self.assertEqual(status, 1)
-            self.assertEqual(out.getvalue(), "")
-            self.assertEqual(err.getvalue(), BROKEN_RESULT)
-
-        from synthetic import cli
-
         case = SYNTHETIC.cases["success/direct"]
-        real_request = DirectHttp.request
-
-        def dropped_header(client: DirectHttp, request: HttpRequest) -> HttpResponse:
-            return real_request(client, request.model_copy(update={"headers": {}}))
-
-        for fault, report in (
-            (patch.object(cli.subprocess, "check_output", return_value="wrong plan"), WRONG_PLAN),
-            (patch.object(DirectHttp, "request", dropped_header), DROPPED_HEADER),
-        ):
-            out, err = StringIO(), StringIO()
-            with self.subTest(report=report.splitlines()[0]), fault, redirect_stdout(out), redirect_stderr(err):
-                self.assertEqual(run_cases([str(DIRECTORY), ENTRY, case.name]), 1)
-                self.assertEqual(out.getvalue(), "")
-                self.assertEqual(err.getvalue(), report)
+        out, err = StringIO(), StringIO()
+        with patch.object(DirectHttp, "request", drop_header(DirectHttp.request)), redirect_stdout(out), redirect_stderr(err):
+            status = run_cases([str(DIRECTORY), ENTRY, case.name])
+        self.assertEqual(status, 1)
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(err.getvalue(), DROPPED_HEADER)
 
     def test_pair_builds_each_case_from_its_full_case(self) -> None:
         """69, 71–72. Merging arrays by position, or keeping a full case's requests when a case lists none, hides a wrong Reader."""

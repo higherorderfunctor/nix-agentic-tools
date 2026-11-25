@@ -14,10 +14,14 @@
     then []
     else mutants;
   inherit (pkgs.ai.generic) python-stack;
+  claude = (import ../../claude-code/lib/default.nix).ai.claude-code;
+  cpa = (import ../../cliproxyapi/lib/default.nix {inherit lib;}).ai.cliproxyapi;
+  claudeModule = claude.pythonModule {inherit pkgs python-stack;};
+  cpaModule = cpa.pythonModule {inherit pkgs python-stack;};
   mutmut = python-stack.pkgs.toPythonModule (pkgs.mutmut.override {
     python3Packages = python-stack.pkgs // {inherit (pkgs.python3Packages) textual;};
   });
-  python = python-stack.withPackages (ps: [ps.pydantic ps.pytest ps.urllib3 mutmut]);
+  python = python-stack.withPackages (ps: [ps.pydantic ps.pytest ps.urllib3 cpaModule mutmut]);
 in
   assert mutmut.version == "3.8.1";
     pkgs.runCommand "credential-usage-mutation" {
@@ -25,7 +29,7 @@ in
       PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1";
       PYTHONDONTWRITEBYTECODE = "1";
       READER_ENTRY = "claude_code.usage.cli:main";
-      READER_PAIR = ../../claude-code/usage/cases;
+      READER_PAIR = claude.usagePair;
       TZDIR = "${pkgs.tzdata}/share/zoneinfo";
       USAGE_DOC = ../docs/credential-usage.md;
     } ''
@@ -35,15 +39,14 @@ in
       export TZ=America/Denver
       pyright --pythonpath "$(command -v python3)" ${./mutation/run.py} ${./mutation/conftest.py}
 
-      mkdir -p claude_code/usage cliproxyapi/usage tests "$out"
+      mkdir -p claude_code tests "$out"
       cp -R ${../python/credential_usage} credential_usage
-      cp ${../../claude-code/usage}/*.py claude_code/usage/
-      cp ${../../cliproxyapi/usage/transport.py} cliproxyapi/usage/transport.py
+      cp -R ${claudeModule}/${python-stack.sitePackages}/claude_code/usage claude_code/usage
       cp -R ${./contract} tests/contract
       cp -R ${./conformance} tests/conformance
       cp ${./mutation/conftest.py} tests/conftest.py
       cp ${./mutation/pyproject.toml} pyproject.toml
-      chmod -R u+w claude_code cliproxyapi credential_usage tests
+      chmod -R u+w claude_code credential_usage tests
       export MATRIX_FILE="$out/matrix.tsv"
       printf 'mutant\ttest\tfixture\tphase\toutcome\n' > "$MATRIX_FILE"
 
