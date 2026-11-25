@@ -6,6 +6,7 @@
   pkgs,
   ...
 }: let
+  python = pkgs.ai.generic.python-stack.withPackages (ps: [ps.pydantic]);
   # Standalone construction evaluates the module files Home Manager and devenv do.
   mergeReaders = (import ../lib/default.nix).ai.credential-usage.mergeReaders {inherit pkgs lib;};
   inherit ((import ../../claude-code/lib/default.nix).ai.claude-code) usageModule usageReader;
@@ -97,7 +98,7 @@
     ))
   backends;
 in {
-  checks.credential-usage-registration = pkgs.runCommand "credential-usage-registration" {nativeBuildInputs = [claude pkgs.python3];} ''
+  checks.credential-usage-registration = pkgs.runCommand "credential-usage-registration" {nativeBuildInputs = [claude python];} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     mkdir "$out"
@@ -110,10 +111,19 @@ in {
     import subprocess
     from threading import Event, Thread
 
+    from pydantic import BaseModel, ConfigDict, ValidationError
+
     requests = []
     finished = Event()
 
+    class ForwardedCall(BaseModel):
+        model_config = ConfigDict(strict=True, hide_input_in_errors=True)
+        auth_index: str
+
     class Discovery(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
         def reply(self, value):
             self.send_response(200)
             self.end_headers()
@@ -131,8 +141,12 @@ in {
             ]})
 
         def do_POST(self):
-            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            requests.append((self.path, self.headers.get("Authorization"), payload["auth_index"]))
+            try:
+                payload = ForwardedCall.model_validate_json(self.rfile.read(int(self.headers["Content-Length"])))
+            except ValidationError:
+                self.send_error(400)
+                return
+            requests.append((self.path, self.headers.get("Authorization"), payload.auth_index))
             self.reply({"status_code": 503, "body": "private response"})
 
     key = secrets.token_hex(32)
