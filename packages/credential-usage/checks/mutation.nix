@@ -32,7 +32,7 @@ in
       cp ${./mutation/pyproject.toml} pyproject.toml
       chmod -R u+w claude_code cliproxyapi credential_usage tests
       export MATRIX_FILE="$out/matrix.tsv"
-      printf 'mutant\ttest\tphase\toutcome\n' > "$MATRIX_FILE"
+      printf 'mutant\ttest\tfixture\tphase\toutcome\n' > "$MATRIX_FILE"
 
       mutmut run --max-children 2
       mutmut results --all true > "$out/generated.txt"

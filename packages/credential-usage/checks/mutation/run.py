@@ -7,15 +7,15 @@ from pathlib import Path
 import subprocess
 import sys
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PositiveInt
 
 
 class Fault(BaseModel):
-    """One TSV row names its behaviors and the complete source line it replaces."""
+    """One row names the behavior it challenges and the source line it replaces."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
     module: str
-    behaviors: str
+    behavior: PositiveInt
     original: str
     replacement: str
 
@@ -27,8 +27,8 @@ def main(table: Path, output: Path) -> None:
         next(stream)
         outcomes.seek(0, os.SEEK_END)
         for number, row in enumerate(stream, 1):
-            module, behaviors, original, replacement = row.rstrip("\n").split("\t")
-            fault = Fault(module=module, behaviors=behaviors, original=original, replacement=replacement)
+            module, behavior, original, replacement = row.rstrip("\n").split("\t")
+            fault = Fault(module=module, behavior=int(behavior), original=original, replacement=replacement)
             path = Path(fault.module)
             source = path.read_text()
             lines = source.splitlines(keepends=True)
@@ -53,7 +53,7 @@ def main(table: Path, output: Path) -> None:
                 status = "survived"
             else:
                 status = f"invalid (pytest exit {process.returncode}, failed phases {','.join(sorted(failed)) or 'none'})"
-            print(name, status, fault.behaviors, sep="\t", file=results)
+            print(name, status, fault.behavior, sep="\t", file=results)
 
 
 if __name__ == "__main__":

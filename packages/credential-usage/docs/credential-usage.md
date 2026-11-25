@@ -257,6 +257,8 @@ env -u HTTPS_PROXY -u HTTP_PROXY -u https_proxy -u http_proxy \
 
 The output directory contains mutmut statuses in `generated.txt`, diffs for
 generated survivors in `surviving-diffs.txt`, and named fault outcomes with
-behavior IDs in `named.tsv`. In `matrix.tsv`, match a failed test call to a
-passing baseline call. Mutmut selects generated runs by function coverage. Every
-named fault runs the full selection.
+their behavior ID in `named.tsv`. Confirm each kill by matching a failed call to
+a passing baseline call in `matrix.tsv`. The matrix includes the name of each
+contract fixture. Exclude tool-reported kills that lack a failed call. Mutmut
+selects generated runs by function coverage. Every named fault runs the full
+selection.
