@@ -343,7 +343,7 @@
             pickerModels = mkOption {
               type = types.listOf modelIdType;
               default = [];
-              description = "Raw upstream model ids, such as `gpt-6.2-sol`, that Claude Code's `/model` picker lists for an OAuth route. Presentation only: it grants no access and changes no routing, and no other catalog is derived from it. An API-key route refuses it, since its picker rows come from the credential's declared models.";
+              description = "Raw upstream model ids to show in Claude Code's `/model` picker for this OAuth route. The first route listing an id supplies its description. CPA selects an eligible credential from the client's grants. API-key routes get their rows from their declared models.";
             };
           };
         });

@@ -229,15 +229,15 @@ in {
           codex.enable = false;
           cliproxyapi.instances.clients.clientKeys = lib.mkForce {};
         };
-        # devenv delivers the rows through the launcher's `--settings` file.
-        pickerFile = result:
-          lib.findFirst lib.isList null (builtins.split "--settings ([^ ']+)" ((lib.findFirst (package: package.name or "" == "claude-code-inference") null (result.config.home.packages or result.config.packages)).buildCommand or ""));
-        # The rows Claude's picker receives: user settings on Home Manager,
-        # the launcher's settings file on devenv.
-        claudeRows = result:
-          if backend == "hm"
-          then (claudeSettings result).modelPicker.options or []
-          else (builtins.fromJSON (builtins.readFile (lib.head (pickerFile result)))).modelPicker.options;
+        # Read the settings file passed to Claude by the generated devenv launcher.
+        launcherSettings = evaluation: let
+          launcher = lib.findFirst (package: package.name or "" == "claude-code-inference") null evaluation.config.packages;
+          matches = builtins.split "--settings ([^ ']+)" (launcher.buildCommand or "");
+          path = lib.findFirst lib.isList [] matches;
+        in
+          if path == []
+          then {}
+          else builtins.fromJSON (builtins.readFile (lib.head path));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
         # One credential whose APIs serve different models; the
@@ -277,26 +277,37 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
-        # Claude's client routes a Codex OAuth login that opts into a raw GPT
-        # id and into `glm-5.3`, a synthetic collision with the API key routed
-        # after it, then routes the login again with a repeat. The Codex client
-        # also supplies picker metadata on its separate OAuth route.
+        # Both clients can reach the login. Only Claude can spill over to the paid key.
         codexOptIn = pickerModels:
           evaluate backend (instanceChange {
-            credentials.codex.oauth = {
-              vendor = "codex";
-              account = redact.file "/run/secrets/cpa-codex-account";
+            credentials = {
+              codex.oauth = {
+                account = redact.file "/fixture/codex-account";
+                vendor = "codex";
+              };
+              paid.apiKey = {
+                apis.responses.base-url = "https://api.openai.com/v1";
+                key = redact.file "/fixture/openai-api-key";
+                models = ["gpt-6.2-astra" "gpt-6.2-sol"];
+                priority = -1;
+              };
             };
-            clientKeys.personal.routes = lib.mkForce [
-              ((route "codex") // {inherit pickerModels;})
-              {
-                credential = "zhipuai";
-                api = "anthropic";
-              }
-              ((route "codex") // {inherit pickerModels;})
-            ];
-            clientKeys.work.routes = lib.mkForce [((route "work") // {inherit pickerModels;})];
+            clientKeys.personal.routes = lib.mkForce [((route "codex") // {inherit pickerModels;}) (route "paid")];
+            clientKeys.work.routes = lib.mkForce [(route "codex")];
           });
+        opted = codexOptIn ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
+        plain = codexOptIn [];
+        expectedPicker = {
+          modelPicker.options = map (model: {
+            inherit model;
+            description = "codex through CLIProxyAPI";
+          }) ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
+        };
+        codexAccountRule = {
+          accounts = [(redact.file "/fixture/codex-account")];
+          kind = "oauth";
+          provider = "codex";
+        };
         checks = {
           "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
           "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
@@ -380,47 +391,56 @@ in {
             ];
           "Claude user picker" = backend != "hm" || (claudeSettings result).modelPicker.options == rows;
           "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
-          "Claude devenv picker follows routes" = backend == "hm" || (pickerFile result != null && builtins.fromJSON (builtins.readFile (lib.head (pickerFile result))) == {modelPicker.options = rows;});
-          "OAuth route opt-in lists raw ids in route order, first row of a repeat" = let
-            opted = codexOptIn ["gpt-6.2-sol" "glm-5.3"];
-          in
-            failedMessages opted
-            == []
-            && opted.config.ai.claude.normalized.settings.inference.credentials
+          "Claude devenv picker follows routes" = backend == "hm" || launcherSettings result == {modelPicker.options = rows;};
+          "OAuth picker fixture accepted" = failedMessages opted == [] && failedMessages plain == [];
+          "OAuth picker metadata stays on its selected route" =
+            opted.config.ai.claude.normalized.settings.inference.credentials
             == [
               {
-                name = "codex";
                 models = [];
-                pickerModels = ["gpt-6.2-sol" "glm-5.3"];
+                name = "codex";
+                pickerModels = ["gpt-6-luna" "gpt-6.1-terra" "gpt-6.2-astra" "gpt-6.2-sol"];
               }
               {
-                name = "zhipuai";
-                inherit (apiKey) models;
-              }
-              {
-                name = "codex";
-                models = [];
-                pickerModels = ["gpt-6.2-sol" "glm-5.3"];
+                models = ["gpt-6.2-astra" "gpt-6.2-sol"];
+                name = "paid";
               }
             ]
-            && claudeRows opted
+            && opted.config.ai.codex.normalized.settings.inference.credentials
             == [
               {
-                description = "codex through CLIProxyAPI";
-                model = "gpt-6.2-sol";
+                models = [];
+                name = "codex";
+              }
+            ];
+          "library lists each raw id once with its first route" =
+            (import ../../packages/claude-code/lib/inference.nix {inherit lib pkgs;}).modelPickerOptions {
+              inherit backend;
+              resolvedInference = opted.config.ai.claude.normalized.settings.inference;
+            }
+            == expectedPicker.modelPicker.options;
+          "OAuth picker in Claude user settings" = backend != "hm" || (claudeSettings opted).modelPicker == expectedPicker.modelPicker;
+          "OAuth picker in Claude launcher settings only" = backend == "hm" || (launcherSettings opted == expectedPicker && !((claudeSettings opted) ? modelPicker));
+          "picker models preserve CPA config and Codex files" = rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;
+          "only Claude has the paid route" =
+            (rendered opted).access.key-allowlist
+            == [
+              {
+                api-key = clientKey "personal";
+                credentials = [
+                  codexAccountRule
+                  {
+                    base-urls = ["https://api.openai.com/v1"];
+                    kind = "apikey";
+                    provider = "codex";
+                  }
+                ];
               }
               {
-                description = "codex through CLIProxyAPI";
-                model = "glm-5.3";
+                api-key = clientKey "work";
+                credentials = [codexAccountRule];
               }
-              (lib.last rows)
-            ]
-            && (backend == "hm" || !((claudeSettings opted) ? modelPicker));
-          "OAuth route opt-in changes no CPA config or Codex file" = let
-            plain = codexOptIn [];
-            opted = codexOptIn ["gpt-6.2-sol" "glm-5.3"];
-          in
-            failedMessages plain == [] && rendered opted == rendered plain && opted.config.ai.codex.files == plain.config.ai.codex.files;
+            ];
           "API-key route refuses pickerModels" = let
             apiKeyRoute =
               (route "zhipuai")

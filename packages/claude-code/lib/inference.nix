@@ -28,11 +28,8 @@
       inherit key;
       option = "ai.claude.settings.inference.key";
     };
-    # One row per distinct model id of the routed upstream credentials, in
-    # route order: an API-key credential's declared models, then the ids an
-    # OAuth route lists in `pickerModels`, which reach the proxy unconverted.
-    # A repeated id keeps its first row's description. CPA chooses the
-    # upstream credential separately.
+    # The picker shows each raw id once. Route order chooses its description
+    # because several granted credentials can serve the same request.
     rows =
       lib.foldl' (listed: row:
         if lib.any (known: known.model == row.model) listed
