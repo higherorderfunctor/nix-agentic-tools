@@ -20,13 +20,18 @@ class Fault(BaseModel):
     replacement: str
 
 
-def main(table: Path, output: Path) -> None:
-    """Keep survivors for review and stop if a fault cannot be applied or pytest cannot run."""
+def main(table: Path, output: Path, selected: frozenset[int] | None = None) -> None:
+    """Keep survivors for review and stop if a fault cannot be applied or pytest cannot run.
+
+    `selected` limits the run to those rows of the table, counted from 1 as their names are.
+    """
     matrix = Path(os.environ["MATRIX_FILE"])
     with table.open() as stream, output.open("w") as results, matrix.open() as outcomes:
         next(stream)
         outcomes.seek(0, os.SEEK_END)
         for number, row in enumerate(stream, 1):
+            if selected is not None and number not in selected:
+                continue
             module, behavior, original, replacement = row.rstrip("\n").split("\t")
             fault = Fault(module=module, behavior=int(behavior), original=original, replacement=replacement)
             path = Path(fault.module)
@@ -56,5 +61,15 @@ def main(table: Path, output: Path) -> None:
             print(name, status, fault.behavior, sep="\t", file=results)
 
 
+def selection(arguments: list[str]) -> frozenset[int] | None:
+    """Read `--selection 1,2`: an absent option selects every row, an empty one selects none."""
+
+    if not arguments:
+        return None
+    if len(arguments) != 2 or arguments[0] != "--selection":
+        raise SystemExit("usage: run.py FAULTS OUTPUT [--selection N,N,...]")
+    return frozenset(int(number) for number in arguments[1].split(",") if number)
+
+
 if __name__ == "__main__":
-    main(Path(sys.argv[1]), Path(sys.argv[2]))
+    main(Path(sys.argv[1]), Path(sys.argv[2]), selection(sys.argv[3:]))

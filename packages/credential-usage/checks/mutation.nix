@@ -1,6 +1,18 @@
 # Manual review derivation. mutmut runs its generated changes, then pytest runs the named faults.
+# `mutants` and `faults` rerun only the named generated mutants and named fault rows; an empty
+# list selects none. Leave both unset for the full pass.
 # cspell:ignore conftest TZDIR
-{pkgs}: let
+{
+  pkgs,
+  mutants ? null,
+  faults ? null,
+}: let
+  inherit (pkgs) lib;
+  # `null` means every mutant, which `mutmut run` takes as an empty argument list.
+  mutantNames =
+    if mutants == null
+    then []
+    else mutants;
   inherit (pkgs.ai.generic) python-stack;
   mutmut = python-stack.pkgs.toPythonModule (pkgs.mutmut.override {
     python3Packages = python-stack.pkgs // {inherit (pkgs.python3Packages) textual;};
@@ -35,14 +47,16 @@ in
       export MATRIX_FILE="$out/matrix.tsv"
       printf 'mutant\ttest\tfixture\tphase\toutcome\n' > "$MATRIX_FILE"
 
-      mutmut run --max-children 2
+      ${lib.optionalString (mutants != []) "mutmut run --max-children 2 ${lib.escapeShellArgs mutantNames}"}
       mutmut results --all true > "$out/generated.txt"
       while read -r mutant status; do
-        if [[ $status != killed ]]; then
+        if [[ $status != killed && $status != "not checked" ]]; then
           mutmut show "''${mutant%:}"
         fi
       done < "$out/generated.txt" > "$out/surviving-diffs.txt"
 
       NAMED_FAULT=baseline python3 -B -m pytest -q
-      python3 -I -B ${./mutation/run.py} ${./mutation/faults.tsv} "$out/named.tsv"
+      python3 -I -B ${./mutation/run.py} ${./mutation/faults.tsv} "$out/named.tsv" ${
+        lib.optionalString (faults != null) "--selection ${lib.escapeShellArg (lib.concatStringsSep "," (map toString faults))}"
+      }
     ''
