@@ -155,6 +155,8 @@
       inherit (portable) reviewPolicy;
       inherit (resolved runtime) routing skill workflows;
       inherit (portable.runtimes.${runtime}) extraRuntimes manualExternalDelegates picker sessionPool;
+      # A Reader the consumer selects in Home Manager or devenv reaches the packaged command.
+      credentialUsageReaders = config.ai.credentialUsage.readers;
     };
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
@@ -374,6 +376,7 @@ in {
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
+    (import ../../credential-usage/lib/default.nix).ai.credential-usage.readerModule
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";

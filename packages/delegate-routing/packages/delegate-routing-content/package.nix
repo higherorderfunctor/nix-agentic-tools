@@ -9,6 +9,9 @@
 }: let
   inherit (pkgs) lib;
   inherit (import ../../lib/usage-python.nix {inherit pkgs;}) usagePython;
+  # Standalone construction shares the module files Home Manager and devenv evaluate.
+  mergeReaders = (import ../../../credential-usage/lib/default.nix).ai.credential-usage.mergeReaders {inherit pkgs lib;};
+  inherit ((import ../../../claude-code/lib/default.nix).ai.claude-code) usageModule;
   generated = generatedLib pkgs;
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
   treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../../lib/treefmt-module.nix).config;
@@ -22,7 +25,6 @@
       text = lib.concatMapStringsSep "\n" builtins.readFile ([../../scripts/usage-cpa.sh] ++ parts);
     };
   usageScripts = {
-    claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq] [../../scripts/claude-usage.sh];
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.curl pkgs.jq pkgs.python3] [../../scripts/codex-usage.sh];
     opencode-usage = mkUsageScript "opencode-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/opencode-usage.sh];
     proxy-accounted-usage = mkUsageScript "proxy-accounted-usage" [pkgs.curl pkgs.jq pkgs.python3] [../../scripts/proxy-accounted-usage.sh];
@@ -30,7 +32,7 @@
   };
   rawDefaults = import ../../lib/defaults.nix {
     inherit lib;
-    claudeUsageScript = lib.getExe usageScripts.claude-usage;
+    claudeUsageScript = lib.getExe (mergeReaders {contributions = [usageModule];}).claude.package;
     codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
@@ -86,9 +88,11 @@
   # pkgs carries no overlay, so the overlay's linters are not in it.
   # Defaults merge before the overridable builder, so a direct caller's
   # `.override (prev: ...)` reads the shipped inputs, `prev.skill` included.
-  mkSkill = args:
+  # `credentialUsageReaders` selects Readers the way `ai.credentialUsage.readers` does.
+  mkSkill = {credentialUsageReaders ? {}, ...} @ args:
     lib.makeOverridable buildSkill (defaults
       // {
+        inherit credentialUsageReaders;
         picker = null;
         reviewPolicy = (lib.evalModules {modules = [(import ../../lib/review-policy.nix {inherit lib;})];}).config;
         sessionPool = null;
@@ -118,7 +122,20 @@
         guidance = args.families;
         inherit lib;
       }).drift;
-    techniques = normalizeTechniques args.techniques;
+    configured = normalizeTechniques args.techniques;
+    selectedReader =
+      lib.getExe
+      (mergeReaders {
+        contributions = [usageModule];
+        overrides = args.credentialUsageReaders;
+      }).claude.package;
+    shippedCommand = defaults.techniques.claude.usage.command;
+    # The shipped Claude command yields to the selected Reader; a caller's own
+    # command stays.
+    techniques =
+      if (configured.claude.usage.command or null) == shippedCommand
+      then lib.recursiveUpdate configured {claude.usage.command = selectedReader;}
+      else configured;
     view = import ../../lib/routing-view.nix {
       inherit lib pools techniques;
       inherit (args) servedModels;
@@ -178,7 +195,7 @@
             # as a dependency of the delivered file, including its manifest.
             body =
               builtins.appendContext
-              (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["credentialUsage" "opencodeGo" "picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
+              (import ../../lib/render.nix ({inherit lib;} // lib.removeAttrs args ["credentialUsage" "credentialUsageReaders" "opencodeGo" "picker" "reviewPolicy" "sessionPool"] // {inherit helperInstruction techniques;}))
               (builtins.getContext helperInstruction);
           };
         };

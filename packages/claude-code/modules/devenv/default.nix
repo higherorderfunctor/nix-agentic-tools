@@ -15,4 +15,4 @@
     }))
     args;
 in
-  transformed // {imports = (transformed.imports or []) ++ [../catalog.nix];}
+  transformed // {imports = (transformed.imports or []) ++ [../catalog.nix ../usage.nix];}
