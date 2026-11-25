@@ -1,11 +1,11 @@
 {
-  "version": "3.6.0",
+  "version": "3.6.1",
   "aarch64-darwin": {
-    "url": "https://desktop-release.q.us-east-1.amazonaws.com/3.6.0/kirocli-universal-darwin.tar.gz",
-    "hash": "sha256-aqH36YtooWxWPmSfIHCc8gGOSzg7DqWLdGYGGzt7dK8="
+    "url": "https://desktop-release.q.us-east-1.amazonaws.com/3.6.1/kirocli-universal-darwin.tar.gz",
+    "hash": "sha256-9atReKC9eW2DxdaJvmP7uHCF3ehhtOYmgFYMLL7YMwM="
   },
   "x86_64-linux": {
-    "url": "https://desktop-release.q.us-east-1.amazonaws.com/3.6.0/kirocli-x86_64-linux.tar.gz",
-    "hash": "sha256-qdNW8PGhJ6JYf2PoBvzsALmLkWueXPYYIvfhedb3x+0="
+    "url": "https://desktop-release.q.us-east-1.amazonaws.com/3.6.1/kirocli-x86_64-linux.tar.gz",
+    "hash": "sha256-xMAauZJI8hNvTiRMpFuOHYue18K3osS8ipQs25Hs19c="
   }
 }
