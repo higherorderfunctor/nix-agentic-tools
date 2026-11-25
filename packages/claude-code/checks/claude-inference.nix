@@ -63,49 +63,42 @@ in {
         && settings.env.ANTHROPIC_AUTH_TOKEN == "")
       (map (settingsFor eval) (builtins.attrValues keys))))
 
-    # Compare the delivered settings with the measured catalog, not the lowering's table.
+    # Compare the delivered settings with the measured catalog, not the lowering's output.
     (perBackend "family-defaults" (eval: let
       measured = import ../lib/extracted-fact.nix {inherit lib;} "latestPerFamily";
-      expected =
-        lib.mapAttrs' (family: model: lib.nameValuePair "ANTHROPIC_DEFAULT_${lib.toUpper family}_MODEL" model)
-        (builtins.intersectAttrs {
-            fable = null;
-            haiku = null;
-            opus = null;
-            sonnet = null;
-          }
-          measured);
+      expected.ANTHROPIC_DEFAULT_FABLE_MODEL = measured.fable;
       selected = urlForm keys.file;
       delivered = config: familyEnv ((claudeSettings (eval (withClaude config))).env or {});
       override.ANTHROPIC_DEFAULT_FABLE_MODEL = "consumer-model";
     in
-      lib.assertMsg (expected != {}) "measured catalog has no supported family defaults"
-      && lib.assertMsg (delivered selected == expected) "CPA family defaults differ from the measured catalog"
-      && lib.assertMsg (delivered (lib.recursiveUpdate selected {ai.claude.native.settings.env = override;}) == expected // override) "consumer override did not replace just the fable default"
+      lib.assertMsg (delivered selected == expected) "CPA must pin measured Fable only, not Haiku, Opus or Sonnet"
+      && lib.assertMsg (delivered (lib.recursiveUpdate selected {ai.claude.native.settings.env = override;}) == override) "consumer override did not replace just the fable default"
       && lib.assertMsg (delivered {} == {}) "unselected inference set family defaults"))
 
-    # An incomplete catalog with an unfamiliar family must emit only the known key.
+    # A partial catalog must neither invent a missing Fable pin nor pin its other families.
     {
       module-claude-inference-partial-family-defaults = mkTest "claude-inference-partial-family-defaults" (let
-        lowering = import ../lib/inference.nix {
-          inherit lib pkgs;
-          latestPerFamily = {
-            haiku = "fixture-haiku";
-            unknown = "fixture-unknown";
-          };
+        otherFamilies = {
+          haiku = "fixture-haiku";
+          unknown = "fixture-unknown";
         };
         resolvedInference = (evalHm (withClaude (urlForm keys.file))).config.ai.claude.normalized.settings.inference;
-        result = lib.evalModules {
-          modules = [
-            {options.ai.claude.native.settings = lib.mkOption {type = lib.types.anything;};}
-            (lowering.config {
-              backend = "hm";
-              inherit resolvedInference;
-            })
-          ];
-        };
+        defaultsFor = latestPerFamily: let
+          lowering = import ../lib/inference.nix {inherit latestPerFamily lib pkgs;};
+          result = lib.evalModules {
+            modules = [
+              {options.ai.claude.native.settings = lib.mkOption {type = lib.types.anything;};}
+              (lowering.config {
+                backend = "hm";
+                inherit resolvedInference;
+              })
+            ];
+          };
+        in
+          familyEnv result.config.ai.claude.native.settings.env;
       in
-        familyEnv result.config.ai.claude.native.settings.env == {ANTHROPIC_DEFAULT_HAIKU_MODEL = "fixture-haiku";});
+        lib.assertMsg (defaultsFor otherFamilies == {}) "catalog without Fable must not pin Haiku or invent a default"
+        && lib.assertMsg (defaultsFor (otherFamilies // {fable = "fixture-fable";}) == {ANTHROPIC_DEFAULT_FABLE_MODEL = "fixture-fable";}) "catalog with Fable must pin only its Fable entry");
     }
 
     # The quiet defaults and proxy-derived leaves yield to a consumer's

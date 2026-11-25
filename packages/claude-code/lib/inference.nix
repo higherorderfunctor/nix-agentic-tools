@@ -7,7 +7,7 @@
 # already writes (user on Home Manager, project on devenv) carries them and a
 # consumer's own value for a leaf wins; optional `launcherFlags` reach the
 # managed launcher. The same launcher guarantees untrusted-project directory access.
-# CLIProxyAPI sets family defaults in `settings.env` from the extracted catalog.
+# CLIProxyAPI sets the Fable default in `settings.env` from the extracted catalog.
 #
 # CLIProxyAPI builds `/model` picker rows from API-key routes' declared models
 # and OAuth routes' pickerModels. Backend delivery and its rationale are in
@@ -27,16 +27,11 @@
     resolvedInference,
   }: let
     inherit (resolvedInference) credentials key url;
-    # Claude only reads these family overrides. A new catalog family need not have one.
-    familyVariables = {
-      fable = "ANTHROPIC_DEFAULT_FABLE_MODEL";
-      haiku = "ANTHROPIC_DEFAULT_HAIKU_MODEL";
-      opus = "ANTHROPIC_DEFAULT_OPUS_MODEL";
-      sonnet = "ANTHROPIC_DEFAULT_SONNET_MODEL";
+    # A pin replaces the native description and pricing with a "Custom <Family> model"
+    # row. Only Fable's native alias lags its latest model in this release.
+    fableDefault = lib.optionalAttrs (latestPerFamily ? fable) {
+      ANTHROPIC_DEFAULT_FABLE_MODEL = latestPerFamily.fable;
     };
-    familyDefaults =
-      lib.mapAttrs' (family: model: lib.nameValuePair familyVariables.${family} model)
-      (builtins.intersectAttrs familyVariables latestPerFamily);
     helper = keyHelper {
       inherit key;
       option = "ai.claude.settings.inference.key";
@@ -79,7 +74,7 @@
         apiKeyHelper = lib.escapeShellArg (lib.getExe helper);
         disableClaudeAiConnectors = true;
         env =
-          familyDefaults
+          fableDefault
           // {
             ANTHROPIC_API_KEY = "";
             ANTHROPIC_AUTH_TOKEN = "";

@@ -1,8 +1,8 @@
 ## ai.settings.inference runtimes: how each harness consumes the resolved endpoint
 
-> **Last verified:** 2026-11-25 — CLIProxyAPI family defaults come from the
-> Claude Code bundle. OAuth routes supply Claude Code picker rows. Credential
-> names in row descriptions are for display only.
+> **Last verified:** 2026-11-25 — CLIProxyAPI pins only Fable from the Claude
+> Code bundle. OAuth routes supply Claude Code picker rows. Credential names in
+> row descriptions are for display only.
 >
 > Runtime behavior verified 2026-10-30 — each runtime's inference library
 > (`packages/<owner>/lib/inference.nix`) holds one lowering per backend (only
@@ -55,10 +55,11 @@ already writes (user on Home Manager, project on devenv). Every derived leaf is
 a `mkDefault`, so a consumer's own value for one, such as
 `env.ANTHROPIC_BASE_URL`, wins without `mkForce`.
 
-Only CLIProxyAPI sets `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` for family aliases. It
-sets a default only for Fable, Haiku, Opus or Sonnet, and only if the pinned
-Claude Code bundle’s `latest_per_family` map lists a model ID for that family.
-To override just Fable, set
+CLIProxyAPI pins only Fable, using the latest Fable model ID in the pinned
+Claude Code bundle. If the catalog has no Fable entry, it sets no family
+default. Only Fable’s native alias lags its latest model in this release.
+Pinning Haiku, Opus or Sonnet would replace its native picker description and
+pricing with a “Custom” model row. To override just Fable, set
 `ai.claude.native.settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL` to the model ID
 you want. Use Nix rather than a shell export: Claude Code can overwrite the
 exported value with its settings `env`. An override can change the family’s
