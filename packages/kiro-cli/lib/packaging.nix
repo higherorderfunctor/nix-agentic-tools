@@ -65,7 +65,8 @@ rec {
                     if not handle.read(4).startswith(KIRO_EXEC_MAGIC):
                         continue
                     # mmap for the same reason the patcher uses it: the target
-                    # is a ~556 MB binary and read() would peak that much RSS
+                    # is a binary of hundreds of MB (209 MB on Linux, 417 MB
+                    # universal Darwin at 3.6.0) and read() would peak that much RSS
                     # on a builder to look for a few hundred bytes. `find`
                     # scans the mapping through the buffer protocol, so nothing
                     # is materialized.
@@ -321,7 +322,7 @@ rec {
   # for the package wrapper to re-sign. The fixture runs this script directly.
   #
   # Length preservation is the whole trick, and it is not fussiness: the
-  # manifest sits in rodata inside a ~556 MB ELF, so growing it by even one
+  # manifest sits in rodata inside a binary of hundreds of MB, so growing it by even one
   # byte would move section offsets and require a relink we cannot do. The
   # `description` field is unused by the gating logic, so it serves as the
   # padding reservoir — shrink or grow it to absorb the delta exactly.
@@ -351,7 +352,7 @@ rec {
       features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
 
-      # mmap, not read()+bytearray. The target is a ~556 MB ELF, and the
+      # mmap, not read()+bytearray. The target is hundreds of MB, and the
       # read-then-copy shape peaked over 1 GB per file, which is enough to
       # make a small CI builder fail on a patch that changes ~200 bytes. The
       # rewrite is length-preserving, so an in-place mapped edit is exactly

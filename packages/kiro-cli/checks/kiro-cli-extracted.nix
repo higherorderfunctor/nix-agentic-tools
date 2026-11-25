@@ -71,13 +71,16 @@
           # A locator that takes the first or the last map instead of failing
           # succeeds here.
           printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M" + literalMap "N")} > ambiguous.js
+          # The effect table alone is an absent map, not a map with a computed
+          # entry: a locator that diagnoses any lone candidate as non-literal fails.
+          printf '%s' ${pkgs.lib.escapeShellArg exitCodeTable} > table-only.js
           ${extract} quoted.js > quoted.json
           [ "$("$jq" '.hookTriggers | length' quoted.json)" = 12 ]
           [ "$("$jq" -r '.hookTriggerAliases.agentSpawn' quoted.json)" = SessionStart ]
           ${extract} exit-codes.js > exit-codes.json
           [ "$("$jq" -c '.hookTriggers' exit-codes.json)" = '["Manual","PostFileCreate","PostFileDelete","PostFileSave","PostTaskExec","PostToolUse","PreTaskExec","PreToolUse","SessionEnd","SessionStart","Stop","UserPromptSubmit"]' ]
           [ "$("$jq" -c '.hookTriggerAliases' exit-codes.json)" = '{"agentSpawn":"SessionStart"}' ]
-          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2" exit-codes-computed:"absent or ambiguous (0 of 2"; do
+          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2" exit-codes-computed:"absent or ambiguous (0 of 2" table-only:"absent or ambiguous (0 of 1"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
             # Two statements: the left side of `&&` is exempt from errexit, so
@@ -195,13 +198,19 @@
               entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
               assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
 
-          # Matching only the opening of the row or list would allow partial patches.
-          for row in (
-              {"treatment": "@kiro-cli-team"},
-              {"treatment": ["@kiro-cli-team", 5]},
-              {"treatment": ["@kiro-cli-team"], **manifest[feature]},
+          # Matching only the opening of the row or list would allow partial
+          # patches; skipping a treatment row in any layout but the one 3.6.0
+          # ships would stop the match failing closed.
+          only_treatment = {feature: {"treatment": ["@kiro-cli-team"]}}
+          for blob in (
+              *(prefix + json.dumps({feature: row}, indent=2).encode() for row in (
+                  {"treatment": "@kiro-cli-team"},
+                  {"treatment": ["@kiro-cli-team", 5]},
+                  {"treatment": ["@kiro-cli-team"], **manifest[feature]},
+              )),
+              prefix + json.dumps(only_treatment).encode(),
+              prefix + json.dumps(only_treatment, indent=4).encode(),
           ):
-              blob = prefix + json.dumps({feature: row}, indent=2).encode()
               path.write_bytes(blob)
               extracted = run_script(extract_script, path)
               assert extracted.returncode == 0, extracted

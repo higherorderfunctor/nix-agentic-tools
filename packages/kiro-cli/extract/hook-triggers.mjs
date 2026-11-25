@@ -73,10 +73,12 @@ const maps = candidates.filter((object) =>
   object.properties.every(isNameToNameEntry),
 );
 
-// With one candidate, a non-literal entry is the more precise diagnosis.
+// A lone candidate that maps at least one name to a name is the map with a
+// non-literal entry; one with no such entry (the effect table alone) means the
+// map is absent.
 if (maps.length !== 1)
   fail(
-    candidates.length === 1
+    candidates.length === 1 && candidates[0].properties.some(isNameToNameEntry)
       ? "hook trigger map contains a non-literal entry"
       : `hook trigger map is absent or ambiguous (${maps.length} of ` +
           `${candidates.length} frozen objects carrying a SessionStart key are ` +
