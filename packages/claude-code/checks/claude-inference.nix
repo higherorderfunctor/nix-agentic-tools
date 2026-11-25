@@ -65,7 +65,7 @@ in {
 
     # Compare the delivered settings with the measured catalog, not the lowering's table.
     (perBackend "family-defaults" (eval: let
-      measured = (builtins.fromJSON (builtins.readFile ../extracted/extracted.json)).latestPerFamily;
+      measured = import ../lib/extracted-fact.nix {inherit lib;} "latestPerFamily";
       expected =
         lib.mapAttrs' (family: model: lib.nameValuePair "ANTHROPIC_DEFAULT_${lib.toUpper family}_MODEL" model)
         (builtins.intersectAttrs {
