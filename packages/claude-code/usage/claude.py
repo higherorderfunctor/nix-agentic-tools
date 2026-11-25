@@ -144,13 +144,20 @@ class Usage(VendorResponse):
     seven_day: ReportedMeter = None
     seven_day_opus: ReportedMeter = None
     seven_day_sonnet: ReportedMeter = None
-    limits: tuple[Annotated[Limit, BeforeValidator(limit_object_or_empty)], ...] = ()
+    limits: Annotated[list[Annotated[Limit, BeforeValidator(limit_object_or_empty)]] | None, invalid_as(None)] = []
 
     def windows(self) -> dict[str, Window]:
         """Publish expected rows even when absent and include each reported optional scope."""
-        if not self.model_fields_set.difference({"cedar_ember"}):
+        # Unreadable supplemental limits can only be skipped when a separate meter supplied usage.
+        limits = self.limits
+        if limits is None:
+            meters = (self.five_hour, self.seven_day, self.seven_day_opus, self.seven_day_sonnet)
+            if not any(meter is not None and meter.utilization is not None for meter in meters):
+                raise RequestFailure("invalid claude usage response")
+            limits = []
+        elif not self.model_fields_set.difference({"cedar_ember"}):
             raise RequestFailure("invalid claude usage response")
-        weekly_status = next((limit.severity for limit in self.limits if limit.kind == "weekly_all"), None)
+        weekly_status = next((limit.severity for limit in limits if limit.kind == "weekly_all"), None)
         missing = MissingWindow(state="missing", reason="meter-unreported")
         rows: dict[str, Window] = {
             "5h": self.five_hour.window(18000, None) if self.five_hour else missing,
@@ -159,7 +166,7 @@ class Usage(VendorResponse):
         for name, meter in (("opus", self.seven_day_opus), ("sonnet", self.seven_day_sonnet)):
             if meter is not None:
                 rows[f"7d:{name}"] = meter.window(604800, None)
-        for limit in self.limits:
+        for limit in limits:
             # Only named weekly scopes identify a separate window.
             if limit.kind != "weekly_scoped" or not limit.display_name:
                 continue

@@ -1,1 +1,1 @@
-"""Claude's usage Reader reports allowance windows for the bound login."""
+"""Claude's usage Reader reports allowance windows, prepaid credits and grants for the bound login."""
