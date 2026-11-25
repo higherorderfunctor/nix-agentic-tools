@@ -11,7 +11,7 @@ from typing import Annotated, NamedTuple
 
 from pydantic import Field, HttpUrl, SecretStr, ValidationError
 
-from cliproxyapi.usage.transport import CpaInstance, UnknownBinding
+from cliproxyapi.usage.transport import CpaBinding, UnknownBinding
 from credential_usage.envelope import Account, Binding
 from credential_usage.transport import DirectHttp, FrozenModel, RequestFailure, Transport
 
@@ -21,6 +21,7 @@ from .claude import VENDOR, read_usage
 class Settings(FrozenModel):
     """Read just the environment variables that locate a Claude or CPA credential."""
 
+    CLAUDE_USAGE_CPA_BINDING: str | None = None
     HOME: str | None = None
     CLAUDE_CONFIG_DIR: str | None = None
     DELEGATE_USAGE_CPA_CLAUDE_URL: str | None = None
@@ -67,18 +68,21 @@ def direct_account(settings: Settings) -> BoundAccount:
 
 def configured_cpa_account(settings: Settings) -> BoundAccount | None:
     """Discover exactly one eligible login when the environment selects a CPA instance."""
-    url, key_file = settings.DELEGATE_USAGE_CPA_CLAUDE_URL, settings.DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE
-    if not url and not key_file:
+    url = settings.DELEGATE_USAGE_CPA_CLAUDE_URL
+    key_file = settings.DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE
+    registered = settings.CLAUDE_USAGE_CPA_BINDING
+    if registered is None and not (url or key_file):
         return None
-    if not url or not key_file:
+    if registered is None and not (url and key_file):
         raise RequestFailure("incomplete claude proxy configuration")
     try:
-        binding = Binding(endpoint=HttpUrl(url), transport="cpa")
-        key = Path(key_file).read_bytes().decode().removesuffix("\n")
-        if not key or "\n" in key or "\r" in key:
-            raise ValueError
-        management = DirectHttp(binding.endpoint, SecretStr(key))
-        selected = CpaInstance(binding.endpoint, management).bind(VENDOR, provider="claude")
+        if registered is not None:
+            config = CpaBinding.model_validate_json(registered)
+        else:
+            assert url and key_file
+            config = CpaBinding(endpoint=HttpUrl(url), managementKeyFile=key_file)
+        binding = Binding(endpoint=config.endpoint, transport="cpa")
+        selected = config.instance().bind(VENDOR, provider="claude", pin=config.pin)
     except (OSError, ValueError, RequestFailure):
         raise RequestFailure("claude proxy binding unavailable") from None
     if isinstance(selected, UnknownBinding):

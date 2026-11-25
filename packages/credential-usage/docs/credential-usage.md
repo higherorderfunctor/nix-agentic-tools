@@ -121,14 +121,32 @@ same Reader output.
 
 `ai.credentialUsage.readers.<id>` is where a consumer finds a Reader. Each id
 has a `package` whose executable prints one envelope per account, the
-`transports` it sends through (`direct`, `cpa` or both) and the vendor
-`endpoint` it targets.
+`transports` it sends through (`direct`, `cpa` or both), and its vendor
+`endpoint` as metadata.
 
 A fill owner registers its Reader from its own module at default priority.
 Claude's module is `packages/claude-code/modules/usage.nix`. It registers
 `claude`, built by `ai.claude-code.usageReader` without a bundled CLI, so the
 Reader reads the `claude` on `PATH` for its version. Home Manager and devenv
 import that module, so the `claude` Reader exists wherever Claude's module does.
+
+Select a CPA instance and HTTP policy on Claude's registered command:
+
+```nix
+ai.credentialUsage.readers.claude.cpa = {
+  endpoint = "https://proxy.example";
+  managementKeyFile = "/run/secrets/claude-usage-cpa";
+  policy = {
+    retries = 1;
+    timeout = 30;
+  };
+};
+```
+
+The command opens the key file at runtime. The packaged command and generated
+skill carry its filename. Set `pin` to select an eligible CPA auth index. When
+the `cpa` setting is unset, the Reader chooses from the current CPA environment
+or local Claude configuration.
 
 To select another Reader, define the leaf at ordinary priority:
 
@@ -198,8 +216,8 @@ does, with three differences a real socket needs:
 - It accepts `observedAt` as any UTC instant inside the run, because the
   subprocess reads the real clock.
 
-The driver never runs a direct case. A direct case has no origin to repoint, so
-it would call the real vendor.
+The driver also checks direct cases that stop before sending a request. The
+imported suite checks all direct requests with its fake transport.
 
 ## Checks
 

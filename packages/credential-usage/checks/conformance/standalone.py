@@ -1,11 +1,10 @@
 # pyright: strict
-"""Replay a fixture pair's CPA cases through an installed Reader command and a local HTTP server.
+"""Replay a fixture pair through an installed Reader command.
 
 Owner checks call `main` with a pair directory and a packaged command. Each CPA
-case gets a server that answers with the scenario's replies in order and records
-every request; the recorded trace and the printed result are then compared with
-the pair, as `suite.differences` compares an entry imported in the test process.
-The direct transport is never run: it has no endpoint to repoint.
+case gets a local HTTP server that answers the scenario's requests. Direct
+cases that stop before sending a request exercise the installed command's
+preflight. The same pair checks all direct requests in the imported suite.
 """
 
 from collections.abc import Sequence
@@ -96,7 +95,7 @@ def stamped(document: Document | None, started: datetime, finished: datetime) ->
 
 
 def installed_differences(inputs: Inputs, case: Case, command: str) -> list[str]:
-    """Run the installed command once for a CPA case and return a safe label for each failed comparison."""
+    """Run the installed command once and return a safe label for each failed comparison."""
     errors: list[str] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     credentials = inputs.credentials | case.scenario.credentials
@@ -167,7 +166,7 @@ def installed_differences(inputs: Inputs, case: Case, command: str) -> list[str]
 
 
 def main(args: Sequence[str]) -> int:
-    """Replay the pair's CPA cases through the installed command and report each failed comparison."""
+    """Replay the pair's cases that can run without contacting a vendor."""
     if len(args) != 2:
         print("usage: standalone.py <pair directory> <Reader command>", file=sys.stderr)
         return 1
@@ -176,9 +175,11 @@ def main(args: Sequence[str]) -> int:
     except IncompletePair as error:
         print(error, file=sys.stderr)
         return 1
-    # A direct case would call the real vendor: it has no origin to repoint.
-    cpa = [case for name, case in pair.cases.items() if name.endswith("/cpa")]
-    errors = [error for case in cpa for error in installed_differences(pair.inputs, case, args[1])]
+    cases = [case for name, case in pair.cases.items() if name.endswith("/cpa") or not case.expected.requests]
+    if not cases:
+        print("pair: no cases can run through the installed command", file=sys.stderr)
+        return 1
+    errors = [error for case in cases for error in installed_differences(pair.inputs, case, args[1])]
     for error in errors:
         print(error, file=sys.stderr)
     return int(bool(errors))
