@@ -13,7 +13,7 @@ from pydantic import Field, HttpUrl, Json, SecretStr, ValidationError
 
 from cliproxyapi.usage.transport import CpaBinding, UnknownBinding
 from credential_usage.envelope import Account, Binding
-from credential_usage.transport import DirectHttp, FrozenModel, HttpPolicy, RequestFailure, Transport
+from credential_usage.transport import DirectHttp, FrozenModel, HttpPolicy, RequestFailure, Transport, reader_deadline
 
 from .claude import VENDOR, read_usage
 
@@ -49,7 +49,7 @@ class BoundAccount(NamedTuple):
     account: Account
 
 
-def direct_account(settings: Settings) -> BoundAccount:
+def direct_account(settings: Settings, deadline: float | None) -> BoundAccount:
     """Bind the vendor origin to the token in the configured Claude directory."""
     try:
         if settings.CLAUDE_CONFIG_DIR:
@@ -62,13 +62,13 @@ def direct_account(settings: Settings) -> BoundAccount:
     except (OSError, ValueError):
         raise RequestFailure("claude credentials unavailable") from None
     return BoundAccount(
-        DirectHttp(VENDOR, login.claudeAiOauth.accessToken, settings.CLAUDE_USAGE_DIRECT_POLICY),
+        DirectHttp(VENDOR, login.claudeAiOauth.accessToken, settings.CLAUDE_USAGE_DIRECT_POLICY, deadline),
         Binding(transport="direct", endpoint=VENDOR),
         Account(auth_index=None, name=None, plan=None),
     )
 
 
-def configured_cpa_account(settings: Settings) -> BoundAccount | None:
+def configured_cpa_account(settings: Settings, deadline: float | None) -> BoundAccount | None:
     """Discover exactly one eligible login when the environment selects a CPA instance."""
     url = settings.DELEGATE_USAGE_CPA_CLAUDE_URL
     key_file = settings.DELEGATE_USAGE_CPA_CLAUDE_MANAGEMENT_KEY_FILE
@@ -84,7 +84,7 @@ def configured_cpa_account(settings: Settings) -> BoundAccount | None:
             assert url and key_file
             config = CpaBinding(endpoint=HttpUrl(url), managementKeyFile=key_file)
         binding = Binding(endpoint=config.endpoint, transport="cpa")
-        selected = config.instance().bind(VENDOR, provider="claude", pin=config.pin)
+        selected = config.instance(deadline).bind(VENDOR, provider="claude", pin=config.pin)
     except (OSError, ValueError, RequestFailure):
         raise RequestFailure("claude proxy binding unavailable") from None
     if isinstance(selected, UnknownBinding):
@@ -110,9 +110,10 @@ def main(env: Mapping[str, str], clock: Callable[[], datetime]) -> int:
     """Print one versioned observation or one public failure line for the routing helper."""
     try:
         settings = Settings.model_validate(dict(env))
-        bound = configured_cpa_account(settings)
+        deadline = reader_deadline(env)
+        bound = configured_cpa_account(settings, deadline)
         agent = user_agent(env)
-        bound = bound or direct_account(settings)
+        bound = bound or direct_account(settings, deadline)
         result = read_usage(*bound, agent, clock)
     except (RequestFailure, ValidationError) as error:
         reason = str(error) if isinstance(error, RequestFailure) else "invalid claude usage response"

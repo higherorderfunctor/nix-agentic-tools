@@ -3,7 +3,8 @@
   inherit (pkgs) lib;
   inherit (pkgs.ai.generic) python-stack;
   credentialUsage = (import ../../credential-usage/lib/default.nix).ai.credential-usage;
-  inherit ((import ../lib/default.nix).ai.claude-code) usageModule usagePair usageReader;
+  claude = import ../lib/default.nix;
+  inherit (claude.ai.claude-code) usageModule usagePair usageReader;
   reader =
     (credentialUsage.mergeReaders {inherit pkgs lib;} {
       contributions = [usageModule];
@@ -12,6 +13,8 @@
     ps.pydantic
     ps.urllib3
     (credentialUsage.pythonModule {inherit pkgs python-stack;})
+    (claude.ai.claude-code.pythonModule {inherit pkgs python-stack;})
+    ((import ../../cliproxyapi/lib/default.nix {inherit (pkgs) lib;}).ai.cliproxyapi.pythonModule {inherit pkgs python-stack;})
   ]);
   # Install the socket guard even in a probe interpreter without replay dependencies.
   guard = pkgs.writeText "reader-offline.py" ''
@@ -45,9 +48,12 @@ in {
   checks.claude-code-usage-command =
     pkgs.runCommand "claude-code-usage-command" {
       nativeBuildInputs = [pkgs.bash python];
+      USAGE_PAIR = usagePair;
+      USAGE_SUITE = credentialUsage.conformanceSuite;
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      python3 -I -B ${./usage-deadline}/test_deadline.py
       if ${offlineStack.withPackages (_: [])}/bin/python3 -I -c 'import socket; socket.getaddrinfo("example.invalid", 443)'; then
         echo "Direct Reader check: its offline guard did not stop the socket" >&2
         exit 1

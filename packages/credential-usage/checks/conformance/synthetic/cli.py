@@ -14,7 +14,7 @@ from cliproxyapi.usage.transport import CpaInstance, UnknownBinding
 from credential_usage.envelope import (
     Account, Binding, CreditLot, Envelope, Observed, ObservedWindow, SlotStates, Unknown, Unsupported,
 )
-from credential_usage.transport import DirectHttp, FrozenModel, HttpRequest, RequestFailure, Transport
+from credential_usage.transport import DirectHttp, FrozenModel, HttpRequest, RequestFailure, Transport, reader_deadline
 
 
 class Settings(FrozenModel):
@@ -43,7 +43,7 @@ def main(env: Mapping[str, str], clock: Callable[[], datetime]) -> int:
         settings = Settings.model_validate(env)
         login = Credential.model_validate_json(Path(settings.CREDENTIAL_FILE).read_bytes())
         endpoint = VENDOR if settings.TRANSPORT == "direct" else PROXY
-        transport: Transport = DirectHttp(endpoint, login.token)
+        transport: Transport = DirectHttp(endpoint, login.token, deadline=reader_deadline(env))
         if settings.TRANSPORT == "cpa":
             binding = CpaInstance(endpoint, transport).bind(VENDOR, pin="sample")
             if isinstance(binding, UnknownBinding):

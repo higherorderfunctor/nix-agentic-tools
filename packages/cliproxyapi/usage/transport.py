@@ -28,12 +28,12 @@ class CpaBinding(FrozenModel):
     pin: str | None = None
     policy: HttpPolicy = HttpPolicy()
 
-    def instance(self) -> "CpaInstance":
-        """Load the management key only when running the Reader."""
+    def instance(self, deadline: float | None = None) -> "CpaInstance":
+        """Load the management key only when running the Reader and keep its calls inside the deadline."""
         key = Path(self.managementKeyFile).read_bytes().decode().removesuffix("\n")
         if not key or "\n" in key or "\r" in key:
             raise RequestFailure("invalid management key file")
-        return CpaInstance(self.endpoint, DirectHttp(self.endpoint, SecretStr(key), self.policy))
+        return CpaInstance(self.endpoint, DirectHttp(self.endpoint, SecretStr(key), self.policy, deadline))
 
 
 class AuthFile(FrozenModel):

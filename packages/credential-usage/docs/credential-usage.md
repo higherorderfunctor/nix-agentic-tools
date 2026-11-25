@@ -1,8 +1,9 @@
 # Credential usage
 
-> **Last verified:** 2026-11-24 — the conformance suite compares direct and CPA
+> **Last verified:** 2026-11-25 — the conformance suite compares direct and CPA
 > request traces and version 1 Reader results; Home Manager, devenv and
-> standalone construction resolve the same registered Reader.
+> standalone construction resolve the same registered Reader; the runner's
+> deadline bounds every request a Reader sends.
 
 This package owns the shared parts of reading a credential's usage. A vendor
 owns what to ask its API and what the answer means. The credential owner
@@ -12,7 +13,8 @@ supplies the transport. The consumer turns Reader output into decisions.
 
 - `python/credential_usage/runner.py` runs registered Reader commands and
   returns one raw capture or safe failure per registration. Registrations that
-  share a command share its final outcome and completion time.
+  share a command share its final outcome and completion time. Each attempt
+  tells the Reader how many seconds it has left (see [Deadline](#deadline)).
 - `python/credential_usage/transport.py` defines the request a Reader sends, the
   `Transport` it sends through, and `DirectHttp`, which keeps one bearer token
   on one origin.
@@ -139,7 +141,7 @@ ai.credentialUsage.readers.claude.cpa = {
   managementKeyFile = "/run/secrets/claude-usage-cpa";
   policy = {
     retries = 1;
-    timeout = 30;
+    timeout = 10;
   };
 };
 ```
@@ -150,7 +152,7 @@ index. When the `cpa` setting is unset, the Reader chooses from the current CPA
 environment or local Claude configuration. Set
 `ai.credentialUsage.readers.claude.direct.policy` to configure the timeout and
 retry count for local OAuth requests to `https://api.anthropic.com`. Both
-policies default to a 75-second timeout and zero retries.
+policies default to a 10-second timeout and zero retries.
 
 To select another Reader, define the leaf at ordinary priority:
 
@@ -168,6 +170,39 @@ returns the same registry. delegate-routing's content package calls it for its
 Claude usage command, and its Home Manager and devenv modules pass
 `config.ai.credentialUsage.readers` as `overrides`. A selected Reader therefore
 reaches the packaged command from every constructor.
+
+## Deadline
+
+The routing helper gives each Reader attempt 10 seconds, the default of
+`ReaderPolicy.timeout` in `python/credential_usage/runner.py`. Before it starts
+the Reader, the runner exports the seconds left as
+`CREDENTIAL_USAGE_READER_TIMEOUT`, replacing any inherited value. A Reader binds
+it once, where it builds its transports:
+
+```python
+deadline = reader_deadline(env)
+DirectHttp(endpoint, token, policy, deadline)
+binding.instance(deadline)
+```
+
+Without the variable, or with a value that is not a finite number, there is no
+deadline and the policy timeout is the only bound.
+
+With a deadline, `DirectHttp` gives each request the smaller of the policy
+timeout and the time left, less a margin of 0.5 seconds, shared evenly among the
+retries. The margin leaves the Reader time to print its envelope. Once that is
+nothing, the transport raises `RequestFailure` without a network call. CPA
+management calls and `api-call` pass through the same `DirectHttp`.
+
+Send required reads before optional ones, and let an optional read fail through
+`RequestFailure` into its slot's `unknown` reason. A slow or stalled optional
+request then costs only its own slot, and the runner never kills the Reader
+before it reports what it observed.
+
+Keep each policy timeout at or below the deadline of the consumer running the
+Reader. Under the runner a larger timeout changes nothing, because the deadline
+bounds the request. The timeout limits the wait for a connection and each socket
+read, so a reply that keeps trickling bytes can outlast it.
 
 ## Conformance suite
 

@@ -5,6 +5,7 @@ The Nix check imports the installed package. Local runs use its checkout path.
 
 from datetime import UTC, datetime, timedelta
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -74,6 +75,13 @@ class TestRunner(unittest.TestCase):
             self.assertEqual(
                 {"calls": calls, "delays": delays, "timeouts": timeouts}, expected
             )
+
+    def test_each_attempt_carries_its_deadline_to_the_reader(self) -> None:
+        """126. A Reader that inherits a stale or no deadline cannot bound its optional reads."""
+        reader = [sys.executable, "-c", "import os; print(os.environ.get('CREDENTIAL_USAGE_READER_TIMEOUT', ''), end='')"]
+        with patch.dict(os.environ, {"CREDENTIAL_USAGE_READER_TIMEOUT": "999"}):
+            process = runner.run_reader(reader, timeout=3.5)
+        self.assertEqual((process.returncode, process.stdout), (0, "3.5"))
 
 
 if __name__ == "__main__":

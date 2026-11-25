@@ -10,8 +10,8 @@
     };
     timeout = lib.mkOption {
       type = lib.types.numbers.positive;
-      default = 75;
-      description = "HTTP timeout per request in seconds.";
+      default = 10;
+      description = "HTTP timeout per request in seconds. Keep it at or below the Reader deadline of the consumer that runs this command.";
     };
   };
 in {

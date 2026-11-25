@@ -1,6 +1,9 @@
 """Usage Readers send HTTP requests through a transport bound to one credential."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+import math
+import time
 from typing import Annotated, Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
@@ -34,6 +37,24 @@ class HttpRequest(FrozenModel):
             },
             "Authorization": f"Bearer {token}",
         }
+
+
+DEADLINE_VARIABLE = "CREDENTIAL_USAGE_READER_TIMEOUT"
+# The runner kills the Reader at its deadline; the Reader still has to print its envelope.
+DEADLINE_MARGIN = 0.5
+
+
+def reader_deadline(environ: Mapping[str, str]) -> float | None:
+    """Return the monotonic instant the runner kills this Reader, or None when it sets no limit.
+
+    The runner exports the seconds left in DEADLINE_VARIABLE. An unset or
+    unreadable value leaves the policy timeout as the only bound.
+    """
+    try:
+        left = math.inf if (seconds := environ.get(DEADLINE_VARIABLE)) is None else float(seconds)
+    except ValueError:
+        return None
+    return time.monotonic() + left if math.isfinite(left) else None
 
 
 class RequestFailure(Exception):
@@ -72,7 +93,7 @@ class HttpPolicy(FrozenModel):
     """The HTTP client owns the timeout and network retries for each operation."""
 
     retries: int = Field(default=0, ge=0)
-    timeout: float = Field(default=75, gt=0, allow_inf_nan=False)
+    timeout: float = Field(default=10, gt=0, allow_inf_nan=False)
 
 
 @dataclass(frozen=True)
@@ -82,6 +103,20 @@ class DirectHttp:
     endpoint: HttpUrl
     token: SecretStr
     policy: HttpPolicy = HttpPolicy()
+    deadline: float | None = None
+
+    def request_timeout(self) -> float:
+        """Return how long the next request may wait, or refuse it once the deadline is too close.
+
+        Every retry waits again, so the time left is shared out among the attempts.
+        """
+        if self.deadline is None:
+            return self.policy.timeout
+        left = (self.deadline - time.monotonic() - DEADLINE_MARGIN) / (self.policy.retries + 1)
+        budget = min(self.policy.timeout, left)
+        if budget <= 0:
+            raise RequestFailure("HTTP request deadline passed")
+        return budget
 
     def request(self, request: HttpRequest) -> HttpResponse:
         """Apply the binding and let the HTTP library retry network failures without redirects."""
@@ -93,7 +128,7 @@ class DirectHttp:
                     self.endpoint, self.token.get_secret_value()
                 ),
                 body=request.body,
-                timeout=self.policy.timeout,
+                timeout=self.request_timeout(),
                 redirect=False,
                 retries=Retry(
                     total=self.policy.retries,

@@ -16,6 +16,8 @@ from typing import Annotated, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from credential_usage.transport import DEADLINE_VARIABLE
+
 
 class ReaderRegistration(BaseModel):
     """The runner uses the manifest name to attribute the command's result."""
@@ -76,6 +78,7 @@ def run_reader(argv: list[str], *, timeout: float) -> subprocess.CompletedProces
     """Run the runner's argv and reap the whole process group on timeout."""
     with subprocess.Popen(
         argv,
+        env={**os.environ, DEADLINE_VARIABLE: str(timeout)},
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
