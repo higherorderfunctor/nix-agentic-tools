@@ -1,9 +1,18 @@
 # pyright: strict
-"""Fill owners replay their paired fixtures here to compare the entire Reader command boundary."""
+# cspell:ignore lineterm
+"""Fill owners replay their paired fixtures here to compare the entire Reader command boundary.
 
-from collections.abc import Callable, Generator, Iterator, Mapping
+Both files of a pair list the same scenarios. An entry writes once what both transports share (the
+fields beside `extends`) and writes under `direct` or `cpa` what one transport alone changes. One
+merge rule joins the two, then joins them onto the full case the entry `extends`: objects merge by
+key; arrays and scalars replace. A full case (`"extends": null`) has nothing beneath it, so what it
+writes must be complete on every declared transport.
+"""
+
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
+from difflib import unified_diff
 from importlib import import_module
 import json
 import os
@@ -12,7 +21,7 @@ import re
 from shutil import which
 import sys
 from tempfile import TemporaryDirectory, TemporaryFile
-from typing import Annotated, Literal, NamedTuple, TextIO, cast
+from typing import Annotated, Literal, NamedTuple, TextIO, cast, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError, field_validator
 from urllib3.response import HTTPResponse
@@ -23,6 +32,7 @@ from credential_usage.envelope import Envelope
 
 Entry = Callable[[Mapping[str, str], Callable[[], datetime]], int]
 TransportName = Literal["cpa", "direct"]
+TRANSPORTS = frozenset(get_args(TransportName))
 FileName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*$")]
 Document = dict[str, JsonValue]
 
@@ -52,22 +62,61 @@ class Reply(FixtureModel):
     private: bool = False
 
 
+def merged(base: Document, override: Document) -> Document:
+    """Apply the pair's merge rule to two JSON objects."""
+    whole = base.copy()
+    for key, value in override.items():
+        before = whole.get(key)
+        whole[key] = merged(before, value) if isinstance(before, dict) and isinstance(value, dict) else value
+    return whole
+
+
 class Scenario(FixtureModel):
     """Set the binding environment and select replies in request order."""
+
     env: dict[str, str]
     replies: list[str]
     credentials: CredentialFiles = Field(default_factory=dict)
 
 
+class CaseEntry(FixtureModel):
+    """One scenario's or expectation's entry: what both transports change and what one transport changes alone."""
+
+    # The fields beside `extends` are the shared changes, so the model keeps them instead of refusing them.
+
+    model_config = ConfigDict(extra="allow", strict=True, hide_input_in_errors=True)
+
+    extends: FileName | None
+    cpa: Document = Field(default_factory=dict)
+    direct: Document = Field(default_factory=dict)
+
+    def written(self, transport: TransportName) -> Document:
+        """Return what the entry changes on one transport: the shared fields, then that transport's own."""
+        return merged(cast(Document, self.model_extra), self.cpa if transport == "cpa" else self.direct)
+
+
+def built(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
+    """Return each entry's complete object on every transport, built from the full case it extends."""
+    objects: dict[str, dict[TransportName, Document]] = {}
+    for name, entry in entries.items():
+        if entry.extends is None:
+            objects[name] = {transport: entry.written(transport) for transport in transports}
+    for name, entry in entries.items():
+        if entry.extends is not None:
+            objects[name] = {transport: merged(objects[entry.extends][transport], entry.written(transport)) for transport in transports}
+    return objects
+
+
 class Inputs(FixtureModel):
-    """Read the shared supplies and each transport's scenario from input.json."""
+    """Read the shared supplies and each scenario from input.json."""
+
     description: str
     transports: Annotated[list[TransportName], Field(min_length=1)]
     now: datetime
     replies: dict[str, Reply]
     credentials: CredentialFiles
     executables: dict[FileName, str]
-    scenarios: Annotated[dict[FileName, dict[TransportName, Scenario]], Field(min_length=1)]
+    scenarios: Annotated[dict[FileName, CaseEntry], Field(min_length=1)]
 
     @field_validator("now", mode="before")
     @classmethod
@@ -88,12 +137,14 @@ class Request(FixtureModel):
 
 class Expected(FixtureModel):
     """Keep the author's literal result independent of the Reader's model and conversions."""
+
     requests: list[Request]
     result: Document
 
 
 class Case(NamedTuple):
     """A runner can select one scenario and transport without skipping pair validation."""
+
     name: str
     scenario: Scenario
     expected: Expected
@@ -103,8 +154,14 @@ class IncompletePair(ValueError):
     """Carry only public case identifiers to the runner when a fixture cannot be replayed."""
 
 
+def described(error: ValidationError) -> str:
+    """Name each invalid field of a built case without repeating its value."""
+    return "; ".join(f"{'.'.join(map(str, part['loc']))}: {part['msg']}" for part in error.errors())
+
+
 class Pair(NamedTuple):
     """Load both files and require a complete grid before selecting any case."""
+
     inputs: Inputs
     cases: dict[str, Case]
 
@@ -112,20 +169,36 @@ class Pair(NamedTuple):
     def read(cls, directory: Path) -> "Pair":
         """Match every scenario on every declared transport to exactly one expectation."""
         inputs = Inputs.model_validate_json((directory / "input.json").read_bytes())
-        expected = TypeAdapter(dict[str, dict[TransportName, Expected]]).validate_json(
+        expectations = TypeAdapter(dict[FileName, CaseEntry]).validate_json(
             (directory / "expected.json").read_bytes(), strict=True
         )
-        if inputs.scenarios.keys() != expected.keys() or len(set(inputs.transports)) != len(inputs.transports):
+        declared = set(inputs.transports)
+        if inputs.scenarios.keys() != expectations.keys() or len(declared) != len(inputs.transports):
             raise IncompletePair("pair: scenario or transport declarations differ")
+        for name, scenario_entry in inputs.scenarios.items():
+            expected_entry = expectations[name]
+            parent = scenario_entry.extends
+            if parent != expected_entry.extends:
+                raise IncompletePair(f"{name}: extends differs between input.json and expected.json")
+            if parent is not None and (parent not in inputs.scenarios or inputs.scenarios[parent].extends is not None):
+                raise IncompletePair(f"{name}: extends {parent}, which is not a full case")
+            for piece in (scenario_entry, expected_entry):
+                if (piece.model_fields_set & TRANSPORTS) - declared:
+                    raise IncompletePair(f"{name}: transport coverage differs")
+        scenario_objects = built(inputs.scenarios, inputs.transports)
+        expected_objects = built(expectations, inputs.transports)
         cases: dict[str, Case] = {}
-        for name, scenarios in inputs.scenarios.items():
-            if set(inputs.transports) != scenarios.keys() or scenarios.keys() != expected[name].keys():
-                raise IncompletePair(f"{name}: transport coverage differs")
-            for transport, scenario in scenarios.items():
+        for name in inputs.scenarios:
+            for transport in inputs.transports:
                 key = f"{name}/{transport}"
+                try:
+                    scenario = Scenario.model_validate(scenario_objects[name][transport])
+                    expectation = Expected.model_validate(expected_objects[name][transport])
+                except ValidationError as error:
+                    raise IncompletePair(f"{key}: {described(error)}") from None
                 if any(reply not in inputs.replies for reply in scenario.replies):
                     raise IncompletePair(f"{key}: unknown reply")
-                cases[key] = Case(key, scenario, expected[name][transport])
+                cases[key] = Case(key, scenario, expectation)
         return cls(inputs, cases)
 
 
@@ -154,24 +227,46 @@ def private_strings(content: str) -> Iterator[str]:
     yield from strings(parsed)
 
 
+def hidden_text(credentials: CredentialFiles, replies: Sequence[Reply]) -> tuple[dict[str, str], list[str]]:
+    """Map each credential spelling to its placeholder and list each spelling a failed reply keeps out of output."""
+    masks = {
+        spelling: f"[credential:{name}]"
+        for name, content in credentials.items()
+        for value in private_strings(content)
+        for spelling in (value, json.dumps(value)[1:-1])
+    }
+    private = [
+        spelling
+        for reply in replies if reply.private or not 200 <= reply.status < 300
+        for value in private_strings(reply.body)
+        for spelling in (value, json.dumps(value)[1:-1])
+    ]
+    return masks, private
+
+
+def conceal(values: Mapping[str, str]) -> Callable[[str], str]:
+    """Return a function that swaps each key for its value, longest first, so no diagnostic repeats a private string."""
+    if not values:
+        return lambda text: text
+    pattern = re.compile("|".join(map(re.escape, sorted(values, key=len, reverse=True))))
+
+    def swap(text: str) -> str:
+        return pattern.sub(lambda match: values[match[0]], text)
+
+    return swap
+
+
 class ScriptedNetwork:
     """Serve one reply per HTTP call and stamp observations with the completed call count."""
 
-    def __init__(self, start: datetime, replies: list[Reply], masks: dict[str, str]):
+    def __init__(self, start: datetime, replies: list[Reply], masks: Mapping[str, str]):
         self.start = start
         self.replies = replies
-        self.masks = masks
-        alternatives = sorted(masks, key=len, reverse=True)
-        self.pattern = re.compile("|".join(map(re.escape, alternatives))) if alternatives else None
+        self.mask = conceal(masks)
         self.requests: list[Request] = []
 
     def clock(self) -> datetime:
         return self.start + timedelta(seconds=len(self.requests))
-
-    def mask(self, value: str) -> str:
-        if self.pattern is None:
-            return value
-        return self.pattern.sub(lambda match: self.masks[match[0]], value)
 
     def request(
         self, method: str, url: str, *, headers: dict[str, str] | None = None,
@@ -268,18 +363,42 @@ def same_json(left: JsonValue, right: JsonValue) -> bool:
     return isinstance(left, bool) == isinstance(right, bool) and left == right
 
 
-def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
-    """Run the actual command and return only safe case labels for every failed comparison."""
-    errors: list[str] = []
+class Difference(NamedTuple):
+    """A failed comparison: its case and kind, then the whole objects that differed when two were compared."""
+
+    label: str
+    diff: str = ""
+
+    def __str__(self) -> str:
+        return f"{self.label}\n{self.diff}" if self.diff else self.label
+
+
+def whole_numbers(value: JsonValue) -> JsonValue:
+    """Write a whole float as an integer so a diff shows only what the comparison counts as different."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: whole_numbers(part) for key, part in value.items()}
+    if isinstance(value, list):
+        return [whole_numbers(part) for part in value]
+    return value
+
+
+def diff_of(expected: JsonValue, observed: JsonValue, mask: Callable[[str], str]) -> str:
+    """Diff the complete expected and observed objects with every private string replaced."""
+    before = mask(json.dumps(whole_numbers(expected), indent=2, sort_keys=True)).splitlines()
+    after = mask(json.dumps(whole_numbers(observed), indent=2, sort_keys=True)).splitlines()
+    return "\n".join(unified_diff(before, after, "expected", "observed", n=len(before), lineterm=""))
+
+
+def differences(inputs: Inputs, case: Case, entry: str) -> list[Difference]:
+    """Run the actual command and return one safe report for every failed comparison."""
+    errors: list[Difference] = []
     replies = [inputs.replies[name] for name in case.scenario.replies]
     credentials = inputs.credentials | case.scenario.credentials
-    masks = {
-        spelling: f"[credential:{name}]"
-        for name, content in credentials.items()
-        for value in private_strings(content)
-        for spelling in (value, json.dumps(value)[1:-1])
-    }
+    masks, private = hidden_text(credentials, replies)
     network = ScriptedNetwork(inputs.now, replies, masks)
+    redact = conceal(masks | dict.fromkeys(private, "[private]"))
     with TemporaryDirectory() as tmp:
         env = case_environment(Path(tmp), inputs.executables, case.scenario.env, credentials)
         with (
@@ -295,7 +414,7 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
                     command = cast(Entry, getattr(import_module(module), name))
                 finally:
                     if stdout.tell() or stderr.tell():
-                        errors.append("import output")
+                        errors.append(Difference(f"{case.name}: import output"))
                 status = command(env, network.clock)
             except KeyboardInterrupt:
                 raise
@@ -307,17 +426,15 @@ def differences(inputs: Inputs, case: Case, entry: str) -> list[str]:
             stderr.seek(0)
             out, err = stdout.read(), stderr.read()
 
-    private = [*masks, *(value for reply in replies if reply.private or not 200 <= reply.status < 300
-                         for value in private_strings(reply.body))]
-    if any(secret in stream or json.dumps(secret)[1:-1] in stream for stream in (out, err) for secret in private):
-        errors.append("leak")
+    if any(secret in stream for stream in (out, err) for secret in [*masks, *private]):
+        errors.append(Difference(f"{case.name}: leak"))
     if len(network.requests) != len(replies):
-        errors.append("extra request" if len(network.requests) > len(replies) else "missing request")
-    if not same_json(
-        [request.model_dump() for request in network.requests],
-        [request.model_dump() for request in case.expected.requests],
-    ):
-        errors.append("trace")
-    if not same_json(public_result(status, out, err), case.expected.result):
-        errors.append("result")
-    return [f"{case.name}: {error}" for error in errors]
+        errors.append(Difference(f"{case.name}: extra request" if len(network.requests) > len(replies) else f"{case.name}: missing request"))
+    expected_trace: JsonValue = [request.model_dump() for request in case.expected.requests]
+    trace: JsonValue = [request.model_dump() for request in network.requests]
+    if not same_json(trace, expected_trace):
+        errors.append(Difference(f"{case.name}: trace", diff_of(expected_trace, trace, redact)))
+    observed = public_result(status, out, err)
+    if not same_json(observed, case.expected.result):
+        errors.append(Difference(f"{case.name}: result", diff_of(case.expected.result, observed, redact)))
+    return errors

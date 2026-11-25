@@ -1,5 +1,32 @@
 {
   "success": {
+    "extends": null,
+    "result": {
+      "schemaVersion": 1,
+      "account": { "auth_index": null, "name": null, "plan": "standard" },
+      "observedAt": "2026-11-01T00:00:02Z",
+      "pool": "sample",
+      "windows": {
+        "1h": {
+          "state": "observed",
+          "enforced": true,
+          "remainingPercent": 77,
+          "resetsAt": null,
+          "status": null,
+          "usedPercent": 23,
+          "windowSeconds": 3600
+        }
+      },
+      "accountedSpend": null,
+      "balances": [],
+      "bonuses": [],
+      "slotStates": {
+        "accountedSpend": { "state": "unsupported" },
+        "credits": { "state": "observed" },
+        "grants": { "state": "unsupported" },
+        "resetInventory": { "state": "unsupported" }
+      }
+    },
     "direct": {
       "requests": [
         {
@@ -14,52 +41,14 @@
         {
           "method": "GET",
           "url": "https://reader.example/credits",
-          "headers": {
-            "Authorization": "Bearer [credential:login]"
-          },
+          "headers": { "Authorization": "Bearer [credential:login]" },
           "body": null
         }
       ],
       "result": {
-        "schemaVersion": 1,
-        "account": {
-          "auth_index": null,
-          "name": null,
-          "plan": "standard"
-        },
         "binding": {
           "endpoint": "https://reader.example/",
           "transport": "direct"
-        },
-        "observedAt": "2026-11-01T00:00:02Z",
-        "pool": "sample",
-        "windows": {
-          "1h": {
-            "state": "observed",
-            "enforced": true,
-            "remainingPercent": 77,
-            "resetsAt": null,
-            "status": null,
-            "usedPercent": 23,
-            "windowSeconds": 3600
-          }
-        },
-        "accountedSpend": null,
-        "balances": [],
-        "bonuses": [],
-        "slotStates": {
-          "accountedSpend": {
-            "state": "unsupported"
-          },
-          "credits": {
-            "state": "observed"
-          },
-          "grants": {
-            "state": "unsupported"
-          },
-          "resetInventory": {
-            "state": "unsupported"
-          }
         }
       }
     },
@@ -93,203 +82,26 @@
             "method": "GET",
             "url": "https://reader.example/credits",
             "auth_index": "sample",
-            "header": {
-              "Authorization": "Bearer $TOKEN$"
-            }
+            "header": { "Authorization": "Bearer $TOKEN$" }
           }
         }
       ],
       "result": {
-        "schemaVersion": 1,
-        "account": {
-          "auth_index": null,
-          "name": null,
-          "plan": "standard"
-        },
-        "binding": {
-          "endpoint": "https://proxy.example/",
-          "transport": "cpa"
-        },
-        "observedAt": "2026-11-01T00:00:02Z",
-        "pool": "sample",
-        "windows": {
-          "1h": {
-            "state": "observed",
-            "enforced": true,
-            "remainingPercent": 77,
-            "resetsAt": null,
-            "status": null,
-            "usedPercent": 23,
-            "windowSeconds": 3600
-          }
-        },
-        "accountedSpend": null,
-        "balances": [],
-        "bonuses": [],
-        "slotStates": {
-          "accountedSpend": {
-            "state": "unsupported"
-          },
-          "credits": {
-            "state": "observed"
-          },
-          "grants": {
-            "state": "unsupported"
-          },
-          "resetInventory": {
-            "state": "unsupported"
-          }
-        }
+        "binding": { "endpoint": "https://proxy.example/", "transport": "cpa" }
       }
     }
   },
   "optional-failure": {
-    "direct": {
-      "requests": [
-        {
-          "method": "GET",
-          "url": "https://reader.example/allowance",
-          "headers": {
-            "Accept": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": null
-        },
-        {
-          "method": "GET",
-          "url": "https://reader.example/credits",
-          "headers": {
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": null
-        }
-      ],
-      "result": {
-        "schemaVersion": 1,
-        "account": {
-          "auth_index": null,
-          "name": null,
-          "plan": "standard"
-        },
-        "binding": {
-          "endpoint": "https://reader.example/",
-          "transport": "direct"
-        },
-        "observedAt": "2026-11-01T00:00:02Z",
-        "pool": "sample",
-        "windows": {
-          "1h": {
-            "state": "observed",
-            "enforced": true,
-            "remainingPercent": 77,
-            "resetsAt": null,
-            "status": null,
-            "usedPercent": 23,
-            "windowSeconds": 3600
-          }
-        },
-        "accountedSpend": null,
-        "balances": [],
-        "bonuses": [],
-        "slotStates": {
-          "accountedSpend": {
-            "state": "unsupported"
-          },
-          "credits": {
-            "state": "unknown",
-            "reason": "prepaid-unavailable"
-          },
-          "grants": {
-            "state": "unsupported"
-          },
-          "resetInventory": {
-            "state": "unsupported"
-          }
-        }
-      }
-    },
-    "cpa": {
-      "requests": [
-        {
-          "method": "POST",
-          "url": "https://proxy.example/v0/management/api-call",
-          "headers": {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": {
-            "method": "GET",
-            "url": "https://reader.example/allowance",
-            "auth_index": "sample",
-            "header": {
-              "Accept": "application/json",
-              "Authorization": "Bearer $TOKEN$"
-            }
-          }
-        },
-        {
-          "method": "POST",
-          "url": "https://proxy.example/v0/management/api-call",
-          "headers": {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": {
-            "method": "GET",
-            "url": "https://reader.example/credits",
-            "auth_index": "sample",
-            "header": {
-              "Authorization": "Bearer $TOKEN$"
-            }
-          }
-        }
-      ],
-      "result": {
-        "schemaVersion": 1,
-        "account": {
-          "auth_index": null,
-          "name": null,
-          "plan": "standard"
-        },
-        "binding": {
-          "endpoint": "https://proxy.example/",
-          "transport": "cpa"
-        },
-        "observedAt": "2026-11-01T00:00:02Z",
-        "pool": "sample",
-        "windows": {
-          "1h": {
-            "state": "observed",
-            "enforced": true,
-            "remainingPercent": 77,
-            "resetsAt": null,
-            "status": null,
-            "usedPercent": 23,
-            "windowSeconds": 3600
-          }
-        },
-        "accountedSpend": null,
-        "balances": [],
-        "bonuses": [],
-        "slotStates": {
-          "accountedSpend": {
-            "state": "unsupported"
-          },
-          "credits": {
-            "state": "unknown",
-            "reason": "prepaid-unavailable"
-          },
-          "grants": {
-            "state": "unsupported"
-          },
-          "resetInventory": {
-            "state": "unsupported"
-          }
-        }
+    "extends": "success",
+    "result": {
+      "slotStates": {
+        "credits": { "state": "unknown", "reason": "prepaid-unavailable" }
       }
     }
   },
   "primary-failure": {
+    "extends": null,
+    "result": { "failed": "usage: observation unavailable" },
     "direct": {
       "requests": [
         {
@@ -301,10 +113,7 @@
           },
           "body": null
         }
-      ],
-      "result": {
-        "failed": "usage: observation unavailable"
-      }
+      ]
     },
     "cpa": {
       "requests": [
@@ -325,24 +134,8 @@
             }
           }
         }
-      ],
-      "result": {
-        "failed": "usage: observation unavailable"
-      }
+      ]
     }
   },
-  "unreadable-credential": {
-    "direct": {
-      "requests": [],
-      "result": {
-        "failed": "usage: observation unavailable"
-      }
-    },
-    "cpa": {
-      "requests": [],
-      "result": {
-        "failed": "usage: observation unavailable"
-      }
-    }
-  }
+  "unreadable-credential": { "extends": "primary-failure", "requests": [] }
 }

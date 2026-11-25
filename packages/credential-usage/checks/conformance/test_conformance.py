@@ -1,4 +1,5 @@
 # pyright: strict
+# cspell:ignore replys
 """Exercise the suite's comparisons with a working Reader and one deliberate fault at a time."""
 
 from collections.abc import Callable, Iterable, Mapping
@@ -13,17 +14,108 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from credential_usage.transport import DirectHttp, HttpRequest, HttpResponse
 from run import main as run_cases
-from suite import Case, Pair, differences
+from suite import Case, IncompletePair, Pair, differences
 
 
 DIRECTORY = HERE / "synthetic" / "cases"
 SYNTHETIC = Pair.read(DIRECTORY)
 ENTRY = "synthetic.cli:main"
+
+BROKEN_RESULT = """unreadable-credential/direct: result
+--- expected
++++ observed
+@@ -1,3 +1,3 @@
+ {
+-  "failed": "usage: deliberately wrong"
++  "failed": "usage: observation unavailable"
+ }
+"""
+
+WRONG_PLAN = """success/direct: result
+--- expected
++++ observed
+@@ -1,42 +1,42 @@
+ {
+   "account": {
+     "auth_index": null,
+     "name": null,
+-    "plan": "standard"
++    "plan": "wrong plan"
+   },
+   "accountedSpend": null,
+   "balances": [],
+   "binding": {
+     "endpoint": "https://reader.example/",
+     "transport": "direct"
+   },
+   "bonuses": [],
+   "observedAt": "2026-11-01T00:00:02Z",
+   "pool": "sample",
+   "schemaVersion": 1,
+   "slotStates": {
+     "accountedSpend": {
+       "state": "unsupported"
+     },
+     "credits": {
+       "state": "observed"
+     },
+     "grants": {
+       "state": "unsupported"
+     },
+     "resetInventory": {
+       "state": "unsupported"
+     }
+   },
+   "windows": {
+     "1h": {
+       "enforced": true,
+       "remainingPercent": 77,
+       "resetsAt": null,
+       "state": "observed",
+       "status": null,
+       "usedPercent": 23,
+       "windowSeconds": 3600
+     }
+   }
+ }
+"""
+
+DROPPED_HEADER = """success/direct: trace
+--- expected
++++ observed
+@@ -1,19 +1,18 @@
+ [
+   {
+     "body": null,
+     "headers": {
+-      "Accept": "application/json",
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "GET",
+     "url": "https://reader.example/allowance"
+   },
+   {
+     "body": null,
+     "headers": {
+       "Authorization": "Bearer [credential:login]"
+     },
+     "method": "GET",
+     "url": "https://reader.example/credits"
+   }
+ ]
+"""
+
+
+def failed_labels(pair: Pair, case: Case, entry: str) -> list[str]:
+    """Return what each failed comparison is named, without the objects printed after it."""
+    return [difference.label for difference in differences(pair.inputs, case, entry)]
 
 
 class GoldenCases(unittest.TestCase):
@@ -34,7 +126,9 @@ def golden_test(pair: Pair, case: Case, entry: str) -> Callable[[GoldenCases], N
     """Bind the case before discovery so unittest and pytest collect the same tests."""
     def test_reader_matches_expected_requests_and_result(self: GoldenCases) -> None:
         """69, 71–72. Comparing only the last request or one result field can hide an incorrect Reader."""
-        self.assertEqual(differences(pair.inputs, case, entry), [])
+        failures = differences(pair.inputs, case, entry)
+        if failures:
+            self.fail("\n".join(map(str, failures)))
     return test_reader_matches_expected_requests_and_result
 
 
@@ -53,7 +147,7 @@ collect_golden_cases()
 
 
 class SuiteTests(unittest.TestCase):
-    """The suite must reject incorrect Readers and incomplete fixture pairs."""
+    """The suite must reject incorrect Readers and malformed fixture pairs."""
 
     def test_suite_rejects_each_broken_decision_naming_the_case(self) -> None:
         """71–72. Fail the named comparison for a dropped header, wrong field, missing or extra request."""
@@ -83,13 +177,13 @@ class SuiteTests(unittest.TestCase):
             (patch.object(DirectHttp, "request", extra_request), ["extra request", "trace", "result"]),
         ):
             with self.subTest(labels=labels), fault:
-                self.assertEqual(differences(SYNTHETIC.inputs, case, ENTRY), [f"success/direct: {label}" for label in labels])
+                self.assertEqual(failed_labels(SYNTHETIC, case, ENTRY), [f"success/direct: {label}" for label in labels])
 
         def print_offset(document: str) -> None:
             print(document.replace("2026-11-01T00:00:02Z", "2026-11-01T01:00:02+01:00"))
 
         with self.subTest(fault="offset instant"), patch.object(cli, "print", print_offset, create=True):
-            self.assertEqual(differences(SYNTHETIC.inputs, case, ENTRY), ["success/direct: result"])
+            self.assertEqual(failed_labels(SYNTHETIC, case, ENTRY), ["success/direct: result"])
 
         with TemporaryDirectory() as tmp, patch.object(sys, "path", [tmp, *sys.path]):
             for stream in ("stdout", "stderr"):
@@ -115,12 +209,125 @@ class SuiteTests(unittest.TestCase):
                 entry = f"{module}:main"
                 expected = [f"{case.name}: {label}" for label in (*extra_labels, "missing request", "trace", "result")]
                 with self.subTest(module=module, caller="differences"):
-                    self.assertEqual(differences(SYNTHETIC.inputs, case, entry), expected)
+                    self.assertEqual(failed_labels(SYNTHETIC, case, entry), expected)
                 out, err = StringIO(), StringIO()
                 with self.subTest(module=module, caller="run"), redirect_stdout(out), redirect_stderr(err):
                     self.assertEqual(run_cases([str(DIRECTORY), entry, case.name]), 1)
                     self.assertEqual(out.getvalue(), "")
-                    self.assertEqual(err.getvalue().splitlines(), expected)
+                    self.assertEqual([line for line in err.getvalue().splitlines() if line.startswith(f"{case.name}: ")], expected)
+
+    def test_failure_prints_the_case_and_the_whole_objects(self) -> None:
+        """71–72, 74. A label alone, or a diff of one field, leaves a reader to find where a Reader differs."""
+        with TemporaryDirectory() as tmp:
+            broken = Path(tmp)
+            expected = json.loads((DIRECTORY / "expected.json").read_bytes())
+            expected["unreadable-credential"]["direct"] = {"result": {"failed": "usage: deliberately wrong"}}
+            (broken / "input.json").write_bytes((DIRECTORY / "input.json").read_bytes())
+            (broken / "expected.json").write_text(json.dumps(expected))
+            out, err = StringIO(), StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                status = run_cases([str(broken), ENTRY, "unreadable-credential/direct"])
+            self.assertEqual(status, 1)
+            self.assertEqual(out.getvalue(), "")
+            self.assertEqual(err.getvalue(), BROKEN_RESULT)
+
+        from synthetic import cli
+
+        case = SYNTHETIC.cases["success/direct"]
+        real_request = DirectHttp.request
+
+        def dropped_header(client: DirectHttp, request: HttpRequest) -> HttpResponse:
+            return real_request(client, request.model_copy(update={"headers": {}}))
+
+        for fault, report in (
+            (patch.object(cli.subprocess, "check_output", return_value="wrong plan"), WRONG_PLAN),
+            (patch.object(DirectHttp, "request", dropped_header), DROPPED_HEADER),
+        ):
+            out, err = StringIO(), StringIO()
+            with self.subTest(report=report.splitlines()[0]), fault, redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(run_cases([str(DIRECTORY), ENTRY, case.name]), 1)
+                self.assertEqual(out.getvalue(), "")
+                self.assertEqual(err.getvalue(), report)
+
+    def test_pair_builds_each_case_from_its_full_case(self) -> None:
+        """69, 71–72. Merging arrays by position, or keeping a full case's requests when a case lists none, hides a wrong Reader."""
+        optional = SYNTHETIC.cases["optional-failure/cpa"]
+        self.assertEqual(
+            optional.scenario.model_dump(),
+            {"env": {"CREDENTIAL_FILE": "${credentials:login}", "TRANSPORT": "cpa"}, "replies": ["proxy-allowance", "proxy-failed"], "credentials": {}},
+        )
+        self.assertEqual(optional.expected.requests, SYNTHETIC.cases["success/cpa"].expected.requests)
+        self.assertEqual(optional.expected.result["slotStates"], {
+            "accountedSpend": {"state": "unsupported"},
+            "credits": {"state": "unknown", "reason": "prepaid-unavailable"},
+            "grants": {"state": "unsupported"},
+            "resetInventory": {"state": "unsupported"},
+        })
+        unreadable = SYNTHETIC.cases["unreadable-credential/direct"]
+        self.assertEqual(unreadable.scenario.model_dump(), {
+            "env": {"CREDENTIAL_FILE": "${credentials:login}.missing", "TRANSPORT": "direct"}, "replies": [], "credentials": {},
+        })
+        self.assertEqual(unreadable.expected.model_dump(), {"requests": [], "result": {"failed": "usage: observation unavailable"}})
+
+    def test_pair_refuses_the_shapes_it_has_no_path_for(self) -> None:
+        """69, 73. A full case in the old shape, a chain, two different parents and a misspelled or mistyped difference
+        must not load: a case built two ways cannot back a recorded kill."""
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            for name, change, message in (
+                ("unreadable-credential", {"extends": "optional-failure"}, "extends optional-failure, which is not a full case"),
+                ("unreadable-credential", {"extends": "absent"}, "extends absent, which is not a full case"),
+                ("optional-failure", {"replys": ["allowance"]}, "optional-failure/cpa: replys: Extra inputs are not permitted"),
+                ("optional-failure", {"direct": {"replies": "allowance"}}, "optional-failure/direct: replies: Input should be a valid list"),
+            ):
+                data = json.loads((DIRECTORY / "input.json").read_bytes())
+                data["scenarios"][name] |= change
+                hoped = json.loads((DIRECTORY / "expected.json").read_bytes())
+                if "extends" in change:
+                    hoped[name]["extends"] = change["extends"]
+                (directory / "input.json").write_text(json.dumps(data))
+                (directory / "expected.json").write_text(json.dumps(hoped))
+                with self.subTest(change=change), self.assertRaisesRegex(IncompletePair, message):
+                    Pair.read(directory)
+
+            data = json.loads((DIRECTORY / "input.json").read_bytes())
+            del data["scenarios"]["success"]["extends"]
+            (directory / "input.json").write_text(json.dumps(data))
+            (directory / "expected.json").write_bytes((DIRECTORY / "expected.json").read_bytes())
+            with self.subTest(shape="a full case without extends"), self.assertRaises(ValidationError):
+                Pair.read(directory)
+
+            (directory / "input.json").write_bytes((DIRECTORY / "input.json").read_bytes())
+            hoped = json.loads((DIRECTORY / "expected.json").read_bytes())
+            hoped["unreadable-credential"]["extends"] = "success"
+            (directory / "expected.json").write_text(json.dumps(hoped))
+            with self.subTest(shape="two different parents"), self.assertRaisesRegex(IncompletePair, "extends differs"):
+                Pair.read(directory)
+
+    def test_a_full_case_written_once_builds_both_transports(self) -> None:
+        """69, 71–72. Dropping a field written once, or letting it replace a transport's own field, changes what a Reader is sent."""
+        with TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            data = json.loads((DIRECTORY / "input.json").read_bytes())
+            data["scenarios"]["primary-failure"] = {
+                "extends": None,
+                "env": {"CREDENTIAL_FILE": "${credentials:login}"},
+                "replies": ["failed"],
+                "direct": {"env": {"TRANSPORT": "direct"}},
+                "cpa": {"env": {"TRANSPORT": "cpa"}, "replies": ["proxy-failed"]},
+            }
+            hoped = json.loads((DIRECTORY / "expected.json").read_bytes())
+            hoped["primary-failure"] = {
+                "extends": None,
+                "result": {"failed": "usage: observation unavailable"},
+                **{
+                    transport: {"requests": [request.model_dump() for request in SYNTHETIC.cases[f"primary-failure/{transport}"].expected.requests]}
+                    for transport in ("direct", "cpa")
+                },
+            }
+            (directory / "input.json").write_text(json.dumps(data))
+            (directory / "expected.json").write_text(json.dumps(hoped))
+            self.assertEqual(Pair.read(directory).cases, SYNTHETIC.cases)
 
     def assert_synthetic_case_ids(self, case_ids: Iterable[str]) -> None:
         """Check the full synthetic grid even if a transport disappears from both fixture files."""
@@ -146,7 +353,7 @@ class SuiteTests(unittest.TestCase):
                 else:
                     data["transports"] = ["direct"]
                 (directory / "input.json").write_text(json.dumps(data))
-                with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, "transport coverage"):
+                with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, "success/cpa: " if missing else "transport coverage"):
                     Pair.read(directory)
 
     def test_supplied_credentials_and_failed_bodies_stay_out_of_output(self) -> None:
@@ -173,9 +380,9 @@ class SuiteTests(unittest.TestCase):
                         return status
 
                     with self.subTest(case=name, stream=stream, private=leaked == "sample-private-value"), patch.object(cli, "main", leaking_entry):
-                        errors = differences(SYNTHETIC.inputs, case, ENTRY)
-                        self.assertIn(f"{name}: leak", errors)
-                        self.assertNotIn(leaked, "\n".join(errors))
+                        reports = differences(SYNTHETIC.inputs, case, ENTRY)
+                        self.assertIn(f"{name}: leak", [report.label for report in reports])
+                        self.assertNotIn(leaked, "\n".join(map(str, reports)))
 
 
 if __name__ == "__main__":
