@@ -103,7 +103,7 @@ def user_agent(env: Mapping[str, str]) -> str:
 def main(env: Mapping[str, str], clock: Callable[[], datetime]) -> int:
     """Print one versioned observation or one public failure line for the routing helper."""
     try:
-        settings = Settings.model_validate(env)
+        settings = Settings.model_validate(dict(env))
         bound = configured_cpa_account(settings)
         agent = user_agent(env)
         bound = bound or direct_account(settings)

@@ -56,4 +56,5 @@ in {
       touch "$out"
     '';
   };
+  imports = [./checks/registration.nix];
 }

@@ -1,12 +1,13 @@
 # Delegate routing package
 
-> **Last verified:** 2026-11-21 — native picker schema and bounded repairs
-> preserve logged sessions and executable-tool removal; shared avoid/exclude
-> fallback and all-technique machine defaults preserve floors, session gates and
-> intentional null omission; failure warnings and the fallback notice reach
-> stderr; advisory notes stay JSON-only; the renderer consumes the private
-> shared routing view for launch reaches and registered readers; Plan saves
-> bounded units, role-qualified launches and verbatim-rubric briefs, and
+> **Last verified:** 2026-11-24 — Claude's usage technique commands the Reader
+> registered in `ai.credentialUsage.readers`; native picker schema and bounded
+> repairs preserve logged sessions and executable-tool removal; shared
+> avoid/exclude fallback and all-technique machine defaults preserve floors,
+> session gates and intentional null omission; failure warnings and the fallback
+> notice reach stderr; advisory notes stay JSON-only; the renderer consumes the
+> private shared routing view for launch reaches and registered readers; Plan
+> saves bounded units, role-qualified launches and verbatim-rubric briefs, and
 > check-plan validates them against fresh helper output; planner has a
 > strong/frontier floor; the packaged non-launching helper consumes the same
 > view and runtime sessionPool binding, rejects incomplete Reader envelopes, and
@@ -879,6 +880,16 @@ to a runtime through that runtime's usage techniques. `opencode-usage` reads the
 undocumented `GET https://opencode.ai/zen/go/v1/usage`, the request OpenCode's
 open-source client makes, and prints Go's `rolling`, `weekly` and `monthly`
 windows through the shared schema with UTC reset times.
+
+Claude's `usage` technique runs the Reader that Claude's module registers at
+`ai.credentialUsage.readers.claude`
+([credential-usage](../../credential-usage/docs/credential-usage.md)), which
+prints the version 1 usage envelope. `mkSkill` takes that command from the
+registered Readers, so an ordinary `ai.credentialUsage.readers.claude.package`
+definition reaches the skill and its manifest in Home Manager and devenv. A
+technique command that a consumer sets itself stays. The helper reads the
+envelope's `account`, `pool`, `windows`, `balances` and `bonuses` as it reads
+any Reader's output.
 
 Usage helpers print one JSON document per account with `pool`, `account`
 (`auth_index`, `name`, `plan`), `windows`, `balances` and `bonuses`. Each window
