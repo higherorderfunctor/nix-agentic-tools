@@ -1,1 +1,1 @@
-var C=[{id:"claude-opus-5",family:"opus",...{id:"provider-wire"}}];
+var C={models:[{id:"claude-opus-5",family:"opus",...{id:"provider-wire"}}],latest_per_family:{}};

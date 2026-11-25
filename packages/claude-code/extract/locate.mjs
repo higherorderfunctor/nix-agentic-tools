@@ -776,8 +776,8 @@ export function locate(root, ts) {
   };
 }
 
-// Catalog aliases, retirement membership and launch guards are outside the
-// settings schema. Parse only content candidates, never execute these chunks.
+// Find catalog aliases, family defaults, retirements and launch guards for
+// modelFacts. Parse candidate chunks without executing the CLI.
 export function locateModelSites(src, ts) {
   const sites = { catalog: [], pins: [], retired: [] };
   if (
@@ -798,6 +798,8 @@ export function locateModelSites(src, ts) {
       "claude-extract: PROBE failure: model facts chunk does not parse",
     );
   const literal = (n) => (n && ts.isStringLiteral(n) ? n.text : null);
+  // Map literal property names to their values for the site readers. Candidate
+  // scans ignore other forms; a named site rejects them and duplicate keys.
   const properties = (n, location) => {
     if (
       location &&
@@ -820,8 +822,9 @@ export function locateModelSites(src, ts) {
       );
     return fields;
   };
-  // Read defaults from the owner of this models array, not the schema or a decoy.
-  function latestPerFamily(models) {
+  // For the catalog site, read family defaults beside its models array.
+  // Reject malformed maps and defaults that do not name one of its ids.
+  function latestPerFamily(models, ids) {
     const field = models.parent;
     const owner = field.parent;
     if (
@@ -848,6 +851,10 @@ export function locateModelSites(src, ts) {
           throw new Error(
             `claude-extract: PROBE failure: latest_per_family: expected string for ${family}`,
           );
+        if (!ids.includes(value.text))
+          throw new Error(
+            `claude-extract: PROBE failure: latest_per_family: ${family} names unknown catalog id ${value.text}`,
+          );
         return [family, value.text];
       }),
     );
@@ -870,7 +877,7 @@ export function locateModelSites(src, ts) {
           );
         for (const entry of n.elements)
           properties(entry, "model catalog entry");
-        sites.catalog.push({ ids, latestPerFamily: latestPerFamily(n) });
+        sites.catalog.push({ ids, latestPerFamily: latestPerFamily(n, ids) });
       }
     }
     if (ts.isObjectLiteralExpression(n)) {

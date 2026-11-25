@@ -1,6 +1,6 @@
 rec {
   # Extract the claude-code facts that mkClaude.nix's option surface is built
-  # from, emitting `{effortLevels, hookEvents, launchEffortPins, models,
+  # from, emitting `{effortLevels, hookEvents, latestPerFamily, launchEffortPins, models,
   # settings}` to `dest` (default stdout). Single source of the extraction
   # logic — used by claude-code's passthru.extracted and the PR CI
   # owner check's regenerator.
@@ -21,8 +21,8 @@ rec {
   #      `settingsBooleanKeys` grep is precisely what broke at 2.1.245 when
   #      upstream code-split the bundle out from under its anchor.
   #
-  #   2. `launchEffortPins` and `models` come from content-located AST reads
-  #      of the launch guards, catalog array and retirement table in that graph.
+  #   2. `latestPerFamily`, `launchEffortPins` and `models` come from AST reads
+  #      of the catalog object, launch guards and retirement table in that graph.
   #      No chunk names or provider wire ids enter the model option enum.
   #
   # Every guard is a hard failure, never a warning. EVERY key here becomes an
