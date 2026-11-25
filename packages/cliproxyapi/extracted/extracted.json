@@ -5024,7 +5024,7 @@
         },
         "name": "LongCat-2.5",
         "object": "model",
-        "open_weights": false,
+        "open_weights": true,
         "owned_by": "opencode",
         "recommended_api": "chat-completions",
         "release_date": "2026-11-02",
