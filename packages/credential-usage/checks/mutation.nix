@@ -14,12 +14,13 @@ in
       PYTHONDONTWRITEBYTECODE = "1";
       READER_ENTRY = "claude_code.usage.cli:main";
       READER_PAIR = ../../claude-code/usage/cases;
-      TZ = "America/Denver";
       TZDIR = "${pkgs.tzdata}/share/zoneinfo";
       USAGE_DOC = ../docs/credential-usage.md;
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      # stdenv sets UTC before running this command.
+      export TZ=America/Denver
       pyright --pythonpath "$(command -v python3)" ${./mutation/run.py} ${./mutation/conftest.py}
 
       mkdir -p claude_code/usage cliproxyapi/usage tests "$out"
