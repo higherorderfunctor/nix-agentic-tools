@@ -1,9 +1,6 @@
 # Claude owns static Anthropic identities, available even when its runtime is disabled.
 {lib, ...}: let
-  # Read only this owner's aggregate; the models set is a list of strings.
-  facts = import ../../../lib/extracted/facts.nix {inherit lib;};
-  # The facts contract validates the set before genAttrs consumes its identifiers.
-  ids = facts.get (facts.load {dir = ../extracted;}).aggregate "models";
+  ids = import ../lib/extracted-fact.nix {inherit lib;} "models";
   # Extraction supplies exact ids, with no additional vendor alias spellings.
   contribution = {
     models = lib.genAttrs ids (_: {

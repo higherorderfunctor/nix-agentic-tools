@@ -24,10 +24,7 @@
   sharedHooks = lib.ai.hooks;
   # Eval-pure reads of committed facts (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
-  claudeFact = let
-    extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
-  in
-    extracted.get (extracted.load {dir = ../extracted;}).aggregate;
+  claudeFact = import ./extracted-fact.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   openKeys = import ../../../lib/open-keys {inherit lib;};

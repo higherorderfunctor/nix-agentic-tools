@@ -55,9 +55,9 @@ already writes (user on Home Manager, project on devenv). Every derived leaf is
 a `mkDefault`, so a consumer's own value for one, such as
 `env.ANTHROPIC_BASE_URL`, wins without `mkForce`.
 
-Only CLIProxyAPI sets `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` for family aliases. For
-Fable, Haiku, Opus and Sonnet, it uses the latest model ID from the pinned
-Claude Code bundle’s catalog. A family missing from the catalog gets no default.
+Only CLIProxyAPI sets `ANTHROPIC_DEFAULT_<FAMILY>_MODEL` for family aliases. It
+sets a default only for Fable, Haiku, Opus or Sonnet, and only if the pinned
+Claude Code bundle’s `latest_per_family` map lists a model ID for that family.
 To override just Fable, set
 `ai.claude.native.settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL` to the model ID
 you want. Use Nix rather than a shell export: Claude Code can overwrite the

@@ -1,7 +1,7 @@
 rec {
   # Extract the claude-code facts that mkClaude.nix's option surface is built
-  # from, emitting `{effortLevels, hookEvents, latestPerFamily, launchEffortPins, models,
-  # settings}` to `dest` (default stdout). Single source of the extraction
+  # from, emitting `{effortLevels, hookEvents, latestPerFamily, launchEffortPins,
+  # models, settings}` to `dest` (default stdout). Single source of the extraction
   # logic — used by claude-code's passthru.extracted and the PR CI
   # owner check's regenerator.
   #
