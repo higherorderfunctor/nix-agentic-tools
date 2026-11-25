@@ -4,17 +4,36 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 import json
+from pathlib import Path
 
 from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError, field_validator
 
 from credential_usage.transport import (
+    DirectHttp,
     FrozenModel,
+    HttpPolicy,
     HttpRequest,
     HttpResponse,
     RequestFailure,
     Transport,
     origin,
 )
+
+
+class CpaBinding(FrozenModel):
+    """Connect to a registered management endpoint using its runtime key file."""
+
+    endpoint: HttpUrl
+    managementKeyFile: str
+    pin: str | None = None
+    policy: HttpPolicy = HttpPolicy()
+
+    def instance(self) -> "CpaInstance":
+        """Load the management key only when running the Reader."""
+        key = Path(self.managementKeyFile).read_bytes().decode().removesuffix("\n")
+        if not key or "\n" in key or "\r" in key:
+            raise RequestFailure("invalid management key file")
+        return CpaInstance(self.endpoint, DirectHttp(self.endpoint, SecretStr(key), self.policy))
 
 
 class AuthFile(FrozenModel):
