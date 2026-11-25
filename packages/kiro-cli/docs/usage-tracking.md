@@ -36,8 +36,10 @@ same runtime state directory.
 `upstreamCaFile` is also an absolute runtime string, not a Nix path. When set,
 the service passes that file to mitmproxy as its complete upstream trust store.
 
-The service runs `pkgs.mitmproxy` from the module's package set, binds only
-`127.0.0.1`, and claims its port through `ai.services`. It intercepts only
+The Home Manager and devenv services use this flake's pinned
+`ai.generic.mitmproxy`. On macOS the build uses the corrected `mitmproxy-macos`
+wheel hash and is published to the flake's binary cache. The service binds only
+`127.0.0.1` and claims its port through `ai.services`. It intercepts only
 `runtime.us-east-1.kiro.dev:443`; the addon records `/v1/responses` (root turns)
 and the GenerateAssistantResponse AWS JSON RPC call (workflow steps, subagents
 and titles): path `/` whose `x-amz-target` is exactly

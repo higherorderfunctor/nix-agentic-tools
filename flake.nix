@@ -274,6 +274,11 @@
       // lib.optionalAttrs (system == "x86_64-linux") {
         ci-hestia = self.ciHestia.x86_64-linux;
       }
+      // lib.optionalAttrs (pkgsFor system).stdenv.hostPlatform.isDarwin {
+        # Owner overlay claims are not native package roots. Publish this
+        # runtime dependency explicitly so consumers substitute the proxy.
+        kiro-usage-mitmproxy = (pkgsFor system).ai.generic.mitmproxy;
+      }
       // {
         kiro-cli-rollout-canary = import ./packages/kiro-cli/rollout-canary.nix {
           inherit lib;

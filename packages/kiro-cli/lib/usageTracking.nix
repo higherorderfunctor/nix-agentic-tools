@@ -3,6 +3,7 @@
   lib,
   pkgs,
 }: let
+  mitmproxy = pkgs.ai.generic.mitmproxy;
   runtime = "${../usage}/runtime.py";
   proxyNames = ["ALL_PROXY" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" "NODE_EXTRA_CA_CERTS" "all_proxy" "http_proxy" "https_proxy" "no_proxy"];
   retentionArgs = cfg: lib.optionals (cfg.payloadRetentionDays != null) ["--payload-retention-days" (toString cfg.payloadRetentionDays)];
@@ -31,7 +32,7 @@
   # A mitmproxy with no evaluable interpreter, such as a non-Python override, adds no entry.
   pythons = lib.filterAttrs (_: python: python != null) {
     inherit (pkgs) python3;
-    mitmproxy = pythonOf pkgs.mitmproxy;
+    mitmproxy = pythonOf mitmproxy;
   };
   pythonRequirement = {
     assertion = lib.all (python: lib.versionAtLeast python.version "3.14") (lib.attrValues pythons);
@@ -114,7 +115,7 @@ in {
         "--port"
         (toString cfg.port)
         "--mitmdump"
-        "${pkgs.mitmproxy}/bin/mitmdump"
+        "${mitmproxy}/bin/mitmdump"
         "--addon"
         "${../usage}/mitm_addon.py"
       ]

@@ -17,7 +17,10 @@
       ln -s ${fake} "$out/bin/$name"
     done
   '';
-  testPkgs = pkgs // {mitmproxy = package;};
+  # Inject where both modules read the proxy. A fallback to raw pkgs.mitmproxy
+  # would miss the fake and could test the wrong interpreter.
+  withMitmproxy = mitmproxy: pkgs // {ai = pkgs.ai // {generic = pkgs.ai.generic // {inherit mitmproxy;};};};
+  testPkgs = withMitmproxy package;
   configuration = {
     ai.kiro = {
       cli = {
@@ -72,6 +75,7 @@ in {
       dev.config.ai.services.kiro-usage.ports.proxy
       == 18091
       && hm.config.ai.services.kiro-usage.command == dev.config.ai.services.kiro-usage.command
+      && lib.elem "${package}/bin/mitmdump" dev.config.ai.services.kiro-usage.command
       && acceptsUpstreamCaFile "/etc/nix/macos-ca.pem"
       && !(acceptsUpstreamCaFile "macos-ca.pem")
       && !(acceptsUpstreamCaFile ./usage-fake.py)
@@ -84,7 +88,7 @@ in {
       && !(disabled.config.ai.services ? kiro-usage)
       && !(disabled.config.env ? HTTPS_PROXY)
       && rejected {ai.kiro.cli.package = null;}
-      && rejectedWith (testPkgs // {mitmproxy = pkgs.python313Packages.mitmproxy;})
+      && rejectedWith (withMitmproxy pkgs.python313Packages.mitmproxy)
       && rejectedWith (testPkgs // {python3 = pkgs.python313;})
       && rejected {ai.environmentVariables.HTTPS_PROXY = "http://another:1234";}
       && rejected {ai.kiro.cli.environmentVariables.NODE_EXTRA_CA_CERTS = "/another.pem";}
