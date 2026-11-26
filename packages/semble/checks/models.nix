@@ -536,7 +536,7 @@ in {
       export HOME="$TMPDIR/home"
       export HF_HOME="$TMPDIR/hf"
       export HF_HUB_OFFLINE=1
-      snapshot="$HF_HOME/hub/models--minishlab--potion-code-16M-v2/snapshots/fixture"
+      snapshot="$HF_HOME/hub/models--minishlab--blink-code-16M-int8/snapshots/fixture"
       ${pkgs.coreutils}/bin/mkdir -p "$HOME" "$snapshot" repo
       ${pkgs.coreutils}/bin/cp ${builtinModel}/* "$snapshot/"
       printf 'def alpha():\n    return beta\n' > repo/main.py
@@ -627,7 +627,7 @@ in {
       # ── Vanilla: upstream's package and its built-in model ──
       check no ${vanillaPackage}/bin/semble search alpha repo
       expect_indexes ${vanillaCacheHome}/semble "index " "a vanilla search"
-      expect_model ${vanillaCacheHome}/semble index minishlab/potion-code-16M-v2
+      expect_model ${vanillaCacheHome}/semble index minishlab/blink-code-16M-int8
 
       # ── MCP: per-call routing through the patched server ──
       export SEMBLE_CACHE_LOCATION="$TMPDIR/mcp-cache"
