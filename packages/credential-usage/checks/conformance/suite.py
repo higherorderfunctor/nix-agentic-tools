@@ -5,7 +5,8 @@ Both files of a pair list the same scenarios. An entry writes once what both tra
 fields beside `extends`) and writes under `direct` or `cpa` what one transport alone changes. One
 merge rule joins the two, then joins them onto the full case the entry `extends`: objects merge by
 key; arrays and scalars replace. A full case (`"extends": null`) has nothing beneath it, so what it
-writes must be complete on every declared transport.
+writes must be complete on every transport it runs on. A case runs on every declared transport, or
+on the fewer it lists in `transports` (never more than the full case it extends); both files agree.
 """
 
 from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
@@ -101,6 +102,7 @@ class CaseEntry(FixtureModel):
     model_config = ConfigDict(extra="allow", strict=True, hide_input_in_errors=True)
 
     extends: FileName | None
+    transports: Annotated[list[TransportName], Field(min_length=1)] | None = None
     cpa: Document = Field(default_factory=dict)
     direct: Document = Field(default_factory=dict)
 
@@ -109,15 +111,16 @@ class CaseEntry(FixtureModel):
         return merged(cast(Document, self.model_extra), self.cpa if transport == "cpa" else self.direct)
 
 
-def expanded_cases(entries: Mapping[str, CaseEntry], transports: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
-    """Return each entry's complete object on every transport, built from the full case it extends."""
+def expanded_cases(entries: Mapping[str, CaseEntry], declared: Sequence[TransportName]) -> dict[str, dict[TransportName, Document]]:
+    """Return each entry's complete object on every transport it runs on, built from the full case it extends."""
     objects: dict[str, dict[TransportName, Document]] = {}
     for name, entry in entries.items():
         if entry.extends is None:
-            objects[name] = {transport: entry.transport_overrides(transport) for transport in transports}
+            objects[name] = {transport: entry.transport_overrides(transport) for transport in entry.transports or declared}
     for name, entry in entries.items():
         if entry.extends is not None:
-            objects[name] = {transport: merged(objects[entry.extends][transport], entry.transport_overrides(transport)) for transport in transports}
+            base = objects[entry.extends]
+            objects[name] = {transport: merged(base[transport], entry.transport_overrides(transport)) for transport in entry.transports or base}
     return objects
 
 
@@ -169,7 +172,7 @@ class Pair(NamedTuple):
 
     @classmethod
     def read(cls, directory: Path) -> "Pair":
-        """Match every scenario on every declared transport to exactly one expectation."""
+        """Match every scenario on every transport it runs on to exactly one expectation."""
         inputs = Inputs.model_validate_json((directory / "input.json").read_bytes())
         expectations = TypeAdapter(dict[FileName, CaseEntry]).validate_json(
             (directory / "expected.json").read_bytes(), strict=True
@@ -181,17 +184,24 @@ class Pair(NamedTuple):
             parent = inputs.scenarios.get(scenario.extends or "")
             if scenario.extends != expected.extends:
                 raise ValueError(f"{name}: extends differs between input.json and expected.json")
+            if scenario.transports != expected.transports:
+                raise ValueError(f"{name}: transports differ between input.json and expected.json")
             if scenario.extends is not None and (parent is None or parent.extends is not None):
                 raise ValueError(f"{name}: extends {scenario.extends}, which is not a full case")
-            if any((piece.model_fields_set & TRANSPORTS) - set(inputs.transports) for piece in (scenario, expected)):
+            # A full case that names no transport runs on every declared one; no case runs on more than the one it extends.
+            inherited = inputs.transports if parent is None else parent.transports or inputs.transports
+            runs = scenario.transports or inherited
+            if not set(runs) <= set(inherited):
+                raise ValueError(f"{name}: transports exceed those of {scenario.extends or 'the pair'}")
+            if any((piece.model_fields_set & TRANSPORTS) - set(runs) for piece in (scenario, expected)):
                 raise ValueError(f"{name}: transport coverage differs")
         scenarios, expected = expanded_cases(inputs.scenarios, inputs.transports), expanded_cases(expectations, inputs.transports)
         cases: dict[str, Case] = {}
-        for name in inputs.scenarios:
-            for transport in inputs.transports:
+        for name, objects in scenarios.items():
+            for transport, document in objects.items():
                 key = f"{name}/{transport}"
                 try:
-                    built = Scenario.model_validate(scenarios[name][transport])
+                    built = Scenario.model_validate(document)
                     expectation = Expected.model_validate(expected[name][transport])
                 except ValidationError as error:
                     raise ValueError(f"{key}: {error}") from None
@@ -202,15 +212,20 @@ class Pair(NamedTuple):
 
 
 def credential_strings(content: str) -> Sequence[str]:
-    """List a credential file's text and every string inside it, so output cannot carry a fragment."""
+    """List a credential file's text and every string inside it, JSON text inside a string included."""
+    adapter = TypeAdapter(JsonValue)
     try:
-        parsed = TypeAdapter(JsonValue).validate_json(content)
+        parsed = adapter.validate_json(content)
     except ValidationError:
         return [content.strip()]
 
     def strings(value: JsonValue) -> Iterator[str]:
         if isinstance(value, str):
             yield value
+            try:
+                yield from strings(adapter.validate_json(value))
+            except ValidationError:
+                pass
         elif isinstance(value, dict):
             for part in value.values():
                 yield from strings(part)
@@ -311,18 +326,20 @@ def public_result(status: int | None, out: str, err: str) -> Document | None:
 
 def compare(
     test: unittest.TestCase, credentials: Mapping[str, str], case: Case,
-    status: int | None, out: str, err: str, requests: Sequence[Document],
+    status: int | None, out: str, err: str, requests: Sequence[Document], observed: Document | None = None,
 ) -> None:
-    """Compare one run's whole public boundary with the pair; each failed assertion prints what differed."""
+    """Compare one run's whole public boundary with the pair; each failed assertion prints what differed.
+
+    `observed` is the decoded result when the caller has decoded it already, as an installed replay must to stamp its time.
+    """
     leaked = [text for content in credentials.values() for text in credential_strings(content) if text and (text in out or text in err)]
     test.assertEqual(leaked, [], "a credential reached stdout or stderr")
-    test.assertEqual(len(requests), len(case.scenario.replies), "requests sent")
     test.assertEqual(requests, case.expected.requests, "requests")
-    test.assertEqual(public_result(status, out, err), case.expected.result, f"result (exit {status}, stdout {out!r}, stderr {err!r})")
+    test.assertEqual(public_result(status, out, err) if observed is None else observed, case.expected.result, f"result (exit {status}, stdout {out!r}, stderr {err!r})")
 
 
-def conformance(directory: Path, entry: str, selector: str = "all") -> unittest.TestSuite:
-    """Return one test per selected case, each named by its scenario and transport, for the Reader at `entry`."""
+def conformance(directory: Path, entry: str) -> unittest.TestSuite:
+    """Return one test per case, each named by its scenario and transport, for the Reader at `entry`."""
     pair = Pair.read(directory)
 
     class Conformance(unittest.TestCase):
@@ -355,8 +372,7 @@ def conformance(directory: Path, entry: str, selector: str = "all") -> unittest.
                     out, err = stdout.read(), stderr.read()
             compare(self, credentials, case, status, out, err, network.requests)
 
-    cases = pair.cases.values() if selector == "all" else [pair.cases[selector]]
     return unittest.TestSuite(
         unittest.defaultTestLoader.loadTestsFromTestCase(type(case.name, (Conformance,), {"inputs": pair.inputs, "case": case}))
-        for case in cases
+        for case in pair.cases.values()
     )

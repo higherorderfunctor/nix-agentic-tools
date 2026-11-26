@@ -1,5 +1,5 @@
 # pyright: strict
-"""Owner checks call this script with a fixture directory, an importable Reader entry and a case."""
+"""Owner checks call this script with a fixture directory and an importable Reader entry."""
 
 from collections.abc import Sequence
 from pathlib import Path
@@ -13,14 +13,14 @@ from suite import conformance
 
 
 def main(args: Sequence[str]) -> int:
-    """Run the selected cases and report each failed comparison."""
-    if len(args) not in (2, 3):
-        print("usage: run.py <pair directory> <module>:<function> [all | <scenario>/<transport>]", file=sys.stderr)
+    """Run every case and report each failed comparison."""
+    if len(args) != 2:
+        print("usage: run.py <pair directory> <module>:<function>", file=sys.stderr)
         return 2
     try:
-        tests = conformance(Path(args[0]), args[1], args[2] if len(args) == 3 else "all")
-    except (OSError, ValueError, KeyError) as error:
-        print(f"invalid fixture or case selection: {error!r}", file=sys.stderr)
+        tests = conformance(Path(args[0]), args[1])
+    except (OSError, ValueError) as error:
+        print(f"invalid fixture: {error}", file=sys.stderr)
         return 2
     return int(not unittest.TextTestRunner(verbosity=2).run(tests).wasSuccessful())
 

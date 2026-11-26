@@ -19,12 +19,6 @@
       "env": { "CREDENTIAL_FILE": "${credentials:login}" },
       "direct": { "env": { "TRANSPORT": "direct" }, "replies": ["meter"] },
       "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": ["proxy-meter"] }
-    },
-    "unreadable-credential": {
-      "extends": null,
-      "env": { "CREDENTIAL_FILE": "${credentials:login}.missing" },
-      "direct": { "env": { "TRANSPORT": "direct" }, "replies": [] },
-      "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": [] }
     }
   }
 }

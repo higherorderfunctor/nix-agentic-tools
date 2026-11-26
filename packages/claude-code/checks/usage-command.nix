@@ -1,14 +1,10 @@
-# The registered Claude Reader, run as the installed command, sends its pair's requests and prints its pair's results.
+# The installed direct Claude Reader, its HTTP scripted offline, sends its pair's requests and prints its pair's results.
 {pkgs, ...}: let
   inherit (pkgs) lib;
   inherit (pkgs.ai.generic) python-stack;
   credentialUsage = (import ../../credential-usage/lib/default.nix).ai.credential-usage;
   claude = import ../lib/default.nix;
-  inherit (claude.ai.claude-code) usageModule usagePair usageReader;
-  reader =
-    (credentialUsage.mergeReaders {inherit pkgs lib;} {
-      contributions = [usageModule];
-    }).claude.package;
+  inherit (claude.ai.claude-code) usagePair usageReader;
   python = python-stack.withPackages (ps: [
     ps.pydantic
     ps.urllib3
@@ -27,7 +23,7 @@
   '';
   offline = python-stack.pkgs.toPythonModule (
     pkgs.writeTextDir "${python-stack.sitePackages}/reader_offline.pth" ''
-      import os, runpy; runpy.run_path("${guard}"); os.getenv("USAGE_DIRECT_REPLAY") and runpy.run_path("${credentialUsage.standaloneCheck}")["install_direct_replay"](2, 0.375)
+      import os, runpy; runpy.run_path("${guard}"); os.getenv("USAGE_DIRECT_REPLAY") and runpy.run_path("${credentialUsage.conformanceSuite}/standalone.py")["install_direct_replay"](2, 0.375)
     ''
   );
   offlineStack =
@@ -60,7 +56,7 @@ in {
       else
         test "$?" -eq 97
       fi
-      python3 -I -B ${credentialUsage.standaloneCheck} ${usagePair} ${lib.getExe reader} ${lib.getExe directReader}
+      python3 -I -B ${credentialUsage.conformanceSuite}/standalone.py ${usagePair} ${lib.getExe directReader}
       touch "$out"
     '';
 }

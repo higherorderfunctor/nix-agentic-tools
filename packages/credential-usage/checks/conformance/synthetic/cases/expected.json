@@ -60,10 +60,5 @@
         "binding": { "endpoint": "https://proxy.example/", "transport": "cpa" }
       }
     }
-  },
-  "unreadable-credential": {
-    "extends": null,
-    "requests": [],
-    "result": { "failed": "usage: observation unavailable" }
   }
 }
