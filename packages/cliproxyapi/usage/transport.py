@@ -4,11 +4,14 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 import json
+from pathlib import Path
 
-from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError
+from pydantic import Field, HttpUrl, SecretStr, TypeAdapter, ValidationError, field_validator
 
 from credential_usage.transport import (
+    DirectHttp,
     FrozenModel,
+    HttpPolicy,
     HttpRequest,
     HttpResponse,
     RequestFailure,
@@ -17,13 +20,37 @@ from credential_usage.transport import (
 )
 
 
+class CpaBinding(FrozenModel):
+    """Connect to a registered management endpoint using its runtime key file."""
+
+    endpoint: HttpUrl
+    managementKeyFile: str
+    pin: str | None = None
+    policy: HttpPolicy = HttpPolicy()
+
+    def instance(self, deadline: float | None = None) -> "CpaInstance":
+        """Load the management key only when running the Reader, with its calls bounded by the deadline."""
+        key = Path(self.managementKeyFile).read_bytes().decode().removesuffix("\n")
+        if not key or "\n" in key or "\r" in key:
+            raise RequestFailure("invalid management key file")
+        return CpaInstance(self.endpoint, DirectHttp(self.endpoint, SecretStr(key), self.policy, deadline))
+
+
 class AuthFile(FrozenModel):
     """CPA lists logins alongside disabled accounts and other credential types."""
 
     account_type: str | None = None
     auth_index: str | None = None
     disabled: bool = False
+    email: str | None = None
+    name: str | None = None
     provider: str | None = None
+
+    @field_validator("email", "name", mode="before")
+    @classmethod
+    def optional_label(cls, value: object) -> str | None:
+        """Keep optional attribution independent of credential selection."""
+        return value if isinstance(value, str) else None
 
 
 class AuthFiles(FrozenModel):
@@ -87,14 +114,14 @@ class CpaInstance:
             raise RequestFailure("conflicting CPA discovery sources")
         if provider is None and surfaces is None:
             return CpaTransport(self, discovery_base, pin) if pin else UnknownBinding.ABSENT
-        candidates: list[tuple[str | SecretStr, str]] = []
+        candidates: list[tuple[str | SecretStr, str, str | None]] = []
         try:
             if provider is not None:
                 accounts = AuthFiles.model_validate_json(
                     self.call("v0/management/auth-files").body
                 )
                 candidates.extend(
-                    (login.auth_index, login.auth_index)
+                    (login.auth_index, login.auth_index, login.email or login.name)
                     for login in accounts.files
                     if login.provider == provider
                     and login.account_type == "oauth"
@@ -104,18 +131,18 @@ class CpaInstance:
             elif surfaces is not None:
                 for key in self.endpoint_keys(discovery_base, surfaces):
                     if key.auth_index and key.api_key:
-                        candidates.append((key.api_key, key.auth_index))
+                        candidates.append((key.api_key, key.auth_index, None))
         except ValidationError:
             raise RequestFailure("invalid CPA discovery response") from None
-        distinct: dict[str | SecretStr, str] = {}
-        for identity, index in candidates:
+        distinct: dict[str | SecretStr, tuple[str, str | None]] = {}
+        for identity, index, name in candidates:
             if pin is None or index == pin:
-                distinct.setdefault(identity, index)
+                distinct.setdefault(identity, (index, name))
         if not distinct:
             return UnknownBinding.ABSENT
         if len(distinct) > 1:
             return UnknownBinding.AMBIGUOUS
-        return CpaTransport(self, discovery_base, next(iter(distinct.values())))
+        return CpaTransport(self, discovery_base, *next(iter(distinct.values())))
 
     def endpoint_keys(
         self, discovery_base: HttpUrl, surfaces: tuple[str, ...]
@@ -146,6 +173,7 @@ class CpaTransport:
     instance: CpaInstance
     discovery_base: HttpUrl
     auth_index: str
+    account_name: str | None = None
 
     def request(self, request: HttpRequest) -> HttpResponse:
         """Forward quota requests anywhere on the discovery origin and check both HTTP statuses."""
