@@ -10,11 +10,12 @@ repetition.
 
 ### Single Source of Truth
 
-- Is `fragments/skill-routing.md` truly the single source for routing? Or has
-  content drifted into CLAUDE.md, INSTALL.md, or README.md that isn't generated
-  from it?
-- Are git config presets (`lib/git-config.nix`, `lib/git-config-full.nix`) the
-  single source? Or are the same values repeated in docs?
+- Is `packages/stacked-workflows/fragments/skill-routing.md` truly the single
+  source for routing? Or has content drifted into CLAUDE.md, INSTALL.md, or
+  README.md that isn't generated from it?
+- Are the git config presets in `packages/stacked-workflows/lib/git-config.nix`
+  and `packages/stacked-workflows/lib/git-config-full.nix` the single source? Or
+  are the same values repeated in docs?
 - Is there content in multiple skills that should be in a shared reference?
 - Are there patterns repeated across personality files that should be extracted?
 
