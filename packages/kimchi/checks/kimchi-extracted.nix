@@ -87,7 +87,7 @@
             "$inline_config" 'readConfigObject(configPath)?.[String("modelEffortDefaults")]'
           mutant "$kimchi" config-inline-whole-object src/config.ts \
             "$inline_config" 'readConfigObject(configPath)'
-          mutant "$kimchi" config-inline-nonoptional src/config.ts \
+          mutant "$kimchi" config-inline-required-access src/config.ts \
             "$inline_config" 'readConfigObject(configPath).modelEffortDefaults'
           mutant "$kimchi" config-inline-delete src/config.ts \
             "$inline_config" 'delete readConfigObject(configPath)?.modelEffortDefaults'
@@ -213,7 +213,7 @@
           done
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
-          for label in config-inline-computed config-inline-whole-object config-inline-nonoptional config-inline-delete config-inline-shadow config-inline-detached config-inline-callee; do
+          for label in config-inline-computed config-inline-whole-object config-inline-required-access config-inline-delete config-inline-shadow config-inline-detached config-inline-callee; do
             expect_rejection "$label" "$TMPDIR/$label-source" \
               'is not bound to a local' >> "$TMPDIR/proof"
           done
