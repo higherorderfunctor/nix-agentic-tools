@@ -166,17 +166,21 @@ const emptySeed =
 const workspaceCall = workspaceDecl?.initializer;
 const workspacePath = workspaceCall?.arguments?.[0];
 const pathParameter = merge.parameters[0];
-// 3.6.2 also accepts an explicit workspace path. Accept only a single simple
-// parameter defaulting to the old path loader, forwarded unchanged to the reader.
-const explicitPath =
+// 3.6.2 adds a path override to the empty-seed merge. The composer still owns
+// the global read, so the probe can exercise both call forms with the same
+// globals. A single named parameter keeps those forms to merge() and
+// merge(path); its default must resolve through the probe's stubbed loader,
+// and the reader must receive the supplied path unchanged.
+const forwardsPathParameter =
   emptySeed &&
   merge.parameters.length === 1 &&
   ts.isIdentifier(pathParameter.name) &&
-  !pathParameter.dotDotDotToken &&
   workspacePath !== undefined &&
   ts.isIdentifier(workspacePath) &&
   workspacePath.text === pathParameter.name.text;
-const pathCall = explicitPath ? pathParameter.initializer : workspacePath;
+const pathCall = forwardsPathParameter
+  ? pathParameter.initializer
+  : workspacePath;
 const catchCall = tryStatement?.catchClause?.block?.statements?.[0]?.expression;
 if (
   statements?.length !== 3 ||
@@ -189,7 +193,7 @@ if (
       ts.isIdentifier(globalCall.expression) &&
       globalCall.arguments.length === 0)
   ) ||
-  (merge.parameters.length !== 0 && !explicitPath) ||
+  (merge.parameters.length !== 0 && !forwardsPathParameter) ||
   !ts.isTryStatement(tryStatement) ||
   !ts.isVariableStatement(tryStatement.tryBlock.statements[0]) ||
   tryStatement.tryBlock.statements[0].declarationList.declarations.length !==
@@ -289,7 +293,19 @@ checkNameUses(merge, "merge");
 if (composer) checkNameUses(composer, "composer");
 
 const hasCalls = [];
+// Check the merge's identifier uses before probing: two fixture paths cannot
+// rule out a copy decision that depends on some other path's spelling.
 function checkMergeUses(node) {
+  if (
+    forwardsPathParameter &&
+    ts.isIdentifier(node) &&
+    node.text === pathParameter.name.text &&
+    node !== pathParameter.name &&
+    node !== workspacePath &&
+    !isPropertyName(node)
+  ) {
+    fail("workspace merge has an unsupported loader shape");
+  }
   if (ts.isIdentifier(node) && node.text === allowlistName) {
     const access = node.parent;
     if (
@@ -331,11 +347,15 @@ if (
 // enumerated key holds a workspace value whose type cycles by key index
 // through every JSON value kind (string, "", true, false, 0, 1, null, array,
 // object), so a merge that copies by type, truthiness or null is caught. One
-// run per kind shifts the cycle so every key meets every kind. Each allowlist
-// key must hold exactly its workspace value (`===`); every other enumerated key
-// must keep its global value; any other key must not hold the string marker a
-// workspace read of a key outside that list returns.
+// rotation shifts the cycle so every key meets every kind. If the merge takes
+// a path, each rotation also passes a different path explicitly: the default
+// call cannot show whether that argument reaches the reader. The explicit
+// probe spreads the same globals itself because the composer calls merge().
+// Each allowlisted key must hold exactly its workspace value (`===`); every
+// other enumerated key must keep its global value. No unlisted key may hold
+// the marker returned by a workspace read outside the enumerated keys.
 const marker = (key) => `workspace:${key}`;
+const defaultProbePath = "fixture-path";
 const literals = new Set();
 (function collectLiterals(node) {
   if (ts.isStringLiteralLike(node)) literals.add(node.text);
@@ -364,14 +384,15 @@ const mergeExpression = (withPath) =>
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `const ${allowlistName}=${allowlist.right.getText(file)};` +
   `const ${emptySeed ? composerGlobalName : globalCall.expression.text}=()=>({...globalSettings});` +
-  `const ${pathCall.expression.text}=()=>"fixture-path";` +
+  `const ${pathCall.expression.text}=()=>${JSON.stringify(defaultProbePath)};` +
   `const ${workspaceCall.expression.text}=(path)=>{if(path!==expectedPath)throw Error("path");return workspace};` +
   `const ${catchCall.expression.expression.text}={warn:()=>{throw Error("workspace read failed")}};` +
+  `${merge.getText(file)};` +
   (withPath
-    ? `${merge.getText(file)};return {...globalSettings,...${merge.name.text}(expectedPath)}})()`
+    ? `return {...globalSettings,...${merge.name.text}(expectedPath)}})()`
     : emptySeed
-      ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
-      : `${merge.getText(file)};return ${merge.name.text}()})()`);
+      ? `${composer.getText(file)};return ${composer.name.text}()})()`
+      : `return ${merge.name.text}()})()`);
 const runProbe = (rotation, withPath) => {
   const workspaceValues = new Map(
     workspaceKeys.map((key, index) => [
@@ -411,7 +432,7 @@ const runProbe = (rotation, withPath) => {
       {
         globalSettings,
         workspace,
-        expectedPath: withPath ? "other-fixture-path" : "fixture-path",
+        expectedPath: withPath ? "other-fixture-path" : defaultProbePath,
       },
       { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
     );
@@ -441,7 +462,8 @@ const runProbe = (rotation, withPath) => {
 if (
   !workspaceValueTypes.every(
     (_, rotation) =>
-      runProbe(rotation, false) && (!explicitPath || runProbe(rotation, true)),
+      runProbe(rotation, false) &&
+      (!forwardsPathParameter || runProbe(rotation, true)),
   )
 )
   fail("workspace merge does not apply exactly the extracted allowlist");

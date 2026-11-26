@@ -106,6 +106,17 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             bundle(registry=registry_assignment * 2),
             "ambiguous or absent",
         ),
+        "extra copy only for an explicit path": (
+            bundle(
+                merge=explicit_path.replace("Cq.has(k)", "Cq.has(k)||arguments.length>0")
+                + composer
+            ),
+            probe_mismatch,
+        ),
+        "forwarded parameter without a default": (
+            bundle(merge=explicit_path.replace("p=path()", "p") + composer),
+            "unsupported loader shape",
+        ),
         "merge with a parameter": (
             bundle(merge=merge_with_guard("Cq.has(k)").replace("merge()", "merge(skip)", 1)),
             "unsupported loader shape",
@@ -118,11 +129,20 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             bundle(merge=explicit_path.replace("readWorkspace(p)", "readWorkspace(path())") + composer),
             "unsupported loader shape",
         ),
-        "extra copy only for an explicit path": (
-            bundle(merge=explicit_path.replace(
-                "e[k]=v", 'e[k]=v;if(p!=="fixture-path")e["chat.surprise"]=w["chat.surprise"]'
-            ) + composer),
-            probe_mismatch,
+        "parameter on a global-loader seed": (
+            bundle(merge=explicit_path.replace("let e={}", "let e=globalLoad()")),
+            "unsupported loader shape",
+        ),
+        "parameter read by the copy guard": (
+            bundle(
+                merge=explicit_path.replace("Cq.has(k)", 'Cq.has(k)||p.endsWith("cli.json")')
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "second parameter": (
+            bundle(merge=explicit_path.replace("p=path()", "p=path(),q") + composer),
+            "unsupported loader shape",
         ),
         "truthiness guard": (
             bundle(merge=merge_with_guard("Cq.has(k)&&v")),
