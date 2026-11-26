@@ -16,7 +16,7 @@ supplies the transport. The consumer turns Reader output into decisions.
 - `python/credential_usage/transport.py` defines the request a Reader sends, the
   `Transport` it sends through, and `DirectHttp`, which keeps one bearer token
   on one origin.
-- `python/credential_usage/envelope.py` is the contract every Reader prints: one
+- `python/credential_usage/envelope.py` is the contract a Reader prints: one
   `Envelope` per account and capture. See "The envelope" below.
 - `checks/runner` holds the process suite.
 - `lib/default.nix` exposes the Python module builder as
@@ -29,8 +29,9 @@ Keep vendor requests and decoders, Nix options and ranking out of this package.
 A Reader prints one JSON `Envelope` on stdout for one account. Its fields:
 
 - `schemaVersion` (1), `pool`, `account` (`auth_index`, `name`, `plan`),
-  `binding` (`transport` is `direct` or `cpa`, and the public `endpoint`) and
-  `observedAt`, the capture's completion time in UTC.
+  `binding` (`transport` is `direct` or `cpa`, and the endpoint's origin only,
+  so no path or query reaches output) and `observedAt`, the capture's completion
+  time in UTC.
 - `windows`: required, keyed by the vendor's window id. Report the windows the
   vendor returns; never assume a fixed set. Each is `observed` (used and
   remaining percent, reset, duration, `enforced`), `invalid` (a reason, and a

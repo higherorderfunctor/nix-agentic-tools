@@ -62,10 +62,9 @@ WindowId = Annotated[str, Field(pattern=r"^[^:\s]+(:[^:\s][^:]*)?$")]
 
 
 def public_endpoint(url: HttpUrl) -> HttpUrl:
-    """Keep credentials and query parameters out of a binding's published endpoint."""
-    if any(part is not None for part in (url.username, url.password, url.query, url.fragment)):
-        raise ValueError("expected a public endpoint without user information, query or fragment")
-    return url
+    """Publish only the endpoint's origin, so a credential in its path, query or user info never reaches output."""
+    port = "" if url.port is None or url.port == {"http": 80, "https": 443}.get(url.scheme) else f":{url.port}"
+    return HttpUrl(f"{url.scheme}://{url.host}{port}/")
 
 
 class Binding(ContractModel):
