@@ -6,7 +6,7 @@ failures without changing credential selection: toolAliases renames a client
 tool before it reaches the upstream (ToolSearch -> ToolSearch_), and
 codexShellArgCleanup drops an empty or unpaired justification and an empty
 prefix-rule array from Codex exec_command and shell_command calls. Validation
-runs on upstream 8.1.2's shared config loading path.
+runs on upstream 8.1.4's shared config loading path.
 Applied with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md, "Credential tool shims".
 
