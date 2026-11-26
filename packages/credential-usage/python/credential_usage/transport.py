@@ -47,11 +47,7 @@ DEADLINE_MARGIN = 0.5
 
 
 def reader_deadline(environ: Mapping[str, str]) -> float | None:
-    """Return the instant the runner's seconds run out, counted from now, or None when it sets none.
-
-    The runner exports the seconds left in DEADLINE_VARIABLE. An unset or
-    unreadable value leaves only the HTTP library's socket timeout.
-    """
+    """Return the instant the runner's seconds run out, or None when it sets no finite number."""
     try:
         left = math.inf if (seconds := environ.get(DEADLINE_VARIABLE)) is None else float(seconds)
     except ValueError:
@@ -99,7 +95,6 @@ class HttpPolicy(FrozenModel):
 
 
 def deliver(reply: Future[HttpResponse], send: Callable[[], HttpResponse]) -> None:
-    """Hand the reply, or its failure, to the thread that is waiting for it."""
     try:
         reply.set_result(send())
     except BaseException as error:
