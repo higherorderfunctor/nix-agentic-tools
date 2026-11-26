@@ -38,6 +38,9 @@ def merge_with_empty_seed(guard, extra=""):
 
 composer = "function compose(){return{...globalLoad(),...merge()}}"
 empty_seed = merge_with_empty_seed("Cq.has(k)")
+explicit_path = empty_seed.replace("merge()", "merge(p=path())", 1).replace(
+    "readWorkspace(path())", "readWorkspace(p)", 1
+)
 extra_copy = ';if("chat.surprise" in w)e["chat.surprise"]=w["chat.surprise"]'
 probe_mismatch = "does not apply exactly"
 
@@ -71,6 +74,22 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(modern_result["workspaceOverridableSettings"]) == 11, modern_result
     assert "chat.defaultModel" in modern_result["workspaceOverridableSettings"]
 
+    # 3.6.2 supports both the default workspace path and an explicit one.
+    parameterized = run(bundle(merge=explicit_path + composer + 'merge("other");'))
+    assert parameterized.returncode == 0, parameterized.stderr
+    assert json.loads(parameterized.stdout) == modern_result
+
+    argument_property = run(
+        bundle(
+            merge=explicit_path.replace(
+                "Cq.has(k)", "Cq.has(k)&&({arguments:true}).arguments"
+            )
+            + composer
+        )
+    )
+    assert argument_property.returncode == 0, argument_property.stderr
+    assert json.loads(argument_property.stdout) == modern_result
+
     # A property key or member name that only shares the merge's or the
     # composer's spelling is not a use of it.
     for member in [
@@ -98,8 +117,51 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             bundle(registry=registry_assignment * 2),
             "ambiguous or absent",
         ),
+        "argument count read by the copy guard": (
+            bundle(
+                merge=explicit_path.replace("Cq.has(k)", "Cq.has(k)||arguments.length>0")
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "argument value read by the copy guard": (
+            bundle(
+                merge=explicit_path.replace(
+                    "Cq.has(k)", 'Cq.has(k)||arguments[0]?.endsWith?.("cli.json")'
+                )
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "forwarded parameter without a default": (
+            bundle(merge=explicit_path.replace("p=path()", "p") + composer),
+            "unsupported loader shape",
+        ),
         "merge with a parameter": (
             bundle(merge=merge_with_guard("Cq.has(k)").replace("merge()", "merge(skip)", 1)),
+            "unsupported loader shape",
+        ),
+        "non-call default path": (
+            bundle(merge=explicit_path.replace("p=path()", 'p="literal"') + composer),
+            "unsupported loader shape",
+        ),
+        "parameter not forwarded": (
+            bundle(merge=explicit_path.replace("readWorkspace(p)", "readWorkspace(path())") + composer),
+            "unsupported loader shape",
+        ),
+        "parameter on a global-loader seed": (
+            bundle(merge=explicit_path.replace("let e={}", "let e=globalLoad()")),
+            "unsupported loader shape",
+        ),
+        "parameter read by the copy guard": (
+            bundle(
+                merge=explicit_path.replace("Cq.has(k)", 'Cq.has(k)||p.endsWith("cli.json")')
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "second parameter": (
+            bundle(merge=explicit_path.replace("p=path()", "p=path(),q") + composer),
             "unsupported loader shape",
         ),
         "truthiness guard": (
