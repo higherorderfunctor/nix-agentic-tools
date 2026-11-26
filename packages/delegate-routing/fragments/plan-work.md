@@ -1,17 +1,21 @@
 Treat an assigned repository change, or investigation/design/bulk reading beyond
-a quick fact from named documents, as substantive. Prepare the rubric from the
-task goal as preflight; this does not authorize task-source investigation.
-Before that investigation, use this runtime's rendered helper with
-`--role planner --launch-context <json-path>` with taskSummary, nullable
-proposerFamily, nonInteractive, compact role requests and observed techniques to
-select a reachable, fitted strong/frontier planner, trying shared avoided-family
-fallback before declaring no qualified route. Pin its model and effort from a
-canonical candidate, pass the task, source paths, saved rubric and the resolved
-routing/workflow context. Use a native subagent or workflow when
-non-interactive; if no qualified pinned planner is reachable, report a loop
-failure rather than doing the design in the orchestrator. A worker assigned an
-approved bounded unit does not recursively plan that assignment. Replan only the
-affected portion when scope changes.
+a quick fact from named documents, as substantive. The reference implementation
+exception in Orchestrator session skips the planning handoff, not the rubric.
+Prepare the rubric from the task goal as preflight; this does not authorize
+task-source investigation. When handing off a plan, first use this runtime's
+rendered helper with `--role planner --launch-context <json-path>` with
+taskSummary, nullable proposerFamily, nonInteractive, compact role requests and
+observed techniques to select a reachable, fitted strong/frontier planner,
+trying shared avoided-family fallback before declaring no qualified route. Pin
+its model and effort from a canonical candidate, pass the task, source paths,
+saved rubric and the resolved routing/workflow context. Use a native subagent or
+workflow when non-interactive; if no qualified pinned planner is reachable,
+report a loop failure rather than doing the design in the orchestrator. A worker
+assigned an approved bounded unit does not recursively plan that assignment.
+Replan only the affected portion when scope changes. The approved plan and
+agreed design bind writers, planners and judges. Carry the design decisions into
+planner and judge briefs as fixed constraints; return any proposed change to
+those decisions to the operator before proceeding.
 
 The planner runs the actual launching runtime's rendered helper with
 `--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,
@@ -23,9 +27,12 @@ The planner reads the resolved routing/workflow policy and task source once,
 then returns a saved JSON plan and prepared human-readable launch briefs in the
 working-data directory the orchestrator provided. Never invent a scratch
 location. Save the full numbered rubric before writing any implementation brief.
-Every worker and reviewer brief follows the Rubric step’s verbatim rule. The
-orchestrator passes the prepared paths without loading every brief into the
-interactive context.
+Every worker and reviewer brief follows the Rubric step's verbatim rule. Each
+unit brief lists the in-scope surfaces (callers, config, exports, docs, checks,
+tests and fixtures as applicable), estimates added and removed lines by kind and
+names a resulting line target for each file. Give those targets to the workflow
+script as data. The orchestrator passes the prepared paths without loading every
+brief into the interactive context.
 
 Use this JSON contract (paths to rubric and briefs are relative to the saved
 plan; writer file ownership is repository-relative):
@@ -81,11 +88,9 @@ The saved helper snapshot records provenance and is never an allowlist or proof
 of current pace. A saved plan is not permission to skip the helper: rerun it as
 Choose execution requires. Changed launch context or a new usage read requires
 validation against the current helper output; use that returned snapshot for
-execution. Do not add age limits or fingerprints of unrelated configuration. A
-downstream delegate that launches work in another runtime needs a separate
-plan/check using that runtime's rendered helper and session pool, even if a
-planner in another harness prepares it. The helper validates specifications and
-reads registered Readers; it never executes a delegate or probe.
+execution. Do not add age limits or fingerprints of unrelated configuration. The
+helper validates specifications and reads registered Readers; it never executes
+a delegate or probe.
 
 Attach the relevant resolved execution policy to each prepared brief. Choose
 execution owns launch selection, supervision, retries, isolation and named

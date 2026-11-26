@@ -121,11 +121,9 @@ in {
           {
             name = "Review order";
             text = ''
-              **Review order.** Apply R1-R6 first to each unit of code. If any
-              readability row fails, stop for that unit and report only those failures.
-              Only after all six pass does the same reviewer apply E1-E4 to that unit.
-              This ordering does not change how many independent reviewers the workflow
-              requires.
+              **Review order.** Apply R1-R6 first to each unit. Stop grading that unit
+              only for a readability failure of medium severity or higher. Report lower
+              readability nits and continue through E1-E4. The reviewer count is unchanged.
             '';
           }
           {
@@ -203,42 +201,39 @@ in {
           {
             name = "E4";
             text = ''
-              **E4.** Parse each external input once, at the earliest boundary that can
-              refuse it, into a typed model. Document one input format; another shape needs
-              a named producer that sends it. Typed values flow downstream without
-              conversion or revalidation. Choosing by type is acceptable only in a downstream
-              unit whose actual job is to choose by type, never as a reason to skip boundary
-              validation.
+              **E4.** Types are the contract. Use typed request and response models at
+              external boundaries. Parse each external input once at the earliest point that
+              can refuse it; a shape change should surface in validation or type checking.
+              Document one input format; another shape needs a named producer. Typed values
+              flow downstream without conversion or revalidation. Choose by type only in a
+              unit whose job is to do so, never instead of boundary validation.
             '';
           }
           {
             name = "Fixtures";
             text = ''
-              **Fixtures.** Fixtures send the production client's exact shape, use bounded
-              literal cases for contract edges, and cover input spaces with a few named
-              properties. Cases that share a setup go in one input and expected pair,
-              with each behavior a named entry so a failure names the rule it broke. A
-              fixture that cannot reproduce production names the difference; a path no
-              fixture exercises is a finding.
+              **Fixtures.** Use fixtures only for risky behavior the types cannot prove.
+              Match production's shape and name any difference. Share setup across cases
+              and name the behavior each case protects. Don't mock a vendor to test its
+              schema; the real implementation exercises that contract.
             '';
           }
           {
             name = "Size";
             text = ''
-              **Size.** Estimate while planning and count the final diff while reviewing:
-              200-400 lines per PR is the target, and about 500 is where a change counts as
-              over. Measure the line budget on normally formatted code. The signal is the
-              added lines of the ready change's line breakdown, its hand-written code row
-              plus its docs row; removed lines count separately and never raise it. Tests,
-              fixtures and checks fit within about twice the change's actual hand-written
-              code unless the brief says why. These are steering signals, never caps: being
-              over never stops work, never needs the user's approval, and being over on
-              code lines alone does not fail this row; the row fails a change that is over
-              on code with neither a split nor a stated reason, or whose tests, fixtures
-              and checks run past about twice its code with no stated reason. If an estimate
-              is over and a seam exists that a reviewer can read alone, split into stacked
-              PRs without asking; each piece passes its checks on its own. If no seam
-              exists, make one change and say why in the brief and PR summary.
+              **Size.** Aim for 200-400 added lines of hand-written code and docs per PR;
+              around 500 is over. Split an over-size estimate or draft at a seam a reviewer
+              can read alone, with checks in each PR. If no seam fits, say why in the brief
+              and PR summary.
+
+              After each unit, report the normally formatted PR diff's cumulative added
+              lines against the plan's total for code, docs, tests, fixtures and checks.
+              Count deletions and generated lines separately; don't net them against
+              additions. When additions reach 1.5x the current estimate, pause before
+              the next unit: split, cut scope within the agreed design, or record the
+              reason and a new estimate. If no additions were planned, any addition
+              triggers re-planning. At 2x the original positive estimate, report the
+              numbers and options to the operator before more work runs.
             '';
           }
           {
@@ -260,12 +255,13 @@ in {
           {
             name = "Checks";
             text = ''
-              **Checks.** Each added check names the wrong implementation it fails on. A
-              check whose expected value is computed by the expression under test, or read
-              back from the input the check itself supplied, fails on none: write the
-              expected value by hand or take it from an observed result, or delete the
-              check. A check for a race or a regression is shown to fail against the code
-              before the fix.
+              **Checks.** Test only behavior types cannot establish and whose failure would
+              matter, such as timing, attribution or a costly decision. Don't add tests for
+              trivial field mapping or schemas. Each check names the wrong implementation
+              it rejects and uses an independent expected value. Show that a race or
+              regression check fails against the code before the fix. When pruning tests or
+              golden cases, use unique failures to spot redundancy and keep the last check
+              of any behavior they protect.
             '';
           }
         ];

@@ -7,8 +7,7 @@ evaluator. Pair coder with reviewer, planner with executor, researcher with
 assessor, and diagnostician with fixer.
 
 The orchestrator briefs review as its own stage before writing starts. A writer
-never launches or briefs its own reviewer. Verify a claimed review by its
-artifact.
+never launches or briefs its own reviewer.
 
 Build a branch as a sequence of units, not one long write. A unit is a bounded
 change with one reader and one verification, in whatever shape the language
@@ -19,7 +18,8 @@ before the first write; a writer run covers at most one unit and ends at its
 boundary, so the unit's review comes before the next run.
 
 Each unit gets the Review step’s required fresh separate check before the next
-unit starts.
+unit starts. The orchestrator reads the first unit's diff itself before the next
+writer starts and shows it to the operator early when they're reachable.
 
 A unit's verification stays local to that unit: its own test, check or reading.
 The full suite, broad builds and end-to-end checks run once, at the branch-level
