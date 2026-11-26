@@ -2,11 +2,7 @@
 # transports it imports, and its packaged command builds.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
-  moduleArgs = {inherit pkgs python-stack;};
-  claudeModule = (import ../lib/default.nix).ai.claude-code.pythonModule moduleArgs;
-  cpaModule = (import ../../cliproxyapi/lib/default.nix {inherit (pkgs) lib;}).ai.cliproxyapi.pythonModule moduleArgs;
-  credentialModule = (import ../../credential-usage/lib/default.nix).ai.credential-usage.pythonModule moduleArgs;
-  python = python-stack.withPackages (ps: [ps.pydantic ps.urllib3 claudeModule cpaModule credentialModule]);
+  python = import ../lib/usage-python.nix {inherit pkgs python-stack;};
   reader = (import ../lib/default.nix).ai.claude-code.usageReader {
     inherit pkgs python-stack;
     claude = pkgs.emptyDirectory;

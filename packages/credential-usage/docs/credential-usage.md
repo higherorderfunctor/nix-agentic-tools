@@ -47,6 +47,16 @@ validate fails in strict Pyright or at construction, not in a consumer. Reset
 and credit policy (spend or hold) belongs to the consumer's configuration, not
 the Reader.
 
+## Deadline
+
+The runner kills a Reader at its per-attempt timeout (10 s by default) and
+exports that timeout to the Reader as `CREDENTIAL_USAGE_READER_TIMEOUT`.
+`DirectHttp` gives each request the smaller of its own timeout and the time
+left, less half a second to print. A request with no time left fails at once. So
+an optional read that stalls reports its slot `unknown`, and the windows already
+read still print. Per-request timeouts default to 10 s, no longer than the
+runner's deadline.
+
 ## Consumers
 
 Call `lib.ai.credential-usage.pythonModule` with `{ pkgs, python-stack }` and
