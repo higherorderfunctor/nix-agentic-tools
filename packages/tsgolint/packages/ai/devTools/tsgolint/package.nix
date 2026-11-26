@@ -9,7 +9,7 @@
 }: let
   vu = packageLib;
 
-  goFloor = "1.26.10";
+  goFloor = "1.26.11";
   toolchain = vu.mkGoToolchain {
     floor = goFloor;
     inherit pkgs;
@@ -17,12 +17,12 @@
     recipeFile = repoPath ./package.nix;
   };
 
-  rev = "020d62f7104077577f6d3e19552e8c98ac760c9f";
+  rev = "dd617d51d187882176a4e8cc7b9efdcd2a0d9e5e";
   src = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "tsgolint";
     inherit rev;
-    hash = "sha256-7dO0bPVMrwhxMOGYFDN92SE3ucACs2l0iVFYCzWloBA=";
+    hash = "sha256-mxEWCiibzV739SvreULTvbSLpvLM/AW3jjlg6Vz3tjg=";
     fetchSubmodules = true;
   };
 in
