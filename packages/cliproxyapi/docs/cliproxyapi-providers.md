@@ -37,8 +37,8 @@ without restarting the service. Nix never names, renames or creates CPA login
 files. Account references receive the same provider ordering and restart
 triggers as other service secrets.
 
-The pinned CPA 8.1.4's `sdk/cliproxy/auth/types.go:961` implements
-`AccountInfo()`: OAuth reads trimmed `Metadata.email`, falling back to
+The `AccountInfo()` method in `sdk/cliproxy/auth/types.go` reads trimmed
+`Metadata.email` for OAuth, falling back to
 `Metadata.service_account.client_email`. API keys never match `accounts` rules.
 
 An `apiKey` declares `key`, `models` and `apis.<api>.base-url` for the

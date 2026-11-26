@@ -126,10 +126,10 @@ the alternative-target check (`Manager.HasAlternativeTargetForModel`), retry,
 Codex continuity retries, and cooldown waits. `SelectAuth` always uses the
 legacy loop; mixed `Execute` with a built-in selector exercises the scheduler
 fast path. Plugin schedulers receive only surviving candidates. Home dispatch is
-the one legacy path that bypasses the predicate, and it is refused. Upstream
-8.1.4’s Antigravity credits fallback uses the shared predicate and matters when
-selection fails because a client key has no Antigravity rule. Plugin executors
-and `host.auth.get` bypass eligibility; this is why enabling plugins must be
+the one legacy path that bypasses the predicate, and it is refused. In CPA
+8.1.6, Antigravity credits fallback uses the shared predicate when selection
+fails because a client key has no Antigravity rule. Plugin executors and
+`host.auth.get` bypass eligibility; this is why enabling plugins must be
 refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
 auth package, fails on a `range` over `Manager.auths` whose own body calls no
 allowlist predicate, unless the function is on its commented exemption list. It
@@ -225,16 +225,6 @@ Manager and devenv.
 The package applies `patches/key-allowlist.patch`,
 `patches/zhipuai-tool-shims.patch`, and `patches/passthrough-provider.patch` in
 that order. Extraction and the Go checks read the same patched source.
-
-The top-up credits recovery test still races its background refresh. Upstream
-16bf182f2088 keys the credits refresh state by auth ID plus registration scope,
-but
-`TestAntigravityManagerExecuteAndStream_ToppedUpCreditsRecoverDuringQuotaCooldown`
-still looks it up by bare auth ID, so it skips its wait and can read the hint
-early. `checks/antigravity-credits-refresh-state-key.patch` looks it up by the
-scoped key in the tool-shims check only. A narrower race, where a clear of a
-stale hint overwrites a fresh refresh, stays in upstream code (upstream PR
-#7139, open). Drop the patch once an upstream release updates that test file.
 
 Fetch the version from `sources.json` into scratch and verify its unpacked NAR
 hash. Check each patch with `patch --dry-run -p1 --fuzz=0`, then apply it before
