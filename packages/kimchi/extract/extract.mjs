@@ -656,9 +656,10 @@ function discoverProjectConfigKeys(configSource, annotations, checker, ts) {
   return result;
 }
 
-// Resolve a guard expression to a key path. Callers resolve identifier roots;
-// only the guard scan supplies a wildcard for computed record members.
-function accessPath(expression, ts, identifierPath, computedKey) {
+// Resolve a guard expression to a key path, or undefined if unresolved.
+// Callers resolve identifiers and omit computedKeyFallback to refuse computed
+// keys, as helper following does to keep guards tied to a specific input.
+function accessPath(expression, ts, identifierPath, computedKeyFallback) {
   expression = unwrapExpression(expression, ts);
   if (ts.isIdentifier(expression)) return identifierPath(expression);
   let key;
@@ -667,14 +668,14 @@ function accessPath(expression, ts, identifierPath, computedKey) {
   } else if (ts.isElementAccessExpression(expression)) {
     key = ts.isStringLiteralLike(expression.argumentExpression)
       ? expression.argumentExpression.text
-      : computedKey;
+      : computedKeyFallback;
   }
   if (key === undefined) return undefined;
   const parent = accessPath(
     expression.expression,
     ts,
     identifierPath,
-    computedKey,
+    computedKeyFallback,
   );
   return parent && [...parent, key];
 }

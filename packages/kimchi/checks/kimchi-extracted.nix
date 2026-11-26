@@ -63,8 +63,15 @@
             'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
           mutant "$kimchi" config-timezone-alias-mutable src/config.ts \
             'const tc = parsed.tui' 'let tc = parsed.tui'
+          timezone_call='const timezone = normalizeTuiTimezone(tc.timezone)'
+          mutant "$kimchi" config-timezone-alias-value src/config.ts \
+            "$timezone_call" $'const timezoneInput = tc.timezone\n\t\t\tconst timezone = normalizeTuiTimezone(timezoneInput)'
+          mutant "$kimchi" config-timezone-bracket-literal src/config.ts \
+            "$timezone_call" 'const timezone = normalizeTuiTimezone(tc["timezone"])'
+          mutant "$kimchi" config-timezone-computed-key src/config.ts \
+            "$timezone_call" 'const timezone = normalizeTuiTimezone(tc[String("timezone")])'
           mutant "$kimchi" config-timezone-guard src/config.ts \
-            'normalizeTuiTimezone(tc.timezone)' 'normalizeTuiTimezone(tc.otherTimezone)'
+            "$timezone_call" 'const timezone = normalizeTuiTimezone(tc.otherTimezone)'
           # Repoint readSurveyConfig's config.json parse: at the harness file its
           # `surveys` read must surface as an unknown harness key, and at a file
           # that is neither surface the parse must be unattributable.
@@ -171,10 +178,21 @@
             "config.json validation shape changed" >> "$TMPDIR/proof"
           expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
             "config.json validation shape changed" >> "$TMPDIR/proof"
-          expect_rejection config-timezone-alias-mutable "$TMPDIR/config-timezone-alias-mutable-source" \
-            'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
-          expect_rejection config-timezone-guard "$TMPDIR/config-timezone-guard-source" \
-            'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
+          for label in config-timezone-alias-mutable config-timezone-computed-key config-timezone-guard; do
+            expect_rejection "$label" "$TMPDIR/$label-source" \
+              'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
+          done
+          # Requiring a dotted argument would reject both paths. The extractor
+          # checks that the helper still guards tui.timezone as a string.
+          for label in config-timezone-alias-value config-timezone-bracket-literal; do
+            if ! (
+              ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
+            ); then
+              echo "FAIL: $label did not preserve the tui.timezone guard" >&2
+              exit 1
+            fi
+            echo "$label (exit 0): preserved the tui.timezone string guard" >> "$TMPDIR/proof"
+          done
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
           expect_rejection config-shape "$TMPDIR/config-shape-source" \
