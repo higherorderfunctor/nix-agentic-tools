@@ -2007,6 +2007,33 @@
       "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
       "type": "int"
     },
+    "api-keys.vertex[].keys[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.vertex[].keys[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[].match[]": {
+      "type": "string"
+    },
+    "api-keys.vertex[].keys[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
+      "type": "int"
+    },
     "api-keys.vertex[].keys[].weight": {
       "description": "Weight controls proportional selection under weighted-round-robin.\nAn omitted value defaults to 1; non-positive values exclude this credential; maximum 1,000,000.",
       "type": "int"
@@ -2080,6 +2107,31 @@
     },
     "api-keys.vertex[].request-retry": {
       "description": "RequestRetry optionally overrides the global request-retry for this credential.\nNil or a negative value means \"use the global request-retry\". 0 disables additional retry rounds.",
+      "type": "int"
+    },
+    "api-keys.vertex[].request-scoped-errors": {
+      "description": "RequestScopedErrors configures custom classification rules for upstream errors.",
+      "type": "list"
+    },
+    "api-keys.vertex[].request-scoped-errors[]": { "type": "object" },
+    "api-keys.vertex[].request-scoped-errors[].action": {
+      "description": "Action specifies the handling behavior: \"stop\", \"stop-and-cooldown\", \"continue\", \"continue-and-cooldown\".",
+      "type": "string"
+    },
+    "api-keys.vertex[].request-scoped-errors[].match": {
+      "description": "Match matches substrings in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.vertex[].request-scoped-errors[].match-regexr": {
+      "description": "MatchRegexr matches regular expressions in the upstream error body.",
+      "type": "list"
+    },
+    "api-keys.vertex[].request-scoped-errors[].match-regexr[]": {
+      "type": "string"
+    },
+    "api-keys.vertex[].request-scoped-errors[].match[]": { "type": "string" },
+    "api-keys.vertex[].request-scoped-errors[].status": {
+      "description": "Status matches the HTTP status code of the upstream response (e.g. 400).",
       "type": "int"
     },
     "api-keys.xai": {
