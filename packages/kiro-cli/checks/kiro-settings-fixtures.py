@@ -38,6 +38,9 @@ def merge_with_empty_seed(guard, extra=""):
 
 composer = "function compose(){return{...globalLoad(),...merge()}}"
 empty_seed = merge_with_empty_seed("Cq.has(k)")
+explicit_path = empty_seed.replace("merge()", "merge(p=path())", 1).replace(
+    "readWorkspace(path())", "readWorkspace(p)", 1
+)
 extra_copy = ';if("chat.surprise" in w)e["chat.surprise"]=w["chat.surprise"]'
 probe_mismatch = "does not apply exactly"
 
@@ -71,6 +74,11 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(modern_result["workspaceOverridableSettings"]) == 11, modern_result
     assert "chat.defaultModel" in modern_result["workspaceOverridableSettings"]
 
+    # 3.6.2 supports both the default workspace path and an explicit one.
+    parameterized = run(bundle(merge=explicit_path + composer + 'merge("other");'))
+    assert parameterized.returncode == 0, parameterized.stderr
+    assert json.loads(parameterized.stdout) == modern_result
+
     # A property key or member name that only shares the merge's or the
     # composer's spelling is not a use of it.
     for member in [
@@ -101,6 +109,20 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         "merge with a parameter": (
             bundle(merge=merge_with_guard("Cq.has(k)").replace("merge()", "merge(skip)", 1)),
             "unsupported loader shape",
+        ),
+        "non-call default path": (
+            bundle(merge=explicit_path.replace("p=path()", 'p="literal"') + composer),
+            "unsupported loader shape",
+        ),
+        "parameter not forwarded": (
+            bundle(merge=explicit_path.replace("readWorkspace(p)", "readWorkspace(path())") + composer),
+            "unsupported loader shape",
+        ),
+        "extra copy only for an explicit path": (
+            bundle(merge=explicit_path.replace(
+                "e[k]=v", 'e[k]=v;if(p!=="fixture-path")e["chat.surprise"]=w["chat.surprise"]'
+            ) + composer),
+            probe_mismatch,
         ),
         "truthiness guard": (
             bundle(merge=merge_with_guard("Cq.has(k)&&v")),

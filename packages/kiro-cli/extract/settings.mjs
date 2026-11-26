@@ -164,7 +164,19 @@ const emptySeed =
   ts.isObjectLiteralExpression(globalInit) &&
   globalInit.properties.length === 0;
 const workspaceCall = workspaceDecl?.initializer;
-const pathCall = workspaceCall?.arguments?.[0];
+const workspacePath = workspaceCall?.arguments?.[0];
+const pathParameter = merge.parameters[0];
+// 3.6.2 also accepts an explicit workspace path. Accept only a single simple
+// parameter defaulting to the old path loader, forwarded unchanged to the reader.
+const explicitPath =
+  emptySeed &&
+  merge.parameters.length === 1 &&
+  ts.isIdentifier(pathParameter.name) &&
+  !pathParameter.dotDotDotToken &&
+  workspacePath !== undefined &&
+  ts.isIdentifier(workspacePath) &&
+  workspacePath.text === pathParameter.name.text;
+const pathCall = explicitPath ? pathParameter.initializer : workspacePath;
 const catchCall = tryStatement?.catchClause?.block?.statements?.[0]?.expression;
 if (
   statements?.length !== 3 ||
@@ -177,9 +189,7 @@ if (
       ts.isIdentifier(globalCall.expression) &&
       globalCall.arguments.length === 0)
   ) ||
-  // The probe calls the merge with no arguments, so a parameter could change
-  // what the bundle's own calls copy.
-  merge.parameters.length !== 0 ||
+  (merge.parameters.length !== 0 && !explicitPath) ||
   !ts.isTryStatement(tryStatement) ||
   !ts.isVariableStatement(tryStatement.tryBlock.statements[0]) ||
   tryStatement.tryBlock.statements[0].declarationList.declarations.length !==
@@ -188,6 +198,7 @@ if (
   !ts.isCallExpression(workspaceCall) ||
   !ts.isIdentifier(workspaceCall.expression) ||
   workspaceCall.arguments.length !== 1 ||
+  !pathCall ||
   !ts.isCallExpression(pathCall) ||
   !ts.isIdentifier(pathCall.expression) ||
   pathCall.arguments.length !== 0 ||
@@ -201,7 +212,7 @@ if (
 )
   fail("workspace merge has an unsupported loader shape");
 
-// 3.1.0 only: exactly one zero-argument function whose whole body returns
+// An empty seed requires exactly one zero-argument function whose body returns
 // `{...globalLoader(),...merge()}`, in that order and nothing else.
 let composer;
 let composerGlobalName;
@@ -349,17 +360,19 @@ const workspaceValueTypes = [
   () => [],
   () => ({}),
 ];
-const mergeExpression =
+const mergeExpression = (withPath) =>
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
   `const ${allowlistName}=${allowlist.right.getText(file)};` +
   `const ${emptySeed ? composerGlobalName : globalCall.expression.text}=()=>({...globalSettings});` +
   `const ${pathCall.expression.text}=()=>"fixture-path";` +
-  `const ${workspaceCall.expression.text}=(path)=>{if(path!=="fixture-path")throw Error("path");return workspace};` +
+  `const ${workspaceCall.expression.text}=(path)=>{if(path!==expectedPath)throw Error("path");return workspace};` +
   `const ${catchCall.expression.expression.text}={warn:()=>{throw Error("workspace read failed")}};` +
-  (emptySeed
-    ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
-    : `${merge.getText(file)};return ${merge.name.text}()})()`);
-const runProbe = (rotation) => {
+  (withPath
+    ? `${merge.getText(file)};return {...globalSettings,...${merge.name.text}(expectedPath)}})()`
+    : emptySeed
+      ? `${merge.getText(file)};${composer.getText(file)};return ${composer.name.text}()})()`
+      : `${merge.getText(file)};return ${merge.name.text}()})()`);
+const runProbe = (rotation, withPath) => {
   const workspaceValues = new Map(
     workspaceKeys.map((key, index) => [
       key,
@@ -394,8 +407,12 @@ const runProbe = (rotation) => {
   let merged;
   try {
     merged = vm.runInNewContext(
-      mergeExpression,
-      { globalSettings, workspace },
+      mergeExpression(withPath),
+      {
+        globalSettings,
+        workspace,
+        expectedPath: withPath ? "other-fixture-path" : "fixture-path",
+      },
       { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
     );
   } catch {
@@ -421,7 +438,12 @@ const runProbe = (rotation) => {
     return false;
   }
 };
-if (!workspaceValueTypes.every((_, rotation) => runProbe(rotation)))
+if (
+  !workspaceValueTypes.every(
+    (_, rotation) =>
+      runProbe(rotation, false) && (!explicitPath || runProbe(rotation, true)),
+  )
+)
   fail("workspace merge does not apply exactly the extracted allowlist");
 
 process.stdout.write(
