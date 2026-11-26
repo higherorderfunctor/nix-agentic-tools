@@ -531,14 +531,19 @@
   "rolloutFeatures": [
     "background_execution",
     "c2s",
+    "code_review",
+    "daemon",
     "fullscreen_default",
     "infra_safety",
+    "kiro_voice",
     "kmux",
     "kvim",
     "lite",
     "managed_settings",
     "memory_cloud_sync",
     "memory_import",
+    "release_help_docs",
+    "review",
     "test",
     "test_internal_only",
     "test_nightly_only",
@@ -548,6 +553,18 @@
   "rolloutPatchability": {
     "background_execution": { "patchable": true, "unmatchedSites": 0 },
     "c2s": { "patchable": true, "unmatchedSites": 0 },
+    "code_review": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
+    "daemon": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
     "fullscreen_default": {
       "patchable": false,
       "unmatchedSites": {
@@ -555,6 +572,7 @@
       }
     },
     "infra_safety": { "patchable": true, "unmatchedSites": 0 },
+    "kiro_voice": { "patchable": true, "unmatchedSites": 0 },
     "kmux": { "patchable": true, "unmatchedSites": 0 },
     "kvim": { "patchable": true, "unmatchedSites": 0 },
     "lite": { "patchable": true, "unmatchedSites": 0 },
@@ -576,6 +594,18 @@
         "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
       }
     },
+    "release_help_docs": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
+    "review": {
+      "patchable": false,
+      "unmatchedSites": {
+        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
+      }
+    },
     "test": { "patchable": true, "unmatchedSites": 0 },
     "test_internal_only": { "patchable": true, "unmatchedSites": 0 },
     "test_nightly_only": { "patchable": true, "unmatchedSites": 0 },
@@ -588,18 +618,25 @@
     "trust_classifier_shadow": { "patchable": true, "unmatchedSites": 0 }
   },
   "rolloutStates": {
-    "background_execution": {
-      "channel": "nightly",
-      "segment": "internal",
-      "treatment_percent": 100
-    },
+    "background_execution": { "segment": "internal", "treatment_percent": 100 },
     "c2s": {
       "channel": "nightly",
       "segment": "internal",
       "treatment_percent": 100
     },
+    "code_review": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
+    "daemon": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
     "fullscreen_default": { "channel": "nightly", "treatment_percent": 100 },
     "infra_safety": { "segment": "internal", "treatment_percent": 100 },
+    "kiro_voice": { "segment": "internal", "treatment_percent": 100 },
     "kmux": {
       "channel": "nightly",
       "segment": "internal",
@@ -622,6 +659,16 @@
       "segment": "internal",
       "treatment_percent": 100
     },
+    "release_help_docs": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
+    "review": {
+      "channel": "nightly",
+      "segment": "internal",
+      "treatment_percent": 0
+    },
     "test": { "treatment_percent": 100 },
     "test_internal_only": { "segment": "internal", "treatment_percent": 100 },
     "test_nightly_only": {
@@ -632,7 +679,7 @@
     "themes_v2": {
       "channel": "nightly",
       "segment": "internal",
-      "treatment_percent": 0
+      "treatment_percent": 100
     },
     "trust_classifier_shadow": {
       "channel": "nightly",
@@ -728,7 +775,11 @@
     "chat.workflowMonitor.mouseEnabled",
     "compaction.autoCompactionThreshold",
     "memory.mode",
-    "memory.reflection"
+    "memory.reflection",
+    "voice.autoSubmit",
+    "voice.backend",
+    "voice.language",
+    "voice.modelSize"
   ],
   "workspaceOverridableSettings": [
     "chat.defaultAgent",
