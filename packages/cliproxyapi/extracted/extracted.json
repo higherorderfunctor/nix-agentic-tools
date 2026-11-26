@@ -4446,7 +4446,7 @@
         "last_updated": "2026-09-21",
         "limit": { "context": 500000, "output": 500000 },
         "modalities": {
-          "input": ["text", "image/jpeg", "image/png", "application/pdf"],
+          "input": ["text", "image/jpeg", "image/png"],
           "output": ["text"]
         },
         "name": "Grok 4.7",
