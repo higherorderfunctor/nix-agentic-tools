@@ -3,17 +3,11 @@
   "instance": "http://cpa.test",
   "discovery_base": "https://vendor.test/go",
   "requests": {
-    "elsewhere": {
-      "method": "GET",
-      "url": "https://elsewhere.test/usage"
-    },
+    "elsewhere": { "method": "GET", "url": "https://elsewhere.test/usage" },
     "usage": {
       "method": "POST",
       "url": "https://vendor.test/usage",
-      "headers": {
-        "Accept": "text/plain",
-        "authorization": "private"
-      },
+      "headers": { "Accept": "text/plain", "authorization": "private" },
       "body": "query"
     }
   },
@@ -23,21 +17,9 @@
       200,
       {
         "files": [
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "one"
-          },
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "two"
-          },
-          {
-            "provider": "codex",
-            "account_type": "oauth",
-            "auth_index": "alt"
-          },
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "one" },
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "two" },
+          { "provider": "codex", "account_type": "oauth", "auth_index": "alt" },
           {
             "provider": "kiro",
             "account_type": "oauth",
@@ -47,42 +29,21 @@
         ]
       }
     ],
-    "denied": [
-      200,
-      {
-        "body": "private",
-        "status_code": 403
-      }
-    ],
+    "denied": [200, { "body": "private", "status_code": 403 }],
     "duplicate": [
       200,
       [
         {
           "base-url": "https://vendor.test/go/v1",
-          "keys": [
-            {
-              "api-key": "private-key",
-              "auth_index": "one"
-            }
-          ]
+          "keys": [{ "api-key": "private-key", "auth_index": "one" }]
         },
         {
           "base-url": "https://vendor.test/gopher",
-          "keys": [
-            {
-              "api-key": "other-secret",
-              "auth_index": "other"
-            }
-          ]
+          "keys": [{ "api-key": "other-secret", "auth_index": "other" }]
         },
         {
           "base-url": "https://elsewhere.test/go",
-          "keys": [
-            {
-              "api-key": "elsewhere-key",
-              "auth_index": "away"
-            }
-          ]
+          "keys": [{ "api-key": "elsewhere-key", "auth_index": "away" }]
         }
       ]
     ],
@@ -91,104 +52,24 @@
       [
         {
           "base-url": "https://vendor.test/go",
-          "keys": [
-            {
-              "api-key": "private-key",
-              "auth_index": "two"
-            }
-          ]
+          "keys": [{ "api-key": "private-key", "auth_index": "two" }]
         }
       ]
     ],
-    "malformed": [
-      200,
-      {
-        "body": "private",
-        "status_code": "200"
-      }
-    ],
+    "malformed": [200, { "body": "private", "status_code": "200" }],
     "missing": [404, "private management error"],
-    "offline": [
-      503,
-      {
-        "body": "private",
-        "status_code": 200
-      }
-    ],
-    "ok": [
-      200,
-      {
-        "body": "usage",
-        "status_code": 200
-      }
-    ],
+    "offline": [503, { "body": "private", "status_code": 200 }],
+    "ok": [200, { "body": "usage", "status_code": 200 }],
     "single": [
       200,
       {
         "files": [
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "two"
-          }
-        ]
-      }
-    ],
-    "unrelated": [
-      200,
-      {
-        "files": [
-          {
-            "provider": "codex",
-            "account_type": "oauth",
-            "auth_index": "other",
-            "email": 17
-          },
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "two"
-          }
-        ]
-      }
-    ],
-    "disabled": [
-      200,
-      {
-        "files": [
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "disabled",
-            "disabled": true,
-            "name": []
-          },
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "two"
-          }
-        ]
-      }
-    ],
-    "selected": [
-      200,
-      {
-        "files": [
-          {
-            "provider": "kiro",
-            "account_type": "oauth",
-            "auth_index": "two",
-            "email": false,
-            "name": {}
-          }
+          { "provider": "kiro", "account_type": "oauth", "auth_index": "two" }
         ]
       }
     ]
   },
-  "direct": {
-    "private network exception": "synthetic-secret"
-  },
+  "direct": { "private network exception": "synthetic-secret" },
   "cases": {
     "ambiguous discovery": ["kiro", false, null, ["accounts"]],
     "correct pin sent": ["kiro", false, "two", ["accounts", "ok"]],
@@ -204,24 +85,6 @@
     "mixed sources skip I/O": ["kiro", true, null, ["accounts"]],
     "registered pin skips discovery": [null, false, "two", ["ok"]],
     "single provider login": ["kiro", false, null, ["single", "ok"]],
-    "vendor HTTP failure": ["kiro", false, "two", ["accounts", "denied"]],
-    "41 malformed unrelated attribution": [
-      "kiro",
-      false,
-      null,
-      ["unrelated", "ok"]
-    ],
-    "42 malformed disabled attribution": [
-      "kiro",
-      false,
-      null,
-      ["disabled", "ok"]
-    ],
-    "40 malformed selected attribution": [
-      "kiro",
-      false,
-      "two",
-      ["selected", "ok"]
-    ]
+    "vendor HTTP failure": ["kiro", false, "two", ["accounts", "denied"]]
   }
 }

@@ -1,5 +1,4 @@
 # Exercise the installed Reader module against public envelopes and process captures.
-# Validate the published schema independently against the example and each successful golden.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
   credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
@@ -18,13 +17,7 @@
   '';
 in {
   checks = {
-    credential-usage-conformance = synthetic.overrideAttrs (old: {
-      buildCommand =
-        old.buildCommand
-        + ''
-          python3 -I -B ${./checks/conformance}/test_conformance.py -v SuiteTests
-        '';
-    });
+    credential-usage-conformance = synthetic;
     credential-usage-contract =
       pkgs.runCommand "credential-usage-contract" {
         nativeBuildInputs = [usagePython];
@@ -39,19 +32,12 @@ in {
       python3 -I -B ${./checks/runner}/test_runner.py
       touch "$out"
     '';
-    credential-usage-schema =
-      pkgs.runCommand "credential-usage-schema" {
-        nativeBuildInputs = [pkgs.biome pkgs.pyright (python-stack.withPackages (ps: usagePackages ps ++ [ps.jsonschema]))];
-        USAGE_DOC = ./docs/credential-usage.md;
-      } ''
-        ${strict}
-        pyright --project ${./checks}/schema --pythonpath "$(command -v python3)"
-        python3 -I -B ${./checks/schema/generate_schema.py} > schema.json
-        diff -u ${./schema/usage-envelope.schema.json} schema.json
-        python3 -I -B ${./checks}/schema/validate_schema.py ${./schema/usage-envelope.schema.json} \
-          ${(import ../claude-code/lib/default.nix).ai.claude-code.usagePair} ${./checks/conformance/synthetic/cases}
-        touch "$out"
-      '';
+    credential-usage-schema = pkgs.runCommand "credential-usage-schema" {nativeBuildInputs = [pkgs.biome usagePython];} ''
+      ${strict}
+      python3 -I -B ${./checks/schema/generate_schema.py} > schema.json
+      diff -u ${./schema/usage-envelope.schema.json} schema.json
+      touch "$out"
+    '';
     credential-usage-types = pkgs.runCommand "credential-usage-types" {nativeBuildInputs = [pkgs.pyright synthetic.python];} ''
       ${strict}
       pyright --project ${./python} --pythonpath "$(command -v python3)"

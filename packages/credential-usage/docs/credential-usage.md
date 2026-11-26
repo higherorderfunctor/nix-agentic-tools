@@ -255,10 +255,7 @@ From `checks/conformance`, run `python3 run.py <pair> <module>:<function>` with
 the fill and both transport modules installed. Append `<scenario>/<transport>`
 to select one case. In Nix, call `lib.ai.credential-usage.conformanceCheck` with
 `pkgs`, `python-stack`, a check `name`, the fill's `ownerModules`, `pair` and
-`entry`. Supply extra command-line tools in `extraPackages`. For mutation
-testing, set `READER_PAIR` and `READER_ENTRY` and collect
-`test_conformance.py::GoldenCases` with pytest. Each scenario and transport has
-its own selectable test.
+`entry`. Supply extra command-line tools in `extraPackages`.
 
 `python3 standalone.py <pair> <CPA command> [<offline direct command>]` runs the
 installed executable instead of an imported entry. Each CPA case gets a local
@@ -280,10 +277,9 @@ subprocess clock.
 
 ## Checks
 
-`credential-usage-conformance` exercises the suite against working and broken
-Readers. `credential-usage-contract` checks envelope decisions.
-`credential-usage-schema` validates the documented example and successful Claude
-and synthetic fixtures against the published schema.
+`credential-usage-conformance` exercises the suite against the synthetic fill.
+`credential-usage-contract` checks envelope decisions. `credential-usage-schema`
+regenerates the published schema and fails on any difference.
 `credential-usage-registration` checks that Home Manager, devenv and standalone
 construction resolve the same Reader, that a second owner can register one and
 that two owners of one id fail evaluation. `credential-usage-runner` checks
@@ -294,30 +290,3 @@ checkout:
 ```bash
 python3 checks/runner/test_runner.py
 ```
-
-## Mutation review
-
-From the repository root, run the manual pass on writable copies of the envelope
-and Claude fill with the pinned Python environment:
-
-```bash
-env -u HTTPS_PROXY -u HTTP_PROXY -u https_proxy -u http_proxy \
-  flock -w 600 /tmp/nat-vm-spike.lock \
-  systemd-run --user --scope -q -p CPUQuota=200% -p MemoryMax=6G \
-  nix build --max-jobs 1 --cores 2 --no-link --print-out-paths --impure --expr '
-    let
-      repo = builtins.getFlake (toString ./.);
-      pkgs = import repo.inputs.nixpkgs {
-        system = builtins.currentSystem;
-        overlays = [ repo.overlays.default ];
-      };
-    in pkgs.callPackage ./packages/credential-usage/checks/mutation.nix {}'
-```
-
-The output directory contains mutmut statuses in `generated.txt`, diffs for
-generated survivors in `surviving-diffs.txt`, and named fault outcomes with
-their behavior ID in `named.tsv`. Confirm each kill by matching a failed call to
-a passing baseline call in `matrix.tsv`. The matrix includes the name of each
-contract fixture. Exclude tool-reported kills that lack a failed call. Mutmut
-selects generated runs by function coverage. Every named fault runs the full
-selection.
