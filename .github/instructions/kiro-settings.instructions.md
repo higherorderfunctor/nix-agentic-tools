@@ -69,11 +69,11 @@ setting keys and stops recursing the moment the accumulated path is one of them.
 `packages/kiro-cli/extracted/` facts, read through `lib.extracted` (each host's
 raw measures them; consumers read the merged value):
 
-- `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 55 keys
-  at 2.23.0, all `chat.*`.
-- `workspaceOverridableSettings`: the workspace allowlist, which adds 21 keys
+- `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 92 keys
+  at 3.6.2, mostly `chat.*`.
+- `workspaceOverridableSettings`: the workspace allowlist, which adds 19 keys
   the registry omits — the whole `toolSearch.*`, `compaction.*` and
-  `knowledge.*` families, plus ten `chat.*` keys including
+  `knowledge.*` families, plus eight `chat.*` keys including
   `chat.enableTangentMode`. That last one is the extractor's own PROBE anchor,
   which makes it the sharpest available evidence that the registry is not the
   settings universe: the probe the allowlist scan keys off is itself absent from
