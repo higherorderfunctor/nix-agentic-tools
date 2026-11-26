@@ -1023,15 +1023,34 @@ function extractConfig(
     fail(
       `readConfigExtras no longer binds exactly one parsed (found ${parsedSymbols.size})`,
     );
+  // Resolve nested properties and const aliases back to this parse by symbol.
+  function parsedPath(expression) {
+    expression = unwrapExpression(expression, ts);
+    if (ts.isPropertyAccessExpression(expression)) {
+      const parent = parsedPath(expression.expression);
+      return parent && [...parent, expression.name.text];
+    }
+    if (!ts.isIdentifier(expression)) return undefined;
+    const symbol = symbolAt(expression, checker, ts);
+    if (parsedSymbols.has(symbol)) return [];
+    const declaration = symbol?.valueDeclaration;
+    if (
+      declaration &&
+      ts.isVariableDeclaration(declaration) &&
+      (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
+      declaration.initializer &&
+      declaration.end < expression.pos
+    )
+      return parsedPath(declaration.initializer);
+    return undefined;
+  }
   (function followHelpers(node) {
     if (ts.isCallExpression(node)) {
       node.arguments.forEach((argument, index) => {
-        argument = unwrapExpression(argument, ts);
-        if (
-          !ts.isPropertyAccessExpression(argument) ||
-          !parsedSymbols.has(symbolAt(argument.expression, checker, ts))
-        )
+        if (!ts.isPropertyAccessExpression(unwrapExpression(argument, ts)))
           return;
+        const path = parsedPath(argument);
+        if (!path?.length) return;
         const helper = symbolAt(
           node.expression,
           checker,
@@ -1040,7 +1059,7 @@ function extractConfig(
         const parameter = helper?.parameters[index]?.name;
         if (!helper?.body || !parameter || !ts.isIdentifier(parameter)) return;
         const kinds = runtimeValidationKinds(helper, ts, {
-          [parameter.text]: [argument.name.text],
+          [parameter.text]: path,
         });
         for (const [key, found] of kinds) {
           if (!extrasValidation.has(key)) extrasValidation.set(key, new Set());

@@ -479,6 +479,10 @@
       "reason": "evaluator limitation: kimchi env --values reads def.name only from the fixed ENV_VARS registry in src/env-vars.ts, and other sites already record every registry name as an environment fact; IGNORED_ENV_VARS and TEST_SUITE_ENV_VARS never reach displayValue. It reports only set or not set, never the value",
       "sites": 1
     },
+    "kimchi/src/extensions/mcp/call-catalog-store.ts#processEnvKey[VarRef]": {
+      "reason": "the MCP call catalog cache compares every enumerable process environment name and value to detect changes; the names depend on the live environment",
+      "sites": 1
+    },
     "kimchi/src/extensions/permissions/mode-controller.ts#getPermissionMode[VarRef]": {
       "reason": "the permission-mode key includes the runtime session identifier",
       "sites": 1
