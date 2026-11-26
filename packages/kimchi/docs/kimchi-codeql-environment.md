@@ -1,6 +1,6 @@
 ## The environment fact from CodeQL
 
-> **Last verified:** 2026-10-24 — fixed names resolve through CommonJS property
+> **Last verified:** 2026-11-25 — fixed names resolve through CommonJS property
 > assignments and destructured reexports, literal callback arrays and object
 > tables, and declared, arrow and function-expression key helpers. Guarded
 > literal-table keys resolve through uppercase and literal-text regex
@@ -158,10 +158,10 @@ retained refusal classes, with helper declarations merged into their case. The
 reads fixture also checks a nested literal table with string/function
 alternatives and an aliased environment passed through two helpers, alongside
 unrelated objects that must add no names; fail-shapes refuses an unresolved
-iteration key and rest copies passed to unknown functions. Fixtures supply an
-empty annotation map, so the release's site reviews neither exempt fixture reads
-nor become stale rows in fixture transforms. The positive reads fixture uses two
-rows from std-env's provider table: `["GITHUB_ACTIONS"]` and
+iteration key and rest copies passed to unknown functions. These query-tree
+fixtures use an empty annotation map so that the release's site reviews cannot
+exempt their reads or appear stale. The positive reads fixture uses two rows
+from std-env's provider table: `["GITHUB_ACTIONS"]` and
 `["CIRCLE", "CIRCLECI"]`, checking two environment keys. It also checks literal
 and constant helper arguments and a binding assigned a string literal before its
 computed read. A guarded region table with a hyphenated key checks multiple
@@ -169,6 +169,11 @@ values through uppercase, replacement and a helper's template argument. The
 overwrites fixture checks reads through helper forwarding, aliases and rest
 copies before writes. A new shape goes into one of these trees, not into a
 mutant of the real source: a real-tree mutant costs a database build each.
+
+`kimchi-codeql-environment-review-guard` feeds decoded query rows directly to
+the same transform, with one annotated site. It checks that the reviewed site
+produces no variable, and that a blank reason, a second occurrence or a stale
+review row fails with its own diagnostic.
 
 ### Running it without Nix
 

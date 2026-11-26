@@ -104,5 +104,71 @@ in {
           fi
         done > "$out"
       '';
+
+    # Feed decoded query results directly to the release transform. A reviewed
+    # key must have a non-blank reason and exactly its reviewed number of sites.
+    kimchi-codeql-environment-review-guard = let
+      key = "kimchi/src/env.ts#key[VarRef]";
+      queryResults = tuples: builtins.toJSON {"#select" = {inherit tuples;};};
+      checkReview = name: {
+        columns,
+        expectedFailure ? null,
+        reason ? "One reviewed computed read.",
+      }: let
+        annotations = pkgs.writeText "kimchi-environment-${name}-annotations.json" (builtins.toJSON {
+          environmentUnresolved.${key} = {
+            inherit reason;
+            sites = 1;
+          };
+        });
+        reviewed = import ../extract/environment.nix {inherit annotations codeql pkgs;};
+        reads = queryResults (map (column: ["fail" "unresolved computed environment read: ${key}" "kimchi/src/env.ts:3:${toString column}"]) columns);
+        run = ''${lib.getExe reviewed.transform} "$TMPDIR"'';
+      in ''
+        printf '%s\n' ${lib.escapeShellArg reads} > "$TMPDIR/EnvironmentReads.json"
+        ${
+          if expectedFailure == null
+          then ''${run} | jq -e '. == {variables: {}}' > /dev/null || fail "${name}: expected an empty surface"''
+          else ''
+            if output=$(${run} 2>&1); then
+              fail '${name}: accepted a review that should be refused'
+            fi
+            case "$output" in
+              *${lib.escapeShellArg expectedFailure}*) ;;
+              *) fail "${name}: unexpected diagnostic: $output" ;;
+            esac
+          ''
+        }
+        echo '${name}: as expected'
+      '';
+      cases = {
+        blank-reason = {
+          columns = [5];
+          expectedFailure = "environmentUnresolved rows need a non-blank reason: ${key}";
+          reason = " ";
+        };
+        duplicate-site = {
+          columns = [5 23];
+          expectedFailure = "unresolved site count changed; review the row: ${key} (expected 1 unresolved sites, got 2)";
+        };
+        reviewed-site.columns = [5];
+        stale-row = {
+          columns = [];
+          expectedFailure = "stale environmentUnresolved rows; delete the stale row: ${key}";
+        };
+      };
+    in
+      pkgs.runCommand "kimchi-codeql-environment-review-guard" {nativeBuildInputs = [pkgs.jq];} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        fail() {
+          echo "kimchi-codeql-environment-review-guard: $*" >&2
+          exit 1
+        }
+        printf '%s\n' ${lib.escapeShellArg (queryResults [])} > "$TMPDIR/LaunchOverwrites.json"
+        (
+          ${lib.concatStrings (lib.mapAttrsToList checkReview cases)}
+        ) > "$out"
+      '';
   };
 }

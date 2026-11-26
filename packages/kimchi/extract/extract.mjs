@@ -656,30 +656,35 @@ function discoverProjectConfigKeys(configSource, annotations, checker, ts) {
   return result;
 }
 
-function runtimeValidationKinds(node, ts, initialAliases = {}) {
-  const aliases = new Map(
-    Object.entries(initialAliases).map(([name, path]) => [name, path]),
-  );
-  function pathFor(expression) {
-    expression = unwrapExpression(expression, ts);
-    if (ts.isIdentifier(expression)) return aliases.get(expression.text);
-    if (ts.isPropertyAccessExpression(expression)) {
-      const parent = pathFor(expression.expression);
-      if (parent) return [...parent, expression.name.text];
-    }
-    // `record[key]` with a computed key reads any member: `*`.
-    if (ts.isElementAccessExpression(expression)) {
-      const parent = pathFor(expression.expression);
-      if (parent)
-        return [
-          ...parent,
-          ts.isStringLiteralLike(expression.argumentExpression)
-            ? expression.argumentExpression.text
-            : "*",
-        ];
-    }
-    return undefined;
+// Resolve a guard expression to a key path, or undefined if unresolved.
+// Callers resolve identifiers and omit computedKeyFallback to refuse computed
+// keys, as helper following does to keep guards tied to a specific input.
+function accessPath(expression, ts, identifierPath, computedKeyFallback) {
+  expression = unwrapExpression(expression, ts);
+  if (ts.isIdentifier(expression)) return identifierPath(expression);
+  let key;
+  if (ts.isPropertyAccessExpression(expression)) {
+    key = expression.name.text;
+  } else if (ts.isElementAccessExpression(expression)) {
+    key = ts.isStringLiteralLike(expression.argumentExpression)
+      ? expression.argumentExpression.text
+      : computedKeyFallback;
   }
+  if (key === undefined) return undefined;
+  const parent = accessPath(
+    expression.expression,
+    ts,
+    identifierPath,
+    computedKeyFallback,
+  );
+  return parent && [...parent, key];
+}
+
+function runtimeValidationKinds(node, ts, initialAliases = {}) {
+  const aliases = new Map(Object.entries(initialAliases));
+  const identifierPath = (identifier) => aliases.get(identifier.text);
+  const pathFor = (expression) =>
+    accessPath(expression, ts, identifierPath, "*");
   function collectAliases(current) {
     if (
       ts.isVariableDeclaration(current) &&
@@ -1023,15 +1028,27 @@ function extractConfig(
     fail(
       `readConfigExtras no longer binds exactly one parsed (found ${parsedSymbols.size})`,
     );
+  // Match helper inputs to the parse's symbol, following only initialized
+  // const aliases declared before use so their binding identifies the value.
+  function parsedIdentifierPath(identifier) {
+    const symbol = symbolAt(identifier, checker, ts);
+    if (parsedSymbols.has(symbol)) return [];
+    const declaration = symbol?.valueDeclaration;
+    if (
+      declaration &&
+      ts.isVariableDeclaration(declaration) &&
+      (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
+      declaration.initializer &&
+      declaration.end < identifier.pos
+    )
+      return accessPath(declaration.initializer, ts, parsedIdentifierPath);
+    return undefined;
+  }
   (function followHelpers(node) {
     if (ts.isCallExpression(node)) {
       node.arguments.forEach((argument, index) => {
-        argument = unwrapExpression(argument, ts);
-        if (
-          !ts.isPropertyAccessExpression(argument) ||
-          !parsedSymbols.has(symbolAt(argument.expression, checker, ts))
-        )
-          return;
+        const path = accessPath(argument, ts, parsedIdentifierPath);
+        if (!path?.length) return;
         const helper = symbolAt(
           node.expression,
           checker,
@@ -1040,7 +1057,7 @@ function extractConfig(
         const parameter = helper?.parameters[index]?.name;
         if (!helper?.body || !parameter || !ts.isIdentifier(parameter)) return;
         const kinds = runtimeValidationKinds(helper, ts, {
-          [parameter.text]: [argument.name.text],
+          [parameter.text]: path,
         });
         for (const [key, found] of kinds) {
           if (!extrasValidation.has(key)) extrasValidation.set(key, new Set());

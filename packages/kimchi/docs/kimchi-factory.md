@@ -1,8 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-11-24 — The package patch adds a title model setting
-> to Kimchi 1.40.0 in the user harness settings. Home Manager supplies the
-> gateway model ID and devenv rejects it at project scope.
+> **Last verified:** 2026-11-25 — Config extraction follows nested helper inputs
+> through const aliases to verify Kimchi's timezone guard.
 >
 > **Settled — do not relitigate.** Walking `main()`'s body in place was tried on
 > PR #2747 and rejected: two review rounds found false fixed-variable facts from
@@ -198,19 +197,22 @@ names follow Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not
 pi's `PI_` default). The extractor uses the TypeScript compiler's checker for
 declared keys and types and syntax tree queries for environment access sites,
 while config queries cross-check compiler types against top-level, nested, and
-array-element runtime validation guards. Those guards include the ones inside a
-helper that readConfigExtras passes `parsed.<key>` to, such as
-`parseOnboardingConfig`, with `parsed` identified by its checker symbol. A
-`delete raw.key` on a parsed object removes a key and is not counted as a read
-of it. Added lines from pi patch files are synthesized as source files and bound
-in isolated TypeScript programs before alias resolution; using the main
-program's checker on those foreign nodes can crash inside the compiler. A
-declaration is never taken by bare name when a reference can pick it:
-config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
-1.1.37 has a second `loadConfig`), pi's `Settings` comes from
-`settings-manager.d.ts`'s exports, and each Settings member carries its
-recursively resolved type inline. The Kimchi harness schemas still looked up by
-name must match exactly one declaration among the modules reachable from
+array-element runtime validation guards. Guards inside a helper called by
+`readConfigExtras` count when its argument resolves to a property path rooted at
+`parsed`. The path may include nested properties, literal bracket keys, or
+`const` aliases declared before use. For example,
+`normalizeTuiTimezone(tc.timezone)` checks `tui.timezone` when
+`const tc = parsed.tui`. The TypeScript checker identifies `parsed` and its
+aliases by symbol, not name. A `delete raw.key` on a parsed object removes a key
+and is not counted as a read of it. Added lines from pi patch files are
+synthesized as source files and bound in isolated TypeScript programs before
+alias resolution; using the main program's checker on those foreign nodes can
+crash inside the compiler. A declaration is never taken by bare name when a
+reference can pick it: config.ts's functions and interfaces resolve in
+config.ts's own scope (Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings`
+comes from `settings-manager.d.ts`'s exports, and each Settings member carries
+its recursively resolved type inline. The Kimchi harness schemas still looked up
+by name must match exactly one declaration among the modules reachable from
 `src/entry.ts`, so `kimchi-extracted-harness-guard` introduces a second live
 `FermentV2Settings` declaration and checks that extraction reports the
 ambiguity. Same-named constants back a constant only where the checker finds no
