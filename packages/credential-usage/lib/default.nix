@@ -1,14 +1,10 @@
-# Fill owners use the shared envelope and run their command against its fixture pair.
-# Consumers of registered Readers merge owner contributions with `mergeReaders`.
-let
-  conformanceSuite = ../checks/conformance;
-in {
+# Fill owners run their command against its fixture pair; consumers of registered Readers merge owner contributions with `mergeReaders`.
+{
   ai.credential-usage = {
     conformanceCheck = import ./conformance.nix;
-    inherit conformanceSuite;
+    conformanceSuite = ../checks/conformance;
     mergeReaders = import ./readers.nix;
     pythonModule = import ./python-module.nix;
     readerModule = ../modules/common.nix;
-    standaloneCheck = "${conformanceSuite}/standalone.py";
   };
 }

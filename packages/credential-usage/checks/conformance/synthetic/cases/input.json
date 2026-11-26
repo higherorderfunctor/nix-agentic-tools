@@ -1,55 +1,30 @@
 {
-  "description": "A bound Reader requires allowance and can report credits on either transport.",
   "transports": ["cpa", "direct"],
   "now": "2026-11-01T00:00:00Z",
-  "credentials": { "login": "{\"token\":\"sample-private-value\"}" },
+  "credentials": { "login": "sample-private-value\n" },
   "executables": { "reader-plan": "printf '%s\\n' standard" },
   "replies": {
-    "allowance": { "status": 200, "body": "{\"used\":23}" },
-    "wallet": { "status": 200, "body": "[]" },
-    "failed": { "status": 503, "body": "private upstream detail" },
-    "proxy-allowance": {
+    "meter": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"{\\\"used\\\":23}\"}"
+      "body": "{\"budget\":50,\"cost\":12.5,\"currency\":\"USD\"}"
     },
-    "proxy-wallet": {
+    "proxy-meter": {
       "status": 200,
-      "body": "{\"status_code\":200,\"body\":\"[]\"}"
-    },
-    "proxy-failed": {
-      "status": 200,
-      "private": true,
-      "body": "{\"status_code\":503,\"body\":\"{\\\"message\\\":\\\"private nested upstream detail\\\"}\"}"
+      "body": { "status_code": 200, "body_from": "meter" }
     }
   },
   "scenarios": {
     "success": {
       "extends": null,
       "env": { "CREDENTIAL_FILE": "${credentials:login}" },
-      "direct": {
-        "env": { "TRANSPORT": "direct" },
-        "replies": ["allowance", "wallet"]
-      },
-      "cpa": {
-        "env": { "TRANSPORT": "cpa" },
-        "replies": ["proxy-allowance", "proxy-wallet"]
-      }
-    },
-    "optional-failure": {
-      "extends": "success",
-      "direct": { "replies": ["allowance", "failed"] },
-      "cpa": { "replies": ["proxy-allowance", "proxy-failed"] }
-    },
-    "primary-failure": {
-      "extends": null,
-      "env": { "CREDENTIAL_FILE": "${credentials:login}" },
-      "direct": { "env": { "TRANSPORT": "direct" }, "replies": ["failed"] },
-      "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": ["proxy-failed"] }
+      "direct": { "env": { "TRANSPORT": "direct" }, "replies": ["meter"] },
+      "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": ["proxy-meter"] }
     },
     "unreadable-credential": {
-      "extends": "primary-failure",
+      "extends": null,
       "env": { "CREDENTIAL_FILE": "${credentials:login}.missing" },
-      "replies": []
+      "direct": { "env": { "TRANSPORT": "direct" }, "replies": [] },
+      "cpa": { "env": { "TRANSPORT": "cpa" }, "replies": [] }
     }
   }
 }

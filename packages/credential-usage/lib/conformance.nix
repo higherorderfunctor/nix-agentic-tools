@@ -1,5 +1,4 @@
 # Fill owners supply their installed Reader modules and one literal pair.
-# Run the command in the same interpreter as both credential transports.
 {
   pkgs,
   python-stack,

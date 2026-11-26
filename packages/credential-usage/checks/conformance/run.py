@@ -4,32 +4,25 @@
 from collections.abc import Sequence
 from pathlib import Path
 import sys
+import unittest
 
 # Isolated Python omits the script directory, which holds the shared suite.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from suite import IncompletePair, Pair, differences
+from suite import conformance
 
 
 def main(args: Sequence[str]) -> int:
-    """Run the selected cases and print each failed comparison with the whole objects that differed."""
+    """Run the selected cases and report each failed comparison."""
     if len(args) not in (2, 3):
         print("usage: run.py <pair directory> <module>:<function> [all | <scenario>/<transport>]", file=sys.stderr)
-        return 1
+        return 2
     try:
-        pair = Pair.read(Path(args[0]))
-        selector = args[2] if len(args) == 3 else "all"
-        cases = list(pair.cases.values()) if selector == "all" else [pair.cases[selector]]
-        errors = [error for case in cases for error in differences(pair.inputs, case, args[1])]
-    except IncompletePair as error:
-        print(error, file=sys.stderr)
-        return 1
-    except (AttributeError, ImportError, KeyError, OSError, ValueError):
-        print("invalid fixture, Reader entry or case selection", file=sys.stderr)
-        return 1
-    for error in errors:
-        print(error, file=sys.stderr)
-    return int(bool(errors))
+        tests = conformance(Path(args[0]), args[1], args[2] if len(args) == 3 else "all")
+    except (OSError, ValueError, KeyError) as error:
+        print(f"invalid fixture or case selection: {error!r}", file=sys.stderr)
+        return 2
+    return int(not unittest.TextTestRunner(verbosity=2).run(tests).wasSuccessful())
 
 
 if __name__ == "__main__":

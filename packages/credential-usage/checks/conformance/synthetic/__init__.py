@@ -1,1 +1,1 @@
-"""The conformance check imports this example Reader to exercise a complete fixture pair."""
+"""The conformance check imports this example metering Reader to exercise a complete fixture pair."""

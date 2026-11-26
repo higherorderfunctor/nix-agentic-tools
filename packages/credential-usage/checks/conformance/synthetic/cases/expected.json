@@ -1,55 +1,42 @@
 {
   "success": {
     "extends": null,
+    "requests": [
+      {
+        "method": "GET",
+        "url": "https://reader.example/spend",
+        "headers": { "Authorization": "Bearer sample-private-value" },
+        "body": null
+      }
+    ],
     "result": {
       "schemaVersion": 1,
       "account": { "auth_index": null, "name": null, "plan": "standard" },
-      "observedAt": "2026-11-01T00:00:02Z",
+      "observedAt": "2026-11-01T00:00:01Z",
       "pool": "sample",
+      "binding": {
+        "endpoint": "https://reader.example/",
+        "transport": "direct"
+      },
       "windows": {
-        "1h": {
+        "budget": {
           "state": "observed",
-          "enforced": true,
-          "remainingPercent": 77,
+          "enforced": null,
+          "remainingPercent": 75.0,
           "resetsAt": null,
           "status": null,
-          "usedPercent": 23,
-          "windowSeconds": 3600
+          "usedPercent": 25.0,
+          "windowSeconds": 2592000.0
         }
       },
-      "accountedSpend": null,
+      "accountedSpend": { "cost": 12.5, "currency": "USD", "source": "meter" },
       "balances": [],
       "bonuses": [],
       "slotStates": {
-        "accountedSpend": { "state": "unsupported" },
-        "credits": { "state": "observed" },
+        "accountedSpend": { "state": "observed" },
+        "credits": { "state": "unsupported" },
         "grants": { "state": "unsupported" },
         "resetInventory": { "state": "unsupported" }
-      }
-    },
-    "direct": {
-      "requests": [
-        {
-          "method": "GET",
-          "url": "https://reader.example/allowance",
-          "headers": {
-            "Accept": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": null
-        },
-        {
-          "method": "GET",
-          "url": "https://reader.example/credits",
-          "headers": { "Authorization": "Bearer [credential:login]" },
-          "body": null
-        }
-      ],
-      "result": {
-        "binding": {
-          "endpoint": "https://reader.example/",
-          "transport": "direct"
-        }
       }
     },
     "cpa": {
@@ -59,28 +46,11 @@
           "url": "https://proxy.example/v0/management/api-call",
           "headers": {
             "Content-Type": "application/json",
-            "Authorization": "Bearer [credential:login]"
+            "Authorization": "Bearer sample-private-value"
           },
           "body": {
             "method": "GET",
-            "url": "https://reader.example/allowance",
-            "auth_index": "sample",
-            "header": {
-              "Accept": "application/json",
-              "Authorization": "Bearer $TOKEN$"
-            }
-          }
-        },
-        {
-          "method": "POST",
-          "url": "https://proxy.example/v0/management/api-call",
-          "headers": {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": {
-            "method": "GET",
-            "url": "https://reader.example/credits",
+            "url": "https://reader.example/spend",
             "auth_index": "sample",
             "header": { "Authorization": "Bearer $TOKEN$" }
           }
@@ -91,51 +61,9 @@
       }
     }
   },
-  "optional-failure": {
-    "extends": "success",
-    "result": {
-      "slotStates": {
-        "credits": { "state": "unknown", "reason": "prepaid-unavailable" }
-      }
-    }
-  },
-  "primary-failure": {
+  "unreadable-credential": {
     "extends": null,
-    "result": { "failed": "usage: observation unavailable" },
-    "direct": {
-      "requests": [
-        {
-          "method": "GET",
-          "url": "https://reader.example/allowance",
-          "headers": {
-            "Accept": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": null
-        }
-      ]
-    },
-    "cpa": {
-      "requests": [
-        {
-          "method": "POST",
-          "url": "https://proxy.example/v0/management/api-call",
-          "headers": {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer [credential:login]"
-          },
-          "body": {
-            "method": "GET",
-            "url": "https://reader.example/allowance",
-            "auth_index": "sample",
-            "header": {
-              "Accept": "application/json",
-              "Authorization": "Bearer $TOKEN$"
-            }
-          }
-        }
-      ]
-    }
-  },
-  "unreadable-credential": { "extends": "primary-failure", "requests": [] }
+    "requests": [],
+    "result": { "failed": "usage: observation unavailable" }
+  }
 }

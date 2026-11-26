@@ -1,48 +1,39 @@
 # Exercise the installed Reader module against public envelopes and process captures.
 {pkgs, ...}: let
   inherit (pkgs.ai.generic) python-stack;
-  credentialUsageModule = (import ./lib/default.nix).ai.credential-usage.pythonModule {inherit pkgs python-stack;};
-  usagePackages = ps: [ps.pydantic ps.urllib3 credentialUsageModule];
-  usagePython = python-stack.withPackages usagePackages;
-  synthetic = (import ./lib/default.nix).ai.credential-usage.conformanceCheck {
+  credentialUsage = (import ./lib/default.nix).ai.credential-usage;
+  conformance = credentialUsage.conformanceCheck {
     inherit pkgs python-stack;
     name = "credential-usage-conformance";
     ownerModules = [];
     pair = ./checks/conformance/synthetic/cases;
     entry = "synthetic.cli:main";
   };
-  strict = ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-  '';
+  # Each check runs one script in the conformance interpreter, with `settings` as its derivation attributes.
+  check = name: settings: script:
+    pkgs.runCommand "credential-usage-${name}" (settings // {nativeBuildInputs = [conformance.python] ++ settings.nativeBuildInputs or [];})
+    ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${script}
+      touch "$out"
+    '';
 in {
   checks = {
-    credential-usage-conformance = synthetic;
-    credential-usage-contract =
-      pkgs.runCommand "credential-usage-contract" {
-        nativeBuildInputs = [usagePython];
-        USAGE_DOC = ./docs/credential-usage.md;
-      } ''
-        ${strict}
-        python3 -I -B ${./checks/contract}/test_envelope.py -v
-        touch "$out"
-      '';
-    credential-usage-runner = pkgs.runCommand "credential-usage-runner" {nativeBuildInputs = [usagePython];} ''
-      ${strict}
+    credential-usage-conformance = conformance;
+    credential-usage-contract = check "contract" {USAGE_DOC = ./docs/credential-usage.md;} ''
+      python3 -I -B ${./checks/contract}/test_envelope.py -v
+    '';
+    credential-usage-runner = check "runner" {} ''
       python3 -I -B ${./checks/runner}/test_runner.py
-      touch "$out"
     '';
-    credential-usage-schema = pkgs.runCommand "credential-usage-schema" {nativeBuildInputs = [pkgs.biome usagePython];} ''
-      ${strict}
-      python3 -I -B ${./checks/schema/generate_schema.py} > schema.json
+    credential-usage-schema = check "schema" {nativeBuildInputs = [pkgs.biome];} ''
+      python3 -I -B ${./checks/schema}/generate_schema.py > schema.json
       diff -u ${./schema/usage-envelope.schema.json} schema.json
-      touch "$out"
     '';
-    credential-usage-types = pkgs.runCommand "credential-usage-types" {nativeBuildInputs = [pkgs.pyright synthetic.python];} ''
-      ${strict}
+    credential-usage-types = check "types" {nativeBuildInputs = [pkgs.pyright];} ''
       pyright --project ${./python} --pythonpath "$(command -v python3)"
       pyright --project ${./checks/conformance} --pythonpath "$(command -v python3)"
-      touch "$out"
     '';
   };
   imports = [./checks/registration.nix];
