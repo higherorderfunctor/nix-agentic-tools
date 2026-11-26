@@ -4,9 +4,9 @@
   webDocsLib,
   ...
 }: let
-  snapshotDate = "2026-11-25";
-  contentHash = "sha256-aLlBbHFn+JyXgfiVWi5KopCwxUTSbfoj0qoVC4jznwc=";
-  hash = "sha256-MFmSQd/IeYMBHipUEWErroCBoF+2JMni/1k0kOTLs40=";
+  snapshotDate = "2026-11-26";
+  contentHash = "sha256-ZqptUcQMeniRrLFRinajnCZZpSGHSlvO7QURd96EKXs=";
+  hash = "sha256-lh4QjlB6GPxok+oC8yJHeMBzjFI6N2nM6ZjgLBlc0LE=";
 in
   (webDocsLib {inherit pkgs;}).mkSnapshot {
     name = "cliproxyapi-opencode-go-docs";
