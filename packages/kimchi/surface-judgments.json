@@ -806,10 +806,10 @@
         "disable": "Unknown: the controls and precedence that prevent this request have not been judged.",
         "trigger": "Unknown: the runtime event and prerequisites that cause this request have not been judged."
       },
-      "evidenceHash": "sha256:7311556c2edae816387430e94e3f1ebcb99556a312f7f07bb449f7d7505516c1",
+      "evidenceHash": "sha256:00aeb8d6997ad208314443cd710d4dec65360589e703f70a443e9740b85416aa",
       "id": "request-extensions-pr-cost-reporting-worker-deliver-events-0",
       "missingEvidence": "Still unreviewed: reporting/tracking defaults, effective platform API URL and credential overrides, full consent/telemetry/lease precedence, and queued-event/supervisor prerequisites beyond the depth boundary.",
-      "rationale": "Reviewed Kimchi 1.32.0 caller evidence: the own-write callback at src/extensions/pr-cost-reporting/worker.ts:913 and shifted reporting depth boundary for the unchanged event upload now at worker.ts:657. Request call and statement bytes are unchanged. These measured caller changes do not settle the four runtime claim parts; the verdict remains unknown.",
+      "rationale": "Reviewed Kimchi 1.42.1 in src/extensions/pr-cost-reporting/worker.ts:555-576 and 641-695. deliverEvents now iterates eligible accounts and drains each due batch in a loop. The batch upload statement moved one indentation level deeper. Its destination expression, method, body, credential headers and cancellation signal match 1.41.1 after dedenting. It still dispatches inside withReportingConsent after checking the batch identity and bytes and calling the fence. All six selected static caller rows match the recorded packet. The wider runtime defaults, override precedence and supervisor prerequisites remain unresolved.",
       "scope": "One Kimchi-owned request occurrence in the original pinned client source. Static statement and reachability evidence only; no assertion of runtime execution or service availability.",
       "verdict": "unknown",
       "selector": {
@@ -832,7 +832,7 @@
         "sources": []
       },
       "evidence": {
-        "call": "sha256:e814c09b6f20f0df179f9b97e683b50cf16885d7d9e4538b44591fa414b912be",
+        "call": "sha256:c930e330280035f953d050aa80fd8a586b2ea399c58905388ffe272061575d1a",
         "root": "sha256:ecad9d791f23bda3a0bb0fc81b8621b88e6b58519ac7c1bc28c834e69c7b765d",
         "rows": [
           "sha256:2dc40e3a74fc5a8f4833fde0a592a0806237b35b4382d464a46262568565e9a4",
@@ -842,7 +842,7 @@
           "sha256:714a7c701f396995f8ad468a7ea182c4a088f33b064b3e57123b5f10370cf22e",
           "sha256:86d74909d299e2d9f68e7828ef82208c7b378011ddd3985a66f34712b4b25fe3"
         ],
-        "statement": "sha256:54ef82b7f3e6f944c4591a3896501a9a18759fa7d225d76e3925445f813ca7f6"
+        "statement": "sha256:d574b52b28a49d72cad5be96b1c7384ef0754c583cb432fe30c1a48a5291a263"
       }
     },
     {

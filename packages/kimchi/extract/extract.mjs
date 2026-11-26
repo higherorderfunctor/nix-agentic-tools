@@ -538,6 +538,7 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   }
 
   const parsedSymbols = new Map();
+  const found = { config: new Set(), harness: new Set() };
   function identify(node) {
     if (ts.isCallExpression(node)) {
       const called = node.expression;
@@ -560,7 +561,26 @@ function discoverConfigKeys(sourceFile, checker, ts) {
       }
       if (pathExpression) {
         const surface = surfaceOfPath(pathExpression, node);
-        parsedSymbols.set(boundSymbol(node), surface);
+        // A direct optional dot read passed as an argument consumes one
+        // statically named property without exposing the config object.
+        const property = node.parent;
+        const reader = symbolOf(called)?.valueDeclaration;
+        if (
+          ts.isIdentifier(called) &&
+          called.text === "readConfigObject" &&
+          reader &&
+          ts.isFunctionDeclaration(reader) &&
+          reader.parent === sourceFile &&
+          ts.isPropertyAccessExpression(property) &&
+          property.expression === node &&
+          property.questionDotToken &&
+          ts.isCallExpression(property.parent) &&
+          property.parent.arguments.includes(property)
+        ) {
+          found[surface].add(property.name.text);
+        } else {
+          parsedSymbols.set(boundSymbol(node), surface);
+        }
       }
       if (ts.isIdentifier(called) && called.text === "updateConfigFile") {
         const surface = surfaceOfPath(node.arguments[0], node);
@@ -576,7 +596,6 @@ function discoverConfigKeys(sourceFile, checker, ts) {
     ts.forEachChild(node, identify);
   }
   identify(sourceFile);
-  const found = { config: new Set(), harness: new Set() };
   function visit(node) {
     // `delete raw.key` removes a key; it reads nothing.
     if (ts.isDeleteExpression(node)) return;

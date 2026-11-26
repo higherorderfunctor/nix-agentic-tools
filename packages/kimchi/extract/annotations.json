@@ -10,6 +10,9 @@
     "device_id": { "aliasFor": "deviceId" },
     "gitTokens": {
       "excluded": "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store"
+    },
+    "modelEffortDefaults": {
+      "ignored": "Kimchi persists ACP model effort choices by app mode and model in the user config"
     }
   },
   "environment": {
