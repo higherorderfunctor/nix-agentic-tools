@@ -127,7 +127,7 @@ Codex continuity retries, and cooldown waits. `SelectAuth` always uses the
 legacy loop; mixed `Execute` with a built-in selector exercises the scheduler
 fast path. Plugin schedulers receive only surviving candidates. Home dispatch is
 the one legacy path that bypasses the predicate, and it is refused. Upstream
-8.1.2’s Antigravity credits fallback uses the shared predicate and matters when
+8.1.4’s Antigravity credits fallback uses the shared predicate and matters when
 selection fails because a client key has no Antigravity rule. Plugin executors
 and `host.auth.get` bypass eligibility; this is why enabling plugins must be
 refused. `checks/key_allowlist_loops_test.go`, a go/types scan joined to the
@@ -225,10 +225,6 @@ Manager and devenv.
 The package applies `patches/key-allowlist.patch`,
 `patches/zhipuai-tool-shims.patch`, and `patches/passthrough-provider.patch` in
 that order. Extraction and the Go checks read the same patched source.
-
-CPA 8.1.4 guards both Vertex Imagen scanner calls upstream. Its native Issue
-6825 executor test expects one complete argument object per tool call and checks
-the indices across chunks.
 
 The top-up credits recovery test still races its background refresh. Upstream
 16bf182f2088 keys the credits refresh state by auth ID plus registration scope,
