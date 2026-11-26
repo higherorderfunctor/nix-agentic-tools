@@ -292,36 +292,42 @@ function checkNameUses(declaration, label) {
 checkNameUses(merge, "merge");
 if (composer) checkNameUses(composer, "composer");
 
-const hasCalls = [];
-// Check the merge's identifier uses before probing: two fixture paths cannot
-// rule out a copy decision that depends on some other path's spelling.
-function checkMergeUses(node) {
-  if (
-    forwardsPathParameter &&
-    ts.isIdentifier(node) &&
-    node.text === pathParameter.name.text &&
-    node !== pathParameter.name &&
-    node !== workspacePath &&
-    !isPropertyName(node)
-  ) {
-    fail("workspace merge has an unsupported loader shape");
-  }
-  if (ts.isIdentifier(node) && node.text === allowlistName) {
-    const access = node.parent;
-    if (
-      !ts.isPropertyAccessExpression(access) ||
-      access.name.text !== "has" ||
-      !ts.isCallExpression(access.parent) ||
-      access.parent.expression !== access
-    )
-      fail("workspace merge no longer consults the extracted allowlist");
-    hasCalls.push(access.parent);
-  }
-  ts.forEachChild(node, checkMergeUses);
+// Validate the merge AST before the runtime probe: require exactly one
+// allowlist .has() call and allow arguments only through direct path forwarding.
+// A finite set of probe paths cannot rule out other path-dependent copy decisions.
+function checkMergeUses(mergeNode) {
+  let hasCallCount = 0;
+  const visit = (node) => {
+    if (ts.isIdentifier(node)) {
+      if (
+        (node.text === "arguments" ||
+          (forwardsPathParameter &&
+            node.text === pathParameter.name.text &&
+            node !== pathParameter.name &&
+            node !== workspacePath)) &&
+        !isPropertyName(node)
+      ) {
+        fail("workspace merge has an unsupported loader shape");
+      }
+      if (node.text === allowlistName) {
+        const access = node.parent;
+        if (
+          !ts.isPropertyAccessExpression(access) ||
+          access.name.text !== "has" ||
+          !ts.isCallExpression(access.parent) ||
+          access.parent.expression !== access
+        )
+          fail("workspace merge no longer consults the extracted allowlist");
+        hasCallCount += 1;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(mergeNode);
+  if (hasCallCount !== 1)
+    fail("workspace merge no longer consults the extracted allowlist");
 }
 checkMergeUses(merge);
-if (hasCalls.length !== 1)
-  fail("workspace merge no longer consults the extracted allowlist");
 
 const expression =
   `(()=>{const ${registryName}=${registry.right.getText(file)};` +
@@ -348,14 +354,15 @@ if (
 // through every JSON value kind (string, "", true, false, 0, 1, null, array,
 // object), so a merge that copies by type, truthiness or null is caught. One
 // rotation shifts the cycle so every key meets every kind. If the merge takes
-// a path, each rotation also passes a different path explicitly: the default
-// call cannot show whether that argument reaches the reader. The explicit
-// probe spreads the same globals itself because the composer calls merge().
+// a path, the explicit call checks that the reader gets that path instead of
+// the default. It spreads the same globals itself because the composer calls
+// merge() without a path.
 // Each allowlisted key must hold exactly its workspace value (`===`); every
 // other enumerated key must keep its global value. No unlisted key may hold
 // the marker returned by a workspace read outside the enumerated keys.
 const marker = (key) => `workspace:${key}`;
-const defaultProbePath = "fixture-path";
+const defaultProbePath = "/fixture/default/.kiro/settings/cli.json";
+const explicitProbePath = "/fixture/explicit/.kiro/settings/cli.json";
 const literals = new Set();
 (function collectLiterals(node) {
   if (ts.isStringLiteralLike(node)) literals.add(node.text);
@@ -432,7 +439,7 @@ const runProbe = (rotation, withPath) => {
       {
         globalSettings,
         workspace,
-        expectedPath: withPath ? "other-fixture-path" : defaultProbePath,
+        expectedPath: withPath ? explicitProbePath : defaultProbePath,
       },
       { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
     );

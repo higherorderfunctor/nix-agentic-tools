@@ -79,6 +79,17 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert parameterized.returncode == 0, parameterized.stderr
     assert json.loads(parameterized.stdout) == modern_result
 
+    argument_property = run(
+        bundle(
+            merge=explicit_path.replace(
+                "Cq.has(k)", "Cq.has(k)&&({arguments:true}).arguments"
+            )
+            + composer
+        )
+    )
+    assert argument_property.returncode == 0, argument_property.stderr
+    assert json.loads(argument_property.stdout) == modern_result
+
     # A property key or member name that only shares the merge's or the
     # composer's spelling is not a use of it.
     for member in [
@@ -106,12 +117,21 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             bundle(registry=registry_assignment * 2),
             "ambiguous or absent",
         ),
-        "extra copy only for an explicit path": (
+        "argument count read by the copy guard": (
             bundle(
                 merge=explicit_path.replace("Cq.has(k)", "Cq.has(k)||arguments.length>0")
                 + composer
             ),
-            probe_mismatch,
+            "unsupported loader shape",
+        ),
+        "argument value read by the copy guard": (
+            bundle(
+                merge=explicit_path.replace(
+                    "Cq.has(k)", 'Cq.has(k)||arguments[0]?.endsWith?.("cli.json")'
+                )
+                + composer
+            ),
+            "unsupported loader shape",
         ),
         "forwarded parameter without a default": (
             bundle(merge=explicit_path.replace("p=path()", "p") + composer),
