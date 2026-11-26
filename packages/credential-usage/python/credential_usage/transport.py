@@ -1,6 +1,11 @@
 """Usage Readers send HTTP requests through a transport bound to one credential."""
 
+from collections.abc import Callable, Mapping
+from concurrent.futures import Future
 from dataclasses import dataclass
+import math
+from threading import Thread
+import time
 from typing import Annotated, Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr
@@ -34,6 +39,24 @@ class HttpRequest(FrozenModel):
             },
             "Authorization": f"Bearer {token}",
         }
+
+
+DEADLINE_VARIABLE = "CREDENTIAL_USAGE_READER_TIMEOUT"
+# The runner kills the Reader at its deadline; the Reader still has to print its envelope.
+DEADLINE_MARGIN = 0.5
+
+
+def reader_deadline(environ: Mapping[str, str]) -> float | None:
+    """Return the instant the runner's seconds run out, counted from now, or None when it sets none.
+
+    The runner exports the seconds left in DEADLINE_VARIABLE. An unset or
+    unreadable value leaves only the HTTP library's socket timeout.
+    """
+    try:
+        left = math.inf if (seconds := environ.get(DEADLINE_VARIABLE)) is None else float(seconds)
+    except ValueError:
+        return None
+    return time.monotonic() + left if math.isfinite(left) else None
 
 
 class RequestFailure(Exception):
@@ -72,7 +95,15 @@ class HttpPolicy(FrozenModel):
     """The HTTP client owns the timeout and network retries for each operation."""
 
     retries: int = Field(default=0, ge=0)
-    timeout: float = Field(default=75, gt=0, allow_inf_nan=False)
+    timeout: float = Field(default=10, gt=0, allow_inf_nan=False)
+
+
+def deliver(reply: Future[HttpResponse], send: Callable[[], HttpResponse]) -> None:
+    """Hand the reply, or its failure, to the thread that is waiting for it."""
+    try:
+        reply.set_result(send())
+    except BaseException as error:
+        reply.set_exception(error)
 
 
 @dataclass(frozen=True)
@@ -82,8 +113,32 @@ class DirectHttp:
     endpoint: HttpUrl
     token: SecretStr
     policy: HttpPolicy = HttpPolicy()
+    deadline: float | None = None
+
+    def request_timeout(self) -> float:
+        """Return how long the next request may wait, or refuse it once the deadline is too close."""
+        if self.deadline is None:
+            return self.policy.timeout
+        left = self.deadline - time.monotonic() - DEADLINE_MARGIN
+        if left <= 0:
+            raise RequestFailure("HTTP request deadline passed")
+        return min(self.policy.timeout, left)
 
     def request(self, request: HttpRequest) -> HttpResponse:
+        """Send the request and wait no longer than its timeout, retries included."""
+        budget = self.request_timeout()
+        if self.deadline is None:
+            return self.send(request, budget)
+        # A name lookup or a trickling reply ignores the socket timeout, so this thread keeps time.
+        reply: Future[HttpResponse] = Future()
+        started = time.monotonic()
+        Thread(target=deliver, args=(reply, lambda: self.send(request, budget)), daemon=True).start()
+        try:
+            return reply.result(timeout=budget - (time.monotonic() - started))
+        except TimeoutError:
+            raise RequestFailure("HTTP request deadline passed") from None
+
+    def send(self, request: HttpRequest, timeout: float) -> HttpResponse:
         """Apply the binding and let the HTTP library retry network failures without redirects."""
         try:
             response = urllib3.request(
@@ -93,7 +148,7 @@ class DirectHttp:
                     self.endpoint, self.token.get_secret_value()
                 ),
                 body=request.body,
-                timeout=self.policy.timeout,
+                timeout=timeout,
                 redirect=False,
                 retries=Retry(
                     total=self.policy.retries,
