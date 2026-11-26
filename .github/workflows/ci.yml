@@ -16,6 +16,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Built by kiro-patched; the cache gate must not count their uncached Kiro variants again.
+  KIRO_PACKAGE_CHECKS: >-
+    kiro-bundle-patch-drift kiro-cli-extracted kiro-kas-dispatch
+    kiro-kas-extraction kiro-wrapper-argv
   SHARD_COUNT: 2
 
 permissions:
@@ -429,13 +433,8 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          nix build \
-            ".#.checks.${{ matrix.system }}.kiro-cli-extracted" \
-            ".#.checks.${{ matrix.system }}.kiro-bundle-patch-drift" \
-            ".#.checks.${{ matrix.system }}.kiro-kas-dispatch" \
-            ".#.checks.${{ matrix.system }}.kiro-kas-extraction" \
-            ".#.checks.${{ matrix.system }}.kiro-wrapper-argv" \
-            --no-link
+          read -r -a checks <<< "$KIRO_PACKAGE_CHECKS"
+          nix build --no-link "${checks[@]/#/.#.checks.${{ matrix.system }}.}"
 
       - name: Build patched Kiro without the project cache
         id: build-patched
@@ -995,6 +994,14 @@ jobs:
           wall="$(awk '/ real / {print $1}' "$RUNNER_TEMP/darwin-check-drvs.time")"
           printf '\n| Darwin check drvPaths | Value |\n| --- | --- |\n| Count | %s |\n| Peak RSS (MiB) | %s |\n| Wall time (s) | %s |\n' \
             "$count" "$rss" "$wall" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Verify uncached Darwin fixed outputs
+        timeout-minutes: 10
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          read -r -a checks <<< "$KIRO_PACKAGE_CHECKS"
+          python3 dev/scripts/darwin-cache-gate.py "$RUNNER_TEMP/darwin-check-drvs.json" \
+            --built-checks "${checks[@]}"
       - name: Upload aarch64-darwin check evaluation
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

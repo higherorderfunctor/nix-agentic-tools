@@ -1,0 +1,226 @@
+{
+  "00000000000000000000000000000000-local-download.drv": {
+    "env": {
+      "allowSubstitutes": "",
+      "out": "/nix/store/00000000000000000000000000000000-local-download"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    },
+    "structuredAttrs": {
+      "allowSubstitutes": false
+    }
+  },
+  "11111111111111111111111111111111-native-package.drv": {
+    "env": {},
+    "inputs": {
+      "drvs": {
+        "22222222222222222222222222222222-native-source.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        }
+      }
+    },
+    "outputs": {
+      "out": {
+        "path": "/nix/store/11111111111111111111111111111111-native-package"
+      }
+    }
+  },
+  "22222222222222222222222222222222-native-source.drv": {
+    "env": {
+      "out": "/nix/store/22222222222222222222222222222222-native-source"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    }
+  },
+  "33333333333333333333333333333333-native-source.drv": {
+    "env": {
+      "out": "/nix/store/22222222222222222222222222222222-native-source"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    }
+  },
+  "44444444444444444444444444444444-check.drv": {
+    "env": {
+      "out": "/nix/store/44444444444444444444444444444444-check"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    }
+  },
+  "55555555555555555555555555555555-wrapper.drv": {
+    "env": {},
+    "inputs": {
+      "drvs": {
+        "88888888888888888888888888888888-stdenv-darwin-no-cc.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        }
+      }
+    },
+    "outputs": {
+      "out": {
+        "path": "/nix/store/55555555555555555555555555555555-wrapper"
+      }
+    }
+  },
+  "66666666666666666666666666666666-cached.drv": {
+    "env": {
+      "out": "/nix/store/66666666666666666666666666666666-cached"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    }
+  },
+  "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-kiro-kas-dispatch.drv": {
+    "env": {},
+    "inputs": {
+      "drvs": {
+        "sg1ynigl5sh0w3cd8cb8i9c304h9ycrk-kiro-cli-unwrapped-3.6.0.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        }
+      }
+    },
+    "outputs": {
+      "out": {
+        "path": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-kiro-kas-dispatch"
+      }
+    }
+  },
+  "f4wnbls124iagnb8lmrdqv5ws1rqscwg-darwin-fixture-home-services.drv": {
+    "env": {
+      "out": "/nix/store/7ifbnd34pydy93sr3jvdry9aspiacprp-darwin-fixture-home-services"
+    },
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "path": "7ifbnd34pydy93sr3jvdry9aspiacprp-darwin-fixture-home-services"
+      }
+    },
+    "structuredAttrs": {
+      "allowSubstitutes": false,
+      "preferLocalBuild": true
+    }
+  },
+  "lr95v7cva6q8zj6x3c3n9sha1nvfxm42-python3.14-mitmproxy-rs-0.12.16.drv": {
+    "env": {
+      "out": "/nix/store/mhy819smvqbcv7kpzmmyv98incl5kvf6-python3.14-mitmproxy-rs-0.12.16"
+    },
+    "inputs": {
+      "drvs": {
+        "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        }
+      }
+    },
+    "outputs": {
+      "dist": {
+        "path": "za2lwnap47nqf4l1wy727qqy9m8jrpv0-python3.14-mitmproxy-rs-0.12.16-dist"
+      },
+      "out": {
+        "path": "mhy819smvqbcv7kpzmmyv98incl5kvf6-python3.14-mitmproxy-rs-0.12.16"
+      }
+    },
+    "structuredAttrs": {}
+  },
+  "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin.drv": {
+    "env": {},
+    "inputs": {
+      "drvs": {}
+    },
+    "outputs": {
+      "out": {
+        "path": "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin"
+      }
+    }
+  },
+  "sg1ynigl5sh0w3cd8cb8i9c304h9ycrk-kiro-cli-unwrapped-3.6.0.drv": {
+    "env": {
+      "out": "/nix/store/bpm02rxibr0z2cxakyyjk31bkcyzjy57-kiro-cli-unwrapped-3.6.0"
+    },
+    "inputs": {
+      "drvs": {
+        "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        }
+      }
+    },
+    "outputs": {
+      "out": {
+        "path": "bpm02rxibr0z2cxakyyjk31bkcyzjy57-kiro-cli-unwrapped-3.6.0"
+      }
+    },
+    "structuredAttrs": {}
+  },
+  "ssjhrnz22a40hdg2wxpzlbbi1hybqr5j-mitmproxy_macos-0.12.16-py3-none-any.whl.drv": {
+    "env": {
+      "out": "/nix/store/ng3sdn8hrq82gld9nq6n2cyrf5qwb9l9-mitmproxy_macos-0.12.16-py3-none-any.whl"
+    },
+    "inputs": {
+      "drvs": {
+        "ig8lvy55zlsh7fnqmrcxx3dzjd6aapxy-bash-5.3p20.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        },
+        "r79fq5nkp4lp1fcqys3bxhhydb71hqn5-stdenv-darwin-no-cc.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["out"]
+        },
+        "x6ignb4ipvcrjiiz568g5fknjfvy4nh2-curl-8.23.0.drv": {
+          "dynamicOutputs": {},
+          "outputs": ["dev"]
+        }
+      }
+    },
+    "outputs": {
+      "out": {
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
+        "method": "flat"
+      }
+    },
+    "structuredAttrs": {
+      "preferLocalBuild": true,
+      "urls": [
+        "https://files.pythonhosted.org/packages/py3/m/mitmproxy_macos/mitmproxy_macos-0.12.16-py3-none-any.whl"
+      ]
+    }
+  }
+}

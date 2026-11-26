@@ -249,6 +249,18 @@
       forAllSystems (system:
         import ./dev/ci-check-evaluator.nix {pkgs = pkgsFor system;});
 
+    # Extra Darwin roots for the cache-gap gate. CI reuses its already-forced
+    # check drvPaths instead of evaluating the check set here again.
+    ciDarwinCacheGate = let
+      drvPaths = lib.mapAttrs (_: package: package.drvPath);
+    in {
+      cache = (import ./flake.nix).nixConfig;
+      packages = drvPaths self.ciPackages.aarch64-darwin;
+      runtime = drvPaths (import ./checks/repository/fixtures/darwin-consumer.nix {
+        inherit inputs repository self;
+      });
+    };
+
     ciHestia.x86_64-linux = import ./dev/ci-hestia.nix {
       inherit inputs;
       pkgs = pkgsFor "x86_64-linux";

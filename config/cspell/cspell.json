@@ -43,6 +43,10 @@
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
     },
     {
+      "filename": "checks/repository/fixtures/darwin-cache-gate/**",
+      "ignoreRegExpList": ["/\\b[0-9abcdfghijklmnpqrsvwxyz]{32}(?=-)/g"]
+    },
+    {
       "filename": "packages/stacked-workflows/checks/scenario-tests/**",
       "words": ["localmain", "nonoverlap", "objectname", "topo"]
     }

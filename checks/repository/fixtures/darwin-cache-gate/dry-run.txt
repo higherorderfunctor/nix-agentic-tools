@@ -1,0 +1,14 @@
+these 11 derivations will be built:
+  /nix/store/00000000000000000000000000000000-local-download.drv
+  /nix/store/11111111111111111111111111111111-native-package.drv
+  /nix/store/22222222222222222222222222222222-native-source.drv
+  /nix/store/33333333333333333333333333333333-native-source.drv
+  /nix/store/44444444444444444444444444444444-check.drv
+  /nix/store/55555555555555555555555555555555-wrapper.drv
+  /nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-kiro-kas-dispatch.drv
+  /nix/store/f4wnbls124iagnb8lmrdqv5ws1rqscwg-darwin-fixture-home-services.drv
+  /nix/store/lr95v7cva6q8zj6x3c3n9sha1nvfxm42-python3.14-mitmproxy-rs-0.12.16.drv
+  /nix/store/sg1ynigl5sh0w3cd8cb8i9c304h9ycrk-kiro-cli-unwrapped-3.6.0.drv
+  /nix/store/ssjhrnz22a40hdg2wxpzlbbi1hybqr5j-mitmproxy_macos-0.12.16-py3-none-any.whl.drv
+this path will be fetched (0.02 MiB download, 0.04 MiB unpacked):
+  /nix/store/66666666666666666666666666666666-cached
