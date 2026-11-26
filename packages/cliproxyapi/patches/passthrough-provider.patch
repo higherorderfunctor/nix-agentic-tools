@@ -4,7 +4,7 @@ Keep validated grouped configuration, keyed synthesis, alias resolution and
 management indexes independent of chat compatibility. Add a raw client route,
 executor and internal-only model registration using native selection, cooldown
 and per-client usage reporting. Select configured response objects and usage
-locations. Upstream 8.1.2 centralizes startup parsing in validateStartupConfig;
+locations. Upstream 8.1.4 centralizes startup parsing in validateStartupConfig;
 the passthrough YAML precheck remains ahead of optional-loader fallback.
 Applied after key-allowlist and zhipuai-tool-shims with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-passthrough.md.

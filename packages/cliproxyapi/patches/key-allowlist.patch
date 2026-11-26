@@ -2,7 +2,7 @@ CLIProxyAPI: access.key-allowlist, a fail-closed per-client-key credential allow
 
 Home dispatch and plugins choose credentials outside the allowlist: Home is
 refused while it is set, and the instance module refuses plugins beside it.
-Upstream 8.1.2 computes shared Antigravity eligibility; the patch passes the
+Upstream 8.1.4 computes shared Antigravity eligibility; the patch passes the
 Manager allowlist pointer into that predicate.
 Applied with --fuzz=0.
 Rationale: packages/cliproxyapi/docs/cliproxyapi-key-allowlist.md.

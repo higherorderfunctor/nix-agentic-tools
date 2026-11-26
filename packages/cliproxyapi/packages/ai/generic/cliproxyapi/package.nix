@@ -34,8 +34,6 @@
           # Per-credential Z.ai tool aliases and Codex shell-argument cleanup.
           ../../../../patches/zhipuai-tool-shims.patch
           ../../../../patches/passthrough-provider.patch
-          # Guards a nil-scanner panic in Vertex Imagen streams (upstream e049c336b6c2).
-          ../../../../patches/vertex-imagen-stream-scanner.patch
         ];
         # A CPA release that changes the patched context fails here, loudly.
         inherit (packageLib) patchFlags;

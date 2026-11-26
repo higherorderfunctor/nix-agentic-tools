@@ -19,7 +19,7 @@ import (
 // schedulerPicksFilter is why a loop that only feeds the scheduler needs no
 // allows call: every scheduler pick builds its predicate with
 // scheduledAuthPredicate. Re-check the cited lines on each CPA bump.
-const schedulerPicksFilter = "every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630 at CPA 8.1.2); re-check on bump"
+const schedulerPicksFilter = "every scheduler pick entry point builds its predicate with scheduledAuthPredicate (patched scheduler.go:492,503,588,595,630 at CPA 8.1.4); re-check on bump"
 
 // Functions that range over the credential pool without an allowlist
 // predicate, each with the reason it does not choose a request's credential.
