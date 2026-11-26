@@ -656,30 +656,34 @@ function discoverProjectConfigKeys(configSource, annotations, checker, ts) {
   return result;
 }
 
-function runtimeValidationKinds(node, ts, initialAliases = {}) {
-  const aliases = new Map(
-    Object.entries(initialAliases).map(([name, path]) => [name, path]),
-  );
-  function pathFor(expression) {
-    expression = unwrapExpression(expression, ts);
-    if (ts.isIdentifier(expression)) return aliases.get(expression.text);
-    if (ts.isPropertyAccessExpression(expression)) {
-      const parent = pathFor(expression.expression);
-      if (parent) return [...parent, expression.name.text];
-    }
-    // `record[key]` with a computed key reads any member: `*`.
-    if (ts.isElementAccessExpression(expression)) {
-      const parent = pathFor(expression.expression);
-      if (parent)
-        return [
-          ...parent,
-          ts.isStringLiteralLike(expression.argumentExpression)
-            ? expression.argumentExpression.text
-            : "*",
-        ];
-    }
-    return undefined;
+// Resolve a guard expression to a key path. Callers resolve identifier roots;
+// only the guard scan supplies a wildcard for computed record members.
+function accessPath(expression, ts, identifierPath, computedKey) {
+  expression = unwrapExpression(expression, ts);
+  if (ts.isIdentifier(expression)) return identifierPath(expression);
+  let key;
+  if (ts.isPropertyAccessExpression(expression)) {
+    key = expression.name.text;
+  } else if (ts.isElementAccessExpression(expression)) {
+    key = ts.isStringLiteralLike(expression.argumentExpression)
+      ? expression.argumentExpression.text
+      : computedKey;
   }
+  if (key === undefined) return undefined;
+  const parent = accessPath(
+    expression.expression,
+    ts,
+    identifierPath,
+    computedKey,
+  );
+  return parent && [...parent, key];
+}
+
+function runtimeValidationKinds(node, ts, initialAliases = {}) {
+  const aliases = new Map(Object.entries(initialAliases));
+  const identifierPath = (identifier) => aliases.get(identifier.text);
+  const pathFor = (expression) =>
+    accessPath(expression, ts, identifierPath, "*");
   function collectAliases(current) {
     if (
       ts.isVariableDeclaration(current) &&
@@ -1023,15 +1027,10 @@ function extractConfig(
     fail(
       `readConfigExtras no longer binds exactly one parsed (found ${parsedSymbols.size})`,
     );
-  // Resolve nested properties and const aliases back to this parse by symbol.
-  function parsedPath(expression) {
-    expression = unwrapExpression(expression, ts);
-    if (ts.isPropertyAccessExpression(expression)) {
-      const parent = parsedPath(expression.expression);
-      return parent && [...parent, expression.name.text];
-    }
-    if (!ts.isIdentifier(expression)) return undefined;
-    const symbol = symbolAt(expression, checker, ts);
+  // Match helper inputs to the parse's symbol, following only initialized
+  // const aliases declared before use so their binding identifies the value.
+  function parsedIdentifierPath(identifier) {
+    const symbol = symbolAt(identifier, checker, ts);
     if (parsedSymbols.has(symbol)) return [];
     const declaration = symbol?.valueDeclaration;
     if (
@@ -1039,17 +1038,15 @@ function extractConfig(
       ts.isVariableDeclaration(declaration) &&
       (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
       declaration.initializer &&
-      declaration.end < expression.pos
+      declaration.end < identifier.pos
     )
-      return parsedPath(declaration.initializer);
+      return accessPath(declaration.initializer, ts, parsedIdentifierPath);
     return undefined;
   }
   (function followHelpers(node) {
     if (ts.isCallExpression(node)) {
       node.arguments.forEach((argument, index) => {
-        if (!ts.isPropertyAccessExpression(unwrapExpression(argument, ts)))
-          return;
-        const path = parsedPath(argument);
+        const path = accessPath(argument, ts, parsedIdentifierPath);
         if (!path?.length) return;
         const helper = symbolAt(
           node.expression,

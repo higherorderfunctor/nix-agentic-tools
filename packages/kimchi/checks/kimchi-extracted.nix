@@ -61,6 +61,8 @@
             'typeof p === "string"' 'typeof p === "number"'
           mutant "$kimchi" config-nested-shape src/config.ts \
             'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
+          mutant "$kimchi" config-timezone-alias-mutable src/config.ts \
+            'const tc = parsed.tui' 'let tc = parsed.tui'
           mutant "$kimchi" config-timezone-guard src/config.ts \
             'normalizeTuiTimezone(tc.timezone)' 'normalizeTuiTimezone(tc.otherTimezone)'
           # Repoint readSurveyConfig's config.json parse: at the harness file its
@@ -169,6 +171,8 @@
             "config.json validation shape changed" >> "$TMPDIR/proof"
           expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
             "config.json validation shape changed" >> "$TMPDIR/proof"
+          expect_rejection config-timezone-alias-mutable "$TMPDIR/config-timezone-alias-mutable-source" \
+            'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
           expect_rejection config-timezone-guard "$TMPDIR/config-timezone-guard-source" \
             'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
