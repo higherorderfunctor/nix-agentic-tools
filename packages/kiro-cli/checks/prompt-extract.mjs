@@ -89,6 +89,7 @@ const dynamicWrites = [
   "[Cr]=[dyn()]",
   "[Cr=1]=dyn()",
   "[...Cr]=dyn()",
+  "[...[Cr]]=dyn()",
   "({body:Cr}=dyn())",
   "({Cr}=dyn())",
   "({...Cr}=dyn())",
@@ -131,11 +132,52 @@ const bad = [
   withLiteral(orchestration, "`# Workflow Orchestration\\n${x}`"),
   withLiteral(orchestration, "tag`# Workflow Orchestration\\n`"),
 ];
-bad.forEach(([key, reason, from, to], row) => {
-  const outcome = run(good.replace(from, to));
+// Rows that need several edits at once: every declaration of `Cr` must be a
+// plain variable declaration, whatever else shares its symbol.
+const dropCr = [",Cr,Pl,Id,Orch;", ",Pl,Id,Orch;"];
+const dropCrWrite = [`Cr=${raw[creator]};`, ""];
+const creatorTable = 'var table=[["other",Orch],[Id,Cr],["wf-planner",Pl]];';
+const edited = [
+  [
+    "for-in head with initializer",
+    [
+      [
+        ",Cr,Pl,Id,Orch;",
+        `,Pl,Id,Orch;for(var Cr=${raw[creator]} in{changed:1}){}`,
+      ],
+      dropCrWrite,
+    ],
+  ],
+  [
+    "parameter beside var",
+    [
+      dropCr,
+      dropCrWrite,
+      [creatorTable, `function f(Cr){var Cr=${raw[creator]};${creatorTable}}`],
+    ],
+  ],
+  ["function beside var", [[table, "function Cr(){}var table"]]],
+].map(([label, edits]) => [
+  creator,
+  notStatic,
+  label,
+  edits.reduce((text, [from, to]) => text.replace(from, to), good),
+  edits.every(([from]) => good.includes(from)),
+]);
+[
+  ...bad.map(([key, reason, from, to]) => [
+    key,
+    reason,
+    to,
+    good.replace(from, to),
+    good.includes(from),
+  ]),
+  ...edited,
+].forEach(([key, reason, label, bundle, applies], row) => {
+  const outcome = run(bundle);
   expect(
-    `bad row ${row} (${key}: ${to})`,
-    good.includes(from) &&
+    `bad row ${row} (${key}: ${label})`,
+    applies &&
       outcome.status === 1 &&
       outcome.stderr.includes(`${key}: `) &&
       outcome.stderr.includes(reason),

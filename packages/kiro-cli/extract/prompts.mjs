@@ -48,48 +48,36 @@ try {
   const heading = "# Workflow Orchestration\n";
   const headingLiterals = [];
   const registrationTables = [];
-  // Every write to a binding, keyed by symbol. A write without a value (a
-  // compound assignment, an update, a destructuring or iteration target) can
-  // never resolve to a literal.
-  const writesBySymbol = new Map();
+  // Every identifier occurrence, keyed by checker symbol. Writes are found
+  // from these by TypeScript's own write classification, never by listing
+  // syntax shapes.
+  if (typeof ts.isWriteAccess !== "function")
+    fail("bundle", "the TypeScript build has no isWriteAccess");
+  const occurrences = new Map();
+  // isWriteAccess misses a rest target (`[...x] = v`, `({...x} = v)`, even
+  // nested), so a spread that wraps the identifier through literals alone is
+  // treated as a write, which also fails closed for a plain read.
+  const isSpreadWrapped = (node) => {
+    for (let at = node; at.parent; at = at.parent) {
+      if (ts.isSpreadElement(at.parent) || ts.isSpreadAssignment(at.parent))
+        return true;
+      if (
+        ![
+          ts.isArrayLiteralExpression,
+          ts.isObjectLiteralExpression,
+          ts.isParenthesizedExpression,
+          ts.isPropertyAssignment,
+        ].some((is) => is(at.parent))
+      )
+        return false;
+    }
+    return false;
+  };
   const symbolOf = (identifier) =>
     ts.isShorthandPropertyAssignment(identifier.parent) &&
     identifier.parent.name === identifier
       ? checker.getShorthandAssignmentValueSymbol(identifier.parent)
       : checker.getSymbolAtLocation(identifier);
-  const addWrite = (target, value) => {
-    const symbol = symbolOf(target);
-    writesBySymbol.set(symbol, [...(writesBySymbol.get(symbol) ?? []), value]);
-  };
-  // Records every binding a pattern or assignment target writes to.
-  function addTargetWrites(target) {
-    if (ts.isIdentifier(target)) addWrite(target, undefined);
-    else if (
-      ts.isArrayBindingPattern(target) ||
-      ts.isObjectBindingPattern(target) ||
-      ts.isArrayLiteralExpression(target)
-    )
-      for (const element of target.elements)
-        addTargetWrites(element.name ?? element);
-    else if (ts.isObjectLiteralExpression(target))
-      for (const property of target.properties)
-        addTargetWrites(
-          ts.isPropertyAssignment(property) ? property.initializer : property,
-        );
-    else if (ts.isShorthandPropertyAssignment(target))
-      addTargetWrites(target.name);
-    else if (
-      ts.isSpreadElement(target) ||
-      ts.isSpreadAssignment(target) ||
-      ts.isParenthesizedExpression(target)
-    )
-      addTargetWrites(target.expression);
-    else if (
-      ts.isBinaryExpression(target) &&
-      target.operatorToken.kind === ts.SyntaxKind.EqualsToken
-    )
-      addTargetWrites(target.left);
-  }
 
   // One walk collects everything the lookups need.
   (function visit(node) {
@@ -113,53 +101,55 @@ try {
       )
     )
       registrationTables.push(node);
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-    )
-      if (
-        ts.isIdentifier(node.left) &&
-        node.operatorToken.kind === ts.SyntaxKind.EqualsToken
-      )
-        addWrite(node.left, node.right);
-      else addTargetWrites(node.left);
-    if (ts.isVariableDeclaration(node)) {
-      if (ts.isIdentifier(node.name)) {
-        if (node.initializer) addWrite(node.name, node.initializer);
-        else if (
-          ts.isForInStatement(node.parent.parent) ||
-          ts.isForOfStatement(node.parent.parent)
-        )
-          addTargetWrites(node.name);
-      } else addTargetWrites(node.name);
-    }
-    if (
-      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
-      !ts.isVariableDeclarationList(node.initializer)
-    )
-      addTargetWrites(node.initializer);
-    if (
-      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
-        node.operator,
-      )
-    )
-      addTargetWrites(node.operand);
+    const symbol = ts.isIdentifier(node) && symbolOf(node);
+    if (symbol)
+      occurrences.set(symbol, [...(occurrences.get(symbol) ?? []), node]);
     ts.forEachChild(node, visit);
   })(file);
 
-  // The literal an expression is, directly or through bindings that each have
-  // exactly one write anywhere in the bundle (including inside lazy
-  // initializer callbacks), else undefined. An alias cycle is unresolved.
+  // The value a binding holds when it is static, else undefined. Static means
+  // every declaration is a plain `var`/`let`/`const` of that name (not a
+  // parameter, catch clause, function, pattern element or loop head) and the
+  // whole file writes it exactly once, as a declaration initializer or a plain
+  // `name = value` assignment that is not a destructuring default.
+  function singleWrite(symbol) {
+    const plain = (declaration) =>
+      ts.isVariableDeclaration(declaration) &&
+      ts.isIdentifier(declaration.name) &&
+      ts.isVariableDeclarationList(declaration.parent) &&
+      !ts.isForInStatement(declaration.parent.parent) &&
+      !ts.isForOfStatement(declaration.parent.parent);
+    if (!symbol?.declarations?.length || !symbol.declarations.every(plain))
+      return undefined;
+    const isInitializer = (id) =>
+      ts.isVariableDeclaration(id.parent) &&
+      id.parent.name === id &&
+      id.parent.initializer;
+    const writes = (occurrences.get(symbol) ?? []).filter(
+      (id) => ts.isWriteAccess(id) || isSpreadWrapped(id) || isInitializer(id),
+    );
+    if (writes.length !== 1) return undefined;
+    const [id] = writes;
+    const { parent } = id;
+    if (isInitializer(id)) return parent.initializer;
+    return ts.isBinaryExpression(parent) &&
+      parent.left === id &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      !ts.isArrayLiteralExpression(parent.parent) &&
+      !ts.isPropertyAssignment(parent.parent) &&
+      !ts.isSpreadElement(parent.parent)
+      ? parent.right
+      : undefined;
+  }
+
+  // The literal an expression is, directly or through static bindings. An
+  // alias cycle is unresolved.
   function staticLiteral(expression, seen = new Set()) {
     if (isStaticString(expression)) return expression;
     if (!ts.isIdentifier(expression)) return undefined;
     const symbol = checker.getSymbolAtLocation(expression);
-    const writes = writesBySymbol.get(symbol) ?? [];
-    if (!symbol || seen.has(symbol) || writes.length !== 1 || !writes[0])
-      return undefined;
-    return staticLiteral(writes[0], seen.add(symbol));
+    const value = seen.has(symbol) ? undefined : singleWrite(symbol);
+    return value && staticLiteral(value, seen.add(symbol));
   }
 
   // Byte offsets, because consumers patch UTF-8 and TypeScript counts UTF-16.
