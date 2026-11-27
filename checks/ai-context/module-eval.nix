@@ -6,8 +6,11 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest;
+  inherit (harness) checkRows deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree markdownInput mkTest rejectsChange;
   inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
+
+  aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
+  steeringDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
 
   # `aiCommon.contentFileEntry` returns the delivery record wrapped in
   # `lib.mkDefault`, so a consumer can override what a factory contributed.
@@ -17,29 +20,48 @@
   entryContent = entry: entry.content.content;
 in {
   checks = {
-    module-context-content-record-rejects-two-sources = mkTest "context-content-record-rejects-two-sources" (!(builtins.tryEval (let
-      result = evalHm {
-        ai.context = {
-          source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-          text = "two sources";
-        };
-      };
-    in
-      builtins.deepSeq result.config.ai.context true)).success);
-
-    module-runtime-context-record-rejects-two-sources = mkTest "runtime-context-record-rejects-two-sources" (!(builtins.tryEval (let
-      result = evalHm {
-        ai.codex.context = {
-          source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-          text = "two sources";
-        };
-      };
-    in
-      builtins.deepSeq result.config.ai.codex.context true)).success);
+    module-content-record-restrictions = mkTest "content-record-restrictions" (
+      let
+        text = "Consumer text.";
+        source = steeringDir + "/alpha.md";
+        rootContext = context: (evalHm {ai.context = context;}).config.ai.context;
+        codexContext = context: (evalHm {ai.codex.context = context;}).config.ai.codex.context;
+        sharedRule = example: (evalHm {ai.rules = {inherit example;};}).config.ai.rules.example;
+        rejectsTwoSources = get:
+          rejectsChange (input: (get input).text) {
+            valid = {inherit text;};
+            invalid = {inherit source text;};
+            expected = text;
+          };
+        rejectsEmptyText = get: fields:
+          rejectsChange (input: (get input).text) {
+            valid = fields // {inherit text;};
+            invalid = fields;
+            expected = text;
+          };
+      in
+        checkRows "content record restrictions" {
+          "ai.codex.context rejects equal-priority source and text" = rejectsTwoSources codexContext;
+          "ai.context rejects empty text when enabled" = rejectsEmptyText rootContext {enable = true;};
+          "ai.context rejects equal-priority source and text" = rejectsTwoSources rootContext;
+          "ai.rules rejects an empty matcher list" = rejectsChange (input: (sharedRule input).matcher) {
+            valid = {
+              inherit text;
+              matcher = ["src/**"];
+            };
+            invalid = {
+              inherit text;
+              matcher = [];
+            };
+            expected = ["src/**"];
+          };
+          "ai.rules rejects empty text by default" = rejectsEmptyText sharedRule {};
+          "ai.rules rejects empty text when explicitly enabled" = rejectsEmptyText sharedRule {enable = true;};
+        }
+    );
 
     module-content-record-text-writers-concatenate = mkTest "content-record-text-writers-concatenate" (
       let
-        aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
         context =
           (lib.evalModules {
             modules = [
@@ -74,7 +96,6 @@ in {
 
     module-rule-content-priority-arbitrates = mkTest "rule-content-priority-arbitrates" (
       let
-        aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
         result = lib.evalModules {
           modules = [
             {
@@ -152,29 +173,30 @@ in {
 
     module-disabled-empty-context-omits-output = mkTest "disabled-empty-context-omits-output" (
       let
-        empty = evalDevenv {
-          ai.copilot = {
-            github.context.enable = false;
-            enable = true;
-          };
-        };
-        withContent = evalDevenv {
-          ai.copilot = {
-            github.context = {
-              enable = false;
-              text = "Disabled content remains inspectable.";
+        check = context: expectedText: let
+          result = evalDevenv {
+            ai.copilot = {
+              github.context = context;
+              enable = true;
             };
-            enable = true;
           };
-        };
+          files = deliveredFiles result.config;
+        in
+          result.config.ai.copilot.github.context.text
+          == expectedText
+          && !(files ? "AGENTS.md")
+          && !(files ? ".github/copilot-instructions.md");
+        text = "Disabled content remains inspectable.";
       in
-        empty.config.ai.copilot.github.context.text
-        == ""
-        && !((deliveredFiles empty.config) ? "AGENTS.md")
-        && !((deliveredFiles empty.config) ? ".github/copilot-instructions.md")
-        && withContent.config.ai.copilot.github.context.text == "Disabled content remains inspectable."
-        && !((deliveredFiles withContent.config) ? "AGENTS.md")
-        && !((deliveredFiles withContent.config) ? ".github/copilot-instructions.md")
+        checkRows "disabled Copilot context" {
+          "disabled empty context emits neither instruction file" = check {enable = false;} "";
+          "disabled inline context retains its text but emits neither file" =
+            check {
+              enable = false;
+              inherit text;
+            }
+            text;
+        }
     );
 
     module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
@@ -197,7 +219,6 @@ in {
 
     module-null-source-winner-keeps-text = mkTest "null-source-winner-keeps-text" (
       let
-        aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
         result = lib.evalModules {
           modules = [
             {
@@ -224,44 +245,11 @@ in {
         }
     );
 
-    module-rule-rejects-empty-content = mkTest "rule-rejects-empty-content" (!(builtins.tryEval (let
-      aiCommon = import ../../lib/ai/ai-common.nix {inherit lib;};
-      result = lib.evalModules {
-        modules = [
-          {
-            options.rules = lib.mkOption {
-              type = lib.types.attrsOf aiCommon.ruleModule;
-              default = {};
-            };
-          }
-          {rules.example = {};}
-        ];
-      };
-    in
-      builtins.deepSeq result.config.rules.example true)).success);
-
-    module-enabled-rule-rejects-empty-content = mkTest "enabled-rule-rejects-empty-content" (
-      let
-        evaluated = evalHm {};
-        ruleOptions = evaluated.options.ai.rules.type.nestedTypes.elemType.getSubOptions [];
-        enableExists = ruleOptions ? enable;
-        contextRejected =
-          !(builtins.tryEval (let
-            result = evalHm {ai.context.enable = true;};
-          in
-            builtins.deepSeq result.config.ai.context true)).success;
-        ruleRejected =
-          !(builtins.tryEval (let
-            result = evalHm {ai.rules.example.enable = true;};
-          in
-            builtins.deepSeq result.config.ai.rules.example true)).success;
-      in
-        enableExists && contextRejected && ruleRejected
-    );
-
     module-single-context-source-does-not-trigger-ifd = mkTest "single-context-source-does-not-trigger-ifd" (
       let
         source = pkgs.runCommand "context-source-must-not-build" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           exit 1
         '';
         result = evalDevenv {
@@ -281,16 +269,6 @@ in {
         && !(input ? text)
     );
 
-    module-rule-rejects-empty-matcher = mkTest "rule-rejects-empty-matcher" (!(builtins.tryEval (let
-      result = evalHm {
-        ai.rules.empty-matcher = {
-          matcher = [];
-          text = "ambiguous";
-        };
-      };
-    in
-      builtins.deepSeq result.config.ai.rules.empty-matcher true)).success);
-
     module-shared-agentsmd-dedupes-identical-units = mkTest "shared-agentsmd-dedupes-identical-units" (
       let
         result = evalDevenv {
@@ -307,7 +285,6 @@ in {
         && agents
         == "<!-- rule: shared -->\n\nApply this rule only in: `codex`, `kiro`.\n\nShared rule.\n\nShared context."
         && result.config.ai.internal.agentsMd."AGENTS.md".audiences.shared == ["codex" "kiro"]
-        && !(lib.hasInfix "---" agents)
     );
 
     module-shared-agentsmd-tier-delivery = mkTest "shared-agentsmd-tier-delivery" (
@@ -322,7 +299,7 @@ in {
         };
         active = evalDevenv base;
         childrenOf = result: lib.filter (path: lib.hasPrefix ".agents/rules/" path) (lib.attrNames (deliveredFiles result.config));
-        child = builtins.head (childrenOf active);
+        child = ".agents/rules/guidance.md";
         disabled = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".enable = false;});
         replaced = evalDevenv (lib.recursiveUpdate base {ai.codex.files."AGENTS.md".content.text = "Consumer root.";});
         removed = evalDevenv {ai.codex.enable = true;};
@@ -336,29 +313,31 @@ in {
           ai.context = {inherit source;};
           ai.codex.files."AGENTS.md".content.text = "Consumer root.";
         });
-        collision = builtins.tryEval (let
-          result = evalDevenv (lib.recursiveUpdate base {
-            ai.internal.agentsMd.${child} = {
-              hasContent = true;
-              context = "Conflicting root.";
-            };
-          });
-        in
-          builtins.deepSeq result.config.ai.internal._generatedFiles true);
       in
-        builtins.length (childrenOf active)
-        == 1
-        && child == ".agents/rules/guidance.md"
-        && active.config.ai.files.${child}.method == "ro"
-        && fromGeneratedTree child (deliveredFiles active.config).${child}
-        && lib.hasInfix "../../docs/guidance/" (markdownInput active child).text
-        && !(lib.hasInfix "RULE-BODY-MUST-NOT-BE-INLINED" (markdownInput active child).text)
-        && childrenOf disabled == []
-        && childrenOf replaced == []
-        && childrenOf removed == []
-        && childrenOf lazy == []
-        && (deliveredFiles lazy.config)."AGENTS.md".text == "Consumer root."
-        && !collision.success
+        checkRows "shared AGENTS.md tier delivery" {
+          "active index delivers its one child with relative links, not the rule body" =
+            childrenOf active
+            == [child]
+            && active.config.ai.files.${child}.method == "ro"
+            && lib.hasInfix "../../docs/guidance/" (deliveredMarkdown active child)
+            && !(lib.hasInfix "RULE-BODY-MUST-NOT-BE-INLINED" (deliveredMarkdown active child));
+          "child index cannot occupy another AGENTS.md target" = rejectsChange (config:
+            (evalDevenv config).config.ai.internal._generatedFiles ? ${child}) {
+            valid = base;
+            invalid = lib.recursiveUpdate base {
+              ai.internal.agentsMd.${child} = {
+                hasContent = true;
+                context = "Conflicting root.";
+              };
+            };
+            expected = true;
+          };
+          "disabling the root hides its child" = childrenOf disabled == [];
+          "no rules means no child" = childrenOf removed == [];
+          "replacing the root hides its child" = childrenOf replaced == [];
+          "replacing the root never reads a discarded source" =
+            childrenOf lazy == [] && (deliveredFiles lazy.config)."AGENTS.md".text == "Consumer root.";
+        }
     );
 
     module-shared-agentsmd-preserves-rule-audiences = mkTest "shared-agentsmd-preserves-rule-audiences" (
@@ -426,52 +405,49 @@ in {
         && files ? ".kiro/steering/scoped.md"
     );
 
-    module-shared-agentsmd-rejects-divergent-index = mkTest "shared-agentsmd-rejects-divergent-index" (
+    module-shared-agentsmd-rejects-divergent-contributions = mkTest "shared-agentsmd-rejects-divergent-contributions" (
       let
-        attempt = builtins.tryEval (let
-          result = evalDevenv {
-            ai = {
-              codex.enable = true;
-              kimchi = {
-                enable = true;
-                rules.scoped = {
-                  matcher = ["other/**"];
-                  references = ["other.md"];
-                  text = "Other guidance.";
-                };
-              };
-              rules.scoped = {
-                matcher = ["src/**"];
-                references = ["source.md"];
-                text = "Source guidance.";
-              };
+        shared = ai: (evalDevenv {inherit ai;}).config.ai.internal.agentsMd."AGENTS.md";
+        inline = text: {
+          codex.enable = true;
+          kiro.cli.enable = true;
+          kiro.rules.shared = {inherit text;};
+          rules.shared.text = "Shared guidance.";
+        };
+        indexed = references: let
+          scoped = {
+            matcher = ["src/**"];
+            references = ["source.md"];
+            text = "Source guidance.";
+          };
+        in {
+          codex.enable = true;
+          kimchi.enable = true;
+          kimchi.rules.scoped = scoped // {inherit references;};
+          rules = {inherit scoped;};
+        };
+      in
+        checkRows "shared AGENTS.md contribution restrictions" {
+          "controls have both contributing runtimes" =
+            (shared (inline "Shared guidance.")).audiences.shared
+            == ["codex" "kiro"]
+            && (shared (indexed ["source.md"])).audiences.scoped == ["codex" "kimchi"];
+          "one index entry cannot have two reference lists" = rejectsChange (ai: (shared ai).index.scoped) {
+            valid = indexed ["source.md"];
+            invalid = indexed ["other.md"];
+            expected = {
+              description = "";
+              inclusion = "fileMatch";
+              matcher = ["src/**"];
+              references = ["source.md"];
             };
           };
-        in
-          builtins.deepSeq (markdownInput result "AGENTS.md").text true);
-      in
-        !attempt.success
-    );
-
-    module-shared-agentsmd-rejects-divergent-units = mkTest "shared-agentsmd-rejects-divergent-units" (
-      let
-        attempt = builtins.tryEval (let
-          result = evalDevenv {
-            ai = {
-              codex = {
-                enable = true;
-                rules.shared.text = "Codex view.";
-              };
-              kiro = {
-                cli.enable = true;
-                rules.shared.text = "Kiro view.";
-              };
-            };
+          "one inline rule key cannot have two bodies" = rejectsChange (ai: (shared ai).rules.shared) {
+            valid = inline "Shared guidance.";
+            invalid = inline "Kiro-only guidance.";
+            expected = "Shared guidance.";
           };
-        in
-          builtins.deepSeq (deliveredFiles result.config)."AGENTS.md" true);
-      in
-        !attempt.success
+        }
     );
 
     module-shared-agentsmd-omits-absent-runtime-context = mkTest "shared-agentsmd-omits-absent-runtime-context" (
@@ -502,11 +478,11 @@ in {
         result = evalHm {
           ai = {
             kiro.cli.enable = true;
-            rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
+            rulesDir = steeringDir;
           };
         };
       in
-        (kiroSteeringContent result) ? "alpha.md"
+        lib.attrNames (kiroSteeringContent result) == ["alpha.md" "beta.md" "gamma.md"]
     );
 
     # Top-level `ai.skillsDir` fans out to every enabled CLI.
@@ -523,41 +499,6 @@ in {
         files ? ".claude/skills/skill-a/SKILL.md" && files ? ".claude/skills/skill-b/SKILL.md"
     );
 
-    # The accepted arms force the delivered file map, never `home.packages`:
-    # nothing about installing the package reads the rules, so a probe on it
-    # passes on laziness alone.
-    module-ai-rules-accepted-for-claude = mkTest "ai-rules-accepted-for-claude" (
-      let
-        probe = builtins.tryEval (lib.attrNames
-          (evalHm {
-            ai.claude = {
-              enable = true;
-              rules.test.text = "test";
-            };
-          })
-          .config
-          .home
-          .file);
-      in
-        probe.success
-    );
-
-    module-ai-rules-accepted-for-kimchi = mkTest "ai-rules-accepted-for-kimchi" (
-      let
-        probe = builtins.tryEval (lib.attrNames
-          (evalHm {
-            ai.kimchi = {
-              enable = true;
-              rules.test.text = "test";
-            };
-          })
-          .config
-          .home
-          .file);
-      in
-        probe.success
-    );
-
     module-ai-rules-root-fans-out-to-kimchi = mkTest "ai-rules-root-fans-out-to-kimchi" (
       let
         result = evalHm {
@@ -572,39 +513,39 @@ in {
         == "<!-- rule: test -->\n\ntest"
     );
 
-    # A REAL directory, not `../fixtures`, which never existed: with a probe on
-    # `home.packages` it passed on laziness alone, because nothing forced the
-    # fanout. Forcing the file map makes it fail on a missing path.
-    module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
+    # Reads what the tree delivers, never `home.packages`: installing the package
+    # reads no rules, so a probe on it passes on laziness alone.
+    module-runtime-rules-deliver-markdown = mkTest "runtime-rules-deliver-markdown" (
       let
-        probe = builtins.tryEval (lib.attrNames
-          (evalHm {
-            ai.claude = {
-              enable = true;
-              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
-            };
-          })
-          .config
-          .home
-          .file);
+        claude = rules: evalHm {ai.claude = rules // {enable = true;};};
+        kimchi = rules: evalHm {ai.kimchi = rules // {enable = true;};};
+        dir = {rulesDir = steeringDir;};
+        inline = {rules.test.text = "Runtime guidance.";};
+        kimchiPath = ".config/kimchi/harness/AGENTS.md";
       in
-        probe.success
-    );
-
-    module-ai-rules-dir-accepted-for-kimchi = mkTest "ai-rules-dir-accepted-for-kimchi" (
-      let
-        probe = builtins.tryEval (lib.attrNames
-          (evalHm {
-            ai.kimchi = {
-              enable = true;
-              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
+        checkRows "runtime rules deliver Markdown" {
+          "Claude renders every rule in its directory" = let
+            result = claude dir;
+            expected = {
+              ".claude/rules/alpha.md" = "Alpha steering body.";
+              ".claude/rules/beta.md" = "Beta steering body.";
+              ".claude/rules/gamma.md" = "Gamma steering body.";
             };
-          })
-          .config
-          .home
-          .file);
-      in
-        probe.success
+            rulePaths = lib.filter (lib.hasPrefix ".claude/rules/") (lib.attrNames (deliveredFiles result.config));
+          in
+            rulePaths
+            == lib.attrNames expected
+            && lib.all (path: lib.hasInfix expected.${path} (deliveredMarkdown result path)) rulePaths;
+          "Claude renders its named rule" = lib.hasInfix "Runtime guidance." (deliveredMarkdown (claude inline) ".claude/rules/test.md");
+          "Kimchi renders every rule in its directory" = let
+            agents = deliveredMarkdown (kimchi dir) kimchiPath;
+          in
+            lib.hasInfix "<!-- rule: alpha -->\n\nAlpha steering body." agents
+            && lib.hasInfix "<!-- rule: beta -->\n\nBeta steering body." agents
+            && lib.hasInfix "<!-- rule: gamma -->\n\nGamma steering body." agents
+            && !(lib.hasInfix "<!-- rule: notes -->" agents);
+          "Kimchi renders its named rule" = deliveredMarkdown (kimchi inline) kimchiPath == "<!-- rule: test -->\n\nRuntime guidance.";
+        }
     );
   };
 }
