@@ -37,8 +37,10 @@
 # Visibility" note in the nix-standards fragment — so a new file must be
 # `git add`ed before either check can see it.
 #
-# `-type f` does not match symlinks. The scanners check regular Markdown
-# files in the tracked source tree, not the targets of symlinks.
+# `-type f` does not match symlinks, so tracked Markdown symlinks go
+# unscanned. That costs no coverage: each points at an in-tree file these
+# scans already read. It is stated because a silent skip otherwise reads as
+# coverage the checks do not have.
 #
 # AN EMPTY FILE SET IS A HARD FAILURE. The original shape here was
 # `find … -print0 | xargs -0 -r`, and it was not enough. `-r` makes an empty
