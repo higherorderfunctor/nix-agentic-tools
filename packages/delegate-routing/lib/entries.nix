@@ -212,10 +212,12 @@ in {
           {
             name = "Fixtures";
             text = ''
-              **Fixtures.** Use fixtures only for risky behavior the types cannot prove.
-              Match production's shape and name any difference. Share setup across cases
-              and name the behavior each case protects. Don't mock a vendor to test its
-              schema; the real implementation exercises that contract.
+              **Fixtures.** Fixtures keep the shape the code reads; name differences it can
+              see. Share setup, never expected results that must stay independent. Use an
+              extractor for facts it establishes and test the real code that reads them. A
+              mock endpoint shows what a client sends or how it handles a reply, never what
+              the live endpoint accepts. A check that only replays a canned answer tests
+              nothing and is deleted.
             '';
           }
           {
@@ -256,13 +258,31 @@ in {
           {
             name = "Checks";
             text = ''
-              **Checks.** Test only behavior types cannot establish and whose failure would
-              matter, such as timing, attribution or a costly decision. Don't add tests for
-              trivial field mapping or schemas. Each check names the wrong implementation
-              it rejects and uses an independent expected value. Show that a race or
-              regression check fails against the code before the fix. When pruning tests or
-              golden cases, use unique failures to spot redundancy and keep the last check
-              of any behavior they protect.
+              **Checks.** Skip a test when a surviving guard (evaluation, a linter, a type
+              checker or another check) already rejects the same wrong outcome, for the same
+              reason, on the same path; the guard under test cannot stand in for its own
+              check. Keep one representative bad input per restriction that could be
+              loosened, beside a valid control, forced through the real merge or entry
+              point. Put a declaration's good and bad inputs in one check over a table so a
+              failure names the row; where the stack has a property-testing library,
+              generate the inputs instead. Known regression inputs stay as explicit rows.
+
+              For any other wrong outcome that matters (a value, order, side effect, timing,
+              attribution or decision), name the input, the wrong outcome and the expected
+              result, taken from the requirement. Check the particular failure, never just
+              that something failed. When an empty result would pass, pin the expected
+              members. A test that recomputes production's logic to get its expectation is
+              reworked: use a known answer for a fixed input or an independent observation,
+              and keep the behavior it checks. Show a bug-fix, race or regression check
+              failing for the intended reason before the fix, or against one plausible
+              wrong implementation, and passing after.
+
+              Before pruning a row or assertion, trace every reader of it, including
+              symlinks and files selected by name. Prune only when the skip test above still
+              holds for each reader after the whole prune, or the outcome is no longer
+              required. A missing comment or missing run evidence is a rework, not grounds
+              to prune. At planning, list the distinct failures to cover; there is no
+              test-to-code target.
             '';
           }
         ];
