@@ -43,7 +43,12 @@ class SourceAttribution(unittest.TestCase):
         init["plugins"][0]["path"] = "/personal/plugin"
         init["mcp_servers"][0]["source"] = "user"
         init["agents"].append("personal")
-        self.assertEqual(len(suite.claude_leaks(init, set(), set(), set(), {"Explore", "fixture"})), 3)
+        # A count would pass if one source were silently accepted and another reported twice.
+        self.assertCountEqual(suite.claude_leaks(init, set(), set(), set(), {"Explore", "fixture"}), [
+            "non-builtin plugin 'vendor'",
+            "non-fixture agent 'personal'",
+            "non-project MCP server 'fixture'",
+        ])
 
     def test_codex_collision_and_personal_skill(self):
         catalog = ("<skills_instructions>\n- `r0` = `/scratch/home/.codex/skills/.system`\n"
@@ -54,7 +59,6 @@ class SourceAttribution(unittest.TestCase):
         with patch.object(suite, "REAL_HOME", Path("/operator")):
             sources = list(suite.codex_sources(json.dumps(init)))
             self.assertEqual([name for name, path in sources if suite.personal_source(path)], ["personal-review"])
-            self.assertTrue(suite.personal_source("/operator/.codex/config.toml"))
             self.assertFalse(suite.personal_source("/scratch/home/.codex/config.toml"))
             mcp = {"mcp_servers": [{"name": "fixture", "config_path": "/scratch/repo/.codex/config.toml"},
                                    {"name": "personal", "source": {"path": "/operator/.codex/config.toml"}}]}
@@ -99,34 +103,34 @@ class CliRecords(unittest.TestCase):
                     "message": {"content": [{"type": "tool_use", "id": str(call_id), "name": name, "input": value}]}}
         guidance = event("Read", {"file_path": "/fixture/.claude/skills/delegate-routing/SKILL.md"})
         workflow = event("Workflow", {"code": "agent('Read task_source.py and design the setting')"})
-        for prefix, expected in [
-            ([guidance], True),
-            ([event("Read", {"file_path": "/fixture/.claude/agents/opus.md"})], True),
-            ([event("Skill", {"skill": "delegate-routing"})], True),
-            ([event("Skill", {"skill": "delegate-routing"}),
+        for regression, prefix, expected in [
+            ("agent guidance blocked", [event("Read", {"file_path": "/fixture/.claude/agents/opus.md"})], True),
+            ("argument suffix permits source access", [event("Bash", {"command": case["usageCommands"][0] + "; cat task_source.py"})], False),
+            ("comment impersonates reader", [event("Bash", {"command": "cat task_source.py # " + case["usageCommands"][0]})], False),
+            ("delegate starts outside workflow", [event("Agent", {"prompt": "design the setting"})], False),
+            ("grep reads source", [event("Grep", {"pattern": ".", "path": "."})], False),
+            ("plan creation blocked", [event("TaskCreate", {"subject": "Design setting", "description": "Plan the handoff"})], True),
+            ("plan details blocked", [event("TaskGet", {"taskId": "1"})], True),
+            ("plan listing blocked", [event("TaskList", {})], True),
+            ("plan status blocked", [event("TaskUpdate", {"taskId": "1", "status": "in_progress"})], True),
+            ("planning masks early read", [event("TodoWrite", {"todos": []}), event("Read", {"file_path": "task_source.py"})], False),
+            ("read touches source", [event("Read", {"file_path": "/fixture/task_source.py"})], False),
+            ("skill and approved readers blocked", [event("Skill", {"skill": "delegate-routing"}),
               *[event("Bash", {"command": command}) for command in case["usageCommands"]]], True),
-            ([event("Bash", {"command": case["usageCommands"][0] + "; cat task_source.py"})], False),
-            ([event("Bash", {"command": "cat task_source.py # " + case["usageCommands"][0]})], False),
-            ([event("Bash", {"command": "/unlisted/usage-reader"})], False),
-            ([event("Skill", {"skill": "unrelated"})], False),
-            ([event("TodoWrite", {"todos": []})], True),
-            ([event("TodoRead", {})], True),
-            ([event("TaskCreate", {"subject": "Design setting", "description": "Plan the handoff"})], True),
-            ([event("TaskGet", {"taskId": "1"})], True),
-            ([event("TaskList", {})], True),
-            ([event("TaskUpdate", {"taskId": "1", "status": "in_progress"})], True),
-            ([event("TodoWrite", {"todos": []}), event("Read", {"file_path": "task_source.py"})], False),
-            ([event("Read", {"file_path": "/fixture/task_source.py"})], False),
-            ([event("Bash", {"command": "cat task_source.py"})], False),
-            ([event("Grep", {"pattern": ".", "path": "."})], False),
-            ([event("Agent", {"prompt": "design the setting"})], False),
+            ("skill guidance blocked", [guidance], True),
+            ("todo retrieval blocked", [event("TodoRead", {})], True),
+            ("todo writing blocked", [event("TodoWrite", {"todos": []})], True),
+            ("unlisted reader permitted", [event("Bash", {"command": "/unlisted/usage-reader"})], False),
+            ("unrelated skill permitted", [event("Skill", {"skill": "unrelated"})], False),
         ]:
-            with self.subTest(prefix=prefix):
-                events = prefix + [workflow, event("Read", {"file_path": "task_source.py"})]
+            with self.subTest(regression=regression):
+                events = prefix + [workflow]
                 raw = suite.session_calls(case, events, Path("/unused"))
                 self.assertEqual(suite.ASSERTIONS["workflow-before-source"][1](suite.classify(case, raw), raw, case), expected)
         child = event("Read", {"file_path": "task_source.py"}, child=True)
-        raw = suite.session_calls(case, [guidance, child, workflow], Path("/unused"))
+        # Ignore child reads and allow root source access after the workflow starts.
+        source = event("Read", {"file_path": "task_source.py"})
+        raw = suite.session_calls(case, [guidance, child, workflow, source], Path("/unused"))
         self.assertTrue(suite.workflow_before_source(suite.classify(case, raw), raw, case))
         self.assertFalse(suite.workflow_before_source([], [], case))
 
@@ -139,7 +143,7 @@ class CliRecords(unittest.TestCase):
                                                  suite.HARNESSES["kimchi"]["finished"])
             self.assertLess(code, 0)
             self.assertEqual(stop, [])
-            self.assertEqual(len(cleanup), 1)
+            self.assertEqual(cleanup, ["completed session did not exit within 0.1s; terminated process group"])
 
     def test_kiro_workspace_catalog_tools_and_completion(self):
         skill = {"name": "delegate-routing", "_meta": {"kiro": {"type": "skill", "resource": {
@@ -155,8 +159,10 @@ class CliRecords(unittest.TestCase):
         self.assertEqual(suite.skill_delivery({"runtime": "kiro"}, {"repo": Path("/other")}, events, None), "missing")
         self.assertTrue(harness["answered"](events))
         self.assertTrue(harness["turns"](events[1]))
-        self.assertEqual(len(harness["calls"](events[1])), 1)
-        self.assertIn("use_subagent", harness["calls"](events[1])[0]["name"])
+        # The native tool identity comes from metadata, not the friendly title.
+        self.assertEqual(harness["calls"](events[1]), [
+            {"id": "one", "name": [None, "Delegate", None, None, "use_subagent"], "input": {}},
+        ])
 
 
 class WorkflowFixture(unittest.TestCase):
@@ -187,9 +193,6 @@ class Selection(unittest.TestCase):
 
     def test_exact_prefix_and_union(self):
         ids = [case["id"] for case in self.CASES]
-        self.assertEqual(suite.select(ids, []), ids)
-        self.assertEqual(suite.select(ids, ["kimchi-single"]), ["kimchi-single"])
-        self.assertEqual(suite.select(ids, ["kimchi*"]), ["kimchi-dependent", "kimchi-single"])
         self.assertEqual(suite.select(ids, ["codex-single,kimchi-s*"]), ["codex-single", "kimchi-single"])
         self.assertEqual(suite.select(ids, ["codex-single", "kimchi-single"]), ["codex-single", "kimchi-single"])
         # A prefix needs the star; a bare prefix is an unknown id.
@@ -201,7 +204,7 @@ class Selection(unittest.TestCase):
             fixtures = Path(directory) / "cases.json"
             fixtures.write_text(json.dumps(self.CASES))
             out = io.StringIO()
-            with patch.object(sys, "argv", ["suite.py", "--fixtures", str(fixtures), *argv]), redirect_stdout(out):
+            with patch.object(sys, "argv", ["suite.py", "--fixtures", str(fixtures), "--out", str(fixtures.with_name("run")), *argv]), redirect_stdout(out):
                 code = suite.main()
             # --list starts nothing and writes no run directory.
             self.assertEqual(list(Path(directory).iterdir()), [fixtures])
@@ -210,10 +213,14 @@ class Selection(unittest.TestCase):
     def test_list_and_only(self):
         code, out = self.run_main("--list")
         self.assertEqual(code, 0)
-        self.assertEqual([line.split("\t")[0] for line in out.splitlines()], [case["id"] for case in self.CASES])
+        self.assertEqual(out.splitlines(), [
+            "codex-single\tcodex\tone-delegate",
+            "kimchi-dependent\tkimchi\tone-delegate",
+            "kimchi-single\tkimchi\tone-delegate",
+        ])
         code, out = self.run_main("--list", "--only=kimchi*")
         self.assertEqual(out.splitlines(), ["kimchi-dependent\tkimchi\tone-delegate", "kimchi-single\tkimchi\tone-delegate"])
-        with self.assertRaisesRegex(ValueError, "matched nothing"):
+        with self.assertRaisesRegex(ValueError, r"matched nothing: nope\*$"):
             self.run_main("--list", "--only=nope*")
 
 

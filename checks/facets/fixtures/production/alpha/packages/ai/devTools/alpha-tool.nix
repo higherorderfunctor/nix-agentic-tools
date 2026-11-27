@@ -1,13 +1,15 @@
 {
   ancestor-tool,
-  sibling_tool,
   runCommandLocal,
+  sibling_tool,
 }:
-runCommandLocal "facet-alpha-tool" {nativeBuildInputs = [ancestor-tool sibling_tool];} ''
+runCommandLocal "facet-alpha-tool" {} ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
-  test "$(cat ${ancestor-tool}/passed)" = ancestor
-  test "$(cat ${sibling_tool}/passed)" = sibling
+  diff -u --label "expected ancestor marker" --label "ancestor scope dependency" \
+    <(printf '%s\n' ancestor) "${ancestor-tool}/passed"
+  diff -u --label "expected sibling marker" --label "sibling scope dependency" \
+    <(printf '%s\n' sibling) "${sibling_tool}/passed"
   mkdir -p "$out"
   touch "$out/passed"
 ''

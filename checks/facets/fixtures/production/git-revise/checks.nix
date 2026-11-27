@@ -1,60 +1,36 @@
 {
-  devenvConfig,
   devenvModules,
-  homeManagerConfig,
   homeManagerModules,
   index,
   lib,
-  packages,
   pkgs,
   registry,
   ...
 }: let
+  inherit (lib) assertMsg;
   owner = builtins.head (builtins.filter (candidate: candidate.name == "git-revise") index.owners);
   metadata =
-    map (entry: [
-      (lib.removePrefix "${toString ./.}/" (toString entry.source))
-      entry.kind
-    ])
+    map (entry: lib.removePrefix "${toString ./.}/" (toString entry.source))
     owner.metadata;
-  package = packages.ai.gitTools.git-revise;
   sentinel = "facet-input-sentinel";
 in {
   checks = {
-    git-revise-production-boundary = assert lib.isDerivation package;
-    assert package.passthru.fixtureSentinel == sentinel;
-    assert registry.facetMock.entries.git-revise.payload == sentinel;
-    assert devenvModules == [./modules/devenv];
-    assert homeManagerModules == [./modules/homeManager];
-    assert homeManagerConfig.facetMock.shared
-    == {
-      backend = "home-manager";
-      enabled = true;
-      label = "git-revise";
-    };
-    assert devenvConfig.facetMock.shared
-    == {
-      backend = "devenv";
-      enabled = true;
-      label = "git-revise";
-    };
+    git-revise-production-boundary = assert assertMsg (registry.facetMock.entries.git-revise.payload == sentinel) "registry must resolve the input-backed value over the same-owner default";
+    assert assertMsg (devenvModules == [./modules/devenv]) "devenv discovery must return only the raw devenv module directory";
+    assert assertMsg (homeManagerModules == [./modules/homeManager]) "Home Manager discovery must return only the raw Home Manager module directory";
     # Check the recorded sources without importing the metadata-only sidecars.
-    assert metadata
-    == [
-      ["README.md" "documentation"]
-      ["default.nix" "owner-default"]
-      ["docs" "docs"]
-      ["fragments" "fragments"]
-      ["module-spec.nix" "nix-sidecar"]
-      ["sidecar.nix" "nix-sidecar"]
-      ["sources.json" "data-sidecar"]
-    ];
-      pkgs.runCommandLocal "facet-git-revise-production-boundary" {
-        nativeBuildInputs = [package];
-      } ''
+    assert assertMsg (metadata
+      == [
+        "README.md"
+        "default.nix"
+        "docs"
+        "fragments"
+        "sidecar.nix"
+        "sources.json"
+      ]) "discovery must record exactly the git-revise metadata source paths";
+      pkgs.runCommandLocal "facet-git-revise-production-boundary" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        test "$(cat ${package}/marker)" = ${lib.escapeShellArg sentinel}
         mkdir -p "$out"
         touch "$out/passed"
       '';

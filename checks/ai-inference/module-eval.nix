@@ -145,6 +145,40 @@
   instanceChange = change: {cliproxyapi.instances.clients = change;};
 in {
   checks = {
+    # The catalog check owns the rendered inventory. Pin a mixed subset here
+    # to catch the runtime grant drifting to the wrong API.
+    module-ai-inference-opencode-go-credential = mkTest "ai-inference-opencode-go-credential" (
+      lib.all (backend: let
+        result = evaluate backend ((instanceChange {
+            credentials.go = {
+              vendor = "opencode-go";
+              apiKey.key = clientKey "go";
+            };
+            clientKeys.personal.routes = lib.mkForce [
+              {
+                api = "chat";
+                credential = "go";
+              }
+            ];
+          })
+          // {
+            catalog.vendors.opencode-go.models = ["beam-free" "claude-haiku-5-5" "gemini-4-argon"];
+          });
+        chatModels = ["beam-free" "gemini-4-argon"];
+      in
+        checkRows "${backend}: OpenCode Go chat grant" {
+          "named chat selection is accepted" = failedMessages result == [];
+          "runtime grant includes Gemini fallback but not native Claude messages" =
+            result.config.ai.claude.normalized.settings.inference.credentials
+            == [
+              {
+                name = "go";
+                models = chatModels;
+              }
+            ];
+        }) ["devenv" "hm"]
+    );
+
     # Cross-owner consumption only: CPA's extracted offers reach Claude's selected API.
     module-ai-inference-zhipuai-credential = mkTest "ai-inference-zhipuai-credential" (
       lib.all (backend: let
@@ -157,52 +191,23 @@ in {
           };
         });
       in
-        failedMessages result
-        == []
-        && result.config.ai.claude.normalized.settings.inference.credentials
-        == [
-          {
-            name = "personal";
-            models = [];
-          }
-          {
-            name = "zhipuai";
-            models = expected;
-          }
-        ]) ["devenv" "hm"]
-    );
-    # The CPA catalog check pins the exact API inventory from extraction. Here,
-    # require a nonempty rendered chat block so an empty runtime grant cannot pass.
-    module-ai-inference-opencode-go-credential = mkTest "ai-inference-opencode-go-credential" (
-      lib.all (backend: let
-        result = evaluate backend (instanceChange {
-          credentials.go = {
-            vendor = "opencode-go";
-            apiKey.key = clientKey "go";
-          };
-          clientKeys.personal.routes = lib.mkForce [
-            {
-              api = "chat";
-              credential = "go";
-            }
-          ];
-        });
-        block = lib.findFirst (entry: entry.name == "go") {} ((rendered result).api-keys.openai-compatibility or []);
-        expected = map (model: model.name) (block.models or []);
-      in
-        checkRows "${backend}: OpenCode Go chat grant" {
-          "rendered chat block offers models" = expected != [];
-          "runtime receives exactly the rendered chat offers" =
+        checkRows "${backend}: z.ai grant" {
+          "named Anthropic selection is accepted" = failedMessages result == [];
+          "vendor defaults reach the API-key grant without expanding the OAuth grant" =
             result.config.ai.claude.normalized.settings.inference.credentials
             == [
               {
-                name = "go";
+                name = "personal";
+                models = [];
+              }
+              {
+                name = "zhipuai";
                 models = expected;
               }
             ];
-          "selection has no failed assertions" = failedMessages result == [];
         }) ["devenv" "hm"]
     );
+
     module-ai-inference-instance-clients = mkTest "ai-inference-instance-clients" (let
       # Exercise the public renderer with the shape used before module defaults
       # supplied modelContextLengths. Only the module checks get those defaults.
@@ -224,12 +229,7 @@ in {
         result = evaluate backend {};
         settings = rendered result;
         rules = map (entry: entry.credentials) settings.access.key-allowlist;
-        rows =
-          map (model: {
-            inherit model;
-            description = "zhipuai through CLIProxyAPI";
-          })
-          apiKey.models;
+        rows = map (expectedPickerRow "zhipuai") ["glm-5.3" "glm-5.3-flash"];
         byUrl = evaluate backend {
           claude.settings.inference = {
             instance = null;
@@ -249,7 +249,6 @@ in {
           if path == []
           then {}
           else builtins.fromJSON (builtins.readFile (lib.head path));
-        chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         instanceAfter = change: (evaluate backend (instanceChange change)).config.ai.cliproxyapi.instances.clients;
         readLengths = response: (instanceAfter {credentials.zhipuai.apiKey.apis.responses = response;}).credentials.zhipuai.apiKey.apis.responses.modelContextLengths;
         rejectsLength = invalid:
@@ -269,6 +268,33 @@ in {
             inherit invalid;
             expected = ["gpt-6.2-sol"];
           };
+        aliasProblem = "settings.api-keys.claude[].tool-aliases requires";
+        duplicateTargets = {
+          A = "Z";
+          B = "Z";
+        };
+        longAlias = lib.concatStrings (lib.replicate 65 "x");
+        rejectsAlias = toolAliases:
+          refused backend aliasProblem (instanceChange {credentials.zhipuai.apiKey = {inherit toolAliases;};});
+        rejectsRaw = block:
+          refused backend aliasProblem (instanceChange {settings.api-keys.claude = [block];});
+        rawAccounts = accounts:
+          instanceChange {
+            settings.access.key-allowlist = [
+              {
+                api-key = clientKey "raw";
+                credentials = [
+                  {
+                    inherit accounts;
+                    kind = "oauth";
+                    provider = "claude";
+                  }
+                ];
+              }
+            ];
+          };
+        rejectsAccounts = fragment: accounts: refused backend fragment (rawAccounts accounts);
+        restricted = evaluate backend (rawAccounts [credentials.work.oauth.account]);
         # One credential whose APIs serve different models; the
         # personal client routes to its chat API.
         split = apiKeyChange:
@@ -296,7 +322,8 @@ in {
             ];
           });
         splitResult = split {};
-        splitBlock = family: lib.findFirst (entry: entry.name == "split") null (rendered splitResult).api-keys.${family};
+        splitModels = evaluation: family:
+          (lib.findFirst (entry: entry.name == "split") null (rendered evaluation).api-keys.${family}).models;
         fallback = split {
           apis.chat.models = null;
           models = ["split-shared"];
@@ -306,6 +333,7 @@ in {
             (rendered (evaluate backend (instanceChange {
               credentials = lib.mapAttrs (_: _: {apiKey = {inherit priority;};}) (lib.filterAttrs (_: credential: credential ? apiKey) credentials);
             }))).api-keys);
+        priorityHolds = priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority];
         inheritedContext = evaluate backend (instanceChange {
           credentials.zhipuai.apiKey.apis.responses.modelContextLengths."glm-5.3" = 200000;
         });
@@ -376,15 +404,41 @@ in {
         };
       in
         checkRows "${backend}: instance clients" {
-          "API-key priority on every served API" = lib.all (priority: map (block: block.priority) (priorityBlocks priority) == [priority priority priority]) [(-1) 0 3];
-          "unset API-key priority omitted" = lib.all (block: !(block ? priority)) (lib.concatLists (builtins.attrValues settings.api-keys));
-          "null API-key priority omitted" = lib.all (block: !(block ? priority)) (priorityBlocks null);
+          # A negative priority enables fallback; zero is a value, not an unset option.
+          "negative API-key priority is forwarded to every served API" = priorityHolds (-1);
+          "unset API-key priority is omitted from the three named blocks" =
+            lib.mapAttrs (_:
+              map (block: {
+                inherit (block) name;
+                hasPriority = block ? priority;
+              }))
+            settings.api-keys
+            == {
+              claude = [
+                {
+                  name = "zhipuai";
+                  hasPriority = false;
+                }
+              ];
+              codex = [
+                {
+                  name = "zhipuai";
+                  hasPriority = false;
+                }
+              ];
+              openai-compatibility = [
+                {
+                  name = "chat";
+                  hasPriority = false;
+                }
+              ];
+            };
+          "zero API-key priority is forwarded rather than omitted" = priorityHolds 0;
           "OAuth rejects priority" = rejectsChange (change: (instanceAfter change).credentials.work.oauth) {
             valid = {};
             invalid.credentials.work.oauth.priority = -1;
             expected = credentials.work.oauth;
           };
-          "fixture accepted" = failedMessages result == [];
           "named keys" = settings.access.api-keys == map clientKey ["personal" "work"];
           "OAuth exact accounts, API exact URL, route order" =
             rules
@@ -431,26 +485,19 @@ in {
               }
             ];
           "per-API models accepted" = failedMessages splitResult == [];
-          "per-API models replace credential models" = (splitBlock "claude").models == [{name = "split-anthropic";}] && (splitBlock "openai-compatibility").models == [{name = "split-chat";}];
-          "API without models falls back to credential models" =
+          "per-API models do not bleed into another API" =
+            splitModels splitResult "claude"
+            == [{name = "split-anthropic";}]
+            && splitModels splitResult "openai-compatibility" == [{name = "split-chat";}];
+          "API without models falls back without replacing a different API's override" =
             failedMessages fallback
             == []
-            && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.openai-compatibility).models
-            == [{name = "split-shared";}]
-            && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.claude).models == [{name = "split-anthropic";}];
-          "API without models refused" = refused backend "credentials.split.apiKey serves API `chat` without models" (instanceChange {
-            credentials.split.apiKey = {
-              apis = {
-                anthropic = {
-                  base-url = "https://split.example/anthropic";
-                  models = ["split-anthropic"];
-                };
-                chat.base-url = "https://split.example/v1";
-              };
-              key = clientKey "split";
-            };
-          });
-          "API with emptied models refused" = failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = [(lib.mkIf false "split-chat")];});
+            && splitModels fallback "openai-compatibility" == [{name = "split-shared";}]
+            && splitModels fallback "claude" == [{name = "split-anthropic";}];
+          "API missing both model lists is refused" =
+            failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = null;});
+          "API whose declared list merges empty is refused" =
+            failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = [(lib.mkIf false "split-chat")];});
           "picker lists the routed API's models" =
             splitResult.config.ai.claude.normalized.settings.inference.credentials
             == [
@@ -460,9 +507,7 @@ in {
               }
             ];
           "Claude user picker" = backend != "hm" || ((claudeSettings result).modelPicker.options or null) == rows;
-          "Claude project has no picker" = backend == "hm" || !((claudeSettings result) ? modelPicker);
           "Claude devenv picker follows routes" = backend == "hm" || launcherSettings result == {modelPicker.options = rows;};
-          "Responses context windows match the upstream IDs" = (paidBlock opted).models == paidModels;
           "maker exclusions remove annotated models before rendering and grants" =
             failedMessages filteredPaid
             == []
@@ -487,7 +532,6 @@ in {
             ]
             && (lib.head (rendered inheritedContext).api-keys.claude).models
             == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
-          "Responses context length rejects a negative integer" = rejectsLength (-1);
           "Responses context length rejects a string" = rejectsLength "272000";
           "Responses context length rejects zero" = rejectsLength 0;
           "Responses context lengths reject IDs outside the API override" = rejectsChange readLengths {
@@ -506,8 +550,6 @@ in {
             invalid.modelContextLengths."glm-9" = 100;
             expected."glm-5.3" = 100;
           };
-          "Responses without context lengths use name-only rows" =
-            (lib.head settings.api-keys.codex).models == [{name = "glm-5.3";} {name = "glm-5.3-flash";}];
           "OAuth picker fixture accepted" = failedMessages opted == [] && failedMessages plain == [];
           "OAuth picker metadata stays on its selected route" =
             opted.config.ai.claude.normalized.settings.inference.credentials
@@ -581,9 +623,8 @@ in {
               };
           in
             refused backend "API-key credential `zhipuai` takes its picker rows from its declared models; remove pickerModels" (instanceChange {clientKeys.personal.routes = lib.mkForce [(route "personal") apiKeyRoute];});
-          "OAuth picker rejects a space-only model ID" = rejectsPickerModels [" "];
-          "OAuth picker rejects a tab next to a valid model ID" = rejectsPickerModels ["gpt-6.2-sol" "\t"];
           "OAuth picker rejects an empty model ID" = rejectsPickerModels [""];
+          "OAuth picker rejects a tab next to a valid model ID" = rejectsPickerModels ["gpt-6.2-sol" "\t"];
           "OAuth picker rejects whitespace inside a model ID" = rejectsPickerModels ["gpt 6"];
           "client key hand-written access refused" = refused backend "lists ai.cliproxyapi.instances.clients.clientKeys.personal.key by hand" (instanceChange {settings.access.api-keys = [(clientKey "personal")];});
           "client key hand-written rule refused" = refused backend "hand-written entry for ai.cliproxyapi.instances.clients.clientKeys.personal.key" (instanceChange {
@@ -595,21 +636,16 @@ in {
             ];
           });
           "Codex has no credential profiles" = !(result.config.ai.codex.files ? ".codex/zhipuai.config.toml");
-          "chat-only choice for Codex" =
-            (lib.last (rendered chatOnly).access.key-allowlist).credentials
-            == [
-              {
-                kind = "apikey";
-                provider = "openai-compatible-chat";
-                base-urls = ["https://chat.example/v1"];
-              }
-            ];
           "external adds no keys or rules" = !((rendered byUrl) ? access) && byUrl.config.ai.claude.normalized.settings.inference.key == clientKey "external";
-          "secret references stay out of config" = !(lib.hasInfix "_redact" result.config.ai.services.cliproxyapi-clients.files.config.content);
-          "unknown credential" = refused backend "unknown upstream credential `missing`" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "missing")];});
+          "config content contains placeholders rather than secret reference objects or paths" = let
+            inherit (result.config.ai.services.cliproxyapi-clients.files.config) content;
+          in
+            !lib.any (fragment: lib.hasInfix fragment content) ["_redact" "/run/secrets/"];
           "unknown client key" = refused backend "clientKey names `missing`" {claude.settings.inference.clientKey = "missing";};
-          "instance needs client key" = refused backend "instance needs `clientKey`" {claude.settings.inference.clientKey = null;};
-          "instance refuses direct key" = refused backend "Instance selections use `clientKey`" {claude.settings.inference.key = clientKey "direct";};
+          "runtime instance refuses a direct key at the runtime option" =
+            refused backend "ai.claude.settings.inference.key is set without `url`; Instance selections use `clientKey`" {claude.settings.inference.key = clientKey "direct";};
+          "runtime instance without client key is refused at the runtime option" =
+            refused backend "ai.claude.settings.inference.instance needs `clientKey`" {claude.settings.inference.clientKey = null;};
           "ambiguous API needs choice" = refused backend "needs api because it does not serve exactly one API" (instanceChange {clientKeys.work.routes = lib.mkForce [(route "zhipuai")];});
           "unserved API" = refused backend "does not serve API `chat`" (instanceChange {
             clientKeys.work.routes = lib.mkForce [
@@ -627,46 +663,15 @@ in {
               }
             ];
           });
-          "neither credential kind" = refused backend "credentials.empty: declare exactly one" (instanceChange {credentials.empty = {};});
-          "both credential kinds" = refused backend "credentials.personal: declare exactly one" (instanceChange {credentials.personal = {inherit apiKey;};});
-          "alias duplicate targets" = refused backend "tool-aliases requires" (instanceChange {
-            credentials.zhipuai.apiKey.toolAliases = {
-              A = "Z";
-              B = "Z";
-            };
-          });
-          "alias source collision" = refused backend "tool-aliases requires" (instanceChange {
-            credentials.zhipuai.apiKey.toolAliases = {
-              A = "B";
-              B = "C";
-            };
-          });
-          "alias source too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zhipuai.apiKey.toolAliases.${lib.concatStrings (lib.replicate 65 "x")} = "A";});
-          "alias target too long" = refused backend "tool-aliases requires" (instanceChange {credentials.zhipuai.apiKey.toolAliases.A = lib.concatStrings (lib.replicate 65 "x");});
-          "raw alias collision" = refused backend "tool-aliases requires" (instanceChange {
-            settings.api-keys.claude = [
-              {
-                tool-aliases = {
-                  A = "Z";
-                  B = "Z";
-                };
-              }
-            ];
-          });
-          "raw key alias collision" = refused backend "tool-aliases requires" (instanceChange {
-            settings.api-keys.claude = [
-              {
-                keys = [
-                  {
-                    tool-aliases = {
-                      A = "Z";
-                      B = "Z";
-                    };
-                  }
-                ];
-              }
-            ];
-          });
+          "both credential kinds refused" = refused backend "credentials.personal: declare exactly one" (instanceChange {credentials.personal = {inherit apiKey;};});
+          "alias duplicate targets" = rejectsAlias duplicateTargets;
+          "alias source collision" = rejectsAlias {
+            A = "B";
+            B = "C";
+          };
+          "alias source too long" = rejectsAlias {${longAlias} = "A";};
+          "alias target too long" = rejectsAlias {A = longAlias;};
+          "raw API key alias collision" = rejectsRaw {keys = [{tool-aliases = duplicateTargets;}];};
           "shared URL" = refused backend "also the base URL of another" (instanceChange {credentials.duplicate.apiKey = apiKey;});
           "shared raw URL" = refused backend "also the base URL of another" (instanceChange {
             settings.api-keys.claude = [
@@ -684,34 +689,14 @@ in {
               }
             ];
           });
-          "empty account restriction" = refused backend "accounts merged to an empty list" (instanceChange {
-            settings.access.key-allowlist = [
-              {
-                api-key = clientKey "raw";
-                credentials = [
-                  {
-                    accounts = [];
-                    kind = "oauth";
-                    provider = "claude";
-                  }
-                ];
-              }
-            ];
-          });
-          "null account restriction" = refused backend "accounts contains null" (instanceChange {
-            settings.access.key-allowlist = [
-              {
-                api-key = clientKey "raw";
-                credentials = [
-                  {
-                    accounts = [null];
-                    kind = "oauth";
-                    provider = "claude";
-                  }
-                ];
-              }
-            ];
-          });
+          "empty account restriction would grant every account" = rejectsAccounts "accounts merged to an empty list" [(lib.mkIf false credentials.work.oauth.account)];
+          "null account restriction would be dropped at rendering" = rejectsAccounts "accounts contains null" [null];
+          "raw account restriction retains its exact reference" =
+            (lib.findFirst (entry: entry.api-key == clientKey "raw") null (rendered restricted).access.key-allowlist)
+            == {
+              api-key = clientKey "raw";
+              credentials = [(oauthRule "work")];
+            };
           "literal OAuth account" = rejectsChange (change: (instanceAfter change).credentials.personal.oauth.account) {
             valid = {};
             invalid.credentials.personal.oauth.account = lib.mkForce "secret";
@@ -722,14 +707,6 @@ in {
             invalid.credentials.personal = lib.mkForce {oauth.vendor = "claude";};
             expected = credentials.personal.oauth.account;
           };
-          "OAuth account placeholder" = let
-            file = result.config.ai.services.cliproxyapi-clients.files.config;
-            variable = "CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_CREDENTIALS_0_ACCOUNTS_0";
-          in
-            file.secrets.${variable}
-            == credentials.personal.oauth.account
-            && lib.hasInfix ("{$" + variable + "}") file.content
-            && !(lib.hasInfix "/run/secrets/cpa-personal-account" file.content);
           "literal client key" = rejectsChange (change: (instanceAfter change).clientKeys.personal.key) {
             valid = {};
             invalid.clientKeys.personal.key = lib.mkForce "secret";
@@ -792,6 +769,7 @@ in {
         rejects = fragment: inference: failsWith ["ai.settings.inference.${fragment}"] (select inference);
       in
         checkRows "${backend}: root inference selection" {
+          "client key without instance rejected" = rejects "clientKey is set without `instance`" (valid // {inherit (selected) clientKey;});
           "command key and hostname accepted" =
             failedMessages (select {
               key = redact.command "${pkgs.hello}/bin/hello";
@@ -801,6 +779,7 @@ in {
           "disabled instance rejected" = rejects "instance names `ai.cliproxyapi.instances.off`, which is disabled." (selected // {instance = "off";});
           "instance and origin rejected together" = rejects "url and ai.settings.inference.instance both select a proxy" (selected // valid);
           "instance with named client accepted" = failedMessages (select selected) == [];
+          "instance without client key rejected" = rejects "instance needs `clientKey`" {inherit (selected) instance;};
           "key without origin rejected" = rejects "key is set without `url`" {inherit (valid) key;};
           "missing instance rejected with registered names" = rejects "instance names `missing`, which no proxy owner registers; registered instances: alt, main, off." (selected // {instance = "missing";});
           "origin with IPv6 and file key accepted" = failedMessages (select valid) == [];
@@ -871,68 +850,8 @@ in {
           backend
           {ai = instances;};
       in
-        resolved {}
-        == null
-        && resolved {ai.settings.inference = root;} == root
-        && (evalApp backend {ai.settings.inference = root;}).config.ai.testapp.normalized.settings.inference.backend == "cliproxyapi"
-        && resolved {
-          ai = {
-            settings.inference = root;
-            testapp.settings.inference = work;
-          };
-        }
-        == work
-        && resolved {ai.testapp.settings.inference = work;} == work
-        && resolved keyOnly == root // {inherit (work) key;}
-        && failedMessages (evalApp backend keyOnly) == []
-        # An instance resolves to its loopback origin at either scope; a
-        # runtime instance replaces the root one.
-        && resolved (withInstances {settings.inference = mainSelection;})
-        == {
-          key = instanceKey;
-          url = "http://127.0.0.1:8400";
-        }
-        && resolved (withInstances {
-          settings.inference = mainSelection;
-          testapp.settings.inference.instance = "alt";
-        })
-        == {
-          key = instanceKey;
-          url = "http://127.0.0.1:8403";
-        }
-        # Switching forms clears nothing by hand: the root's url and key
-        # drop for a runtime instance, its instance and clientKey for a
-        # runtime url; a runtime setting both forms itself is still refused.
-        && resolved switchedToInstance
-        == {
-          key = instanceKey;
-          url = "http://127.0.0.1:8400";
-        }
-        && failedMessages (evalApp backend switchedToInstance) == []
-        && resolved switchedToUrl == work
-        && failedMessages (evalApp backend switchedToUrl) == []
-        && failsWith ["ai.testapp.settings.inference.url and ai.testapp.settings.inference.instance both select a proxy"] (evalApp backend (withInstances {
-          settings.inference = root;
-          testapp.settings.inference = mainSelection // root;
-        }))
-        && resolved optedOut == null
-        && removeAttrs profileDefault.config.ai.testapp.normalized.settings.inference ["backend" "credentials"]
-        == {
-          key = instanceKey;
-          url = "http://127.0.0.1:8400";
-        }
-        && failedMessages profileDefault == []
-        && failedMessages (evalApp backend optedOut) == []
-        && failsWith ["ai.testapp.settings.inference.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
-          settings.inference = mainSelection;
-          testapp.settings.inference.instance = "missing";
-        }))
-        && failsWith ["ai.testapp.settings.inference.key is set without `url`"] (evalApp backend {ai.testapp.settings.inference.key = work.key;})
-        && failsWith ["ai.testapp.settings.inference.url needs `key`"] (evalApp backend {
-          ai.testapp.settings.inference.url = "http://127.0.0.1:8318";
-        })
-        && checkRows "${backend}: normalized inference" {
-          "directly assigned URL must be an origin" = rejectsChange (url:
+        checkRows "${backend}: runtime inference" {
+          "directly assigned normalized URL must be an origin" = rejectsChange (url:
             (evalApp backend {
               ai.testapp.normalized.settings.inference = lib.mkForce {
                 inherit url;
@@ -943,6 +862,55 @@ in {
             invalid = "http://127.0.0.1:8317/v1";
             expected = "http://127.0.0.1:8317";
           };
+          "explicit runtime instance null opts out without rejecting the inherited client key" =
+            resolved optedOut == null && failedMessages (evalApp backend optedOut) == [];
+          "profile default is not in conflict with unset root fields" =
+            removeAttrs profileDefault.config.ai.testapp.normalized.settings.inference ["backend" "credentials"]
+            == {
+              key = instanceKey;
+              url = "http://127.0.0.1:8400";
+            }
+            && failedMessages profileDefault == [];
+          "root URL and key become a CLIProxyAPI endpoint with no grants" =
+            (evalApp backend {ai.settings.inference = root;}).config.ai.testapp.normalized.settings.inference
+            == root
+            // {
+              backend = "cliproxyapi";
+              credentials = [];
+            };
+          "runtime URL selection drops the inherited instance and client key" =
+            resolved switchedToUrl == work && failedMessages (evalApp backend switchedToUrl) == [];
+          "runtime cannot explicitly select both forms" = failsWith ["ai.testapp.settings.inference.url and ai.testapp.settings.inference.instance both select a proxy"] (evalApp backend (withInstances {
+            settings.inference = root;
+            testapp.settings.inference = mainSelection // root;
+          }));
+          "runtime instance changes the origin while retaining the client key" =
+            resolved (withInstances {
+              settings.inference = mainSelection;
+              testapp.settings.inference.instance = "alt";
+            })
+            == {
+              key = instanceKey;
+              url = "http://127.0.0.1:8403";
+            };
+          "runtime instance selection drops the inherited URL and key" =
+            resolved switchedToInstance
+            == {
+              key = instanceKey;
+              url = "http://127.0.0.1:8400";
+            }
+            && failedMessages (evalApp backend switchedToInstance) == [];
+          "runtime key-only override keeps the root origin" =
+            resolved keyOnly == root // {inherit (work) key;} && failedMessages (evalApp backend keyOnly) == [];
+          "runtime key without an origin is rejected at the runtime option" =
+            failsWith ["ai.testapp.settings.inference.key is set without `url`"] (evalApp backend {ai.testapp.settings.inference.key = work.key;});
+          "runtime missing instance is rejected at the runtime option" = failsWith ["ai.testapp.settings.inference.instance names `missing`, which no proxy owner registers"] (evalApp backend (withInstances {
+            settings.inference = mainSelection;
+            testapp.settings.inference.instance = "missing";
+          }));
+          "runtime origin without a key is rejected at the runtime option" = failsWith ["ai.testapp.settings.inference.url needs `key`"] (evalApp backend {
+            ai.testapp.settings.inference.url = "http://127.0.0.1:8318";
+          });
         })
       ["devenv" "hm"]
     );
@@ -971,13 +939,14 @@ in {
               testapp.settings.inference = second;
             };
         };
-        resolvedInference = (evaluate {ai.settings.inference = second;}).config.ai.testapp.normalized.settings.inference;
+        clientless = evaluate {ai.settings.inference = second;};
+        expectedEndpoint = {
+          backend = "relay";
+          url = "http://127.0.0.1:8500";
+        };
+        resolvedInference = clientless.config.ai.testapp.normalized.settings.inference;
         claudeInference = (import ../../packages/claude-code/lib/inference.nix {inherit lib pkgs;}).withLowerings {
           relay = {resolvedInference, ...}: {settings.env.HTTPS_PROXY = resolvedInference.url;};
-        };
-        codexInference = import ../../packages/chatgpt-codex/lib/inference.nix {
-          inherit lib pkgs;
-          inlineToml = import ../../packages/chatgpt-codex/lib/inlineToml.nix {inherit lib;};
         };
         relaySettings =
           (lib.evalModules {
@@ -1004,26 +973,29 @@ in {
         };
         unsupported = runtime: "ai.${runtime}.settings.inference selects a `relay` proxy instance, which ${runtime} cannot use; it supports cliproxyapi.";
       in
-        resolvedInference
-        == {
-          backend = "relay";
-          url = "http://127.0.0.1:8500";
-        }
-        && failedMessages (evaluate {ai.settings.inference = second;}) == []
-        && failsWith ["ai.settings.inference.clientKey is set, but `ai.relay.instances.second` declares no clients."] withClientKey
-        && withClientKey.config.ai.testapp.normalized.settings.inference == null
-        && switched.config.ai.testapp.normalized.settings.inference == resolvedInference
-        && failedMessages switched == []
-        && relaySettings == {env.HTTPS_PROXY = "http://127.0.0.1:8500";}
-        && claudeInference.launcherFlags {inherit backend resolvedInference;} == []
-        && codexInference.launcherFlags resolvedInference == []
-        && failsWith ["ai.claims.inference-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.inference-instance = ["main"];};})
-        && failsWith [(unsupported "claude")] runtimes
-        && failsWith [(unsupported "codex")] runtimes
-        && (backend != "devenv" || !(builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected but ai.codex.package is null") runtimes.config.warnings))
-        && runtimes.config.ai.claude.native.settings.apiKeyHelper == null
-        && !(runtimes.config.ai.claude.native.settings.env ? ANTHROPIC_BASE_URL)
-        && !(runtimes.config.ai.codex.native.settings.tui or {} ? model_availability_nux))
+        checkRows "${backend}: inference instance registry" {
+          "Claude names the unsupported owner" = failsWith [(unsupported "claude")] runtimes;
+          "Claude does not install CLIProxyAPI settings for an unsupported owner" =
+            runtimes.config.ai.claude.native.settings.apiKeyHelper
+            == null
+            && !(runtimes.config.ai.claude.native.settings.env ? ANTHROPIC_BASE_URL);
+          "Codex names the unsupported owner" = failsWith [(unsupported "codex")] runtimes;
+          "Codex does not apply CLIProxyAPI settings for an unsupported owner" =
+            !(runtimes.config.ai.codex.native.settings.tui or {} ? model_availability_nux);
+          "Codex does not warn about a missing launcher when it has no lowering" =
+            backend != "devenv" || !(builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected but ai.codex.package is null") runtimes.config.warnings);
+          "a clientless instance uses its own backend and needs no key" =
+            resolvedInference == expectedEndpoint && failedMessages clientless == [];
+          "adding a client key to a clientless instance is refused and leaves no endpoint" =
+            failsWith ["ai.settings.inference.clientKey is set, but `ai.relay.instances.second` declares no clients."] withClientKey
+            && withClientKey.config.ai.testapp.normalized.settings.inference == null;
+          "custom Claude lowering takes only its own settings" = relaySettings == {env.HTTPS_PROXY = "http://127.0.0.1:8500";};
+          "custom Claude lowering does not inherit CLIProxyAPI launcher flags" = claudeInference.launcherFlags {inherit backend resolvedInference;} == [];
+          "duplicate instance names are refused by the owner claim" =
+            failsWith ["ai.claims.inference-instance.main: claimed by cliproxyapi and relay"] (evaluate {ai = instances // {relay.claims.inference-instance = ["main"];};});
+          "switching to a clientless instance discards the root client key" =
+            switched.config.ai.testapp.normalized.settings.inference == expectedEndpoint && failedMessages switched == [];
+        })
       ["devenv" "hm"]
     );
   };

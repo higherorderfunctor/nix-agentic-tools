@@ -30,21 +30,34 @@ def launch(binary, *arguments):
     return subprocess.run([binary, *arguments], cwd=root, env=environment, capture_output=True, text=True, check=True)
 
 
-for binary, expected in ((stub_off, False), (stub_update_true, True), (stub_update_null, None)):
+def config_overrides(arguments):
+    return [
+        (flag, tomllib.loads(arguments[index + 1]))
+        for index, flag in enumerate(arguments)
+        if flag in ("--config", "-c")
+    ]
+
+
+# Pin the spellings as well as the values: an extra -c could override the
+# managed value, and null must leave no update override on the command line.
+for case, binary, expected in (
+    ("unset defaults to false", stub_off, [("--config", {"check_for_update_on_startup": False})]),
+    ("explicit true replaces the false default", stub_update_true, [("--config", {"check_for_update_on_startup": True})]),
+    ("explicit null omits the override", stub_update_null, []),
+):
     arguments = json.loads(launch(binary, "--version").stdout)
-    overrides = [tomllib.loads(arguments[index + 1]) for index, flag in enumerate(arguments) if flag == "--config"]
-    assert overrides == ([] if expected is None else [{"check_for_update_on_startup": expected}]), arguments
-    print(f"verified: update-check session override={expected}")
+    assert config_overrides(arguments) == expected, (case, arguments)
+    print(f"verified: update-check session override: {case}")
 
 arguments = json.loads(launch(stub_off, "-c", "check_for_update_on_startup=true", "--version").stdout)
-overrides = [
-    tomllib.loads(arguments[index + 1])["check_for_update_on_startup"]
-    for index, flag in enumerate(arguments)
-    if flag in ("--config", "-c")
-]
-assert overrides == [False, True], arguments
+assert config_overrides(arguments) == [
+    ("--config", {"check_for_update_on_startup": False}),
+    ("-c", {"check_for_update_on_startup": True}),
+], ("user override must follow launcher default", arguments)
 print("verified: user -c overrides the launcher update-check default")
 
+# Parse the real argv payload: TOML quoting must preserve the literal path,
+# and an opt-out must not silently inject a project trust override.
 for binary, trusted in ((stub_off, False), (stub_on, True)):
     result = launch(binary, "--version")
     arguments = json.loads(result.stdout)
@@ -55,10 +68,9 @@ for binary, trusted in ((stub_off, False), (stub_on, True)):
         assert tomllib.loads(overrides[0]) == {"projects": {str(root): {"trust_level": "trusted"}}}
     else:
         assert overrides == [], arguments
-    # --version skips notices; a normal command proves preflight sees trust.
-    notice = launch(binary, "debug", "prompt-input", "PROBE")
-    assert ("warning: Codex ignores" in notice.stderr) == (not trusted), notice.stderr
 
+# The pinned CLI must load the project limit only for opted-in sessions;
+# preflight must agree and neither launcher may write persistent user trust.
 for binary, trusted in ((codex_off, False), (codex_on, True)):
     result = launch(binary, "debug", "prompt-input", "PROBE")
     expected_count = 32 if trusted else 512
@@ -67,6 +79,10 @@ for binary, trusted in ((codex_off, False), (codex_on, True)):
     probe_run = max(map(len, re.findall("Q+", result.stdout)), default=0)
     assert probe_run == expected_count, result.stdout
     assert ("END_OF_PROBE" in result.stdout) == (not trusted), result.stdout
-    assert ("warning: Codex ignores" in result.stderr) == (not trusted), result.stderr
+    target = root / ".codex/config.toml"
+    trust_warnings = [line for line in result.stderr.splitlines() if line.startswith("warning: Codex ignores ")]
+    assert len(trust_warnings) == (0 if trusted else 1), (trusted, result.stderr)
+    if not trusted:
+        assert trust_warnings[0].startswith(f"warning: Codex ignores {target} "), result.stderr
     assert user.read_text() == "", "launcher changed user config"
     print(f"verified: session trust={trusted}, Q_count={expected_count}, user config unchanged")

@@ -1,5 +1,4 @@
 {
-  lib,
   packages,
   pkgs,
   ...
@@ -8,21 +7,25 @@
   inherit (packages.ai.mcpServers.modelContextProtocol) fixture_mcp;
 in {
   imports = [./checks/native-module.nix];
-  checks = {
-    native-package-namespaces = assert lib.isDerivation devTools."literal.name" && devTools."literal.name".name == "facet-dotted";
-    assert lib.isDerivation devTools.literal.name && devTools.literal.name.name == "facet-nested";
-    assert devTools."literal.name".drvPath != devTools.literal.name.drvPath;
-    assert lib.isDerivation devTools.peer-tool && devTools.peer-tool.name == "facet-peer";
-    assert lib.isDerivation fixture_mcp && fixture_mcp.name == "facet-mcp";
-      pkgs.runCommandLocal "facet-native-package-namespaces" {
-        nativeBuildInputs = [devTools.alpha-tool devTools.peer-tool];
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        test -e ${devTools.alpha-tool}/passed
-        test -e ${devTools.peer-tool}/passed
-        mkdir -p "$out"
-        touch "$out/passed"
-      '';
-  };
+  checks.native-package-namespaces =
+    pkgs.runCommandLocal "facet-native-package-namespaces" {
+      # Building alpha forces its sibling and ancestor dependencies in the native scopes.
+      nativeBuildInputs = [devTools.alpha-tool];
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      expect_marker() {
+        local expected="$1" artifact="$2" regression="$3"
+        diff -u --label "expected marker: $expected" --label "$regression" \
+          <(printf '%s\n' "$expected") "$artifact"
+      }
+
+      # Both paths must resolve to their own recipes, not aliases of one another.
+      expect_marker literal-dot "${devTools."literal.name"}" 'literal dotted name split into a nested path'
+      expect_marker nested-path "${devTools.literal.name}" 'nested path flattened into a dotted name'
+      expect_marker mcp-namespace "${fixture_mcp}" 'nested namespace case or package underscore changed'
+      mkdir -p "$out"
+      touch "$out/passed"
+    '';
 }

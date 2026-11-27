@@ -23,41 +23,55 @@ in {
     state = home / ".claude/.claude.json"
     state.parent.mkdir(parents=True)
     environment = dict(os.environ, HOME=str(home))
+    environment.pop("CLAUDE_CONFIG_DIR", None)
     project = '/project with "quotes"'
-    message = {"systemMessage": project + " is not a trusted Claude Code project; its project settings did not apply. The launcher appended --add-dir ~/.claude/projects so Workflow resume keeps working."}
 
-    def check(payload, expected, env=environment):
+    def notice(path):
+        return {"systemMessage": path + " is not a trusted Claude Code project; its project settings did not apply. The launcher appended --add-dir ~/.claude/projects so Workflow resume keeps working."}
+
+    def check(case, payload, expected, env=environment):
         result = subprocess.run(
             ["${hook}"], input=payload, capture_output=True, env=env, check=False
         )
-        assert result.returncode == 0, result
-        assert result.stderr == b"", result.stderr
+        assert result.returncode == 0, (case, result)
+        assert result.stderr == b"", (case, result.stderr)
         if expected is None:
-            assert result.stdout == b"", result.stdout
+            assert result.stdout == b"", (case, result.stdout)
         else:
-            assert json.loads(result.stdout) == expected, result.stdout
+            try:
+                actual = json.loads(result.stdout)
+            except ValueError as error:
+                raise AssertionError((case, result.stdout)) from error
+            assert actual == expected, (case, actual)
 
     payload = json.dumps({"cwd": project}).encode()
-    state.write_text(json.dumps({"projects": {project: {"hasTrustDialogAccepted": True}}}))
-    check(payload, None)
+    trusted = json.dumps({"projects": {project: {"hasTrustDialogAccepted": True}}})
     # Onboarding is not trust; a check against the wrong key suppresses this notice.
-    for entry in [{"hasTrustDialogAccepted": False}, {"hasCompletedProjectOnboarding": True}]:
-        state.write_text(json.dumps({"projects": {project: entry}}))
-        check(payload, message)
-    for contents in ["{}", "{"]:
+    for case, contents, expected in [
+        ("corrupt state still warns", "{", notice(project)),
+        ("empty state still warns", "{}", notice(project)),
+        ("explicit rejection is not trust", json.dumps({"projects": {project: {"hasTrustDialogAccepted": False}}}), notice(project)),
+        ("onboarding is not trust", json.dumps({"projects": {project: {"hasCompletedProjectOnboarding": True}}}), notice(project)),
+        ("trust in another project does not apply", json.dumps({"projects": {"/another": {"hasTrustDialogAccepted": True}}}), notice(project)),
+        ("trusted project stays quiet", trusted, None),
+    ]:
         state.write_text(contents)
-        check(payload, message)
+        check(case, payload, expected)
     state.unlink()
-    check(payload, message)
-    fallback = {"systemMessage": os.getcwd() + " is not a trusted Claude Code project; its project settings did not apply. The launcher appended --add-dir ~/.claude/projects so Workflow resume keeps working."}
-    check(b"{}", fallback)
-    for invalid in [b"", b"{", b"[]", b'{"cwd":1}', b"{} {}"]:
-        check(invalid, None)
-    check(payload, None, {key: value for key, value in environment.items() if key != "HOME"})
+    check("missing state warns and missing cwd uses process cwd", b"{}", notice(os.getcwd()))
+    for case, invalid in [
+        ("empty input is not a hook event", b""),
+        ("malformed JSON is not a hook event", b"{"),
+        ("multiple JSON values are not one hook event", b"{} {}"),
+        ("non-object is not a hook event", b"[]"),
+        ("numeric cwd is not a path", b'{"cwd":1}'),
+    ]:
+        check(case, invalid, None)
+    check("missing HOME stays quiet", payload, None, {key: value for key, value in environment.items() if key != "HOME"})
     relocated = home / "relocated"
     relocated.mkdir()
-    (relocated / ".claude.json").write_text(json.dumps({"projects": {project: {"hasTrustDialogAccepted": True}}}))
-    check(payload, None, dict(environment, CLAUDE_CONFIG_DIR=str(relocated)))
+    (relocated / ".claude.json").write_text(trusted)
+    check("relocated trust state suppresses the notice", payload, None, dict(environment, CLAUDE_CONFIG_DIR=str(relocated)))
     print("PASS: hook trust, silence, malformed payload, HOME and config-directory cases")
     PYTHON
     ${pkgs.coreutils}/bin/touch "$out"

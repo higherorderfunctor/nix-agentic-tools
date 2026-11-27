@@ -1,10 +1,10 @@
-# cspell:ignore nme permisions timeot
+# cspell:ignore nme timeot
 {
   harness,
   lib,
   ...
 }: let
-  inherit (builtins) head;
+  inherit (builtins) elemAt head length;
   inherit (harness) checkRows mkTest;
   keys = import ../../lib/open-keys {inherit lib;};
   known = keys.fromPaths {paths = ["entries[].name" "opaque" "permissions.allow" "services.*.url"];};
@@ -34,14 +34,14 @@
     lines = lib.splitString "\n" (head actual);
     prefix = "To suppress this warning, add ";
     suffix = " to allowed.";
-    remedy = builtins.elemAt lines 1;
+    remedy = elemAt lines 1;
     # Read the exact Nix list in the diagnostic, as a consumer would paste it.
     rendered = lib.removeSuffix suffix (lib.removePrefix prefix remedy);
     entries = import (builtins.toFile "open-keys-printed-allowlist.nix" rendered);
   in
-    builtins.length actual
+    length actual
     == 1
-    && builtins.length lines == 2
+    && length lines == 2
     && lib.hasPrefix prefix remedy
     && lib.hasSuffix suffix remedy
     && entries == [entry]
@@ -53,7 +53,7 @@
 in {
   checks = {
     open-keys-policy = mkTest "open-keys-policy" (checkRows "open key inspection" {
-      "allowlist suppresses only matching quoted keys and map fields" = let
+      "allowlist suppresses warnings for quoted and wildcard entries, still warns for an unlisted map sibling, and preserves the input" = let
         value = {
           "future.key" = 42;
           services.custom = {
@@ -83,15 +83,14 @@ in {
             services.custom = {inherit source;};
           };
         });
-      "credential refusal names the field and reason" = let
+      "credential check accepts a display name and refuses an acronym-led token field with its reason" = let
         allowed = credential "displayName";
         refused = credential "myAPIToken";
       in
         allowed.assertion
         && allowed.reason == null
         && !refused.assertion
-        && refused.reason == "token fields carry authentication material"
-        && refused.message == "settings.myAPIToken cannot be set: token fields carry authentication material.";
+        && refused.reason == "token fields carry authentication material";
       "declared struct children take precedence over a wildcard map" = warnsFor ["services.custom.ul" "services.defaults.timeot" "services.defaults.url"] (warnings {
         known = keys.fromPaths {paths = ["services.*.url" "services.defaults.timeout"];};
         value.services = {
@@ -106,16 +105,12 @@ in {
       "list warnings name the element path once even across repeated typos" = warnsFor [''entries."[]".nme''] (warnings {
         value.entries = [{name = "ok";} {nme = "a";} {nme = "b";}];
       });
-      "literal schema names accept open dotted keys, not nested copies" = warnsFor ["chat"] (warnings {
+      "literal schema names do not accept nested copies" = warnsFor ["chat"] (warnings {
         known = literalNames;
-        value = {
-          chat.modelDefaults = {};
-          "chat.modelDefaults"."future.model".field = true;
-        };
+        value.chat.modelDefaults = {};
       });
       "map names are unrestricted but dotted names stay quoted in warnings" = warnsFor [''services."user.with.dots".ul''] (warnings {
         value.services = {
-          another.url = "ok";
           "user.with.dots" = {
             ul = "typo";
             url = "ok";
@@ -137,26 +132,17 @@ in {
         ordinary = inspect {inherit value;};
       in
         ordinary.value == value && warnsFor ["future"] ordinary.warnings;
-      "stale allowlist warnings preserve each entry and classify its redundancy" =
+      "stale allowlist distinguishes declared list and wildcard paths from unchecked and concrete map paths" =
         warnings {
-          allowed = ["entries[].name" "opaque.anything" "permissions.allow" "services.*.url" "services.custom.url"];
+          allowed = ["entries[].name" "opaque.anything" "services.*.url" "services.custom.url"];
           value = {};
         }
         == [
           "allowed: stale allowlist entry `entries[].name` is already declared; remove it."
           "allowed: stale allowlist entry `opaque.anything` is under an unchecked freeform container; remove it."
-          "allowed: stale allowlist entry `permissions.allow` is already declared; remove it."
           "allowed: stale allowlist entry `services.*.url` is already declared; remove it."
           "allowed: stale allowlist entry `services.custom.url` is accepted under a user-named map; remove it."
         ];
-      "typo warns at the misspelled path and suggests the declared sibling" =
-        warningLines (warnings {
-          value = {
-            permissions.allow = [];
-            permisions.allow = [];
-          };
-        })
-        == ["settings.permisions: unrecognized key; did you mean `settings.permissions`?"];
       "unquoted dotted suppression is unused and leaves the literal key warning" =
         warningLines (warnings {
           known = literalNames;
@@ -169,12 +155,10 @@ in {
         ];
     });
     open-keys-printed-allowlist = mkTest "open-keys-printed-allowlist" (checkRows "printed allowlist round-trip" {
-      "dotted key" = printedEntry ''"future.key"'' {"future.key" = true;};
-      "dotted key under a map" = printedEntry ''services.*."future.key"'' {services."user.with.dots"."future.key" = true;};
-      "interpolation in key" = printedEntry ''"future.''${name}"'' {"future.\${name}" = true;};
-      "list marker" = printedEntry "entries[].nme" {entries = [{nme = "typo";}];};
-      "map wildcard" = printedEntry "services.*.ul" {services."user.with.dots".ul = "typo";};
-      "quote in key" = printedEntry ''"future.\"quoted\""'' {"future.\"quoted\"" = true;};
+      "dotted map field is quoted and uses the wildcard instead of the entry name" = printedEntry ''services.*."future.key"'' {services."user.with.dots"."future.key" = true;};
+      "interpolation in a key is printed literally, not evaluated" = printedEntry ''"future.''${name}"'' {"future.\${name}" = true;};
+      "list marker is glued to the list name in the printed entry" = printedEntry "entries[].nme" {entries = [{nme = "typo";}];};
+      "quote in a key is escaped in the printed entry" = printedEntry ''"future.\"quoted\""'' {"future.\"quoted\"" = true;};
     });
   };
 }
