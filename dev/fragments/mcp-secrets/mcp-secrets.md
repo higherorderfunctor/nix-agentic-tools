@@ -48,6 +48,7 @@ world-readable store or in committed config. Files:
 - `lib/ai/sharedOptions.nix` — cross-record owner aggregation, validation, and
   ordinary `ai.internal.services` declarations.
 - `lib/mcp.nix` `renderServer` — the shared renderer + non-Kiro throw.
+- `lib/ai/env-var-name.nix` — the one naming formula for exported variables.
 - `packages/kiro-cli/lib/mcpSecrets.nix` — Kiro preprocessor.
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
@@ -400,7 +401,8 @@ through it**. So:
   whole value and uses an explicit `envsubst` variable list so header
   placeholders survive; files-engine delivery writes private mcp.json.
 
-`deriveEnvVar` lives in `packages/kiro-cli/lib/mcpSecrets.nix`. Server and field
+`deriveEnvVar` lives in `packages/kiro-cli/lib/mcpSecrets.nix` and, like the
+proxy's names, uses the formula in `lib/ai/env-var-name.nix`. Server and field
 names determine variables; consumers cannot choose `var`. Header fields have a
 `header_` namespace so a header called `url` cannot collide with the URL
 binding. Distinct source bindings that sanitize to one name fail with a rename

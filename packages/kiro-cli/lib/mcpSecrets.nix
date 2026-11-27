@@ -3,14 +3,7 @@
 {lib}: let
   inherit (lib) foldl' mapAttrs;
 
-  sanitize = s:
-    lib.concatStrings (map
-      (c:
-        if lib.match "[A-Z0-9]" c != null
-        then c
-        else "_")
-      (lib.stringToCharacters (lib.toUpper s)));
-  deriveEnvVar = serverName: fieldName: "KIRO_MCP_${sanitize serverName}_${sanitize fieldName}";
+  deriveEnvVar = (import ../../../lib/ai/env-var-name.nix {inherit lib;}).envVarName "KIRO_MCP";
 
   mergeEnvs = maps:
     foldl' (acc: env:

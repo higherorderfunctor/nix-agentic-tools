@@ -456,6 +456,7 @@
         "checks/*/module-eval.nix"
         "lib/ai/app/mkBackendTransform.nix"
         "lib/ai/caddy.nix"
+        "lib/ai/env-var-name.nix"
         "lib/ai/mcpProxy.nix"
         "lib/ai/mcpServer/**"
         "lib/ai/sharedOptions.nix"
