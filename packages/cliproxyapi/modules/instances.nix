@@ -240,6 +240,12 @@ in {
               message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey serves API `${api}` without models. Set apiKey.apis.${api}.models${lib.optionalString (!providersLib.apis.${api}.modelObjects) " or apiKey.models"}; a list whose elements all sit under a false mkIf merges to [] and counts as none.";
             }) (builtins.attrNames (providersLib.served apiKey)))
           (providersLib.apiKeys instance))
+          # cloakMode renders only on api-keys.claude keys; refuse it where it would be a no-op.
+          ++ lib.mapAttrsToList (credentialName: apiKey: {
+            assertion = apiKey.cloakMode == null || providersLib.served apiKey ? anthropic;
+            message = "ai.cliproxyapi.instances.${name}.credentials.${credentialName}.apiKey.cloakMode applies only to the Anthropic API (api-keys.claude), which this credential does not serve. Remove cloakMode, or declare apiKey.apis.anthropic.";
+          })
+          (providersLib.apiKeys instance)
           ++ lib.concatLists (lib.mapAttrsToList (clientName: client:
             map (choice: let
               result = providersLib.route instance "ai.cliproxyapi.instances.${name}.clientKeys.${clientName}.routes" choice;

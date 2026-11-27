@@ -45,6 +45,11 @@
       type = "string";
       refine = {types, ...}: types.enum ["apikey" "oauth"];
     };
+    # A mode CPA does not know turns cloaking on (lib/providers.nix, cloakModeType).
+    "api-keys.claude[].keys[].cloak.mode" = {
+      type = "string";
+      refine = _: providers.cloakModeType;
+    };
     "api-keys.passthrough[].path" = {
       type = "string";
       refine = {types, ...}: redact.types.maybeRedacted types.nonEmptyStr;
