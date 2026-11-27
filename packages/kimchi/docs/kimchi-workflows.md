@@ -230,7 +230,7 @@ are unchanged. Pi's explicit project `autoload = false` delta still keeps its
 user base. Install/remove matching and Plugins row IDs remain based on source
 strings/paths. Moving the delivery source changes each resource id from
 `plugins.package.extensions-<key>` to `plugins.package.packages-<key>`. Kimchi
-v1.42.1 lowercases package sources and replaces non-alphanumeric runs with `-`
+v1.42.3 lowercases package sources and replaces non-alphanumeric runs with `-`
 (`src/resources/package-resources.ts:85-87,139-148`). Consumers must rename any
 corresponding `native.harnessSettings.resources` keys or saved user toggles; old
 toggle keys no longer match. For workflows the new id is

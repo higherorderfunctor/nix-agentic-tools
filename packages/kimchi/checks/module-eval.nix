@@ -881,7 +881,7 @@ in {
         && !(accepts {model = "custom-title-model";})
     );
 
-    # Kimchi 1.42.1 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
+    # Kimchi 1.42.3 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
     # (src/config.ts:808): a project `[]` replaces the user's global list, so
     # an undeclared skillPaths must leave the key out of .kimchi/config.json.
     # An explicit list, empty included, still lands.
@@ -1017,7 +1017,7 @@ in {
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
 
-    # Kimchi 1.42.1 reads lifecycle hooks from a trusted project's
+    # Kimchi 1.42.3 reads lifecycle hooks from a trusted project's
     # .kimchi/hooks.json, in the Claude hook shape with timeouts in seconds
     # (src/extensions/kimchi-hooks/definition.ts:25-37,
     # src/extensions/hook-adapters/discovery.ts:130-190), and never writes it.
@@ -1111,7 +1111,7 @@ in {
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );
 
-    # Kimchi 1.42.1 reads a hard-coded user permissions.json and a trusted
+    # Kimchi 1.42.3 reads a hard-coded user permissions.json and a trusted
     # project's .kimchi/permissions.json and validates both with a `.strict()`
     # schema (src/extensions/permissions/config.ts:11-37). Both are read-only
     # copies: the HM path ignores configDir and is owned with nothing declared;

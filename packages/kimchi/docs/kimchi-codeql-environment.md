@@ -63,7 +63,7 @@ naming each, and the `extracted` build fails with it.
 ### Reads beyond the former TypeScript extractor
 
 Destructuring `process.env` and a named `env` import from `node:process` count
-as real reads. Kimchi 1.42.1's `src/extensions/work-attribution/scope.ts:38`
+as real reads. Kimchi 1.42.3's `src/extensions/work-attribution/scope.ts:38`
 reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
 an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
 `AWS_EXECUTION_ENV`.

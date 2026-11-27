@@ -95,15 +95,15 @@ diff --git i/src/modes/acp/server.ts w/src/modes/acp/server.ts
 index 0a8ad85..7363176 100644
 --- i/src/modes/acp/server.ts
 +++ w/src/modes/acp/server.ts
-@@ -156,7 +156,7 @@ import {
+@@ -159,7 +159,7 @@ import {
  import { prWatchCommandArgs, runPRWatchCommand } from "../../extensions/pr-watch/command.js"
  import { getPRWatcher } from "../../extensions/pr-watch/index.js"
  import { formatPRWatchStatus } from "../../extensions/pr-watch/presentation.js"
 -import { setPRMonitoringPermitted } from "../../extensions/pr-watch/session-policy.js"
 +import { isPRWatchResourceEnabled, setPRMonitoringPermitted } from "../../extensions/pr-watch/session-policy.js"
  import { isRefusal, refusalText } from "../../extensions/refused-turns.js"
+ import { cancelActiveReview } from "../../extensions/review-command/active-runs.js"
  import { modelSupportsImages } from "../../extensions/vision-support.js"
- import { configureHttpIdleTimeout } from "../../http/proxy.js"
 @@ -696,7 +696,7 @@ export class KimchiAcpAgent implements Agent {
  					// clients feature-detect the gate; emission is opt-in gated.
  					[BACKGROUND_RUNS_CAPABILITY]: true,
