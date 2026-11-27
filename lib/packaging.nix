@@ -1,4 +1,4 @@
-# lib/packaging.nix — DRY version extraction + smoke test helpers.
+# lib/packaging.nix — DRY version extraction, smoke test and Hugging Face model helpers.
 #
 # One exception: `fetchHuggingFaceModel` is consumer-facing, exported
 # through the flake's `lib.packaging`. It lives here temporarily.

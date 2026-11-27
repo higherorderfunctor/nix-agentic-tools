@@ -632,7 +632,7 @@ in {
       # ── Vanilla: upstream's package and its built-in model ──
       check no ${vanillaPackage}/bin/semble search alpha repo
       expect_indexes ${vanillaCacheHome}/semble "index " "a vanilla search"
-      expect_model ${vanillaCacheHome}/semble index ${expectedBuiltinDefaultModelId}
+      expect_model ${vanillaCacheHome}/semble index ${lib.escapeShellArg expectedBuiltinDefaultModelId}
 
       # ── MCP: per-call routing through the patched server ──
       export SEMBLE_CACHE_LOCATION="$TMPDIR/mcp-cache"
