@@ -207,4 +207,5 @@ adjacent commit touching the same concern, consider merging them.
 
 A repeated fact or decision, or a duplicated helper doing the same job, gets one
 source from the second copy. Incidental similar lines that carry no shared
-decision stay as they are.
+decision stay as they are. The test: if one copy changed and the other did not,
+would anything break?

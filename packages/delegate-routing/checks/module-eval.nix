@@ -2229,7 +2229,8 @@
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "7. **Loop:**" claude
       # Fails if units lose their definition, cadence or separate evaluation,
-      # fixes re-review the whole branch or retain its base, or mid-build
+      # fixes re-review the whole branch, retain their base or skip weighing a
+      # deletion against the fix, or mid-build
       # units remain subject to the opening three-check rule, or the
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude

@@ -18,10 +18,11 @@ loop failure, not a deliverable.
 Stop early when no accepted issue is medium severity or higher; otherwise repeat
 write then review, up to 3 rounds per loop: a unit's loop and the branch-level
 review count their own rounds, and a fix round counts toward the loop it
-repairs. Findings of the same kind against the same rubric row or guarantee
-count as one defect; if it survives 2 rounds, change the brief or drop the
-requirement that produces it instead of repeating the loop. At the cap, return
-the result, open defects and decision needed.
+repairs. Findings that name the same wrong outcome against the same rubric row
+or guarantee count as one defect; if it survives 2 rounds, change the brief
+instead of repeating the loop, or bring the user a proposal to drop the
+requirement that produces it. At the cap, return the result, open defects and
+decision needed.
 
 Fix real in-scope nits and follow the Review step's fix-review rule, including
 its exception after the ready review. The gap list is for out-of-scope findings
