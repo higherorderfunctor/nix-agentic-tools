@@ -17,9 +17,6 @@
         inherit (shipped) src;
         inherit (packageLib) patchFlags;
         patches = [
-          # Waits on the credits refresh state under the scoped key upstream
-          # 16bf182f2088 adopted without updating the top-up recovery test.
-          ./antigravity-credits-refresh-state-key.patch
           # Upstream's payload tests fail past 20 ms of wall-clock time, which a
           # busy CI runner exceeds. This raises those two limits to 200 ms; the
           # allocation and count assertions beside them stay as written.
