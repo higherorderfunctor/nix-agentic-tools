@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-11-26 — Kimchi 1.42.1 reads saved model effort from
+> **Last verified:** 2026-11-27 — Kimchi 1.42.3 reads saved model effort from
 > user config. The extractor counts the inline property read and the factory
 > leaves the preference under Kimchi's ownership.
 >
@@ -140,7 +140,7 @@ telemetry, so a key upstream adds there meets the closed submodule as an unknown
 option with no drift signal. The `modelEffortDefaults` read in
 `src/config.ts:1106-1119` remains visible in the sidecar. Its annotation leaves
 the saved per-mode and per-model effort choices to Kimchi's ACP writer
-(`src/modes/acp/server.ts:1195`). The config.json shapes of `teleport`,
+(`src/modes/acp/server.ts:1196`). The config.json shapes of `teleport`,
 `gitTokens` and the `surveys` record have no declared type, so they are written
 by hand and pinned both ways to their readers' runtime guards
 (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`): every
@@ -457,7 +457,7 @@ declared by `ai.kimchi.projectTrust` under Home Manager, saved by Kimchi's trust
 prompt without it. Headless and ACP sessions honor that decision or the
 user-global `defaultProjectTrust`. `--approve` is a run-scoped override for CLI
 and TUI only: ACP resolves trust again for each session without it
-(`src/modes/acp/server.ts:4370-4383`), so an unattended ACP client needs the
+(`src/modes/acp/server.ts:4376-4389`), so an unattended ACP client needs the
 persisted decision or `defaultProjectTrust`. Root `AGENTS.md` is the upstream
 exception: Kimchi's context loader walks ancestors directly without consulting
 the project-scope gate.
@@ -570,7 +570,7 @@ would write the path itself as the agent's text. Locked by
 ## Hooks: project `hooks.json` only
 
 The CLI registers Bash, Claude Code, plugin package and Kimchi hook adapters
-(`src/cli.ts:984,1013,1018-1019`). The Kimchi hook adapter serves `ai.hooks`: it
+(`src/cli.ts:996,1025,1030-1031`). The Kimchi hook adapter serves `ai.hooks`: it
 reads `.kimchi/hooks.json` and `hooks.local.json` in the Claude shape, timeouts
 in seconds, from a trusted project only, and never writes them
 (`src/extensions/kimchi-hooks/definition.ts:31-36`). So devenv writes the shared
