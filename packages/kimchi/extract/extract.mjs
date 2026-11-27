@@ -539,6 +539,33 @@ function discoverConfigKeys(sourceFile, checker, ts) {
 
   const parsedSymbols = new Map();
   const found = { config: new Set(), harness: new Set() };
+  // Accepts the one unbound read shape the extractor can count: a direct
+  // `readConfigObject(path)?.name` passed as a call argument, where
+  // `readConfigObject` is the file's own top-level function. The read consumes
+  // one statically named property and never exposes the config object, so the
+  // caller records that property instead of tracking a bound local. Inputs are
+  // the callee, the read's parent node and the read call; output is a boolean.
+  // Whole-object, computed-key, required-access, delete, shadowed and detached
+  // reads fail this test and fall through to the bound-local path, which
+  // rejects them.
+  function isInlineSingleRead(called, property, read) {
+    if (!ts.isIdentifier(called) || called.text !== "readConfigObject")
+      return false;
+    const reader = symbolOf(called)?.valueDeclaration;
+    const readerIsTopLevelFunction =
+      reader &&
+      ts.isFunctionDeclaration(reader) &&
+      reader.parent === sourceFile;
+    const isOptionalDotRead =
+      ts.isPropertyAccessExpression(property) &&
+      property.expression === read &&
+      property.questionDotToken;
+    const isCallArgument =
+      isOptionalDotRead &&
+      ts.isCallExpression(property.parent) &&
+      property.parent.arguments.includes(property);
+    return Boolean(readerIsTopLevelFunction && isCallArgument);
+  }
   function identify(node) {
     if (ts.isCallExpression(node)) {
       const called = node.expression;
@@ -561,22 +588,8 @@ function discoverConfigKeys(sourceFile, checker, ts) {
       }
       if (pathExpression) {
         const surface = surfaceOfPath(pathExpression, node);
-        // A direct optional dot read passed as an argument consumes one
-        // statically named property without exposing the config object.
         const property = node.parent;
-        const reader = symbolOf(called)?.valueDeclaration;
-        if (
-          ts.isIdentifier(called) &&
-          called.text === "readConfigObject" &&
-          reader &&
-          ts.isFunctionDeclaration(reader) &&
-          reader.parent === sourceFile &&
-          ts.isPropertyAccessExpression(property) &&
-          property.expression === node &&
-          property.questionDotToken &&
-          ts.isCallExpression(property.parent) &&
-          property.parent.arguments.includes(property)
-        ) {
+        if (isInlineSingleRead(called, property, node)) {
           found[surface].add(property.name.text);
         } else {
           parsedSymbols.set(boundSymbol(node), surface);

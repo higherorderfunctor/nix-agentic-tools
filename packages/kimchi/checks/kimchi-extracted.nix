@@ -82,21 +82,31 @@
           mutant "$kimchi" config-parse-unattributable src/config.ts \
             "''${survey_parse}configPath, \"utf-8\"))" \
             "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"state.json\"), \"utf-8\"))"
+          # Each inline_mutant is a wrong inline read the extractor must refuse
+          # with "is not bound to a local": counting a computed key, the whole
+          # object, a required access, a delete, a shadowed or detached reader,
+          # or a non-call callee as a single named property read would hide
+          # real key reads. The labels are recorded once and checked below.
+          inline_rejected=()
+          inline_mutant() {
+            inline_rejected+=("$1")
+            mutant "$kimchi" "$@"
+          }
           inline_config='readConfigObject(configPath)?.modelEffortDefaults'
-          mutant "$kimchi" config-inline-computed src/config.ts \
+          inline_mutant config-inline-computed src/config.ts \
             "$inline_config" 'readConfigObject(configPath)?.[String("modelEffortDefaults")]'
-          mutant "$kimchi" config-inline-whole-object src/config.ts \
+          inline_mutant config-inline-whole-object src/config.ts \
             "$inline_config" 'readConfigObject(configPath)'
-          mutant "$kimchi" config-inline-required-access src/config.ts \
+          inline_mutant config-inline-required-access src/config.ts \
             "$inline_config" 'readConfigObject(configPath).modelEffortDefaults'
-          mutant "$kimchi" config-inline-delete src/config.ts \
+          inline_mutant config-inline-delete src/config.ts \
             "$inline_config" 'delete readConfigObject(configPath)?.modelEffortDefaults'
           inline_call="return parseModelEffortDefaults($inline_config)"
-          mutant "$kimchi" config-inline-shadow src/config.ts \
+          inline_mutant config-inline-shadow src/config.ts \
             "$inline_call" $'function readConfigObject(_path: string) { return {} }\n\t'"$inline_call"
-          mutant "$kimchi" config-inline-detached src/config.ts \
+          inline_mutant config-inline-detached src/config.ts \
             "$inline_call" "const saved = $inline_config;"$'\n\t'"return parseModelEffortDefaults(saved)"
-          mutant "$kimchi" config-inline-callee src/config.ts \
+          inline_mutant config-inline-callee src/config.ts \
             "$inline_config" "$inline_config()"
           mutant "$kimchi" config-inline-unattributable src/config.ts \
             "$inline_config" 'readConfigObject(resolve(AGENT_CONFIG_DIR, "state.json"))?.modelEffortDefaults'
@@ -213,7 +223,7 @@
           done
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
-          for label in config-inline-computed config-inline-whole-object config-inline-required-access config-inline-delete config-inline-shadow config-inline-detached config-inline-callee; do
+          for label in "''${inline_rejected[@]}"; do
             expect_rejection "$label" "$TMPDIR/$label-source" \
               'is not bound to a local' >> "$TMPDIR/proof"
           done
