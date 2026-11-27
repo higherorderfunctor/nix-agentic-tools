@@ -15,7 +15,7 @@ assigned an approved bounded unit does not recursively plan that assignment.
 Replan only the affected portion when scope changes. The approved plan and
 agreed design bind writers, planners and judges. Carry the design decisions into
 planner and judge briefs as fixed constraints; return any proposed change to
-those decisions to the operator before proceeding.
+those decisions to the user before proceeding.
 
 The planner runs the actual launching runtime's rendered helper with
 `--launch-context <json-path> --role <worker-role> --role <reviewer-role>`,
@@ -31,8 +31,8 @@ Every worker and reviewer brief follows the Rubric step's verbatim rule. Each
 unit brief lists the in-scope surfaces (callers, config, exports, docs, checks,
 tests and fixtures as applicable), estimates added and removed lines by kind and
 names a resulting line target for each file. Give those targets to the workflow
-script as data. The orchestrator passes the prepared paths without loading every
-brief into the interactive context.
+as data. The orchestrator passes the prepared paths without loading every brief
+into the interactive context.
 
 Use this JSON contract (paths to rubric and briefs are relative to the saved
 plan; writer file ownership is repository-relative):
@@ -43,7 +43,8 @@ plan; writer file ownership is repository-relative):
 - `units`: records with unique `id`, `goal`, `audience` (one reader), `files`
   (all writer-owned paths, including associated docs/tests), `dependencies`
   (unit ids), `docs` and `checks` path lists, `size` (per-kind `added`/`removed`
-  nonnegative line counts), and `verification` with one `command` and the
+  nonnegative line counts), `fileTargets` (writer-owned paths mapped to their
+  target final line counts), and `verification` with one `command` and the
   `wrongImplementation` it rejects.
 - Each unit's `launches` contains one worker role (`writer`, `investigator` or
   `mechanical`) and its proposed reviewer roles, including `first-check`. Each
@@ -93,8 +94,7 @@ helper validates specifications and reads registered Readers; it never executes
 a delegate or probe.
 
 Attach the relevant resolved execution policy to each prepared brief. Choose
-execution owns launch selection, supervision, retries, isolation and named
-fallbacks; Work owns hard-rules briefs; Review owns independence and trial
-limits; Validate the result owns receipts and evidence. The orchestrator
-enforces those policies and checks the working tree after every shell-capable
-delegate.
+execution owns launch selection, supervision, retries and isolation; Work owns
+hard-rules briefs; Review owns independence and trial limits; Validate the
+result owns receipts and evidence. The orchestrator enforces those policies and
+checks the working tree after every shell-capable delegate.

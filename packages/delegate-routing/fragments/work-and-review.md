@@ -19,7 +19,7 @@ boundary, so the unit's review comes before the next run.
 
 Each unit gets the Review step’s required fresh separate check before the next
 unit starts. The orchestrator reads the first unit's diff itself before the next
-writer starts and shows it to the operator early when they're reachable.
+writer starts and shows it to the user early when they're reachable.
 
 A unit's verification stays local to that unit: its own test, check or reading.
 The full suite, broad builds and end-to-end checks run once, at the branch-level

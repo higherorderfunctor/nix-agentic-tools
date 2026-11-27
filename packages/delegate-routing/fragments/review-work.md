@@ -12,8 +12,8 @@ commits. It names the project's coding standards, the checks the writer may and
 may not run, the files it may read, and the report's evidence format. When
 commit hooks reject patterns writers are known to produce, the brief names each
 pattern and its required form, and has the writer run that linter on every
-edited file. A brief that delegates steps requires native subagents only and
-waits for each to finish; never end a job with a child reported as running.
+edited file. If the brief calls for delegation, point to Choose execution and
+require the delegate to wait for each child to finish before ending the job.
 
 Each unit report gives the Size row's cumulative measurement and ends with a
 "What I skipped" line, including any checks not run.

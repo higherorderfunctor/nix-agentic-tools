@@ -78,7 +78,7 @@ in {
 
           After hard eligibility the helper runs its own one-shot picker, without tools, that keeps or excludes each role and family pair for this task, then ranks what is kept by pool pace. An unknown non-null proposer is refused; missing or null proposer identity skips the picker. When the picker is unavailable or fails, report `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`, followed by ` Unavailable: <reason>.` for each failed entry, or for missing identity/no runnable entry, and use the tier and pool ranking the helper returns. The authorized internal picker may run in nonInteractive contexts, needs no entry in `techniques`, and is skipped when its executable is not on PATH.
 
-          JSON goes to stdout and routing lines to stderr. A line is a specification for your own launch tool, never shell text: bind its technique, model and effort exactly. A role whose first pick is a fallback prints `WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user.` Failed Readers and dropped windows print warnings ending "Report this failure to the user." Exclude wins over avoid and removes every route for that family with reason "excluded by caller"; avoid never removes a route by itself. Avoided families rank after the rest with measured preference and pace ordering within each partition and carry `kind`, `resolvedEffort` and `launchEffort`; list order and duplicates add no preference. Session pace still compares all otherwise fitting measured candidates, including avoided ones. Review callers avoid the writer family; cut judges avoid writer and proposer families; use fresh separate agents with neutral briefs. After a launch route fails, follow Choose execution’s retry rules; when the failure makes the family unusable, add it to `exclude` and rerun the helper, retaining other evidence. Planner and review roles require strong or frontier tiers; try shared fallback before reporting no qualified route and never step down a tier. For a fit-only selection, report budget and session uncertainty. If no reachable candidate survives, retain the exclusions and report a loop failure. An unknown or headless context cannot certify an external launch. Provider identity is provisional for maker independence; callers still enforce trial and independence rules.
+          JSON goes to stdout and routing lines to stderr. A line is a specification for your own launch tool, never shell text: bind its technique, model and effort exactly. A role whose first pick is a fallback prints `WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user.` Failed Readers and dropped windows print warnings ending "Report this failure to the user." Exclude wins over avoid and removes every route for that family with reason "excluded by caller"; avoid never removes a route by itself. Avoided families rank after the rest with measured preference and pace ordering within each partition and carry `kind`, `resolvedEffort` and `launchEffort`; list order and duplicates add no preference. Session pace still compares all otherwise fitting measured candidates, including avoided ones. Review callers avoid the writer family; cut judges avoid writer and proposer families; use fresh separate agents with neutral briefs. After a launch route fails, follow Choose execution’s retry rules. Outside rate limits, when the failure makes the family unusable, add it to `exclude` and rerun the helper, retaining other evidence. Planner and review roles require strong or frontier tiers; try shared fallback before reporting no qualified route and never step down a tier. For a fit-only selection, report budget and session uncertainty. If no reachable candidate survives, retain the exclusions and report a loop failure. An unknown or headless context cannot certify an external launch. Provider identity is provisional for maker independence; callers still enforce trial and independence rules.
         '';
       }
       {
@@ -212,9 +212,9 @@ in {
           {
             name = "Fixtures";
             text = ''
-              **Fixtures.** Fixtures keep the shape the code reads; name differences it can
-              see. Share setup, never expected results that must stay independent. Use an
-              extractor for facts it establishes and test the real code that reads them. A
+              **Fixtures.** Match the real input format and name any differences the code can
+              see. Share setup, never expected results that must stay independent. Use facts
+              extracted from the source and test the real code that reads them. A
               mock endpoint shows what a client sends or how it handles a reply, never what
               the live endpoint accepts. A check that only replays a canned answer tests
               nothing and is deleted.
@@ -235,7 +235,7 @@ in {
               the next unit: split, cut scope within the agreed design, or record the
               reason and a new estimate. Judge a unit planned as a cut by each file's
               planned target size, not by added lines. At 2x the original positive
-              estimate, report the numbers and options to the operator before more work
+              estimate, report the numbers and options to the user before more work
               runs.
             '';
           }
@@ -260,11 +260,12 @@ in {
             text = ''
               **Checks.** Skip a test when a surviving guard (evaluation, a linter, a type
               checker or another check) already rejects the same wrong outcome, for the same
-              reason, on the same path; the guard under test cannot stand in for its own
-              check. Keep one representative bad input per restriction that could be
-              loosened, beside a valid control, forced through the real merge or entry
-              point. Put a declaration's good and bad inputs in one check over a table so a
-              failure names the row; where the stack has a property-testing library,
+              reason, on the same path. Do not count the guard under test as the check that
+              verifies it.
+              Keep one representative bad input per restriction that could be loosened,
+              beside a valid control, and run both through the real path that accepts or
+              rejects the input. Put a declaration's good and bad inputs in one check over a
+              table so a failure names the row; where the stack has a property-testing library,
               generate the inputs instead. Known regression inputs stay as explicit rows.
 
               For any other wrong outcome that matters (a value, order, side effect, timing,

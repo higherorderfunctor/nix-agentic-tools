@@ -27,8 +27,8 @@ tool-less probe agent or a direct API call, never with an ordinary workflow
 agent.
 
 On a rate limit, wait out the stated reset or cooldown, or back off when none is
-stated, then retry. Exclude a pool's families in the helper launch context only
-while its usage reads 100% used, until that window resets.
+stated, then retry. In the helper launch context, exclude that pool's families
+only while its usage reads 100% used, until that window resets.
 
 When local validation cannot run, such as a held shared lock or an unreachable
 cache, push the reviewed unit or branch and let CI run its checks instead of
@@ -45,15 +45,16 @@ with one committer staging and committing for all of them. Serialize writers
 whose files overlap; use separate worktrees when they need different bases.
 
 Offer the helper every native technique and model this session shows it can pin.
-Observed tools and configuration decide availability, not runtime or model
-family names. Report what you observed in the helper's launch context. Every
+Observed tools and configuration decide availability: use a technique only when
+it is in your tool list or its command is on PATH, never by runtime or model
+family name. Report what you observed in the helper's launch context. Every
 launch fixes technique, model and effort from one helper line, bound exactly; a
 named user request wins. Rerun the helper before every launch (each subagent
 call or new workflow).
 
 - **Native subagents only:** you invoke the helper, then bind the returned fixed
   technique, model and effort in each subagent call.
-- **Static workflow** (the script is fixed once it starts): a planner delegate
+- **Static workflow** (the steps are fixed once it starts): a planner delegate
   returns the plan and the caller that launches the workflow builds it from that
   plan with fixed values. A static workflow's picks stay fixed for that run and
   the next launch reruns the helper. Never mutate a running one.
@@ -61,21 +62,23 @@ call or new workflow).
   planner reruns the helper between steps and fixes every dispatch's values from
   that fresh result.
 
-External CLIs such as `codex exec` are manual techniques for probes and fixture
-testing, not fallback routes for work. Run a manual probe from the intended
-launch directory, which determines permissions and configuration. If no native
-technique reaches a qualified model, report the gap instead of shelling out. A
-delegate never launches external CLIs; it may use its own runtime's native
-subagent and workflow tools.
+External CLIs such as `codex exec` are manual techniques for probes, fixture
+testing or work the user explicitly asks to run with them, not automatic
+fallback routes. Run a manual probe from the intended launch directory, which
+determines permissions and configuration. If no native technique reaches a
+qualified model, report the gap instead of shelling out. A delegate never
+launches external CLIs; it may use its own runtime's native subagent and
+workflow tools.
 
-Every work workflow's script carries its own guards:
+Every work workflow carries its own guards: in its script if the tool has one,
+otherwise in its step list or in the launching orchestrator.
 
 - **Ceiling:** a token limit it can enforce, or a maximum number of agent calls
   if it cannot meter tokens. Check it before each dispatch; a turn budget alone
   is not enough.
-- **Size:** after each unit, script code checks the Size row's running total and
-  compares each changed file's resulting size with its planned target. Measure
-  final lengths against those targets, not preexisting lines or net shrinkage.
+- **Size:** after each unit, check the Size row's running total and compare each
+  changed file's resulting size with its planned target. Measure final lengths
+  against those targets, not preexisting lines or net shrinkage.
 - **Scope judge:** at the first unit and periodically after it, a fresh agent
   that did not write the work judges scope and size against the approved plan
   and agreed design.
@@ -87,5 +90,5 @@ The workflow returns early:
 
 It returns completed unit IDs, artifact paths, measured sizes and the judge's
 evidence. The orchestrator verifies those artifacts and settles the next step
-before resuming from the finished run where the workflow tool supports it;
-completed agents replay from cache.
+before resuming from the finished run where the workflow tool supports it; reuse
+completed results from cache where supported.
