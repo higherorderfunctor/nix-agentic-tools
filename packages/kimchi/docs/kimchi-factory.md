@@ -487,7 +487,7 @@ launcher, covering both project namespaces with positive controls.
 declared. pi 1.3.0 keeps it in `<agentDir>/trust.json`, which Kimchi pins to its
 harness directory, and looks it up under `realpath(cwd)` and then each parent,
 reading keys verbatim (`findNearestTrustEntry`,
-`dist/core/trust-manager.js:20-33`). So one entry covers every project beneath
+`dist/core/trust-manager.js:21-34`). So one entry covers every project beneath
 it, `false` denies a subtree, and a key reached through a symlink never matches.
 Home Manager stages the file as a read-only `ro` copy, declared `{}` when
 nothing is set. The copy declares `content.run` rather than `value`:
@@ -495,13 +495,13 @@ nothing is set. The copy declares `content.run` rather than `value`:
 writer runs, since evaluation cannot see the filesystem, and fails the writer
 when two keys resolve to one directory with different answers. pi writes the
 file in place under proper-lockfile's `trust.json.lock`
-(`dist/core/trust-manager.js:94-142`), so remembering an answer at the trust
+(`dist/core/trust-manager.js:95-143`), so remembering an answer at the trust
 prompt fails on the copy, and the MCP trust prompt's "Trust" fails closed for
 that session. The session-only answers ("Trust (this session only)", "Do not
 trust (this session only)") write nothing and still work
-(`dist/core/project-trust.js:41-56`). `/trust` cannot persist a choice under
-Home Manager and may exit after the failed write. A devenv project on a Home
-Manager machine must have its project root or a parent declared trusted in
+(`dist/core/trust-manager.js:57-59,66-68`). `/trust` cannot persist a choice
+under Home Manager and may exit after the failed write. A devenv project on a
+Home Manager machine must have its project root or a parent declared trusted in
 `ai.kimchi.projectTrust` before Kimchi reads the project's settings, skills, MCP
 servers or harness settings. Check parent entries before adding a duplicate.
 Devenv rejects the option with an assertion: pi reads trust only from the user

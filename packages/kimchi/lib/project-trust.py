@@ -1,8 +1,8 @@
 """Render ai.kimchi.projectTrust as the trust.json Kimchi will match.
 
-pi 0.85.1 looks a decision up under realpath(cwd), then under each parent in
-turn (findNearestTrustEntry, dist/core/trust-manager.js:20-33), and reads the
-file's keys verbatim (readTrustFile, :70-93). A declared key that reaches its
+pi 1.3.0 looks a decision up under realpath(cwd), then under each parent in
+turn (findNearestTrustEntry, dist/core/trust-manager.js:21-34), and reads the
+file's keys verbatim (readTrustFile, :71-94). A declared key that reaches its
 directory through a symlink would therefore never match. Canonicalizing needs
 the filesystem, so it happens here, when the writer runs, and not at
 evaluation.

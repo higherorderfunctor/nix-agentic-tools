@@ -207,39 +207,39 @@ creating the new entries. This covers both a rename and removing all extension
 declarations; neither needs a new migration writer. Delivery requires
 `ai.kimchi.enable`. Devenv's project settings engage the existing exact-cwd
 launcher guard and load only in a trusted project: pi drops untrusted project
-settings (`dist/core/settings-manager.js:189`), and Home Manager's
+settings (`dist/core/settings-manager.js:257-260`), and Home Manager's
 `defaultProjectTrust = "never"` never prompts. Trust the root with
 `ai.kimchi.projectTrust."<abs dir>" = true` (or `--approve` per session). Kimchi
 still lists an untrusted project package as an enabled Plugins row, because its
 discovery builds settings with trust defaulted on
 (`src/resources/package-resources.ts:36`).
 
-Pi 0.85.1 resolves local package sources from its agent directory for user scope
+Pi 1.3.0 resolves local package sources from its agent directory for user scope
 and `<cwd>/<CONFIG_DIR_NAME>` for project scope
-(`dist/core/package-manager.js:981-993,1048-1062,1785-1799`). Its path resolver
-normalizes paths without resolving symlinks (`dist/utils/paths.js:82-86`). NAT's
-`package-identity.patch` gives a local directory with a non-empty string
-`package.json.name` the identity `npm:<name>`. Pi's existing deduplication then
-keeps the project entry over the user entry, including a user npm installation
-of that name. This avoids loading the same configured extension twice in the
-final extension set. Top-level extension auto-discovery remains separate and
-deduplicates by real path, which is why package links must stay outside its
-roots. Missing, unreadable, invalid or unnamed manifests retain their absolute
-path identity; npm and git identities are unchanged. Pi's explicit project
-`autoload = false` delta still keeps its user base. Install/remove matching and
-Plugins row IDs remain based on source strings/paths. Moving the delivery source
-changes each resource id from `plugins.package.extensions-<key>` to
-`plugins.package.packages-<key>` (Kimchi lowercases and replaces
-non-alphanumeric runs with `-`). Consumers must rename any corresponding
-`native.harnessSettings.resources` keys or saved user toggles; old toggle keys
-no longer match. For workflows the new id is
+(`dist/core/package-manager.js:1005-1013,1067-1068,1832-1841`). Its path
+resolver normalizes paths without resolving symlinks
+(`dist/utils/paths.js:83-87`). NAT's `package-identity.patch` gives a local
+directory with a non-empty string `package.json.name` the identity `npm:<name>`.
+Pi's existing deduplication then keeps the project entry over the user entry,
+including a user npm installation of that name. This avoids loading the same
+configured extension twice in the final extension set. Top-level extension
+auto-discovery remains separate and deduplicates by real path, which is why
+package links must stay outside its roots. Missing, unreadable, invalid or
+unnamed manifests retain their absolute path identity; npm and git identities
+are unchanged. Pi's explicit project `autoload = false` delta still keeps its
+user base. Install/remove matching and Plugins row IDs remain based on source
+strings/paths. Moving the delivery source changes each resource id from
+`plugins.package.extensions-<key>` to `plugins.package.packages-<key>` (Kimchi
+lowercases and replaces non-alphanumeric runs with `-`). Consumers must rename
+any corresponding `native.harnessSettings.resources` keys or saved user toggles;
+old toggle keys no longer match. For workflows the new id is
 `plugins.package.packages-workflows`. Kimchi discovers a Plugins row from each
 configured package (`src/resources/package-resources.ts:19-31,85-94`). Its
 disable filter matches both package paths and the original metadata source
 string before extension loading
-(`src/extensions/pi-package-lookup/native-compat.ts:151-159,277-284`), so the
+(`src/extensions/pi-package-lookup/native-compat.ts:151-159,275-285`), so the
 directory link preserves the package toggle. Resource overrides remain user
-scope even for project packages (`src/resources/store.ts:9-12,37-44`): Home
+scope even for project packages (`src/resources/store.ts:11-15,32-35`): Home
 Manager can declare the row's id under `native.harnessSettings.resources`;
 devenv cannot disable a user resource.
 
