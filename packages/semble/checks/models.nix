@@ -8,6 +8,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  inherit (import ../../../lib/packaging.nix) huggingFaceModelCacheDirName;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
 
@@ -20,6 +21,8 @@
   fallbackModel = fixtureModel 3;
   # Served from a seeded Hugging Face cache as Semble's built-in model.
   builtinModel = fixtureModel 4;
+  expectedBuiltinDefaultModelId = import ./expected-builtin-default-model-id.nix;
+  builtinModelCacheDir = huggingFaceModelCacheDirName expectedBuiltinDefaultModelId;
   # A model package that lists its files, minus a real download.
   withFiles = files: model: model // {passthru = (model.passthru or {}) // {inherit files;};};
 
@@ -533,10 +536,12 @@ in {
 
     # The patched CLI and MCP server, offline, against generated models.
     module-semble-models-runtime = pkgs.runCommand "module-test-semble-models-runtime" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR/home"
       export HF_HOME="$TMPDIR/hf"
       export HF_HUB_OFFLINE=1
-      snapshot="$HF_HOME/hub/models--minishlab--potion-code-16M-v2/snapshots/fixture"
+      snapshot="$HF_HOME/hub/${builtinModelCacheDir}/snapshots/fixture"
       ${pkgs.coreutils}/bin/mkdir -p "$HOME" "$snapshot" repo
       ${pkgs.coreutils}/bin/cp ${builtinModel}/* "$snapshot/"
       printf 'def alpha():\n    return beta\n' > repo/main.py
@@ -627,7 +632,7 @@ in {
       # ── Vanilla: upstream's package and its built-in model ──
       check no ${vanillaPackage}/bin/semble search alpha repo
       expect_indexes ${vanillaCacheHome}/semble "index " "a vanilla search"
-      expect_model ${vanillaCacheHome}/semble index minishlab/potion-code-16M-v2
+      expect_model ${vanillaCacheHome}/semble index ${lib.escapeShellArg expectedBuiltinDefaultModelId}
 
       # ── MCP: per-call routing through the patched server ──
       export SEMBLE_CACHE_LOCATION="$TMPDIR/mcp-cache"

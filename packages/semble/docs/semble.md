@@ -522,5 +522,7 @@ share the first-party source-build derivation; the latter changes only the
 evaluation-time `meta.mainProgram` used by `lib.getExe`.
 
 Unless every search routes to a configured model, Semble downloads its built-in
-embedding model into the user cache on first use; the Nix package does not
-vendor it.
+embedding model into the user cache on first use. The Nix package does not
+vendor the weights. The `semble-real-default-model` check fetches a pinned copy
+of the int8 weights, seeds a Hugging Face cache, and verifies that Semble's
+default loader can use them offline to produce normalized embeddings.

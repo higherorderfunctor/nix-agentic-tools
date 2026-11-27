@@ -1,3 +1,4 @@
+allclose
 apikey
 autocheckpoint
 AUTOUPDATER
@@ -17,6 +18,7 @@ COLORFGBG
 COLORTERM
 Consolas
 cooldown
+dequantized
 DEXPERIMENTAL
 DONT
 forall
@@ -32,6 +34,7 @@ intraprocedural
 IPPROTO
 ITIMER
 libxcb
+linalg
 Menlo
 mktime
 navigations

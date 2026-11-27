@@ -1,4 +1,4 @@
-# lib/packaging.nix — DRY version extraction + smoke test helpers.
+# lib/packaging.nix — DRY version extraction, smoke test and Hugging Face model helpers.
 #
 # One exception: `fetchHuggingFaceModel` is consumer-facing, exported
 # through the flake's `lib.packaging`. It lives here temporarily.
@@ -984,4 +984,8 @@ rec {
             '')
             notices}
         '';
+
+  # huggingFaceModelCacheDirName — the Hub cache directory basename for a model
+  # repo ID, with each slash replaced by the Hub's double-hyphen separator.
+  huggingFaceModelCacheDirName = repoId: "models--${builtins.replaceStrings ["/"] ["--"] repoId}";
 }
