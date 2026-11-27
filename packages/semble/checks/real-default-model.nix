@@ -11,11 +11,11 @@
   cacheDirectory = "models--${lib.replaceStrings ["/"] ["--"] modelId}";
   modelSnapshot = fetchHuggingFaceModel {
     inherit pkgs;
-    repoId = modelId;
-    rev = revision;
     files = ["config.json" "model.safetensors" "tokenizer.json"];
     hash = "sha256-HgWuVJZd/3E33s40KsRRbex/PTxl3wEydfv2EjCCORk=";
     license = lib.licenses.mit;
+    repoId = modelId;
+    rev = revision;
   };
   script = import ./semble-script.nix pkgs "real-default-model" pkgs.ai.semble ./real-default-model.py;
 in {
