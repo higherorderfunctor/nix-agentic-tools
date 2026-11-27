@@ -573,7 +573,7 @@ The CLI registers Bash, Claude Code, plugin package and Kimchi hook adapters
 (`src/cli.ts:984,1013,1018-1019`). The Kimchi hook adapter serves `ai.hooks`: it
 reads `.kimchi/hooks.json` and `hooks.local.json` in the Claude shape, timeouts
 in seconds, from a trusted project only, and never writes them
-(`src/extensions/kimchi-hooks/definition.ts:25-37`). So devenv writes the shared
+(`src/extensions/kimchi-hooks/definition.ts:31-36`). So devenv writes the shared
 groups followed by `ai.kimchi.hooks` (typed over Kimchi's own 20 events) into
 `.kimchi/hooks.json`, rendered by `lib/ai/hooks.nix`'s `render`, the same one
 Claude's settings use. It takes the default facts and lands as a symlink.

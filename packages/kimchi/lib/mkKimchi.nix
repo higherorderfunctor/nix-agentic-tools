@@ -31,7 +31,7 @@
     extractedLib = lib.ai.extracted;
   };
   # Pi v1.3.0 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir
-  # (packages/coding-agent/src/config.ts:581).
+  # (earendil-works/pi v1.3.0 packages/coding-agent/src/config.ts:581).
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
@@ -571,7 +571,7 @@
       }
 
       # Pi v1.3.0's ThinkingLevel covers the normalized enum
-      # (packages/agent/src/types.ts:349). Pi reads `defaultThinkingLevel` from
+      # (earendil-works/pi packages/agent/src/types.ts:349). Pi reads `defaultThinkingLevel` from
       # the merged user and project harness settings, so the mapping is
       # lossless on both backends. An explicit native harness value wins.
       (lib.mkIf (resolvedSettings.reasoningEffort != null) {
