@@ -284,6 +284,8 @@ in {
               failing for the intended reason before the fix, or against one plausible
               wrong implementation, and passing after.
 
+              Every check and row names the plausible regression that only it catches; one
+              that cannot is deleted, the same as one a surviving guard already covers.
               Before pruning a row or assertion, trace every reader of it, including
               symlinks and files selected by name. Prune only when the skip test above still
               holds for each reader after the whole prune, or the outcome is no longer
