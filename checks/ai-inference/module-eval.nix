@@ -256,6 +256,7 @@ in {
           else builtins.fromJSON (builtins.readFile (lib.head path));
         chatOnly = evaluate backend (instanceChange {clientKeys.work.routes = lib.mkForce [(route "chat")];});
         rejectsType = ai: !(builtins.tryEval (builtins.deepSeq (let instance = (evaluate backend ai).config.ai.cliproxyapi.instances.clients; in {inherit (instance) clientKeys credentials;}) true)).success;
+        rejectsSettings = ai: !(builtins.tryEval (builtins.deepSeq (evaluate backend ai).config.ai.cliproxyapi.instances.clients.settings true)).success;
         # One credential whose APIs serve different models; the
         # personal client routes to its chat API.
         split = apiKeyChange:
@@ -288,6 +289,24 @@ in {
           apis.chat.models = null;
           models = ["split-shared"];
         };
+        uncloaked = split {cloakMode = "uncloak";};
+        uncloakedSplit = rendered uncloaked;
+        handWrittenCloak = mode:
+          instanceChange {
+            settings.api-keys.claude = [
+              {
+                name = "raw";
+                base-url = "https://raw.example";
+                keys = [
+                  {
+                    api-key = clientKey "raw";
+                    cloak.mode = mode;
+                  }
+                ];
+              }
+            ];
+          };
+        uncloakedBlock = family: name: lib.findFirst (entry: entry.name == name) null uncloakedSplit.api-keys.${family};
         priorityBlocks = priority:
           lib.concatLists (builtins.attrValues
             (rendered (evaluate backend (instanceChange {
@@ -421,6 +440,31 @@ in {
             && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.openai-compatibility).models
             == [{name = "split-shared";}]
             && (lib.findFirst (entry: entry.name == "split") null (rendered fallback).api-keys.claude).models == [{name = "split-anthropic";}];
+          "cloak mode on the setter's Anthropic key" =
+            failedMessages uncloaked
+            == []
+            && (uncloakedBlock "claude" "split").keys
+            == [
+              {
+                api-key = clientKey "split";
+                cloak.mode = "uncloak";
+              }
+            ];
+          "cloak mode stays off the setter's chat key" = (uncloakedBlock "openai-compatibility" "split").keys == [{api-key = clientKey "split";}];
+          "cloak mode stays off other Anthropic credentials" = (uncloakedBlock "claude" "zhipuai").keys == [{api-key = apiKey.key;}];
+          "unset cloak mode omitted" = lib.all (block: lib.all (key: !(key ? cloak)) block.keys) (lib.concatLists (builtins.attrValues settings.api-keys));
+          "cloak mode without Anthropic refused" = refused backend "credentials.chat-only.apiKey.cloakMode applies only to the Anthropic API" (instanceChange {
+            credentials.chat-only.apiKey = {
+              apis.chat = {
+                base-url = "https://chat.example/v1";
+                models = ["chat-model"];
+              };
+              cloakMode = "uncloak";
+              key = clientKey "chat-only";
+            };
+          });
+          "unknown cloak mode refused" = rejectsType (instanceChange {credentials.zhipuai.apiKey.cloakMode = "off";});
+          "hand-written cloak mode typed" = rejectsSettings (handWrittenCloak "off") && !rejectsSettings (handWrittenCloak "uncloak");
           "API without models refused" = refused backend "credentials.split.apiKey serves API `chat` without models" (instanceChange {
             credentials.split.apiKey = {
               apis = {

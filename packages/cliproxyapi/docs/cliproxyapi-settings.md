@@ -182,6 +182,11 @@ in the allowlist patch:
 - `access.key-allowlist[].credentials[].kind`: `enum ["apikey" "oauth"]`; the
   patch matches a rule only when its kind normalizes to a credential kind
   (`normalizeAuthKind`), so any other value would silently allow nothing.
+- `api-keys.claude[].keys[].cloak.mode`:
+  `enum ["always" "auto" "never" "uncloak"]`; CPA treats any other value as
+  `auto` with cloaking configured, so a typo would turn cloaking on
+  (`claude_executor_cloaking.go`). The module option `apiKey.cloakMode` shares
+  this type.
 - `client.codex.web-search-result-cache.ttl`: measured `string`, typed as a Go
   duration, because `Validate` in `sdk_config.go` refuses a TTL that is neither
   a duration nor integer seconds; the type admits the duration form only.

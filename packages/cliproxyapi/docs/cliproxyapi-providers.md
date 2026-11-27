@@ -1,9 +1,10 @@
 ## ai.settings.inference providers: CLIProxyAPI upstream credentials
 
-> **Last verified:** 2026-11-24 — OAuth routes supply Claude Code picker rows.
+> **Last verified:** 2026-11-27 — OAuth routes supply Claude Code picker rows.
 > Credential names in row descriptions are for display only. The
 > `module-ai-inference-instance-clients` check verifies the per-model windows
-> set by `apiKey.apis.responses.modelContextLengths`.
+> set by `apiKey.apis.responses.modelContextLengths`, and the rendering and
+> refusals of `apiKey.cloakMode`.
 >
 > Credential options verified 2026-10-30 — OAuth upstream credentials require
 > vendor and a secret account email; named API-key credentials can select the
@@ -93,6 +94,35 @@ Here `sopsFile` is the consumer's helper for a sops-nix secret reference. Keep
 `claude-sonnet-5` in the models on the granted Anthropic key for Claude Code's
 billed auto-mode classifier, even when that model is absent from the main
 picker.
+
+### Claude Code identity on an Anthropic API key
+
+Set `apiKey.cloakMode = "uncloak"` on one Anthropic API-key credential to stop
+Anthropic billing its requests as Claude Code. CPA then removes the Claude Code
+identity from requests sent with that key: the claude-cli User-Agent and caller
+headers, the `claude-code-20250219` beta, and the identity and billing system
+blocks. Anthropic bills the request as plain API use, so promotional or API
+credit can pay for it. Without this, a request from a Claude Code client is
+billed as Claude Code, which only purchased credit covers.
+
+Use it for an API key with promotional or API credit that sits behind Claude
+Code clients.
+
+```nix
+credentials.claude-api-personal.apiKey.cloakMode = "uncloak";
+```
+
+- It applies only to this credential's `api-keys.claude` key. A credential with
+  no Anthropic API fails evaluation, naming the credential. Vendor defaults
+  (z.ai, OpenCode Go) never set it.
+- OAuth credentials are unaffected: CPA always sends OAuth logins with the
+  Claude Code CLI profile.
+- CPA removes a system block only when its trimmed text is exactly one of three
+  identity sentences, such as "You are Claude Code, Anthropic's official CLI for
+  Claude." A block that adds text to the sentence stays as sent.
+- `never` behaves the same as `uncloak` on these keys. `auto` and `always` do
+  the opposite: once any cloak mode is set, CPA dresses other clients as Claude
+  Code on this key.
 
 ### Provider URLs and routing
 
