@@ -30,7 +30,8 @@
     inherit ((import ../../../lib/extracted/facts.nix {inherit lib;}).load {dir = ../extracted;}) aggregate;
     extractedLib = lib.ai.extracted;
   };
-  # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
+  # Pi v1.3.0 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir
+  # (packages/coding-agent/src/config.ts:581).
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
@@ -120,8 +121,10 @@
   hmSettingsDefaults = {
     config = {
       telemetry.enabled = lib.mkDefault false;
-      # DEFAULT_SKILL_PATHS (src/config.ts:52-56), which Kimchi writes when
-      # the key is unset (src/cli.ts:600-604). It already covers where ai.*
+      # DEFAULT_SKILL_PATHS (Kimchi v1.42.1, src/config.ts:52-56). If skillPaths
+      # is unset, Kimchi writes these defaults on non-interactive launches or
+      # uses the setup wizard's choices on interactive launches
+      # (src/cli.ts:583,600-614). The defaults cover where ai.*
       # delivers skills: the default harness directory, or, for a non-default
       # configDir, the overriding package's agent directory, whose `skills/`
       # Kimchi always scans
@@ -567,10 +570,10 @@
         cfg.extensions;
       }
 
-      # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
-      # pi reads `defaultThinkingLevel` from the merged user and project
-      # harness settings, so the lowering is lossless on both backends. It is
-      # a default: an explicit native harness value wins.
+      # Pi v1.3.0's ThinkingLevel covers the normalized enum
+      # (packages/agent/src/types.ts:349). Pi reads `defaultThinkingLevel` from
+      # the merged user and project harness settings, so the mapping is
+      # lossless on both backends. An explicit native harness value wins.
       (lib.mkIf (resolvedSettings.reasoningEffort != null) {
         ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
@@ -736,7 +739,7 @@ in
       environmentVariables = {};
       hooks = {
         backends = ["devenv"];
-        reason = "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:138-145) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+        reason = "Kimchi v1.42.1 reads its own lifecycle hooks from .kimchi/hooks.json and .kimchi/hooks.local.json in trusted projects (src/extensions/kimchi-hooks/definition.ts:31-36). This module manages only .kimchi/hooks.json, and only in devenv. Kimchi has two user-scope routes, but neither can be managed by Home Manager. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:138-145) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
         gaps =
           map (event: {
             path = [event];

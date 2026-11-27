@@ -545,9 +545,9 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   // one statically named property and never exposes the config object, so the
   // caller records that property instead of tracking a bound local. Inputs are
   // the callee, the read's parent node and the read call; output is a boolean.
-  // Whole-object, computed-key, required-access, delete, shadowed and detached
-  // reads fail this test and fall through to the bound-local path, which
-  // rejects them.
+  // Other read shapes must pass through boundSymbol. A whole-object read
+  // assigned to a local can still be tracked; an unbound whole-object argument
+  // cannot.
   function isInlineSingleRead(called, property, read) {
     if (!ts.isIdentifier(called) || called.text !== "readConfigObject")
       return false;

@@ -82,11 +82,11 @@
           mutant "$kimchi" config-parse-unattributable src/config.ts \
             "''${survey_parse}configPath, \"utf-8\"))" \
             "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"state.json\"), \"utf-8\"))"
-          # Each inline_mutant is a wrong inline read the extractor must refuse
-          # with "is not bound to a local": counting a computed key, the whole
-          # object, a required access, a delete, a shadowed or detached reader,
-          # or a non-call callee as a single named property read would hide
-          # real key reads. The labels are recorded once and checked below.
+          # Each inline mutant must fail with "is not bound to a local".
+          # Counting these shapes as single named property reads could hide key
+          # reads: a computed key, the whole object, required access, delete,
+          # a shadowed reader, a detached property, or a property used as the
+          # callee rather than an argument.
           inline_rejected=()
           inline_mutant() {
             inline_rejected+=("$1")

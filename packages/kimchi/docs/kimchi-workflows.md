@@ -229,13 +229,14 @@ unnamed manifests retain their absolute path identity; npm and git identities
 are unchanged. Pi's explicit project `autoload = false` delta still keeps its
 user base. Install/remove matching and Plugins row IDs remain based on source
 strings/paths. Moving the delivery source changes each resource id from
-`plugins.package.extensions-<key>` to `plugins.package.packages-<key>` (Kimchi
-lowercases and replaces non-alphanumeric runs with `-`). Consumers must rename
-any corresponding `native.harnessSettings.resources` keys or saved user toggles;
-old toggle keys no longer match. For workflows the new id is
-`plugins.package.packages-workflows`. Kimchi discovers a Plugins row from each
-configured package (`src/resources/package-resources.ts:19-31,85-94`). Its
-disable filter matches both package paths and the original metadata source
+`plugins.package.extensions-<key>` to `plugins.package.packages-<key>`. Kimchi
+v1.42.1 lowercases package sources and replaces non-alphanumeric runs with `-`
+(`src/resources/package-resources.ts:85-87,139-148`). Consumers must rename any
+corresponding `native.harnessSettings.resources` keys or saved user toggles; old
+toggle keys no longer match. For workflows the new id is
+`plugins.package.packages-workflows`. Kimchi builds its Plugins rows from the
+configured package records (`src/resources/package-resources.ts:19-31,33-42`).
+Its disable filter matches both package paths and the original metadata source
 string before extension loading
 (`src/extensions/pi-package-lookup/native-compat.ts:151-159,275-285`), so the
 directory link preserves the package toggle. Resource overrides remain user

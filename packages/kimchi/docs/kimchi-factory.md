@@ -484,21 +484,20 @@ bounded to one second, no stdin, stdout discarded, failure ignored.
 launcher, covering both project namespaces with positive controls.
 
 `ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
-declared. pi 1.3.0 keeps it in `<agentDir>/trust.json`, which Kimchi pins to its
-harness directory, and looks it up under `realpath(cwd)` and then each parent,
-reading keys verbatim (`findNearestTrustEntry`,
-`dist/core/trust-manager.js:21-34`). So one entry covers every project beneath
-it, `false` denies a subtree, and a key reached through a symlink never matches.
-Home Manager stages the file as a read-only `ro` copy, declared `{}` when
-nothing is set. The copy declares `content.run` rather than `value`:
-`lib/project-trust.py` canonicalizes each key with `os.path.realpath` when the
-writer runs, since evaluation cannot see the filesystem, and fails the writer
-when two keys resolve to one directory with different answers. pi writes the
-file in place under proper-lockfile's `trust.json.lock`
-(`dist/core/trust-manager.js:95-143`), so remembering an answer at the trust
-prompt fails on the copy, and the MCP trust prompt's "Trust" fails closed for
-that session. The session-only answers ("Trust (this session only)", "Do not
-trust (this session only)") write nothing and still work
+declared. Pi v1.3.0 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
+its harness directory. Pi reads keys verbatim and checks `realpath(cwd)` and
+then its parents (`dist/core/trust-manager.js:18-34,87-92`). So one entry covers
+every project beneath it, `false` denies a subtree, and a key reached through a
+symlink never matches. Home Manager stages the file as a read-only `ro` copy,
+declared `{}` when nothing is set. The copy declares `content.run` rather than
+`value`: `lib/project-trust.py` canonicalizes each key with `os.path.realpath`
+when the writer runs, since evaluation cannot see the filesystem, and fails the
+writer when two keys resolve to one directory with different answers. pi writes
+the file in place under proper-lockfile's `trust.json.lock`
+(`dist/core/trust-manager.js:103-105,114,189-201`), so remembering an answer at
+the trust prompt fails on the copy, and the MCP trust prompt's "Trust" fails
+closed for that session. The session-only answers ("Trust (this session only)",
+"Do not trust (this session only)") write nothing and still work
 (`dist/core/trust-manager.js:57-59,66-68`). `/trust` cannot persist a choice
 under Home Manager and may exit after the failed write. A devenv project on a
 Home Manager machine must have its project root or a parent declared trusted in
