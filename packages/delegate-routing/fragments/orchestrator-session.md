@@ -6,7 +6,9 @@ Task source is what the work will change. Hand off before reading it, except to
 triage what the user pointed at and write the brief. While a delegate runs,
 gather only quick facts; loading this skill and usage reads is handoff, not
 quick facts. A sweep is deep checking or investigation; design is a sweep
-however small. Keep this session for talking, deciding, and checking results.
+however small. Keep this session for talking, deciding, and checking results. If
+you already hold the reference implementation and selecting and trimming it to
+the agreed design is a small change within the Size row, write it yourself.
 
 Hand bulk reading, searching, measuring, tracing, edit-and-test loops, file
 moves and document writing to delegates. Give each delegate one task: one part

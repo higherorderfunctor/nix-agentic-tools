@@ -913,9 +913,9 @@
           "when the failure makes the family unusable, add it to `exclude` and rerun the helper"
         ]
         && lib.all (launch: hasProse launch text || throw "missing ${runtime} review fallback: ${launch}") [
-          "runs its own subagents"
-          "tools that pin model and effort"
-          "a subagent call, a workflow agent call or an external launcher"
+          "Run all three checks in a native workflow"
+          "dispatch each role as a native subagent if no workflow is available"
+          "avoid the writer's family"
         ])
       runtimes
     );
@@ -2391,7 +2391,7 @@
           && lib.all (needle: hasProse needle text || throw "missing ${runtime} capability text: ${needle}") capability
           && lib.all (needle: hasProse needle text || throw "missing ${runtime} technique note: ${needle}") techniqueFacts.${runtime};
         # The same text for every runtime: a runtime-named branch would differ.
-        capabilitySection = runtime: builtins.head (lib.splitString "A non-interactive or external delegate" (builtins.elemAt (lib.splitString "Choose the launch path by what this session shows" (readSkill defaults runtime)) 1));
+        capabilitySection = runtime: builtins.head (lib.splitString "External CLIs such as" (builtins.elemAt (lib.splitString "Offer the helper every native technique" (readSkill defaults runtime)) 1));
       in
         passes defaults
         && lib.all sound runtimes
