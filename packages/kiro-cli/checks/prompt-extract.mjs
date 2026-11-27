@@ -122,6 +122,7 @@ const bad = [
   ],
   withLiteral(planner, "`${x}`"),
   withLiteral(planner, "tag`x`"),
+  ["bundle", "uses with", table, `with({}){Cr="changed"}${table}`],
   [orchestration, "0 headed literals", '"# Workflow Orchestration', '"# Other'],
   [
     orchestration,
@@ -184,6 +185,31 @@ const edited = [
     `status ${outcome.status}, stderr ${outcome.stderr.trim()}`,
   );
 });
+
+// Reads and value-position assignments are not writes of a destructuring
+// target: each must still resolve, to the same creator text as the good bundle.
+const reads = ["[...Cr]", "{...Cr}", "[...{a:Cr}]"].map((read) => [
+  `spread read ${read}`,
+  [[table, `var copy=${read};${table}`]],
+]);
+const valueWrites = ["[Cr=RAW]", "{body:Cr=RAW}"].map((value) => [
+  `value-position assignment ${value}`,
+  [
+    dropCrWrite,
+    [table, `var a=${value.replace("RAW", raw[creator])};${table}`],
+  ],
+]);
+for (const [label, edits] of [...reads, ...valueWrites]) {
+  const outcome = run(
+    edits.reduce((text, [from, to]) => text.replace(from, to), good),
+  );
+  expect(
+    `passing row (${label})`,
+    outcome.status === 0 &&
+      facts(outcome)[creator]?.text === expected[creator][1],
+    `status ${outcome.status}, stderr ${outcome.stderr.trim()}`,
+  );
+}
 
 // Pinned real bundle: three distinct bodies, each starting with its anchor and
 // spanning a delimited literal. Contents are never printed.

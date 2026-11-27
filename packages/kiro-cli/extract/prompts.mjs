@@ -54,22 +54,32 @@ try {
   if (typeof ts.isWriteAccess !== "function")
     fail("bundle", "the TypeScript build has no isWriteAccess");
   const occurrences = new Map();
-  // isWriteAccess misses a rest target (`[...x] = v`, `({...x} = v)`, even
-  // nested), so a spread that wraps the identifier through literals alone is
-  // treated as a write, which also fails closed for a plain read.
-  const isSpreadWrapped = (node) => {
+  // isWriteAccess misses rest targets and shorthand defaults, so an identifier
+  // is also a write when it is part of an assignment target: walk up through
+  // the destructuring node kinds and answer true when the chain ends as the
+  // left of an `=` (a nested default included) or the head of a for-in/of. A
+  // spread or assignment in value position ends elsewhere, so it is a read or
+  // an ordinary write.
+  const keepsTarget = (parent, at) =>
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isObjectLiteralExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    ts.isSpreadElement(parent) ||
+    ts.isSpreadAssignment(parent) ||
+    (ts.isPropertyAssignment(parent) && parent.initializer === at) ||
+    (ts.isShorthandPropertyAssignment(parent) && parent.name === at);
+  const isAssignmentTarget = (node) => {
     for (let at = node; at.parent; at = at.parent) {
-      if (ts.isSpreadElement(at.parent) || ts.isSpreadAssignment(at.parent))
-        return true;
+      const { parent } = at;
       if (
-        ![
-          ts.isArrayLiteralExpression,
-          ts.isObjectLiteralExpression,
-          ts.isParenthesizedExpression,
-          ts.isPropertyAssignment,
-        ].some((is) => is(at.parent))
+        (ts.isBinaryExpression(parent) &&
+          parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          parent.left === at) ||
+        ((ts.isForInStatement(parent) || ts.isForOfStatement(parent)) &&
+          parent.initializer === at)
       )
-        return false;
+        return true;
+      if (!keepsTarget(parent, at)) return false;
     }
     return false;
   };
@@ -81,6 +91,8 @@ try {
 
   // One walk collects everything the lookups need.
   (function visit(node) {
+    // A write inside `with` has no checker symbol, so it could not be seen.
+    if (ts.isWithStatement(node)) fail("bundle", "the bundle uses with");
     if (
       (ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) &&
       node.text.startsWith(heading)
@@ -111,7 +123,7 @@ try {
   // every declaration is a plain `var`/`let`/`const` of that name (not a
   // parameter, catch clause, function, pattern element or loop head) and the
   // whole file writes it exactly once, as a declaration initializer or a plain
-  // `name = value` assignment that is not a destructuring default.
+  // `name = value` assignment that is not part of a destructuring target.
   function singleWrite(symbol) {
     const plain = (declaration) =>
       ts.isVariableDeclaration(declaration) &&
@@ -126,7 +138,8 @@ try {
       id.parent.name === id &&
       id.parent.initializer;
     const writes = (occurrences.get(symbol) ?? []).filter(
-      (id) => ts.isWriteAccess(id) || isSpreadWrapped(id) || isInitializer(id),
+      (id) =>
+        ts.isWriteAccess(id) || isAssignmentTarget(id) || isInitializer(id),
     );
     if (writes.length !== 1) return undefined;
     const [id] = writes;
@@ -135,9 +148,7 @@ try {
     return ts.isBinaryExpression(parent) &&
       parent.left === id &&
       parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      !ts.isArrayLiteralExpression(parent.parent) &&
-      !ts.isPropertyAssignment(parent.parent) &&
-      !ts.isSpreadElement(parent.parent)
+      !isAssignmentTarget(parent)
       ? parent.right
       : undefined;
   }
