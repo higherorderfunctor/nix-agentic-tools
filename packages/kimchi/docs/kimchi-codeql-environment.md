@@ -63,7 +63,7 @@ naming each, and the `extracted` build fails with it.
 ### Reads beyond the former TypeScript extractor
 
 Destructuring `process.env` and a named `env` import from `node:process` count
-as real reads. Kimchi 1.19.1's `src/extensions/work-attribution/scope.ts:35`
+as real reads. Kimchi 1.42.1's `src/extensions/work-attribution/scope.ts:38`
 reads `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` through
 an object pattern; the carried pi bundle also reads `HOMEDRIVE`, `HOMEPATH` and
 `AWS_EXECUTION_ENV`.
@@ -78,16 +78,16 @@ table escape.
 
 Helpers whose parameter names the environment key contribute the names of
 literal or constant call arguments at that parameter index. This includes
-`boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:63-70`, `parseEnvInt` in
-`src/shared/env-int.ts:7`, and pi's `getProviderEnvValue`. Declared functions,
+`boolEnv` and `nonEmptyEnv` in `src/oauth-config.ts:69-78`, `parseEnvInt` in
+`src/shared/env-int.ts:6`, and pi's `getProviderEnvValue`. Declared functions,
 arrow bindings and function-expression bindings share this rule. Parameter
 forwarding through known helpers is followed to its call arguments, including
 jiti’s boolean-to-JSON reader. A helper site resolves completely only when all
 terminal call arguments resolve. `nonEmptyEnv` also receives a region template
-at `src/oauth-config.ts:85`: the preceding falsy-lookup return guard restricts
-`region.id` to the literal defaults table's keys, and uppercase plus global
-literal-text regex replacement produces one name per key. Uninitialized bundled
-bindings assigned string literals also resolve, including
+at `src/oauth-config.ts:89-91`: the preceding falsy-lookup return guard
+restricts `region.id` to the literal defaults table's keys, and uppercase plus
+global literal-text regex replacement produces one name per key. Uninitialized
+bundled bindings assigned string literals also resolve, including
 `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` in
 `bedrock-converse-stream.js:24`.
 

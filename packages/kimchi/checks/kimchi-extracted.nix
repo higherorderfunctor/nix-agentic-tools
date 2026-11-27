@@ -82,6 +82,34 @@
           mutant "$kimchi" config-parse-unattributable src/config.ts \
             "''${survey_parse}configPath, \"utf-8\"))" \
             "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"state.json\"), \"utf-8\"))"
+          # Each inline mutant must fail with "is not bound to a local".
+          # Counting these shapes as single named property reads could hide key
+          # reads: a computed key, the whole object, required access, delete,
+          # a shadowed reader, a detached property, or a property used as the
+          # callee rather than an argument.
+          inline_rejected=()
+          inline_mutant() {
+            inline_rejected+=("$1")
+            mutant "$kimchi" "$@"
+          }
+          inline_config='readConfigObject(configPath)?.modelEffortDefaults'
+          inline_mutant config-inline-computed src/config.ts \
+            "$inline_config" 'readConfigObject(configPath)?.[String("modelEffortDefaults")]'
+          inline_mutant config-inline-whole-object src/config.ts \
+            "$inline_config" 'readConfigObject(configPath)'
+          inline_mutant config-inline-required-access src/config.ts \
+            "$inline_config" 'readConfigObject(configPath).modelEffortDefaults'
+          inline_mutant config-inline-delete src/config.ts \
+            "$inline_config" 'delete readConfigObject(configPath)?.modelEffortDefaults'
+          inline_call="return parseModelEffortDefaults($inline_config)"
+          inline_mutant config-inline-shadow src/config.ts \
+            "$inline_call" $'function readConfigObject(_path: string) { return {} }\n\t'"$inline_call"
+          inline_mutant config-inline-detached src/config.ts \
+            "$inline_call" "const saved = $inline_config;"$'\n\t'"return parseModelEffortDefaults(saved)"
+          inline_mutant config-inline-callee src/config.ts \
+            "$inline_config" "$inline_config()"
+          mutant "$kimchi" config-inline-unattributable src/config.ts \
+            "$inline_config" 'readConfigObject(resolve(AGENT_CONFIG_DIR, "state.json"))?.modelEffortDefaults'
           mutant "$kimchi" config-shape src/config.ts \
             'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
           mutant "$kimchi" config-second-shape src/config.ts \
@@ -195,6 +223,12 @@
           done
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
+          for label in "''${inline_rejected[@]}"; do
+            expect_rejection "$label" "$TMPDIR/$label-source" \
+              'is not bound to a local' >> "$TMPDIR/proof"
+          done
+          expect_rejection config-inline-unattributable "$TMPDIR/config-inline-unattributable-source" \
+            'cannot attribute the JSON read' >> "$TMPDIR/proof"
           expect_rejection config-shape "$TMPDIR/config-shape-source" \
             "config.json validation shape changed" >> "$TMPDIR/proof"
           expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
@@ -275,6 +309,9 @@
           ${pkgs.jq}/bin/jq -e '.harness.keys.fermentV2.type == "object"' \
             "$TMPDIR/helper-known-unresolved.json" > /dev/null
           echo 'helper-known-unresolved (exit 0): warned and retained parser shape' >> "$TMPDIR/proof"
+          ${pkgs.jq}/bin/jq -e '.config.keys.modelEffortDefaults == {type: null, project: false}' \
+            "$TMPDIR/real.json" > /dev/null
+          echo 'real (exit 0): attributed the inline modelEffortDefaults read to user config.json' >> "$TMPDIR/proof"
           # Settings is re-exported by settings-manager, and compaction is
           # inherited from its TypeBox schema rather than declared on Settings.
           # Resolve both the inherited properties and a replacement interface

@@ -104,15 +104,15 @@ index 0a8ad85..7363176 100644
  import { isRefusal, refusalText } from "../../extensions/refused-turns.js"
  import { modelSupportsImages } from "../../extensions/vision-support.js"
  import { configureHttpIdleTimeout } from "../../http/proxy.js"
-@@ -794,7 +794,7 @@ export class KimchiAcpAgent implements Agent {
+@@ -696,7 +696,7 @@ export class KimchiAcpAgent implements Agent {
  					// clients feature-detect the gate; emission is opt-in gated.
  					[BACKGROUND_RUNS_CAPABILITY]: true,
  					[MCP_OAUTH_TURN_CAPABILITY]: true,
 -					[PR_MONITORING_CAPABILITY]: true,
 +					[PR_MONITORING_CAPABILITY]: isPRWatchResourceEnabled(),
+ 					[MODEL_EFFORT_CAPABILITY]: MODEL_EFFORT_VERSION,
  					// Cast AI SSO login via the stepwise `_kimchi.dev/sso_*` ext
  					// methods. Clients gate their SSO UI on this flag.
- 					sso: true,
 @@ -1577,7 +1577,7 @@ export class KimchiAcpAgent implements Agent {
  			return { stopReason: "end_turn" }
  		}

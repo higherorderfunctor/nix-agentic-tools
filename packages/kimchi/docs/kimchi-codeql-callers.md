@@ -7,10 +7,11 @@ merges it beside `requestGuards` for the judgment check; the egress report does
 not read or publish it. Only requests under `kimchi/src/` qualify, using the
 same `ClientRequest`, library and target predicates as the network queries. A
 call occurrence is identified by file and its exact start and end positions.
-Thus the two calls on `src/extensions/memory/backend.ts:192` remain distinct
-even though `network` groups them. Calls sharing a start also remain distinct:
-`getFetch()(url)` can measure the outer invocation, while `fetch(u).then(cb)`
-measures the inner invocation. Carried dependencies are outside this fact.
+Thus, at Kimchi 1.26.0, the two calls on `src/extensions/memory/backend.ts:192`
+remain distinct even though `network` groups them. Calls sharing a start also
+remain distinct: `getFetch()(url)` can measure the outer invocation, while
+`fetch(u).then(cb)` measures the inner invocation. Carried dependencies are
+outside this fact.
 
 Every row contains `callSite` (file, line, column, endLine, endColumn, library),
 `functionSite` (file, line, column), `kind`, `site` (file, line, column),

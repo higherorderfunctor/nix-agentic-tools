@@ -538,6 +538,34 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   }
 
   const parsedSymbols = new Map();
+  const found = { config: new Set(), harness: new Set() };
+  // Accepts the one unbound read shape the extractor can count: a direct
+  // `readConfigObject(path)?.name` passed as a call argument, where
+  // `readConfigObject` is the file's own top-level function. The read consumes
+  // one statically named property and never exposes the config object, so the
+  // caller records that property instead of tracking a bound local. Inputs are
+  // the callee, the read's parent node and the read call; output is a boolean.
+  // Other read shapes must pass through boundSymbol. A whole-object read
+  // assigned to a local can still be tracked; an unbound whole-object argument
+  // cannot.
+  function isInlineSingleRead(called, property, read) {
+    if (!ts.isIdentifier(called) || called.text !== "readConfigObject")
+      return false;
+    const reader = symbolOf(called)?.valueDeclaration;
+    const readerIsTopLevelFunction =
+      reader &&
+      ts.isFunctionDeclaration(reader) &&
+      reader.parent === sourceFile;
+    const isOptionalDotRead =
+      ts.isPropertyAccessExpression(property) &&
+      property.expression === read &&
+      property.questionDotToken;
+    const isCallArgument =
+      isOptionalDotRead &&
+      ts.isCallExpression(property.parent) &&
+      property.parent.arguments.includes(property);
+    return Boolean(readerIsTopLevelFunction && isCallArgument);
+  }
   function identify(node) {
     if (ts.isCallExpression(node)) {
       const called = node.expression;
@@ -560,7 +588,12 @@ function discoverConfigKeys(sourceFile, checker, ts) {
       }
       if (pathExpression) {
         const surface = surfaceOfPath(pathExpression, node);
-        parsedSymbols.set(boundSymbol(node), surface);
+        const property = node.parent;
+        if (isInlineSingleRead(called, property, node)) {
+          found[surface].add(property.name.text);
+        } else {
+          parsedSymbols.set(boundSymbol(node), surface);
+        }
       }
       if (ts.isIdentifier(called) && called.text === "updateConfigFile") {
         const surface = surfaceOfPath(node.arguments[0], node);
@@ -576,7 +609,6 @@ function discoverConfigKeys(sourceFile, checker, ts) {
     ts.forEachChild(node, identify);
   }
   identify(sourceFile);
-  const found = { config: new Set(), harness: new Set() };
   function visit(node) {
     // `delete raw.key` removes a key; it reads nothing.
     if (ts.isDeleteExpression(node)) return;

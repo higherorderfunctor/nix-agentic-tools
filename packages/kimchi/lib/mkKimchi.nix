@@ -30,7 +30,8 @@
     inherit ((import ../../../lib/extracted/facts.nix {inherit lib;}).load {dir = ../extracted;}) aggregate;
     extractedLib = lib.ai.extracted;
   };
-  # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
+  # Pi v1.3.0 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir
+  # (earendil-works/pi v1.3.0 packages/coding-agent/src/config.ts:581).
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
@@ -48,7 +49,7 @@
     if backend == "devenv"
     then "${projectDir}/agents"
     else "${userHarnessDir cfg}/agents";
-  # Kimchi 1.1.37 hard-codes the user permissions file to
+  # Kimchi 1.42.1 hard-codes the user permissions file to
   # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
   # (src/extensions/permissions/config.ts:35), so unlike the rest of the
   # harness it does not follow configDir even under a package override.
@@ -120,8 +121,10 @@
   hmSettingsDefaults = {
     config = {
       telemetry.enabled = lib.mkDefault false;
-      # DEFAULT_SKILL_PATHS (src/config.ts:45-49), which Kimchi writes when
-      # the key is unset (src/cli.ts:398-406). It already covers where ai.*
+      # DEFAULT_SKILL_PATHS (Kimchi v1.42.1, src/config.ts:52-56). If skillPaths
+      # is unset, Kimchi writes these defaults on non-interactive launches or
+      # uses the setup wizard's choices on interactive launches
+      # (src/cli.ts:583,600-614). The defaults cover where ai.*
       # delivers skills: the default harness directory, or, for a non-default
       # configDir, the overriding package's agent directory, whose `skills/`
       # Kimchi always scans
@@ -203,8 +206,8 @@
   # devenv delivers its accepted exceptions through the launcher environment.
   # Home Manager writes the global leaves and needs no duplicate environment.
   # Harness `resources` toggles are read only from the user settings.json
-  # (src/resources/store.ts:9-13); KIMCHI_ENABLE_RESOURCES delivers the
-  # true-valued ids, and nothing can deliver a false one (store.ts:35-60).
+  # (src/resources/store.ts:11-15); KIMCHI_ENABLE_RESOURCES delivers the
+  # true-valued ids, and nothing can deliver a false one (store.ts:77-118).
   envShadowedSettings = native: let
     resources =
       if native.harnessSettings.resources == null
@@ -320,7 +323,7 @@
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
       ++ lib.optional (proxyDefaults != {}) "--run ${lib.escapeShellArg (import ../../../lib/ai/environment-defaults.nix {inherit lib;} proxyDefaults)}"
-      # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:45-61), so
+      # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:102-118), so
       # the declared ids are appended to a caller's or an `ai.kimchi`
       # environment value instead of replacing it. Placed after `--set` so a
       # set value is extended, not overwritten.
@@ -424,8 +427,8 @@
       if isDevenv
       then projectDir
       else userPermissionsDir;
-    # Kimchi 1.1.37 loads `<agentDir>/agents/*.md` and a trusted project's
-    # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:21-35).
+    # Kimchi 1.42.1 loads `<agentDir>/agents/*.md` and a trusted project's
+    # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:34-48).
     agentsDir = agentsDirectory backend cfg;
     userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredProjectHarnessSettings);
     userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredProjectSettings);
@@ -567,10 +570,10 @@
         cfg.extensions;
       }
 
-      # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
-      # pi reads `defaultThinkingLevel` from the merged user and project
-      # harness settings, so the lowering is lossless on both backends. It is
-      # a default: an explicit native harness value wins.
+      # Pi v1.3.0's ThinkingLevel covers the normalized enum
+      # (earendil-works/pi packages/agent/src/types.ts:349). Pi reads `defaultThinkingLevel` from
+      # the merged user and project harness settings, so the mapping is
+      # lossless on both backends. An explicit native harness value wins.
       (lib.mkIf (resolvedSettings.reasoningEffort != null) {
         ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
@@ -581,7 +584,7 @@
 
       # Immutable JSON files remain read-only copies. Kimchi's
       # writers either rename a temporary over the path (MCP edits, the setup
-      # wizard, `writeConfigSetting`: src/config/json.ts:154-160), which would
+      # wizard, `writeConfigSetting`: src/config/json.ts:156-161), which would
       # replace a store symlink, or write in place (pi's settings and trust
       # stores, `/permissions save`), which fails on the copy. The next
       # activation or shell entry backs a replaced file up and restores the
@@ -612,18 +615,18 @@
             mode = "0400";
           })
           # Kimchi warns once per launch when a group or other can read a
-          # config.json (src/config.ts:390-403,533), so the project copy is
+          # config.json (src/config.ts:599-612,758-761), so the project copy is
           # owner-only.
           ++ lib.optional isDevenv (settingsCopy "settings" "${projectDir}/config.json" {
             content.value = filteredProjectSettings;
             mode = "0400";
           })
-          # pi 0.85.1's ProjectTrustStore reads `<agentDir>/trust.json`, and
-          # Kimchi pins agentDir to the harness directory (src/entry.ts:46-47),
+          # pi 1.3.0's ProjectTrustStore reads `<agentDir>/trust.json`, and
+          # Kimchi pins agentDir to the harness directory (src/entry.ts:54-59),
           # so the file follows configDir exactly as harness settings do. User
           # scope only: pi reads trust from the global store so that a project
           # cannot trust itself. pi writes it in place
-          # (dist/core/trust-manager.js:94-103), which fails on the copy; its
+          # (dist/core/trust-manager.js:95-105), which fails on the copy; its
           # session-only answers still work. The renderer canonicalizes each
           # key when the writer runs (see project-trust.py), which is why this
           # copy declares `run`. Home Manager only: devenv rejects the option
@@ -736,7 +739,7 @@ in
       environmentVariables = {};
       hooks = {
         backends = ["devenv"];
-        reason = "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+        reason = "Kimchi v1.42.1 reads its own lifecycle hooks from .kimchi/hooks.json and .kimchi/hooks.local.json in trusted projects (src/extensions/kimchi-hooks/definition.ts:31-36). This module manages only .kimchi/hooks.json, and only in devenv. Kimchi has two user-scope routes, but neither can be managed by Home Manager. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:138-145) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
         gaps =
           map (event: {
             path = [event];

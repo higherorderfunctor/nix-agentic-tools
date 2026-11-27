@@ -1,4 +1,4 @@
-# Kimchi 1.1.37's lifecycle events, FULL_COMMAND_HOOK_EVENTS
+# Kimchi 1.42.1's lifecycle events, FULL_COMMAND_HOOK_EVENTS
 # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
 # except PermissionRequest is among them, and the reader skips an event
 # outside this list without a word (:131).
