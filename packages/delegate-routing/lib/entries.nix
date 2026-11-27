@@ -231,9 +231,10 @@ in {
               Count deletions and generated lines separately; don't net them against
               additions. When additions reach 1.5x the current estimate, pause before
               the next unit: split, cut scope within the agreed design, or record the
-              reason and a new estimate. If no additions were planned, any addition
-              triggers re-planning. At 2x the original positive estimate, report the
-              numbers and options to the operator before more work runs.
+              reason and a new estimate. Judge a unit planned as a cut by each file's
+              planned target size, not by added lines. At 2x the original positive
+              estimate, report the numbers and options to the operator before more work
+              runs.
             '';
           }
           {
