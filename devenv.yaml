@@ -5,7 +5,7 @@ allowUnfree: true
 
 inputs:
   devenv:
-    url: github:cachix/devenv/e874a14853d5bbf7ff43acd25960dbf9dc2f3e45
+    url: github:cachix/devenv/09273b2564a7b6f4662b4301698998fde08905c7
   git-branchless:
     url: github:arxanas/git-branchless/d0eceb7efb5d61a287c1444bb340fb2ee17b9497
     inputs:
