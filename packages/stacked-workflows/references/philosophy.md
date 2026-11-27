@@ -205,5 +205,6 @@ Target 50-200 lines per commit. If a commit exceeds 200 lines, look for a
 natural split point. If it's under 50 lines and could logically combine with an
 adjacent commit touching the same concern, consider merging them.
 
-Three similar lines of code is better than a premature abstraction, but three
-similar _blocks_ means it's time to extract.
+A repeated fact or decision, or a duplicated helper doing the same job, gets one
+source from the second copy. Incidental similar lines that carry no shared
+decision stay as they are.

@@ -2234,7 +2234,7 @@
       # branch-level review loses its ready/earlier sizing.
       && hasProse "A unit is a bounded change with one reader and one verification" claude
       && hasProse "Each unit gets the Review step’s required fresh separate check before the next unit starts." claude
-      && hasProse "a fix round reviews only the fix's diff plus what it touches." claude
+      && hasProse "a fix round reviews only the fix's diff plus what it touches, and says whether deleting what caused the finding would be smaller than the fix" claude
       && hasProse "for a fix round, HEAD before the fix starts" claude
       && hasProse "a unit of a branch still being built, the branch-level review of a branch not yet going ready, and a fix after any review each get one fresh reviewer" claude
       && hasProse "all three checks when the change is ready, and one fresh check in the exception below." claude

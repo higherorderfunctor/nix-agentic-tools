@@ -194,8 +194,13 @@ in {
             name = "E3";
             text = ''
               **E3.** Look for the simpler, cheaper shape. A finding that says a part can go also
-              says what breaks if it is removed. Implement each decision once, and abstract
-              repeated decisions only when that avoids needless jumping between files.
+              says what breaks if it is removed; for a check, that means some behavior loses
+              its only check. Implement each decision once: a repeated fact or decision (a
+              constant, an external naming formula, an ID, a version) and a duplicated
+              helper doing the same job each get one source from the second copy, a
+              library's when one fits. Leave incidental similar lines that carry no shared
+              decision. If one copy changed and the other did not, and anything would break,
+              extract it now.
             '';
           }
           {
