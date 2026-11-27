@@ -21,11 +21,7 @@
 {lib}: let
   redact = import ../redact {inherit lib;};
   isReference = value: redact.isRedacted value || redact.isAsFile value;
-  sanitize = segment:
-    lib.concatStrings (map (c:
-      if builtins.match "[A-Z0-9]" c != null
-      then c
-      else "_") (lib.stringToCharacters (lib.toUpper (toString segment))));
+  inherit (import ../ai/env-var-name.nix {inherit lib;}) sanitize;
   # The token's one spelling; packages/ai-module/lib/services.nix reads it
   # from here. Concatenated, not interpolated: `$${` is Nix's escape for a
   # literal `${`. Bracket expressions in the pattern, since libstdc++'s ERE
