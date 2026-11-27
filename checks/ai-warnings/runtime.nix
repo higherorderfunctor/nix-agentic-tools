@@ -4,7 +4,9 @@
   pkgs,
   ...
 }: let
-  featureNotice = "${../../packages/kiro-cli/lib/global-feature-notice.py}";
+  # builtins.match (inside lib.hasInfix) rejects a pattern carrying store-path
+  # context, so compare the path as plain text.
+  featureNotice = builtins.unsafeDiscardStringContext "${../../packages/kiro-cli/lib/global-feature-notice.py}";
   featureWarning = declaration:
     (harness.evalDevenv {
       ai.kiro.cli = {enable = true;} // declaration;
