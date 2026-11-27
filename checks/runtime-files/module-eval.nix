@@ -142,11 +142,10 @@ in {
         delivered = config: config.home.file ? ${target};
         disabled = evaluate {enable = false;};
         applyCommand = config: config.home.activation.ai-files-apply.text or "";
-        # Force both HM outputs. The apply command carries the plan path, so
-        # the same fixture with the target disabled must produce a different
-        # command (or no apply entry), even for a run with no native link.
+        # Force the native link map without walking its derivations. The apply
+        # command must differ from the disabled control even without a native link.
         reachesSink = config:
-          builtins.deepSeq config.home.file (let
+          builtins.seq (delivered config) (let
             command = applyCommand config;
           in
             lib.hasInfix "--phase apply" command && command != applyCommand disabled);

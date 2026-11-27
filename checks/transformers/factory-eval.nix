@@ -15,9 +15,9 @@
       (capture: toString (/. + "/workspace/${builtins.dirOf filename}/${builtins.head capture}"))
       (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" text))));
 
-  # Split only at top-level rule bullets, not indented glob or link bullets.
+  # Split at top-level rule bullets and restore the consumed line ending.
   hasRule = text: name: markers:
-    lib.any (rule: lib.hasPrefix "`${name}`**\n" rule && lib.all (marker: lib.hasInfix marker rule) markers)
+    lib.any (rule: lib.hasPrefix "`${name}`**\n" rule && lib.all (marker: lib.hasInfix marker "${rule}\n") markers)
     (builtins.tail (lib.splitString "\n- **" text));
 in {
   checks = {
