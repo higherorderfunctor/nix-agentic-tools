@@ -42,12 +42,13 @@ and `oauth.account` (a redact reference), lowering to an `accounts` rule through
 the existing secret renderer. An account rule matches only OAuth with a nonempty
 native `AccountInfo()` email, compared case-sensitively after trimming both
 values. `AccountInfo()` reads `Metadata.email`, with a service-account
-`client_email` fallback (`sdk/cliproxy/auth/types.go:962`). An account with no
-matching login selects nothing; several matching logins remain eligible.
-`accounts` combined with `kind = "apikey"` matches nothing. A config API key's
-ID hashes its secret, so use provider and `base-urls` to address a group through
-rotation. The settings types and module refinements are in
-`cliproxyapi-settings.md`.
+`client_email` fallback
+([CPA v8.1.6 source](https://github.com/router-for-me/CLIProxyAPI/blob/v8.1.6/sdk/cliproxy/auth/types.go#L962-L979)).
+An account with no matching login selects nothing; several matching logins
+remain eligible. `accounts` combined with `kind = "apikey"` matches nothing. A
+config API key's ID hashes its secret, so use provider and `base-urls` to
+address a group through rotation. The settings types and module refinements are
+in `cliproxyapi-settings.md`.
 
 The `apikey` kind matches only credentials synthesized from config. A
 store-loaded login can temporarily classify as `apikey` from its file or a Meta
