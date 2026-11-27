@@ -65,9 +65,10 @@ expect(
 for (const [key, [kind, text]] of Object.entries(expected)) {
   const start = Buffer.from(good).indexOf(raw[key]);
   const end = start + Buffer.byteLength(raw[key]);
+  const want = JSON.stringify({ end, kind, start, text });
   expect(
     key,
-    JSON.stringify(found[key]) === JSON.stringify({ end, kind, start, text }),
+    JSON.stringify(found[key]) === want,
     `got ${JSON.stringify(found[key])}`,
   );
 }
@@ -76,18 +77,50 @@ for (const [key, [kind, text]] of Object.entries(expected)) {
 // naming the fact key and the reason.
 const notStatic = "not one static string";
 const table = "var table";
+const binding = { [creator]: "Cr", [orchestration]: "Orch", [planner]: "Pl" };
+const withLiteral = (key, replacement) => [
+  key,
+  notStatic,
+  `${binding[key]}=${raw[key]}`,
+  `${binding[key]}=${replacement}`,
+];
+// A write the extractor must see: each one gives `Cr` a second, dynamic write.
+const dynamicWrites = [
+  "[Cr]=[dyn()]",
+  "[Cr=1]=dyn()",
+  "[...Cr]=dyn()",
+  "({body:Cr}=dyn())",
+  "({Cr}=dyn())",
+  "({...Cr}=dyn())",
+  "for(Cr of dyn()){}",
+  "for(Cr in dyn()){}",
+  "var [Cr]=dyn()",
+  "for(var [Cr] of dyn()){}",
+];
 const bad = [
   [creator, "0 registration rows", "[Id,Cr],", ""],
   [creator, "0 registration rows", 'Id="wf-workflow-creator";', ""],
   [creator, notStatic, "Cr,Pl,", 'Cr="late",Pl,'],
+  ...dynamicWrites.map((write) => [
+    creator,
+    notStatic,
+    table,
+    `${write};${table}`,
+  ]),
   [
     planner,
     "2 registration rows",
     table,
     `var again=[["wf-planner",Pl]];${table}`,
   ],
-  [planner, notStatic, `Pl=${raw[planner]}`, "Pl=`${x}`"],
-  [planner, notStatic, `Pl=${raw[planner]}`, "Pl=tag`x`"],
+  [
+    planner,
+    notStatic,
+    '["wf-planner",Pl]];',
+    '["wf-planner",Cy]];var Cy=Dy,Dy=Cy;',
+  ],
+  withLiteral(planner, "`${x}`"),
+  withLiteral(planner, "tag`x`"),
   [orchestration, "0 headed literals", '"# Workflow Orchestration', '"# Other'],
   [
     orchestration,
@@ -95,29 +128,15 @@ const bad = [
     table,
     `var more="# Workflow Orchestration\\n";${table}`,
   ],
-  [
-    orchestration,
-    notStatic,
-    `Orch=${raw[orchestration]}`,
-    "Orch=`# Workflow Orchestration\\n${x}`",
-  ],
-  [
-    orchestration,
-    notStatic,
-    `Orch=${raw[orchestration]}`,
-    "Orch=tag`# Workflow Orchestration\\n`",
-  ],
+  withLiteral(orchestration, "`# Workflow Orchestration\\n${x}`"),
+  withLiteral(orchestration, "tag`# Workflow Orchestration\\n`"),
 ];
 bad.forEach(([key, reason, from, to], row) => {
-  expect(
-    `bad row ${row}`,
-    good.includes(from),
-    "fixture lacks the text to change",
-  );
   const outcome = run(good.replace(from, to));
   expect(
-    `bad row ${row} (${key})`,
-    outcome.status === 1 &&
+    `bad row ${row} (${key}: ${to})`,
+    good.includes(from) &&
+      outcome.status === 1 &&
       outcome.stderr.includes(`${key}: `) &&
       outcome.stderr.includes(reason),
     `status ${outcome.status}, stderr ${outcome.stderr.trim()}`,

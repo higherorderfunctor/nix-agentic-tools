@@ -48,12 +48,48 @@ try {
   const heading = "# Workflow Orchestration\n";
   const headingLiterals = [];
   const registrationTables = [];
-  const writesByName = new Map();
-  const addWrite = (target, value) =>
-    writesByName.set(target.text, [
-      ...(writesByName.get(target.text) ?? []),
-      { target, value },
-    ]);
+  // Every write to a binding, keyed by symbol. A write without a value (a
+  // compound assignment, an update, a destructuring or iteration target) can
+  // never resolve to a literal.
+  const writesBySymbol = new Map();
+  const symbolOf = (identifier) =>
+    ts.isShorthandPropertyAssignment(identifier.parent) &&
+    identifier.parent.name === identifier
+      ? checker.getShorthandAssignmentValueSymbol(identifier.parent)
+      : checker.getSymbolAtLocation(identifier);
+  const addWrite = (target, value) => {
+    const symbol = symbolOf(target);
+    writesBySymbol.set(symbol, [...(writesBySymbol.get(symbol) ?? []), value]);
+  };
+  // Records every binding a pattern or assignment target writes to.
+  function addTargetWrites(target) {
+    if (ts.isIdentifier(target)) addWrite(target, undefined);
+    else if (
+      ts.isArrayBindingPattern(target) ||
+      ts.isObjectBindingPattern(target) ||
+      ts.isArrayLiteralExpression(target)
+    )
+      for (const element of target.elements)
+        addTargetWrites(element.name ?? element);
+    else if (ts.isObjectLiteralExpression(target))
+      for (const property of target.properties)
+        addTargetWrites(
+          ts.isPropertyAssignment(property) ? property.initializer : property,
+        );
+    else if (ts.isShorthandPropertyAssignment(target))
+      addTargetWrites(target.name);
+    else if (
+      ts.isSpreadElement(target) ||
+      ts.isSpreadAssignment(target) ||
+      ts.isParenthesizedExpression(target)
+    )
+      addTargetWrites(target.expression);
+    else if (
+      ts.isBinaryExpression(target) &&
+      target.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    )
+      addTargetWrites(target.left);
+  }
 
   // One walk collects everything the lookups need.
   (function visit(node) {
@@ -79,42 +115,51 @@ try {
       registrationTables.push(node);
     if (
       ts.isBinaryExpression(node) &&
-      ts.isIdentifier(node.left) &&
       node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
     )
-      addWrite(
-        node.left,
+      if (
+        ts.isIdentifier(node.left) &&
         node.operatorToken.kind === ts.SyntaxKind.EqualsToken
-          ? node.right
-          : undefined,
-      );
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name))
-      node.initializer && addWrite(node.name, node.initializer);
+      )
+        addWrite(node.left, node.right);
+      else addTargetWrites(node.left);
+    if (ts.isVariableDeclaration(node)) {
+      if (ts.isIdentifier(node.name)) {
+        if (node.initializer) addWrite(node.name, node.initializer);
+        else if (
+          ts.isForInStatement(node.parent.parent) ||
+          ts.isForOfStatement(node.parent.parent)
+        )
+          addTargetWrites(node.name);
+      } else addTargetWrites(node.name);
+    }
+    if (
+      (ts.isForInStatement(node) || ts.isForOfStatement(node)) &&
+      !ts.isVariableDeclarationList(node.initializer)
+    )
+      addTargetWrites(node.initializer);
     if (
       (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
-      ts.isIdentifier(node.operand) &&
       [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
         node.operator,
       )
     )
-      addWrite(node.operand, undefined);
+      addTargetWrites(node.operand);
     ts.forEachChild(node, visit);
   })(file);
 
-  // The literal an expression is, directly or through a binding that has
+  // The literal an expression is, directly or through bindings that each have
   // exactly one write anywhere in the bundle (including inside lazy
-  // initializer callbacks), else undefined.
-  function staticLiteral(expression) {
+  // initializer callbacks), else undefined. An alias cycle is unresolved.
+  function staticLiteral(expression, seen = new Set()) {
     if (isStaticString(expression)) return expression;
     if (!ts.isIdentifier(expression)) return undefined;
     const symbol = checker.getSymbolAtLocation(expression);
-    const writes = (writesByName.get(expression.text) ?? []).filter(
-      ({ target }) => checker.getSymbolAtLocation(target) === symbol,
-    );
-    return symbol && writes.length === 1 && writes[0].value
-      ? staticLiteral(writes[0].value)
-      : undefined;
+    const writes = writesBySymbol.get(symbol) ?? [];
+    if (!symbol || seen.has(symbol) || writes.length !== 1 || !writes[0])
+      return undefined;
+    return staticLiteral(writes[0], seen.add(symbol));
   }
 
   // Byte offsets, because consumers patch UTF-8 and TypeScript counts UTF-16.
