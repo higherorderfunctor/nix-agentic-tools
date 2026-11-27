@@ -857,8 +857,7 @@ caught only if evaluation had already probed that exact path.
 That last clause is not hypothetical. 33 of the 301 input paths do not exist on
 disk: `devenv.local.nix`, `.env`, `~/.config/nixpkgs/overlays.nix`,
 `packages/agnix/packages/ai/mcpServers/package.nix` (a `pathExists` probe), and
-the dangling `dev/skills/repo-review/references/*.md` symlinks. Creating any of
-those would reload.
+dangling symlinks. Creating any of those would reload.
 
 ### 5. "Nothing in this pass's argument rests on `input-paths.txt`" is false
 
