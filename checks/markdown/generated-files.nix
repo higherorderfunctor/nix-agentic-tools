@@ -39,6 +39,15 @@
     | --- | --- |
     | x | y |
   '';
+  # Run this mutation through the actual mkTree derivation to verify that
+  # stdenv runs the install check.
+  frontmatterMutation = {
+    name = "frontmatter-value-change-bad";
+    files = markdown "---\nname: \"a\"\n---\n\n# Page\n";
+    treefmt = rewriteFormatter "md" "---\nname: \"b\"\n---\n\n# Page\n";
+    guards = onlyGuards ["parseCompare"];
+    fails = "parsed Markdown frontmatter values differ from";
+  };
   cases = [
     {
       name = "frontmatter-whole-file-format";
@@ -47,13 +56,6 @@
       guards = onlyGuards ["parseCompare"];
       expected = "---\nname: \"a\"\n---\n\n# Page\n";
       path = "page.md";
-    }
-    {
-      name = "frontmatter-value-change-bad";
-      files = markdown "---\nname: \"a\"\n---\n\n# Page\n";
-      treefmt = rewriteFormatter "md" "---\nname: \"b\"\n---\n\n# Page\n";
-      guards = onlyGuards ["parseCompare"];
-      fails = "parsed Markdown frontmatter values differ from";
     }
     {
       name = "frontmatter-thematic-break-is-not-a-header";
@@ -66,8 +68,12 @@
     {
       name = "frontmatter-crlf-header-compares-values";
       files = markdown "---\r\nname: a\r\n---\r\n\r\n# Page\r\n";
-      treefmt = treefmtConfig;
+      # Normalize to a known LF header. Ignoring the original CRLF header
+      # would now compare an absent header with a present one and fail.
+      treefmt = rewriteFormatter "md" "---\nname: a\n---\n\n# Page\n";
       guards = onlyGuards ["parseCompare"];
+      expected = "---\nname: a\n---\n\n# Page\n";
+      path = "page.md";
     }
     {
       name = "format-json-default";
@@ -102,9 +108,10 @@
     {
       name = "table-cells-header-before-format";
       files = markdown badHeader;
-      treefmt = treefmtConfig;
+      # Repair the defect so that a guard moved after formatting misses it.
+      treefmt = rewriteFormatter "md" goodTable;
       guards = onlyGuards ["tableCells"];
-      fails = "tableCells";
+      fails = "MD056";
     }
     {
       name = "surface-check-fails";
@@ -127,9 +134,10 @@
       files = markdown ''        A `split
         span` is broken.
       '';
-      treefmt = treefmtConfig;
+      # Repair the defect so that a guard moved after formatting misses it.
+      treefmt = rewriteFormatter "md" "A `split span` is sound.\n";
       guards = onlyGuards ["splitCodeSpans"];
-      fails = "splitCodeSpans";
+      fails = "ERROR: inline code spans split across a newline.";
     }
     {
       name = "parse-json-good";
@@ -141,7 +149,7 @@
       files = dataFile "json" ''{"value":true}'';
       treefmt = rewriteFormatter "json" ''{"value":false}'';
       guards = onlyGuards ["parseCompare"];
-      fails = "parseCompare";
+      fails = "parsed json values differ from";
     }
     {
       name = "parse-toml-bad";
@@ -150,7 +158,7 @@
         '';
       treefmt = rewriteFormatter "toml" "value = false\n";
       guards = onlyGuards ["parseCompare"];
-      fails = "parseCompare";
+      fails = "parsed toml values differ from";
     }
     {
       name = "parse-yaml-bad";
@@ -159,7 +167,7 @@
         '';
       treefmt = rewriteFormatter "yaml" "value: false\n";
       guards = onlyGuards ["parseCompare"];
-      fails = "parseCompare";
+      fails = "parsed yaml values differ from";
     }
 
     {
@@ -232,7 +240,7 @@
       ${tree.installPhase}
       ${tree.installCheckPhase}
     '';
-  expectedMutationFailure = pkgs.testers.testBuildFailure (makeTree (lib.findFirst (case: case.name == "frontmatter-value-change-bad") (throw "generated-files: the value-change fixture is gone") cases));
+  expectedMutationFailure = pkgs.testers.testBuildFailure (makeTree frontmatterMutation);
   treefmtConfig = (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix {inherit inputs;})).config;
   treefmtTree = generated.mkTree {
     name = "generated-fixture-treefmt-eval-module";
@@ -318,7 +326,7 @@ in {
       '')
       cases}
 
-    grep -q -F 'parsed Markdown frontmatter values differ from' ${expectedMutationFailure}/testBuildFailure.log
+    grep -q -F ${lib.escapeShellArg frontmatterMutation.fails} ${expectedMutationFailure}/testBuildFailure.log
     grep -q -F 'Generated-file guard parseCompare failed' ${expectedMutationFailure}/testBuildFailure.log
     echo 'ok — actual mkTree value guard fails from installCheckPhase'
     touch "$out"

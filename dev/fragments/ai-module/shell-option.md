@@ -262,10 +262,11 @@ nix build .#checks.x86_64-linux.module-ai-shell-per-runtime-overrides-root
 nix build .#checks.x86_64-linux.module-ai-shell-codex-hm-wrapper-carries-shell
 ```
 
-`module-ai-shell-accepted-for-claude` is the **positive control** for the two
-exclusion tests. Those assert an eval failure, which a broken harness satisfies
-for free; the control runs the identical `tryEval` shape against a supported
-runtime and requires success. Delete them as a set or not at all.
+`module-ai-shell-excluded-for-copilot` has its own controls: `rejectsChange`
+checks that the valid input succeeds, and a `_module.check = false` row checks
+that the same shell write evaluates when undeclared options are not rejected.
+Separately, `module-ai-shell-accepted-for-claude` checks that a shell set only
+for Claude reaches `CLAUDE_CODE_SHELL` without a root shell setting.
 
 The generalized gate has positive controls for Kimchi's `rules` and `rulesDir`
 options: `module-ai-rules{-dir,}-accepted-for-kimchi`.

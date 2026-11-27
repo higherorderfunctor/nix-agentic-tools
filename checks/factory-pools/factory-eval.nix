@@ -5,11 +5,13 @@
   harness,
   ...
 }: let
+  inherit (harness) checkRows;
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest poolMergeContract;
-in {
-  checks = {
-    factory-pool-agents-negation = mkTest "pool-agents-negation" (poolMergeContract {
-      poolName = "agents";
+
+  pools = {
+    agents = {
+      checkRoot = value: value.description == "root" && value.tools == ["Read"];
+      checkRuntime = value: value.description == "runtime" && value.tools == null;
       rootValue = {
         description = "root";
         instructions.text = "root";
@@ -19,53 +21,50 @@ in {
         description = "runtime";
         instructions.text = "runtime";
       };
-      checkRoot = value:
-        value.description == "root" && value.tools == ["Read"];
-      checkRuntime = value:
-        value.description == "runtime" && value.tools == null;
-    });
-    factory-pool-environmentVariables-negation = mkTest "pool-environmentVariables-negation" (poolMergeContract {
-      poolName = "environmentVariables";
-      rootValue = "root";
-      runtimeValue = "runtime";
+    };
+    environmentVariables = {
       checkRoot = value: value == "root";
       checkRuntime = value: value == "runtime";
-    });
-    factory-pool-mcpServers-negation = mkTest "pool-mcpServers-negation" (poolMergeContract {
-      poolName = "mcpServers";
+      rootValue = "root";
+      runtimeValue = "runtime";
+    };
+    mcpServers = {
+      checkRoot = value: value.command == "root-mcp" && value.args == ["--root-only"];
+      checkRuntime = value: value.command == "runtime-mcp" && value.args == [];
       rootValue = {
-        type = "stdio";
-        command = "root-mcp";
         args = ["--root-only"];
+        command = "root-mcp";
+        type = "stdio";
       };
       runtimeValue = {
-        type = "stdio";
         command = "runtime-mcp";
+        type = "stdio";
       };
-      checkRoot = value:
-        value.command == "root-mcp" && value.args == ["--root-only"];
-      checkRuntime = value:
-        value.command == "runtime-mcp" && value.args == [];
-    });
-    factory-pool-rules-negation = mkTest "pool-rules-negation" (poolMergeContract {
-      poolName = "rules";
+    };
+    rules = {
+      checkRoot = value: value.text == "root" && value.matcher == ["**/*.root"];
+      checkRuntime = value: value.text == "runtime" && value.matcher == null;
       rootValue = {
-        text = "root";
         matcher = ["**/*.root"];
+        text = "root";
       };
       runtimeValue.text = "runtime";
       suppressionValue.enable = false;
-      checkRoot = value:
-        value.text == "root" && value.matcher == ["**/*.root"];
-      checkRuntime = value:
-        value.text == "runtime" && value.matcher == null;
-    });
-    factory-pool-skills-negation = mkTest "pool-skills-negation" (poolMergeContract {
-      poolName = "skills";
-      rootValue = ../../packages/claude-code/checks/fixtures/claude-agents;
-      runtimeValue = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
-      checkRoot = value: value == ../../packages/claude-code/checks/fixtures/claude-agents;
-      checkRuntime = value: value == ../../packages/kiro-cli/checks/fixtures/kiro-steering;
-    });
+    };
+    skills = let
+      rootFixture = ../../packages/claude-code/checks/fixtures/claude-agents;
+      runtimeFixture = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
+    in {
+      checkRoot = value: value == rootFixture;
+      checkRuntime = value: value == runtimeFixture;
+      rootValue = rootFixture;
+      runtimeValue = runtimeFixture;
+    };
   };
+in {
+  checks.factory-pool-negation = mkTest "pool-negation" (
+    # Suppression and replacement in one runtime must not affect another.
+    checkRows "runtime pool negation and replacement"
+    (lib.mapAttrs (poolName: row: poolMergeContract (row // {inherit poolName;})) pools)
+  );
 }

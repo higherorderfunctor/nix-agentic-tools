@@ -7,7 +7,7 @@
   mkLintedCheck = import ../../lib/mk-linted-check.nix {inherit pkgs;};
 in {
   checks.isolate-prek-hooks = mkLintedCheck "isolate-prek-hooks-check" {
-    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.gnugrep];
+    runtimeInputs = [pkgs.coreutils pkgs.diffutils pkgs.git pkgs.gnugrep];
     text = ''
       export HOME="$PWD/home"
       mkdir -p "$HOME" primary stub
@@ -45,52 +45,59 @@ in {
       #!${pkgs.bash}/bin/bash
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      printf 'PREK_HOME=%s\n' "$PREK_HOME" > "$PREK_CAPTURE"
-      printf 'ARGV=' >> "$PREK_CAPTURE"
-      printf '%s ' "$@" >> "$PREK_CAPTURE"
-      printf '\n' >> "$PREK_CAPTURE"
+      printf '%s\n' "PREK_HOME=$PREK_HOME" "$@" > "$PREK_CAPTURE"
       STUB
       chmod 0755 stub/prek
-      echo 'repos: []' > primary/.pre-commit-config.yaml
-      echo 'repos: []' > base/.pre-commit-config.yaml
-      echo 'repos: []' > other/.pre-commit-config.yaml
+      for checkout in base other primary; do
+        echo 'repos: []' > "$checkout/.pre-commit-config.yaml"
+      done
       export PATH="$PWD/stub:$PATH"
       export PREK_CAPTURE="$PWD/capture"
       root="$PWD"
-      expect_config() {
-        grep -Fq -- "--config=$1/.pre-commit-config.yaml" capture \
-          || { cat capture >&2; return 1; }
-      }
 
-      # No devenv shell (an editor or plain-terminal commit): the primary.
-      ( cd worktree; env -u DEVENV_ROOT "$hooks_dir/pre-commit" )
-      expect_config "$PWD/primary"
-      grep -Fq "PREK_HOME=$PWD/worktree/.devenv/state/prek" capture
+      run_hook() (
+        cd worktree || exit 2
+        unset DEVENV_ROOT
+        if [ "$1" != none ]; then
+          export DEVENV_ROOT="$root/$1"
+        fi
+        if [ "$2" = set ]; then
+          GIT_DIR="$(git rev-parse --path-format=absolute --git-dir)"
+          export GIT_DIR
+        fi
+        "$hooks_dir/pre-commit"
+      )
 
-      ( cd worktree; DEVENV_ROOT="$root/primary" "$hooks_dir/pre-commit" )
-      expect_config "$root/primary"
+      # No shell (editor or plain-terminal commit) uses the primary. A launch
+      # worktree of this repo uses its own config. An unrelated repo never does,
+      # even if Git exports a GIT_DIR that would make it look like this repo.
+      while read -r launch git_dir config; do
+        rm -f "$PREK_CAPTURE"
+        run_hook "$launch" "$git_dir"
+        if ! printf 'PREK_HOME=%s\nrun\n--config=%s\n' \
+          "$root/worktree/.devenv/state/prek" "$root/$config/.pre-commit-config.yaml" \
+          | diff -u - "$PREK_CAPTURE"; then
+          echo "wrong hook state or config: launch=$launch GIT_DIR=$git_dir" >&2
+          exit 1
+        fi
+      done <<'CASES'
+      base unset base
+      none unset primary
+      other set primary
+      other unset primary
+      primary unset primary
+      CASES
 
-      # Launched from a long-lived worktree of this repository: its config.
-      ( cd worktree; DEVENV_ROOT="$root/base" "$hooks_dir/pre-commit" )
-      expect_config "$root/base"
-
-      # Launched from another repository: never its config, and git exports
-      # GIT_DIR to hooks, which, left in place, makes that repository look like this one.
-      ( cd worktree; DEVENV_ROOT="$root/other" "$hooks_dir/pre-commit" )
-      expect_config "$PWD/primary"
-
-      ( cd worktree
-        GIT_DIR="$(git rev-parse --path-format=absolute --git-dir)" \
-          DEVENV_ROOT="$root/other" "$hooks_dir/pre-commit" )
-      expect_config "$PWD/primary"
-
-      rm base/.pre-commit-config.yaml
-      if ( cd worktree; DEVENV_ROOT="$root/base" "$hooks_dir/pre-commit" ) >base.out 2>&1; then
-        echo "rewritten hook allowed a missing launch-checkout config" >&2
+      rm base/.pre-commit-config.yaml "$PREK_CAPTURE"
+      status=0
+      run_hook base unset >base.out 2>&1 || status=$?
+      if [ "$status" -ne 1 ] || [ -e "$PREK_CAPTURE" ] \
+        || ! grep -Fxq "prek: missing: $root/base/.pre-commit-config.yaml" base.out \
+        || ! grep -Fxq "  Run \"devenv shell true\" in $root/base, then commit again." base.out; then
+        echo "missing launch config should abort before invoking prek (exit was $status)" >&2
+        cat base.out >&2
         exit 1
       fi
-      grep -Fq "missing: $root/base/.pre-commit-config.yaml" base.out
-      grep -Fq "devenv shell true\" in $root/base" base.out
 
       mkdir -p "$out"
       touch "$out/ok"

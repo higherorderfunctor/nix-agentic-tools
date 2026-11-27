@@ -46,25 +46,29 @@
       export USER
       export NIX_STATE_DIR="$TMPDIR/nix-state"
       export NIXPKGS_ALLOW_UNFREE=0
+      evaluate() {
+        nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" "$@"
+      }
+
       mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER" repository/packages
       cp -R ${../../packages/git-revise} repository/packages/git-revise
       chmod -R u+w repository
-      nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" > before.json
+      evaluate > before.json
       mv repository/packages/git-revise repository/packages/relocated-owner
-      nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" > after.json
+      evaluate > after.json
       jq -e -s '
-        (.[0].checks | length) > 0 and
+        (.[0].checks | has("git-revise-package")) and
         (.[0] | del(.file)) == (.[1] | del(.file)) and
         .[0].file == "packages/git-revise/packages/ai/gitTools/git-revise/package.nix" and
         .[1].file == "packages/relocated-owner/packages/ai/gitTools/git-revise/package.nix"
       ' before.json after.json
-      if nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" --arg collision true > collision.json 2> collision.log; then
+      if evaluate --arg collision true > collision.json 2> collision.log; then
         echo 'root/owner duplicate check unexpectedly passed' >&2
         exit 1
       fi
-      grep -F 'git-revise-package' collision.log
-      grep -F '<root>' collision.log
-      grep -F 'relocated-owner' collision.log
+      grep -F "facet ownership collision in checks at 'git-revise-package'" collision.log
+      grep -F '<root> (' collision.log
+      grep -F 'relocated-owner (' collision.log | grep -F '/packages/relocated-owner/checks.nix)'
 
       mkdir -p repository/packages/unfree-control/packages/ai/facet-unfree-control
       cp ${pkgs.writeText "facet-unfree-control.nix" ''
@@ -75,15 +79,15 @@
       ''} repository/packages/unfree-control/packages/ai/facet-unfree-control/package.nix
       echo '{}' > repository/packages/unfree-control/registry.nix
       for policy in allow predicate; do
-        nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" --argstr policy "$policy" > "$policy.json"
+        evaluate --argstr policy "$policy" > "$policy.json"
         jq -e '.unfree.drvPath | endswith("facet-unfree-control-1.drv")' "$policy.json"
       done
       for policy in deny rejected-predicate; do
-        if nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" --argstr policy "$policy" > "$policy.json" 2> "$policy.log"; then
+        if evaluate --argstr policy "$policy" > "$policy.json" 2> "$policy.log"; then
           echo "unfree policy $policy unexpectedly passed" >&2
           exit 1
         fi
-        grep -F 'unfree license' "$policy.log"
+        grep -F 'facet-unfree-control-1' "$policy.log" | grep -F 'unfree license'
       done
       mkdir -p "$out"
       cp before.json after.json "$out/"

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest setEnable;
+  inherit (harness) aiStubs checkRows claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest rejectsChange setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDefaults;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   # Runtimes whose record declares settings support.
@@ -25,10 +25,11 @@ in {
       devenv = evalDevenv declaration;
       roots = devenv.config.ai.internal.roots;
       expectedSkills = roots.stacked-workflows-content.passthru.skills;
-      expectedRules = import ../../packages/stacked-workflows/router.nix {
-        inherit lib;
-        pkgs = pkgs // roots;
-      };
+      # Read the named source instead of calling the router factory again.
+      expectedRouter =
+        "<!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->\n\n"
+        + builtins.readFile ../../packages/stacked-workflows/fragments/skill-routing.md;
+      github = devenv.config.ai.copilot.github;
       poolWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.github.") evaluated.config.warnings;
       observation = {
         rules = builtins.attrNames hm.config.ai.copilot.github.rules;
@@ -44,19 +45,20 @@ in {
       });
       warns = pool: lib.any (lib.hasPrefix "ai.copilot.github.${pool} is set but hm does not deliver it to copilot") (poolWarnings consumer);
     in
-      (mkTest "package-copilot-backend-gate" (
-        observation.rules
-        == []
-        && observation.skills == []
-        && observation.warnings == []
-        && devenv.config.ai.copilot.github.skills == expectedSkills
-        && builtins.attrNames devenv.config.ai.copilot.github.rules == builtins.attrNames expectedRules
-        && lib.all (name: devenv.config.ai.copilot.github.rules.${name}.text == expectedRules.${name}.text) (builtins.attrNames expectedRules)
-        && poolWarnings devenv == []
-        && consumer.config.ai.copilot.github.rules ? consumer
-        && consumer.config.ai.copilot.github.skills ? consumer
-        && lib.all warns ["rules" "skills"]
-      ))
+      (mkTest "package-copilot-backend-gate" (checkRows "Copilot package backend gate" {
+        "devenv Copilot receives the router body" =
+          builtins.attrNames github.rules
+          == ["stacked-workflows-router"]
+          && github.rules.stacked-workflows-router.text == expectedRouter;
+        "devenv Copilot receives the complete packaged skill set without warnings" =
+          builtins.attrNames github.skills
+          == ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"]
+          && github.skills == expectedSkills
+          && poolWarnings devenv == [];
+        "hm leaves unsupported consumer rules intact and warns" = consumer.config.ai.copilot.github.rules ? consumer && warns "rules";
+        "hm leaves unsupported consumer skills intact and warns" = consumer.config.ai.copilot.github.skills ? consumer && warns "skills";
+        "hm writes neither package pool and emits no package warning" = observation.rules == [] && observation.skills == [] && observation.warnings == [];
+      }))
       // {passthru = {inherit observation;};};
 
     module-runtime-path-provenance-notice = let
@@ -132,18 +134,10 @@ in {
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
         # on both backends and MUST NOT gain a `-wrapped` suffix.
         shapes = {
-          devenv = {
-            claude = "bare";
-            codex = "wrapped";
-            kimchi = "wrapped";
-            kiro = "wrapped";
-          };
-          hm = {
-            claude = "bare";
-            codex = "wrapped";
-            kimchi = "wrapped";
-            kiro = "wrapped";
-          };
+          claude = "bare";
+          codex = "wrapped";
+          kimchi = "wrapped";
+          kiro = "wrapped";
         };
         installedBy = {
           devenv = name: (evalDevenv (setEnable name true)).config.packages;
@@ -154,29 +148,19 @@ in {
         # turns this eval-only check into a multi-minute realization. The name
         # attribute carries the same `-wrapped` signal for free.
         drvName = drv: drv.name or "";
-        backendFailures = backend:
-          lib.concatMap (
-            name: let
-              installed = installedBy.${backend} name;
-              ok =
-                builtins.length installed
-                == 1
-                && lib.hasSuffix "-wrapped" (drvName (builtins.head installed))
-                == (shapes.${backend}.${name} == "wrapped");
-            in
-              lib.optional (!ok) "${name}/${backend}"
-          )
-          (builtins.attrNames shapes.${backend});
-        failures = backendFailures "devenv" ++ backendFailures "hm";
+        rows = lib.concatMapAttrs (backend: install:
+          lib.mapAttrs' (name: shape: let
+            installed = install name;
+          in
+            lib.nameValuePair "${backend}/${name} installs exactly one ${shape} package" (
+              builtins.length installed
+              == 1
+              && lib.hasSuffix "-wrapped" (drvName (builtins.head installed)) == (shape == "wrapped")
+            ))
+          shapes)
+        installedBy;
       in
-        # `mkTest` throws a bare `FAIL: <name>`, which would name neither the
-        # runtime nor the backend across ten assertions. Trace the offenders first.
-        if failures == []
-        then true
-        else
-          builtins.trace
-          "every-runtime-installs-package: wrong install channel or shape for ${builtins.concatStringsSep ", " failures}"
-          false
+        checkRows "runtime install channel and shape" rows
     );
 
     # The option-presence gate in `lib/ai/mkSkillPackageModule.nix` is what lets a
@@ -357,23 +341,31 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames
-        && lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames
+        checkRows "settings-capable runtimes" {
+          "Claude, Codex, and Kimchi declare shared settings support" = settingsHarnessNames == ["claude" "codex" "kimchi"];
+          "devenv reads portable reasoning effort for each capable runtime" =
+            lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames;
+          "hm reads portable reasoning effort for each capable runtime" =
+            lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames;
+        }
     );
 
     module-runtime-settings-reject-native-keys = mkTest "runtime-settings-reject-native-keys" (
       let
-        rejects = evaluator: let
-          attempt = builtins.tryEval (let
-            result = evaluator {
-              ai.claude.settings.effortLevel = "high";
+        rejectsNativeKey = evaluate:
+          rejectsChange (settings: (evaluate {ai.claude = {inherit settings;};}).config.ai.claude.settings.reasoningEffort) {
+            valid.reasoningEffort = "high";
+            invalid = {
+              effortLevel = "high";
+              reasoningEffort = "high";
             };
-          in
-            builtins.deepSeq result.config.ai.claude.settings true);
-        in
-          !attempt.success;
+            expected = "high";
+          };
       in
-        rejects evalHm && rejects evalDevenv
+        checkRows "portable runtime settings" {
+          "devenv rejects Claude native effortLevel in ai.claude.settings" = rejectsNativeKey evalDevenv;
+          "hm rejects Claude native effortLevel in ai.claude.settings" = rejectsNativeKey evalHm;
+        }
     );
 
     module-aggregate-reasoning-effort-native-overrides-win = mkTest "aggregate-reasoning-effort-native-overrides-win" (
@@ -399,13 +391,19 @@ in {
         && !(devenv.config.ai.codex.files ? ".codex/config.toml")
     );
 
-    module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (!(builtins.tryEval (
-      builtins.deepSeq
-      (evalHm {
-        ai.hooks.ConfigChange = [{hooks = [{command = "true";}];}];
-      }).config.ai.hooks
-      true
-    )).success);
+    module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (
+      let
+        blocks = [{hooks = [{command = "true";}];}];
+        mergedEvents = hooks: builtins.attrNames (evalHm {ai = {inherit hooks;};}).config.ai.hooks;
+      in
+        checkRows "shared hooks" {
+          "ai.hooks accepts PreToolUse but rejects Claude-only ConfigChange" = rejectsChange mergedEvents {
+            valid.PreToolUse = blocks;
+            invalid.ConfigChange = blocks;
+            expected = ["PreToolUse"];
+          };
+        }
+    );
 
     module-all-four-enabled = mkTest "all-four-enabled" (
       let
@@ -447,8 +445,6 @@ in {
           (builtins.removeAttrs declarations ["_module"]);
         programOptions = evaluated: package: evaluated.options.ai.programs.${package};
         optionShape = evaluated: package: shape (programOptions evaluated package);
-        runtimeShape = evaluated: package: runtime:
-          shape (programOptions evaluated package).runtimes.${runtime};
         hm = evalHm {};
         devenv = evalDevenv {};
         gitPresetValues = evaluated:
@@ -457,13 +453,7 @@ in {
           builtins.removeAttrs (optionShape hm package) ["runtimes"]
           == expectedRootShape
           && builtins.attrNames (programOptions hm package).runtimes == runtimes
-          && optionShape hm package
-          == optionShape devenv package
-          && lib.all
-          (runtime:
-            runtimeShape hm package runtime
-            == runtimeShape devenv package runtime)
-          runtimes;
+          && optionShape hm package == optionShape devenv package;
       in
         programParity "delegate-routing" {
           credentialUsage = "attribute set of (submodule)";
@@ -549,77 +539,54 @@ in {
         && !(lib.hasInfix "fileMatchPattern:" kiro)
     );
 
-    module-rule-inclusion-unsupported-runtime-fails = mkTest "rule-inclusion-unsupported-runtime-fails" (
+    module-rule-inclusion-restrictions = mkTest "rule-inclusion-restrictions" (
       let
-        unsupportedAttempt = builtins.tryEval (let
-          evaluated = evalDevenv {
-            ai = {
-              claude.enable = true;
-              rules.manual = {
-                inclusion = ["manual"];
-                text = "MANUAL-RULE.";
-              };
-            };
-          };
-        in
-          builtins.deepSeq (markdownInput evaluated ".claude/rules/manual.md").text true);
-      in
-        !unsupportedAttempt.success
-    );
-
-    module-rule-inclusion-auto-requires-description = mkTest "rule-inclusion-auto-requires-description" (
-      let
-        attempt = builtins.tryEval (let
-          evaluated = evalDevenv {
-            ai = {
-              kiro.cli.enable = true;
-              rules.semantic = {
-                inclusion = ["auto"];
-                text = "SEMANTIC-RULE.";
-              };
-            };
-          };
-        in
-          builtins.deepSeq (markdownInput evaluated ".kiro/steering/semantic.md").text true);
-      in
-        !attempt.success
-    );
-
-    module-rule-inclusion-codex-auto-needs-references = mkTest "rule-inclusion-codex-auto-needs-references" (
-      let
-        withReferences = evalDevenv {
-          ai = {
-            codex.enable = true;
-            rules.semantic = {
-              description = "Load when semantic guidance applies";
-              inclusion = ["auto"];
-              references = ["docs/semantic.md"];
-              text = "SEMANTIC-RULE-BODY.";
-            };
-          };
+        text = "SEMANTIC-RULE-BODY.";
+        evaluate = enable: rule: evalDevenv {ai = enable // {rules.semantic = rule;};};
+        claudeRule = rule: (markdownInput (evaluate {claude.enable = true;} rule) ".claude/rules/semantic.md").text;
+        codex = evaluate {codex.enable = true;};
+        kiroRule = rule: (markdownInput (evaluate {kiro.cli.enable = true;} rule) ".kiro/steering/semantic.md").text;
+        autoRule = {
+          inherit text;
+          description = "Load when semantic guidance applies";
+          inclusion = ["auto"];
         };
-        agentsMd = (markdownInput withReferences "AGENTS.md").text;
-        withoutReferences = builtins.tryEval (let
-          evaluated = evalDevenv {
-            ai = {
-              codex.enable = true;
-              rules.semantic = {
-                description = "Load when semantic guidance applies";
-                inclusion = ["auto"];
-                text = "SEMANTIC-RULE-BODY.";
-              };
-            };
-          };
+        codexWithReferences = autoRule // {references = ["docs/semantic.md"];};
+        codexControl = codex codexWithReferences;
+        hasCodexIndex = evaluated: let
+          agentsMd = (markdownInput evaluated "AGENTS.md").text;
         in
-          builtins.deepSeq (markdownInput evaluated "AGENTS.md").text true);
+          lib.hasInfix "## Rule index" agentsMd
+          && lib.hasInfix "Trigger: `auto`" agentsMd
+          && lib.hasInfix "Description: Load when semantic guidance applies" agentsMd
+          && lib.hasInfix "[`docs/semantic.md`](docs/semantic.md)" agentsMd
+          && !(lib.hasInfix text agentsMd);
       in
-        lib.hasInfix "## Rule index" agentsMd
-        && withReferences.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
-        && lib.hasInfix "Trigger: `auto`" agentsMd
-        && lib.hasInfix "Description: Load when semantic guidance applies" agentsMd
-        && lib.hasInfix "[`docs/semantic.md`](docs/semantic.md)" agentsMd
-        && !(lib.hasInfix "SEMANTIC-RULE-BODY." agentsMd)
-        && !withoutReferences.success
+        checkRows "rule inclusion restrictions" {
+          "Claude rejects manual as the only requested trigger" = rejectsChange claudeRule {
+            valid = {
+              inherit text;
+              inclusion = ["always"];
+            };
+            invalid = {
+              inherit text;
+              inclusion = ["manual"];
+            };
+            expected = text;
+          };
+          "Codex auto rule needs references to render an index entry, not an inline body" = rejectsChange hasCodexIndex {
+            valid = codexControl;
+            invalid = codex autoRule;
+            expected = true;
+          };
+          "Codex marks the document as having an on-demand index" =
+            codexControl.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex;
+          "Kiro auto rule needs a non-empty description" = rejectsChange (rule: lib.hasInfix ''inclusion: "auto"'' (kiroRule rule)) {
+            valid = autoRule;
+            invalid = builtins.removeAttrs autoRule ["description"];
+            expected = true;
+          };
+        }
     );
 
     module-rule-inclusion-defaults-preserve-rendering = mkTest "rule-inclusion-defaults-preserve-rendering" (

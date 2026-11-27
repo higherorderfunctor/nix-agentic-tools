@@ -20,9 +20,11 @@ sees the wrong word first and takes the wrong branch for Codex and Kiro.
 Select the stub's behavior with an environment variable instead, and let the
 check set it before the launch. Stubs that need no behavior switch simply ignore
 argv, as the Codex fake in
-`packages/chatgpt-codex/checks/chatgpt-codex-project-doc-preflight.nix` and the
-Kiro stub in `checks/ai-warnings/runtime.nix` do. A stub that must observe the
-argv prints it, one `ARG=` line per token, as `kiro-wrapper-argv.nix` does.
+`packages/chatgpt-codex/checks/chatgpt-codex-project-doc-preflight.nix` does.
+The Kiro stub in `checks/ai-warnings/runtime.nix` ignores argv and chooses its
+response based on the `PROBE` credential in its environment. A stub that must
+observe argv prints it, one `ARG=` line per token, as `kiro-wrapper-argv.nix`
+does.
 
 <!-- Fragment: dev/fragments/facets/package-ownership.md -->
 

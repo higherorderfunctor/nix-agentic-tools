@@ -9,7 +9,7 @@
   ...
 }: let
   inherit (import ../../lib/extracted {inherit pkgs;}) mkDriftCheck;
-  runner = import ./runner.nix {inherit lib;};
+  runner = (import ./runner.nix {inherit lib pkgs;}).shell;
   host = pkgs.stdenv.hostPlatform.system;
   # A system this host cannot build for: a host-run extractor's derivation.
   other = lib.findFirst (system: system != host) null (import ../../config/systems.nix);
@@ -106,7 +106,7 @@
     runner {
       inherit label;
       command = ''(mkdir "$TMPDIR/${label}" && cd "$TMPDIR/${label}" && out="$TMPDIR/${label}/out" bash ${pkgs.writeText "${label}.sh" (script case)})'';
-      names = map named case.fails or [];
+      names = map (system: "${named system} is out of sync with its extraction sources") case.fails or [];
       omits = map named case.omits or [];
     };
 in {

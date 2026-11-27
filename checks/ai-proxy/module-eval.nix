@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm mkTest;
+  inherit (harness) checkRows claudeSettings evalDevenv evalHm mkTest rejectsChange;
   backends = {
     devenv = evalDevenv;
     hm = evalHm;
@@ -12,6 +12,7 @@
   runtimes = ["claude" "codex" "kimchi" "kiro"];
   http = "http://plain.invalid:8080";
   https = "http://secure.invalid:8443";
+  instanceHttp = "http://instance.invalid:8080";
   local = "http://runtime.invalid:8000";
   cases = {
     both = {
@@ -79,11 +80,11 @@
     };
     instance-peer-fallback = {
       root = {
-        instance = "main";
         https = local;
+        instance = "main";
       };
       expected = {
-        http = https;
+        http = instanceHttp;
         https = local;
       };
       expectedInstance = "main";
@@ -107,17 +108,6 @@
         inherit http;
         https = null;
       };
-    };
-    root-explicit-https = {
-      root = {
-        https = local;
-        instance = "main";
-      };
-      expected = {
-        http = https;
-        https = local;
-      };
-      expectedInstance = "main";
     };
     runtime-http = {
       root = {inherit http https;};
@@ -265,45 +255,53 @@
       expectedInstance = "other";
     };
   };
-  semantics = lib.concatMapAttrs (backend: evaluate:
-    lib.mapAttrs' (name: test:
-      lib.nameValuePair "module-ai-proxy-${backend}-${name}"
-      (mkTest "ai-proxy-${backend}-${name}" (let
-        result = evaluate {
-          ai =
-            {
-              internal.proxyInstances = {
-                main = {
-                  http = https;
-                  inherit https;
-                };
-                other = {
-                  http = local;
-                  https = local;
-                };
+  semantics = lib.mapAttrs' (backend: evaluate: let
+    name = "ai-proxy-${backend}-resolution";
+    observe = test:
+      (evaluate {
+        ai =
+          {
+            internal.proxyInstances = {
+              main = {
+                http = instanceHttp;
+                inherit https;
               };
-              proxy = test.root;
-            }
-            // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
-        };
-      in
-        lib.all (runtime:
-          result.config.ai.${runtime}.proxy
-          == test.expected // {instance = test.expectedInstance or null;}
-          && result.config.ai.${runtime}.normalized.proxy == test.expected)
-        runtimes)))
-    cases)
-  backends;
-  invalidProxies = lib.concatMapAttrs (backend: evaluate:
-    lib.mapAttrs' (name: path:
-      lib.nameValuePair "module-ai-proxy-${backend}-${name}"
-      (mkTest "ai-proxy-${backend}-${name}" (let
-        value = lib.attrByPath path null (evaluate (lib.setAttrByPath path "")).config;
-      in
-        !(builtins.tryEval (builtins.deepSeq value value)).success))) {
-      reject-empty-root-http = ["ai" "proxy" "http"];
-      reject-empty-runtime-https = ["ai" "kiro" "proxy" "https"];
-    })
+              other = {
+                http = local;
+                https = local;
+              };
+            };
+            proxy = test.root;
+          }
+          // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
+      }).config.ai;
+    rows = lib.mapAttrsToList (scenario: test: let
+      actual = observe test;
+    in
+      lib.concatMap (runtime: [
+        (lib.nameValuePair "${scenario}: ${runtime} resolves protocols and instance"
+          (actual.${runtime}.proxy == test.expected // {instance = test.expectedInstance or null;}))
+        (lib.nameValuePair "${scenario}: ${runtime} normalizes only the resolved protocols"
+          (actual.${runtime}.normalized.proxy == test.expected))
+      ])
+      runtimes)
+    cases;
+    # Force just the defining field: otherwise an unrelated module error could
+    # satisfy the rejection. Each control travels through the same merge.
+    rejectsEmpty = path: valid:
+      rejectsChange (value: lib.getAttrFromPath path (evaluate (lib.setAttrByPath path value)).config) {
+        inherit valid;
+        invalid = "";
+        expected = valid;
+      };
+  in
+    lib.nameValuePair "module-${name}" (mkTest name (checkRows name (
+      builtins.listToAttrs (lib.concatLists rows)
+      // {
+        "ai.kiro.proxy.https rejects an empty string" = rejectsEmpty ["ai" "kiro" "proxy" "https"] https;
+        "ai.proxy.http rejects an empty string" = rejectsEmpty ["ai" "proxy" "http"] http;
+      }
+    ))))
   backends;
   # The actual installed launcher executes this sentinel. No inference or
   # credentials are needed, and an absent default is observably different.
@@ -382,30 +380,41 @@
         export HOME="$TMPDIR/home" DEVENV_ROOT="$PWD"
         mkdir -p "$HOME"
         unset http_proxy https_proxy
-        actual=$(env -u NO_PROXY -u no_proxy PROXY_SENTINEL_MODE=no-proxy ${selectedInstance}/bin/${exe})
-        test "$actual" = '127.0.0.1,localhost,::1'
-        expected=$(printf '%s\n' ${lib.escapeShellArg http} ${lib.escapeShellArg https} absent)
-        actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${ordinary}/bin/${exe})
-        test "$actual" = "$expected"
-        expected=$(printf '%s\n' absent ${lib.escapeShellArg https} absent)
-        actual=$(env -u HTTP_PROXY -u HTTPS_PROXY http_proxy=ambient ${ordinary}/bin/${exe})
-        test "$actual" = "$expected"
-        expected=$(printf '%s\n' ${lib.escapeShellArg http} ${lib.escapeShellArg http} absent)
-        actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${sameProtocol}/bin/${exe})
-        test "$actual" = "$expected"
-        expected=$(printf '%s\n' ambient "" absent)
-        actual=$(HTTP_PROXY=ambient HTTPS_PROXY= ${ordinary}/bin/${exe})
-        test "$actual" = "$expected"
-        expected=$(printf '%s\n' ${lib.escapeShellArg local} "" absent)
-        actual=$(HTTP_PROXY=ambient HTTPS_PROXY=ambient ${native}/bin/${exe})
-        test "$actual" = "$expected"
-        expected=$(printf '%s\n' ${lib.escapeShellArg http} absent ${lib.escapeShellArg local})
-        actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${nativeLowercase}/bin/${exe})
-        test "$actual" = "$expected"
+        check_output() {
+          local row=$1 expected=$2 actual
+          shift 2
+          if ! actual=$("$@"); then
+            printf '%s: launcher failed\n' "$row" >&2
+            return 1
+          fi
+          if [[ "$actual" != "$expected" ]]; then
+            printf '%s: expected %q, got %q\n' "$row" "$expected" "$actual" >&2
+            return 1
+          fi
+        }
+        check_proxy() {
+          local row=$1 expected
+          expected=$(printf '%s\n' "$2" "$3" "$4")
+          shift 4
+          check_output "$row" "$expected" "$@"
+        }
+        check_output 'instance supplies loopback NO_PROXY' '127.0.0.1,localhost,::1' \
+          env -u NO_PROXY -u no_proxy PROXY_SENTINEL_MODE=no-proxy ${selectedInstance}/bin/${exe}
+        check_proxy 'both unset protocols use their configured defaults' ${lib.escapeShellArg http} ${lib.escapeShellArg https} absent \
+          env -u HTTP_PROXY -u HTTPS_PROXY ${ordinary}/bin/${exe}
+        check_proxy 'ambient lowercase HTTP suppresses only the uppercase HTTP default' absent ${lib.escapeShellArg https} absent \
+          env -u HTTP_PROXY -u HTTPS_PROXY http_proxy=ambient ${ordinary}/bin/${exe}
+        check_proxy 'single configured HTTP origin reaches both protocol variables' ${lib.escapeShellArg http} ${lib.escapeShellArg http} absent \
+          env -u HTTP_PROXY -u HTTPS_PROXY ${sameProtocol}/bin/${exe}
+        check_proxy 'ambient uppercase values win even when empty' ambient "" absent \
+          env HTTP_PROXY=ambient HTTPS_PROXY= ${ordinary}/bin/${exe}
+        check_proxy 'configured uppercase values win over ambient and defaults' ${lib.escapeShellArg local} "" absent \
+          env HTTP_PROXY=ambient HTTPS_PROXY=ambient ${native}/bin/${exe}
+        check_proxy 'configured lowercase HTTPS suppresses only the uppercase HTTPS default' ${lib.escapeShellArg http} absent ${lib.escapeShellArg local} \
+          env -u HTTP_PROXY -u HTTPS_PROXY ${nativeLowercase}/bin/${exe}
         ${lib.optionalString (runtime == "kimchi" && backend == "hm") ''
-          expected=$(printf '%s\n' absent absent absent)
-          actual=$(env -u HTTP_PROXY -u HTTPS_PROXY ${kimchiNative}/bin/${exe})
-          test "$actual" = "$expected"
+          check_proxy 'Kimchi native httpProxy suppresses both defaults' absent absent absent \
+            env -u HTTP_PROXY -u HTTPS_PROXY ${kimchiNative}/bin/${exe}
         ''}
         echo PASS > "$out"
       ''))
@@ -415,8 +424,8 @@
     lib.listToAttrs (map (runtime: let
       name = "ai-proxy-${backend}-${runtime}-null-package-warning";
       warning = "ai.proxy is set but ai.${runtime}.package is null; the proxy is delivered only through the managed launcher.";
-      warningsWith = extra: package: proxy:
-        lib.filter (lib.hasInfix warning)
+      proxyWarnings = extra: package: proxy:
+        lib.filter (lib.hasPrefix "ai.proxy is set but ai.${runtime}.package is null;")
         (evaluate {
           ai = {
             inherit proxy;
@@ -428,80 +437,75 @@
               // extra;
           };
         }).config.warnings;
-      warnings = warningsWith {};
+      warnings = proxyWarnings {};
+      rows =
+        {
+          "absent proxy is silent without a package" = warnings null {} == [];
+          "explicit null protocols are silent without a package" =
+            warnings null {
+              http = null;
+              https = null;
+            }
+            == [];
+          "managed launcher delivers the proxy without warning" = warnings sentinel {inherit http;} == [];
+          "unmanaged launcher warns about undelivered proxy" = warnings null {inherit http;} == [warning];
+        }
+        // lib.optionalAttrs (backend == "hm" && runtime == "kimchi") {
+          # Kimchi's native httpProxy (HM only) suppresses the launcher defaults.
+          "native Kimchi proxy suppresses the managed-launcher warning" =
+            proxyWarnings {native.harnessSettings.httpProxy = local;} null {inherit http;} == [];
+        };
     in
-      lib.nameValuePair "module-${name}" (mkTest name (
-        warnings null {inherit http;}
-        == [warning]
-        && warnings sentinel {inherit http;} == []
-        && warnings null {} == []
-        && warnings null {
+      lib.nameValuePair "module-${name}" (mkTest name (checkRows name rows))) ["codex" "kimchi"]))
+  backends;
+  settings = lib.mapAttrs' (backend: evaluate: let
+    name = "ai-proxy-${backend}-settings-and-warnings";
+    claude = proxy: native:
+      (claudeSettings (evaluate {
+        ai = {
+          inherit proxy;
+          claude = {
+            enable = true;
+            native.settings.env = native;
+          };
+        };
+      })).env;
+    copilot = proxy:
+      lib.filter (lib.hasInfix "ai.proxy is set but ${backend} does not deliver it to copilot")
+      (evaluate {
+        ai = {
+          inherit proxy;
+          copilot.enable = true;
+        };
+      }).config.warnings;
+    blocked = claude {
+      http = null;
+      inherit https;
+    } {};
+    overridden = claude {inherit http https;} {
+      HTTP_PROXY = local;
+      HTTPS_PROXY = local;
+    };
+    shared = claude {inherit http https;} {};
+  in
+    lib.nameValuePair "module-${name}" (mkTest name (checkRows name {
+      "Claude delivers both configured origins in settings" = shared.HTTP_PROXY == http && shared.HTTPS_PROXY == https;
+      "Claude explicit null HTTP omits only HTTP_PROXY" = !(blocked ? HTTP_PROXY) && blocked.HTTPS_PROXY == https;
+      "Claude native env wins for both protocols" = overridden.HTTP_PROXY == local && overridden.HTTPS_PROXY == local;
+      "Copilot explicit null protocols are not a delivery request" =
+        copilot {
           http = null;
           https = null;
         }
-        == []
-        # Kimchi's native httpProxy (HM only) suppresses the launcher defaults.
-        && (backend
-          == "hm"
-          && runtime == "kimchi"
-          -> warningsWith {native.harnessSettings.httpProxy = local;} null {inherit http;} == [])
-      ))) ["codex" "kimchi"]))
+        == [];
+      "Copilot omitted proxy fields do not warn" = copilot {} == [];
+    })))
   backends;
-  settings = lib.mapAttrs' (backend: evaluate:
-    lib.nameValuePair "module-ai-proxy-${backend}-settings-and-warnings"
-    (mkTest "ai-proxy-${backend}-settings-and-warnings" (let
-      claude = native:
-        evaluate {
-          ai = {
-            proxy = {inherit http https;};
-            claude = {
-              enable = true;
-              native.settings.env = native;
-            };
-          };
-        };
-      settings = claudeSettings (claude {});
-      overridden = claudeSettings (claude {
-        HTTP_PROXY = local;
-        HTTPS_PROXY = local;
-      });
-      blocked = claudeSettings (evaluate {
-        ai = {
-          proxy = {
-            http = null;
-            inherit https;
-          };
-          claude.enable = true;
-        };
-      });
-      copilot = proxy:
+  usageTracking = lib.mapAttrs' (backend: evaluate: let
+    name = "ai-proxy-${backend}-kiro-usage-tracking";
+    failures = root: proxy:
+      map (entry: entry.message) (lib.filter (entry: !entry.assertion)
         (evaluate {
-          ai = {
-            inherit proxy;
-            copilot.enable = true;
-          };
-        }).config.warnings;
-      warning = "ai.proxy is set but ${backend} does not deliver it to copilot";
-    in
-      settings.env.HTTP_PROXY
-      == http
-      && settings.env.HTTPS_PROXY == https
-      && overridden.env.HTTP_PROXY == local
-      && overridden.env.HTTPS_PROXY == local
-      && !(blocked.env ? HTTP_PROXY)
-      && blocked.env.HTTPS_PROXY == https
-      && lib.any (lib.hasInfix warning) (copilot {inherit http;})
-      && !(lib.any (lib.hasInfix warning) (copilot {
-        http = null;
-        https = null;
-      }))
-      && !(lib.any (lib.hasInfix warning) (copilot {})))))
-  backends;
-  usageTracking = lib.mapAttrs' (backend: evaluate:
-    lib.nameValuePair "module-ai-proxy-${backend}-kiro-usage-tracking"
-    (mkTest "ai-proxy-${backend}-kiro-usage-tracking" (let
-      evaluateProxy = root: proxy:
-        evaluate {
           ai = {
             proxy = root;
             internal.proxyInstances.main = {inherit http https;};
@@ -513,34 +517,33 @@
               };
             };
           };
-        };
-      failures = map (entry: entry.message) (lib.filter (entry: !entry.assertion) (evaluateProxy {inherit http;} {}).config.assertions);
-      optedOut = evaluateProxy {inherit http;} {
-        http = null;
-        https = null;
-      };
-    in
-      builtins.length failures
-      == 1
-      && lib.hasInfix "usageTracking owns HTTP(S)/ALL/NO_PROXY" (builtins.head failures)
-      && lib.hasInfix "ai.kiro.proxy = {http = null; https = null;}" (builtins.head failures)
-      && lib.all (entry: entry.assertion) optedOut.config.assertions
-      && lib.all (entry: entry.assertion)
-      (evaluateProxy {instance = "main";} {
-        http = null;
-        https = null;
-      }).config.assertions)))
+        }).config.assertions);
+    inherited = failures {inherit http;} {};
+    optOut = {
+      http = null;
+      https = null;
+    };
+  in
+    lib.nameValuePair "module-${name}" (mkTest name (checkRows name {
+      "explicit null protocols permit tracking with a root instance" = failures {instance = "main";} optOut == [];
+      "explicit null protocols permit tracking with a root protocol" = failures {inherit http;} optOut == [];
+      "inherited HTTP proxy reports the tracking conflict and opt-out remedy" =
+        builtins.length inherited
+        == 1
+        && lib.hasPrefix "ai.kiro.cli.usageTracking owns HTTP(S)/ALL/NO_PROXY" (builtins.head inherited)
+        && lib.hasInfix "ai.kiro.proxy = {http = null; https = null;}" (builtins.head inherited);
+    })))
   backends;
 in {
   checks =
     semantics
-    // invalidProxies
     // launchers
     // packageWarnings
     // settings
     // usageTracking
     // {
-      module-ai-proxy-kimchi-native-priority = mkTest "ai-proxy-kimchi-native-priority" (let
+      module-ai-proxy-kimchi-native-priority = let
+        name = "ai-proxy-kimchi-native-priority";
         evaluate = backend: native:
           backends.${backend} {
             ai = {
@@ -557,9 +560,12 @@ in {
         in
           result.config.ai.files.${path}.content.value.httpProxy or null;
       in
-        lib.all (backend: (evaluate backend {}).config.ai.kimchi.native.harnessSettings.httpProxy == null) (builtins.attrNames backends)
-        && delivered {} == null
-        && delivered {httpProxy = local;} == local
-        && delivered {httpProxy = null;} == null);
+        mkTest name (checkRows name {
+          "devenv shared proxy leaves native httpProxy unset" = (evaluate "devenv" {}).config.ai.kimchi.native.harnessSettings.httpProxy == null;
+          "home manager shared proxy leaves native httpProxy unset" = (evaluate "hm" {}).config.ai.kimchi.native.harnessSettings.httpProxy == null;
+          "native null does not deliver a proxy origin in settings" = delivered {httpProxy = null;} == null;
+          "native proxy reaches settings instead of the shared origin" = delivered {httpProxy = local;} == local;
+          "shared proxy is not written to native settings" = delivered {} == null;
+        });
     };
 }

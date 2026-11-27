@@ -13,11 +13,13 @@
 # Tool-specific behavior (git-branchless's refinements and exclusions) is
 # the owner's own check; see packages/git-branchless/checks/settings-options.nix.
 {
+  harness,
   lib,
-  pkgs,
   self,
   ...
 }: let
+  inherit (harness) checkRows mkTest rejectsChange;
+
   generate = extracted:
     import ../../lib/git-tool-settings {
       inherit extracted lib;
@@ -36,121 +38,118 @@
     source.version = "1";
   };
   one = node: sidecar {"probe.key" = read // node;};
-  throws = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
   optionOf = extracted: (generate extracted).options.probe.key;
   describes = node: fragment: lib.hasInfix fragment (optionOf (one node)).description;
-  checks' = type: value: (builtins.tryEval (type.check value)).value or false;
 
-  fixtures = {
-    known-fields-evaluate =
-      !(throws (optionOf (one {
-        cli = {
-          alsoSetBy = ["--force"];
-          doc = "Do it";
-          flag = "--probe";
-        };
-        default = false;
-        invalid = "default";
-        type = "bool";
-      })));
-    unknown-setting-field-fails = throws (optionOf (one {
+  # Reading the option forces the whole sidecar's schema, including entries
+  # that never become options. Each rejection changes only the named field.
+  cli = {
+    alsoSetBy = ["--force"];
+    doc = "Do it";
+    flag = "--probe";
+  };
+  validSidecar =
+    lib.recursiveUpdate (one {
+      inherit cli;
+      default = false;
+      invalid = "default";
       type = "bool";
-      range = [0 1];
-    }));
-    unknown-top-level-field-fails = throws (generate ((one {type = "bool";}) // {aliases = [];})).options;
-    unknown-value-field-fails = throws (optionOf (one {
-      type = "enum";
-      values = [
+    }) {
+      foreign."core.editor" =
+        read
+        // {
+          type = "string";
+          writes = {};
+        };
+      settings."probe.choice" =
+        read
+        // {
+          type = "enum";
+          values = [{value = "a";}];
+        };
+    };
+  rejectsSidecar = invalid:
+    rejectsChange (extracted: (optionOf extracted).default) {
+      valid = validSidecar;
+      inherit invalid;
+      expected = null;
+    };
+  schemaCases =
+    lib.mapAttrs (_: patch: rejectsSidecar (lib.recursiveUpdate validSidecar patch)) {
+      "cli rejects unknown negation field".settings."probe.key".cli.negation = "--no-probe";
+      "enum value rejects unknown rank field".settings."probe.choice".values = [
         {
-          value = "a";
           rank = 1;
+          value = "a";
         }
       ];
-    }));
-    unknown-cli-field-fails = throws (optionOf (one {
-      type = "bool";
-      cli = {
-        flag = "--p";
-        doc = "";
-        negation = "--no-p";
-      };
-    }));
-    unknown-foreign-field-fails =
-      throws
-      (generate ((one {type = "bool";})
-        // {
-          foreign."core.x" = {
-            reads = {};
-            writes = {};
-            owner = "git";
-          };
-        })).options;
-    missing-required-field-fails = throws (generate (builtins.removeAttrs (one {type = "bool";}) ["deadKeys"])).options;
-    bad-invalid-value-fails = throws (optionOf (one {
-      type = "bool";
-      invalid = "error";
-    }));
-    revset-functions-are-optional = (generate (one {type = "bool";})).revsetFunctions == [];
-    minimum-narrows-the-int = let
-      inherit
-        (optionOf (one {
-          type = "int";
-          minimum = 1;
-        }))
-        type
-        ;
-    in
-      checks' type 1 && !(checks' type 0) && !(checks' type (-5)) && checks' type null;
-    plain-int-is-32-bit = let
-      inherit (optionOf (one {type = "int";})) type;
-    in
-      checks' type (-5) && !(checks' type 2147483648);
-    fallback-is-described = describes {
-      type = "bool";
+      "foreign key rejects unknown owner field".foreign."core.editor".owner = "git";
+      "setting rejects invalid handling other than default or fallback".settings."probe.key".invalid = "error";
+      "setting rejects unknown range field".settings."probe.key".range = [0 1];
+      "sidecar rejects unknown aliases field".aliases = [];
+    }
+    // {
+      "sidecar rejects missing deadKeys" = rejectsSidecar (builtins.removeAttrs validSidecar ["deadKeys"]);
+    };
+
+  readInt = bounds: value:
+    (lib.evalModules {
+      modules = [
+        {inherit (generate (one ({type = "int";} // bounds))) options;}
+        {config.probe.key = value;}
+      ];
+    }).config.probe.key;
+  plainInt = readInt {};
+  positiveInt = readInt {minimum = 1;};
+  rejectsInt = readValue: valid: invalid:
+    rejectsChange readValue {
+      inherit invalid valid;
+      expected = valid;
+    };
+  rangeCases = {
+    "minimum 1 accepts null" = positiveInt null == null;
+    "minimum 1 rejects zero" = rejectsInt positiveInt 1 0;
+    "plain int rejects above signed 32-bit maximum" = rejectsInt plainInt (-5) 2147483648;
+  };
+
+  # Descriptions tell users the upstream behavior, not Nix's unset default.
+  fixtures = {
+    cli-or-semantics-are-described = describes {
+      inherit cli;
       default = false;
-      fallback = ["rebase.autoSquash"];
-    } "uses the value of `rebase.autoSquash`; when that is unset too, `false`";
-    computed-terminal-default-is-described = describes {
       type = "bool";
+    } "`--probe` (also set by `--force`) (\"Do it\") is ORed with this setting";
+    computed-terminal-default-is-described = describes {
       defaultExpr = "rr_cache.is_dir()";
       fallback = ["rerere.enabled"];
+      type = "bool";
     } "whatever `rr_cache.is_dir()` computes";
-    cli-or-semantics-are-described = describes {
-      type = "bool";
+    fallback-is-described = describes {
       default = false;
-      cli = {
-        alsoSetBy = ["--force"];
-        doc = "Do it";
-        flag = "--probe";
-      };
-    } "`--probe` (also set by `--force`) (\"Do it\") is ORed with this setting";
+      fallback = ["rebase.autoSquash"];
+      type = "bool";
+    } "uses the value of `rebase.autoSquash`; when that is unset too, `false`";
+    foreign-keys-are-not-options = let
+      surface = generate validSidecar;
+    in
+      !(surface.options ? core) && map (leaf: leaf.key) surface.leaves == ["probe.choice" "probe.key"];
     overrides-are-described = describes {
-      type = "bool";
       overriddenBy = ["--probe" "--no-probe"];
-    } "flags `--probe`, `--no-probe` override it";
-    undocumented-is-described = describes {
       type = "bool";
-      documented = false;
-    } "Undocumented upstream";
+    } "flags `--probe`, `--no-probe` override it";
+    revset-functions-are-optional = (generate (one {type = "bool";})).revsetFunctions == [];
     silent-fallback-on-invalid-is-described = describes {
-      type = "int";
       invalid = "default";
+      type = "int";
     } "replaces a value it cannot parse with the default";
     special-values-are-described = describes {
-      type = "string";
       specialValues = ["" "auto"];
+      type = "string";
     } "`\"\"`, `\"auto\"`";
-    foreign-keys-are-not-options = let
-      surface = generate ((one {type = "bool";})
-        // {
-          foreign."core.editor" = {
-            inherit (read) reads;
-            writes = {};
-            type = "string";
-          };
-        });
-    in
-      !(surface.options ? core) && map (l: l.key) surface.leaves == ["probe.key"];
+    undocumented-is-described = describes {
+      documented = false;
+      type = "bool";
+    } "Undocumented upstream";
   };
 
   owners = lib.filterAttrs (_: exported: builtins.isAttrs exported && exported ? settings) self.lib;
@@ -158,20 +157,17 @@
     lib.concatMapAttrs (owner: exported: let
       surface = exported.settings {inherit lib;};
     in {
-      "${owner}-types-are-mapped" = surface.report.untyped == [];
-      "${owner}-keys-do-not-nest" = surface.report.collisions == [];
       "${owner}-hand-tables-are-current" = surface.report.staleExclusions == [] && surface.report.staleRefinements == [];
-      "${owner}-options-evaluate" = !(throws surface.options);
+      "${owner}-keys-do-not-nest" = surface.report.collisions == [];
+      "${owner}-options-evaluate" = (builtins.tryEval (builtins.deepSeq surface.options true)).success;
+      "${owner}-types-are-mapped" = surface.report.untyped == [];
     })
     owners;
-
-  cases = fixtures // ownerCases;
-  failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
 in {
-  checks.git-tool-settings-generator =
-    if failed == []
-    then
-      pkgs.writeText "git-tool-settings-generator"
-      (lib.concatMapStringsSep "\n" (name: "PASS ${name}") (builtins.attrNames cases) + "\n")
-    else throw "git-tool-settings-generator: FAILED ${lib.concatStringsSep ", " failed}";
+  checks.git-tool-settings-generator = mkTest "git-tool-settings-generator" (
+    checkRows "sidecar schema" schemaCases
+    && checkRows "integer option definitions" rangeCases
+    && checkRows "generated options" fixtures
+    && checkRows "owner sidecars" ownerCases
+  );
 }

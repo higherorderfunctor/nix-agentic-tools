@@ -6,7 +6,6 @@
 # independent bubblewrap positive control with the same namespace flags;
 # `$out` says which branch ran.
 {
-  harness,
   lib,
   pkgs,
   self,
@@ -14,38 +13,29 @@
 }: let
   jailLib = import ../../lib/ai/jail {inherit lib;};
   bwrap = lib.getExe pkgs.bubblewrap;
-  # Inspect direct per-executable derivations, without exposing test metadata
-  # on the installed profile or duplicating its base permissions.
-  combinatorJail = self.lib.ai.jail.extend {
-    inherit pkgs;
-    additionalCombinators = self.lib.ai.jail.combinators pkgs;
-    basePermissions = [];
-  };
-  environmentWrapper = explicit:
-    combinatorJail "environment-order" "${pkgs.coreutils}/bin/true" (c:
-      [c.strict-runtime c.restore-path (c.unset-env "PATH")]
-      ++ lib.optional explicit (c.set-env "PATH" "/jail-permissions-path"));
-  environmentOrder = explicit: let
-    text = builtins.unsafeDiscardStringContext (environmentWrapper explicit).text;
-    restoreUnset = builtins.unsafeDiscardStringContext ''--setenv PATH "''${PATH#${pkgs.coreutils}/bin:}" --unsetenv PATH'';
-    afterUnset = builtins.elemAt (lib.splitString "--unsetenv PATH" text) 1;
-  in
-    lib.hasInfix restoreUnset text
-    && !(lib.hasInfix "RUNTIME_ARGS+=(--setenv PATH" text)
-    && (!explicit || lib.hasInfix "--setenv PATH /jail-permissions-path" afterUnset);
   probe = pkgs.writeShellScriptBin "jail-probe" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     root=$1
-    printf 'file=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/secret-file")"
-    printf 'dir=%s\n' "$("${pkgs.coreutils}/bin/ls" -A "$root/secret-dir")"
-    printf 'link=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/link")"
-    printf 'target=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/link-target")"
-    printf 'visible=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/visible")"
-    printf 'secret=%s\n' "''${JAIL_SECRET:-unset}"
+    read_fixture() {
+      local name=$1 value
+      shift
+      # A blocked read is not the same as successfully reading an empty mask.
+      if ! value=$("$@"); then
+        echo "FAIL: could not read the $name fixture" >&2
+        exit 1
+      fi
+      printf '%s=%s\n' "$name" "$value"
+    }
+    read_fixture file ${pkgs.coreutils}/bin/wc -c < "$root/secret-file"
+    read_fixture dir ${pkgs.coreutils}/bin/ls -A "$root/secret-dir"
+    read_fixture link ${pkgs.coreutils}/bin/wc -c < "$root/link"
+    read_fixture target ${pkgs.coreutils}/bin/wc -c < "$root/link-target"
+    read_fixture visible ${pkgs.coreutils}/bin/cat "$root/visible"
+    printf 'secret-present=%s\n' "''${JAIL_SECRET+yes}"
     printf 'kept=%s\n' "''${JAIL_KEPT:-unset}"
     if jail_probe_path="$(${pkgs.coreutils}/bin/printenv PATH)"; then
-      printf 'path=%s\n' "$jail_probe_path"
+      printf 'path=value:%s\n' "$jail_probe_path"
     else
       printf 'path=unset\n'
     fi
@@ -95,35 +85,64 @@
       permissions = null;
     };
   };
-  helperPassThrough = let
-    postBuild = builtins.unsafeDiscardStringContext helperWrapped.buildCommand;
-  in
-    builtins.length helperWrapped.paths
-    == 1
-    # The one path is the jail, not the package it wraps.
-    && lib.hasSuffix "-jail-probe" (builtins.head helperWrapped.paths)
-    && builtins.head helperWrapped.paths != "${withHelper}"
-    && builtins.head helperWrapped.paths != "${probe}"
-    && lib.hasInfix (builtins.unsafeDiscardStringContext "for bin in ${withHelper}/bin/*; do") postBuild
-    && lib.hasInfix ''ln -s "$bin" "$target"'' postBuild;
+  wrapped = {
+    excluded = jailed (_: []);
+    restored = jailed (c: [(c.set-env "PATH" "/jail-permissions-path")]);
+  };
   expected = path:
     pkgs.writeText "ai-jail-wrap-expected" ''
-      file=
+      file=0
       dir=
-      link=
-      target=
+      link=0
+      target=0
       visible=shown
-      secret=unset
+      secret-present=
       kept=kept
       path=${path}
     '';
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-    ai-jail-environment-order = harness.mkTest "ai-jail-environment-order" (
-      environmentOrder false && environmentOrder true
-    );
+    # Read the installed wrappers even when the build sandbox cannot run
+    # bubblewrap. Restoration must expand at exec, not in RUNTIME_ARGS.
+    ai-jail-environment-order = pkgs.runCommand "ai-jail-environment-order" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      restore='--setenv PATH "''${PATH#${pkgs.coreutils}/bin:}"'
+      unset_path='--unsetenv PATH'
+      check_order() {
+        local label=$1 wrapper=$2 text
+        text=$(cat "$wrapper")
+        if [[ $text != *"$restore"*"$unset_path"* || $text == *'RUNTIME_ARGS+=(--setenv PATH'* ]]; then
+          echo "FAIL: $label must restore the caller PATH at exec before excluding it" >&2
+          exit 1
+        fi
+        if [[ $label == restored && $text != *"$unset_path"*'--setenv PATH /jail-permissions-path'* ]]; then
+          echo "FAIL: explicit PATH must be assigned after its exclusion" >&2
+          exit 1
+        fi
+      }
+      check_order excluded ${wrapped.excluded}/bin/jail-probe
+      check_order restored ${wrapped.restored}/bin/jail-probe
+      touch "$out"
+    '';
 
-    ai-jail-helper-pass-through = harness.mkTest "ai-jail-helper-pass-through" helperPassThrough;
+    # Read the installed links rather than predicting symlinkJoin's inputs or
+    # matching its build command. Both named fixture binaries must survive.
+    ai-jail-helper-pass-through = pkgs.runCommand "ai-jail-helper-pass-through" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      entry=${helperWrapped}/bin/jail-probe
+      helper=${helperWrapped}/bin/jail-helper
+      if ! test -x "$entry" || ! grep -qF -- ${lib.escapeShellArg bwrap} "$entry"; then
+        echo "FAIL: the fixture entry point is not an executable jail wrapper" >&2
+        exit 1
+      fi
+      if ! test -L "$helper" || ! test -x "$helper" || ! test "$helper" -ef ${withHelper}/bin/jail-helper; then
+        echo "FAIL: the fixture helper does not link to the original executable" >&2
+        exit 1
+      fi
+      touch "$out"
+    '';
 
     ai-jail-wrap-masks = pkgs.runCommand "ai-jail-wrap-masks" {} ''
       set -euETo pipefail
@@ -136,16 +155,19 @@ in {
       ln -s link-target "$JAIL_ROOT/link"
       echo shown > "$JAIL_ROOT/visible"
       if ${bwrap} --unshare-user --unshare-pid --dev-bind / / --proc /proc --dev /dev -- true 2>"$TMPDIR/control.log"; then
-        JAIL_SECRET=leaked JAIL_KEPT=kept ${jailed (_: [])}/bin/jail-probe "$JAIL_ROOT" > "$TMPDIR/actual"
-        if ! diff -u ${expected "unset"} "$TMPDIR/actual"; then
-          echo "FAIL: the jailed probe saw something it should not" >&2
-          exit 1
-        fi
-        JAIL_SECRET=leaked JAIL_KEPT=kept ${jailed (c: [(c.set-env "PATH" "/jail-permissions-path")])}/bin/jail-probe "$JAIL_ROOT" > "$TMPDIR/override"
-        if ! diff -u ${expected "/jail-permissions-path"} "$TMPDIR/override"; then
-          echo "FAIL: final permissions did not restore PATH" >&2
-          exit 1
-        fi
+        check_probe() {
+          local label=$1 wrapper=$2 expected=$3
+          if ! JAIL_SECRET=leaked JAIL_KEPT=kept "$wrapper" "$JAIL_ROOT" > "$TMPDIR/actual"; then
+            echo "FAIL: $label jailed probe could not run or read its fixtures" >&2
+            exit 1
+          fi
+          if ! diff -u "$expected" "$TMPDIR/actual"; then
+            echo "FAIL: $label jailed probe did not deliver the expected masks and environment" >&2
+            exit 1
+          fi
+        }
+        check_probe excluded ${wrapped.excluded}/bin/jail-probe ${expected "unset"}
+        check_probe restored ${wrapped.restored}/bin/jail-probe ${expected "value:/jail-permissions-path"}
         echo "AI-JAIL-WRAP: masks, PATH exclusion and final override held inside the jail" | tee "$out"
       else
         cat "$TMPDIR/control.log" >&2

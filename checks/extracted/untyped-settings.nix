@@ -1,6 +1,7 @@
 # Exercise option merging before each owner's renderer. Manager Plus has no
 # `any` node today; its fixture adds one to test that renderer's config boundary.
 {
+  harness,
   lib,
   self,
 }: let
@@ -41,26 +42,38 @@ in
           }
         ];
       }).config.value;
-    refuses = value: !(builtins.tryEval (builtins.deepSeq (render value) true)).success;
+    inspect = value: let
+      result = render value;
+    in {
+      inherit (result) secrets;
+      value = caller.output (builtins.fromJSON result.content);
+    };
     plain = {nested = [1 "two" {three = true;}];};
+    refuses = invalid:
+      harness.rejectsChange inspect {
+        inherit invalid;
+        valid = plain;
+        expected = {
+          secrets = {};
+          value = plain;
+        };
+      };
   in {
-    "${name}-any-lifts-a-reference" = let
-      result = render {nested = [file];};
-    in
-      caller.output (builtins.fromJSON result.content)
-      == {nested = [("{" + "$" + caller.placeholder + "}")];}
-      && result.secrets == {${caller.placeholder} = file;};
-    "${name}-any-preserves-json" = let
-      result = render plain;
-    in
-      caller.output (builtins.fromJSON result.content) == plain && result.secrets == {};
-    "${name}-any-refuses-malformed-markers" = lib.all (marker: refuses {nested = [marker];}) [
-      {_redact.concat = ["literal"];}
-      {
-        _redact.file = "/run/secrets/probe";
-        extra = true;
-      }
-    ];
+    "${name}-any-lifts-a-reference" =
+      inspect {nested = [file];}
+      == {
+        secrets.${caller.placeholder} = file;
+        value.nested = [("{" + "$" + caller.placeholder + "}")];
+      };
+    "${name}-any-refuses-a-concat-without-a-reference" = refuses {nested = [{_redact.concat = ["literal"];}];};
+    "${name}-any-refuses-a-reference-with-extra-fields" = refuses {
+      nested = [
+        {
+          _redact.file = "/run/secrets/probe";
+          extra = true;
+        }
+      ];
+    };
     "${name}-any-refuses-non-json" = refuses (value: value);
   })
   callers

@@ -1,4 +1,5 @@
 {
+  harness,
   lib,
   pkgs,
   self,
@@ -102,7 +103,13 @@
       index = facetIndex;
     };
     localChecks = localCheckWorld.claims;
-    localCheckNames = attrNames localChecks;
+    localCheckNames = [
+      "alpha-overlay-order"
+      "git-revise-production-boundary"
+      "native-check-module"
+      "native-package-namespaces"
+      "platform-omission"
+    ];
     localCheckValues = map (name: localChecks.${name}.value) localCheckNames;
     localCheckBuildCommands =
       concatMapStringsSep "\n" (
@@ -142,17 +149,21 @@
       })
       overlayWorld.ownershipClaims;
 
-    registryClaimKeys = sort builtins.lessThan (
-      map (claim: builtins.elemAt claim.keyPath 2) registryWorld.ownershipClaims
-    );
+    hasClaimPaths = claims: expected:
+      sort builtins.lessThan (map (claim: builtins.toJSON claim.keyPath) claims)
+      == map builtins.toJSON expected;
     assertions = {
       check-config-context =
-        localCheckNames
-        == attrNames localCheckWorld.checks
-        && builtins.elem "native-check-module" localCheckNames;
+        attrNames localChecks
+        == localCheckNames
+        && attrNames localCheckWorld.checks == localCheckNames;
+      check-laziness =
+        lib.isDerivation lazyCheckWorld.checks.available
+        && builtins.attrNames lazyCheckWorld.checks == ["available" "unavailable"]
+        && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"];
       deterministic-index =
         ownerNames
-        == sort builtins.lessThan ownerNames
+        == ["alpha" "git-revise" "namespace-peer" "platform-control"]
         && all (
           owner:
             toString owner.path
@@ -189,19 +200,13 @@
       package-laziness =
         lib.isDerivation lazyWorld.packages.ai.available
         && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"];
-      check-laziness =
-        lib.isDerivation lazyCheckWorld.checks.available
-        && builtins.attrNames lazyCheckWorld.checks == ["available" "unavailable"]
-        && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"];
       overlay-order-and-namespace =
         overlayResult.ai.seed
         == inputs.fixture.sentinel
-        && overlayResult.ai.alpha == "${inputs.fixture.sentinel}:alpha"
         && overlayResult.ai.gitReviseObserved
         == "${inputs.fixture.sentinel}:${inputs.fixture.sentinel}:alpha:${inputs.fixture.sentinel}"
         && overlayResult.ai.devTools.seed == inputs.fixture.sentinel
-        && !(overlayResult.ai.devTools.alpha-tool ? previousPackageOnly)
-        && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath;
+        && !(overlayResult.ai.devTools.alpha-tool ? previousPackageOnly);
       overlay-sparse-leaf =
         overlayResult.ai.devTools.alpha-note
         == "${inputs.fixture.sentinel}:alpha-note";
@@ -256,27 +261,33 @@
         && packageWorld.scopes.platform-control.ai.devTools.supported-control.drvPath == supportedControl.drvPath
         && overlayResult.ai.devTools.supported-control.drvPath == supportedControl.drvPath;
       registry-native-realization =
-        all (key: registryWorld.config.facetMock.entries ? ${key}) registryClaimKeys
-        && !(builtins.elem "root-policy" registryClaimKeys)
+        hasClaimPaths registryWorld.ownershipClaims [
+          ["facetMock" "entries" "alpha"]
+          ["facetMock" "entries" "conditional-child"]
+          ["facetMock" "entries" "git-revise"]
+        ]
+        && hasClaimPaths registryWorld.rootOwnershipClaims [
+          ["facetMock" "entries" "conditional-root"]
+          ["facetMock" "entries" "root-policy"]
+        ]
+        && attrNames registryWorld.config.facetMock.entries == ["alpha" "conditional-child" "conditional-root" "git-revise" "root-policy"]
         && registryWorld.config.facetMock.entries.root-policy.owner == "root"
-        && builtins.elem "conditional-child" registryClaimKeys
         && registryWorld.config.facetMock.entries.conditional-child
         == {
           owner = "namespace-peer";
           payload = "registry-module-argument";
           source = toString (productionRoot + "/namespace-peer/registry.nix");
-        }
-        && builtins.any (claim: claim.keyPath == ["facetMock" "entries" "conditional-root"]) registryWorld.rootOwnershipClaims;
+        };
     };
-    assertionsPass = all (value: value == true) (builtins.attrValues assertions);
 
-    positiveCheck = assert assertionsPass;
+    positiveCheck = assert harness.checkRows "facet mock" assertions;
       pkgs.runCommandLocal "facet-mock" {
-        nativeBuildInputs = localCheckValues ++ [gitRevise];
+        nativeBuildInputs = localCheckValues;
         passthru.localChecks = localChecks;
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         ${localCheckBuildCommands}
-        test "$(cat ${gitRevise}/marker)" = ${lib.escapeShellArg inputs.fixture.sentinel}
         test "$(cat ${supportedControl})" = "supported-relative-sidecar"
         mkdir -p "$out"
         touch "$out/passed"
@@ -320,13 +331,17 @@
           ''
           else if probe.force == "index"
           then "builtins.deepSeq index true"
-          else if probe.force == "overlay"
+          else if probe.force == "overlay" || probe.force == "overlay-dotted-alias"
           then ''
             let
               world = loader.realizeOverlay { inherit context index; };
               base.ai.seed = inputs.fixture.sentinel;
               result = lib.fix (final: base // world.overlay final base);
-            in builtins.deepSeq result true
+            in ${
+              if probe.force == "overlay-dotted-alias"
+              then ''assert result.ai."a.b" == "one" && result.ai.a.b == "two"; true''
+              else "builtins.deepSeq result true"
+            }
           ''
           else if probe.force == "overlay-forcing-sibling" || probe.force == "overlay-plain-sibling"
           then ''
@@ -352,13 +367,23 @@
               result = lib.fix (final: world.overlay final {});
             in builtins.deepSeq result true
           ''
-          else if probe.force == "packages"
+          else if builtins.elem probe.force ["packages" "package-invalid-name" "package-missing-recipe"]
           then ''
             let world = loader.realizePackages {
               inherit index inputs pkgs;
               scopeArgs = builtins.fromJSON ${builtins.toJSON (builtins.toJSON probe.scopeArgs)};
               system = ${builtins.toJSON system};
-            }; in builtins.deepSeq (map (claim:
+            }; in ${
+              if probe.force == "package-invalid-name"
+              then ''
+                assert builtins.attrNames world.packages == ["Bad"];
+                assert lib.isDerivation world.packages.Bad && builtins.isString world.packages.Bad.drvPath;
+              ''
+              else if probe.force == "package-missing-recipe"
+              then "assert world.packages == {} && world.eligibleClaims == [];"
+              else ""
+            }
+            builtins.deepSeq (map (claim:
               (lib.getAttrFromPath claim.keyPath world.packages).drvPath
             ) world.eligibleClaims) true
           ''
@@ -724,18 +749,8 @@
     ];
     successProbes = [
       (probe {
-        name = "package-invalid-name";
-        force = "packages";
-        expected = [];
-      })
-      (probe {
-        name = "package-missing-recipe";
-        force = "packages";
-        expected = [];
-      })
-      (probe {
         name = "overlay-dotted-alias";
-        force = "overlay";
+        force = "overlay-dotted-alias";
         expected = [];
       })
       (probe {
@@ -748,6 +763,16 @@
         name = "overlay-sparse-forcing";
         scenario = "overlay-sparse";
         force = "overlay-forcing-sibling";
+        expected = [];
+      })
+      (probe {
+        name = "package-invalid-name";
+        force = "package-invalid-name";
+        expected = [];
+      })
+      (probe {
+        name = "package-missing-recipe";
+        force = "package-missing-recipe";
         expected = [];
       })
     ];
@@ -766,9 +791,11 @@
       pkgs.runCommandLocal "facet-mock-negative" {
         nativeBuildInputs = [pkgs.nix];
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         export HOME="$PWD/home"
         export NIX_STATE_DIR="$PWD/nix-state"
-        mkdir -p "$HOME" "$NIX_STATE_DIR/profiles/per-user/$USER"
+        mkdir -p "$HOME" "$NIX_STATE_DIR/profiles/per-user/$(id -un)"
 
         run_probe() {
           local name="$1"

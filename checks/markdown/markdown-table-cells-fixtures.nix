@@ -75,55 +75,47 @@
         exit 1
       }
 
-      # Returns 0 when the tool reports a finding, 1 when it is silent. Both
-      # exit non-zero on a hit, so this inverts into a readable predicate.
-      hits() {
-        local tool="$1" file="$2"
-        case "$tool" in
-          rumdl)
-            if ${pkgs.lib.getExe rumdlTables} "$file" >/dev/null 2>&1
-            then return 1; else return 0; fi ;;
-          markdownlint)
-            if ${pkgs.lib.getExe markdownlintTables} "$file" >/dev/null 2>&1
-            then return 1; else return 0; fi ;;
-          *) fail "unknown tool '$tool'" ;;
-        esac
+      # A nonzero exit alone could be a crash or another rule, not MD056.
+      check_linter() {
+        local name="$1" tool="$2" want="$3" program="$4" rc=0 got=silent
+        "$program" "$name.md" >linter.log 2>&1 || rc=$?
+        if ${pkgs.gnugrep}/bin/grep -qwF MD056 linter.log; then got=MD056; fi
+
+        local want_rc=0
+        if [ "$want" = MD056 ]; then want_rc=1; fi
+        if [ "$rc" -ne "$want_rc" ] || [ "$got" != "$want" ]; then
+          ${pkgs.coreutils}/bin/cat linter.log >&2
+          fail "$name: $tool expected $want (exit $want_rc), got $got (exit $rc)"
+        fi
       }
 
-      # Copying each fixture to a plain `.md` under $TMPDIR gives both tools
-      # the extension they expect. It is a copy, so the tracked fixture keeps
-      # its `.md.fixture` name.
+      # Copy each fixture once with the `.md` extension the tools expect,
+      # leaving the tracked `.md.fixture` outside the corpus and formatter.
       check() {
         local name="$1" wantRumdl="$2" wantMdl="$3"
-        # --no-preserve=mode: store files are read-only, and without this the
-        # SECOND copy cannot overwrite the first and the suite dies half-run.
-        ${pkgs.coreutils}/bin/cp --no-preserve=mode,ownership \
-          "${fixtures}/$name.md.fixture" "$TMPDIR/case.md"
-
-        if hits rumdl "$TMPDIR/case.md"; then gotRumdl=hit; else gotRumdl=silent; fi
-        if hits markdownlint "$TMPDIR/case.md"; then gotMdl=hit; else gotMdl=silent; fi
-
-        [ "$gotRumdl" = "$wantRumdl" ] \
-          || fail "$name: rumdl expected $wantRumdl, got $gotRumdl"
-        [ "$gotMdl" = "$wantMdl" ] \
-          || fail "$name: markdownlint expected $wantMdl, got $gotMdl"
-
-        echo "ok — $name: rumdl=$gotRumdl markdownlint=$gotMdl"
+        ${pkgs.coreutils}/bin/cp "${fixtures}/$name.md.fixture" "$name.md"
+        check_linter "$name" rumdl "$wantRumdl" ${pkgs.lib.getExe rumdlTables}
+        check_linter "$name" markdownlint "$wantMdl" ${pkgs.lib.getExe markdownlintTables}
+        echo "ok — $name: rumdl=$wantRumdl markdownlint=$wantMdl"
       }
 
       #      fixture                              rumdl    markdownlint
-      check break-header-delimiter-disagree       hit      silent
-      check cause-excess-body-cell                silent   hit
+      check break-header-delimiter-disagree       MD056    silent
+      check cause-excess-body-cell                silent   MD056
       check clean                                 silent   silent
       check escaped-pipe-in-code-span             silent   silent
 
       # The script itself, as the hook runs it: a finding exits 1 (not 127
       # from a diagnostic that dies half-printed) and the diagnostic reaches
-      # its worked example. Not `fail`: this is not a disjointness failure.
-      ${pkgs.coreutils}/bin/cp --no-preserve=mode,ownership \
-        "${fixtures}/cause-excess-body-cell.md.fixture" "$TMPDIR/case.md"
+      # its worked example. Require the input copied by the cause row above:
+      # the gate also exits 1 and prints the example when the file is missing.
+      # Not `fail`: this is not a disjointness failure.
+      if [ ! -f cause-excess-body-cell.md ]; then
+        echo "FAIL: the gate case needs cause-excess-body-cell.md from the linter checks above" >&2
+        exit 1
+      fi
       rc=0
-      ${pkgs.lib.getExe tableCells.package} "$TMPDIR/case.md" >/dev/null 2>"$TMPDIR/err" || rc=$?
+      ${pkgs.lib.getExe tableCells.package} cause-excess-body-cell.md >/dev/null 2>"$TMPDIR/err" || rc=$?
       if [ "$rc" -ne 1 ] || ! ${pkgs.gnugrep}/bin/grep -q -F 'fixed:   | id |' "$TMPDIR/err"; then
         echo "FAIL: markdown-table-cells exited $rc on a broken table (expected 1) or did not print its worked example:" >&2
         ${pkgs.coreutils}/bin/cat "$TMPDIR/err" >&2

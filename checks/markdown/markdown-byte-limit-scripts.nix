@@ -28,18 +28,22 @@
       sized 32768 exact.md
       sized 32769 above.md
       printf 'é\n' >unicode.md
-      ${check} below.md 32768 probe 'Raise it.' || fail "32767 bytes fail a 32768-byte limit"
-      ${check} exact.md 32768 probe 'Raise it.' || fail "32768 bytes fail a 32768-byte limit"
-      if ${check} above.md 32768 probe 'Raise it.' 2>err; then
-        fail "32769 bytes pass a 32768-byte limit"
-      fi
-      [ "$(cat err)" = "probe: above.md renders to 32769 bytes, exceeding its limit (32768 bytes). Raise it." ] \
-        || fail "unexpected failure message: $(cat err)"
-      ${check} unicode.md 3 probe 'Raise it.' || fail "3 bytes fail a 3-byte limit"
-      if ${check} unicode.md 2 probe 'Raise it.' 2>err; then
-        fail "a 3-byte file passes a 2-byte limit: characters were counted, not bytes"
-      fi
-      grep -q -F "renders to 3 bytes" err || fail "unexpected failure message: $(cat err)"
+      expect() {
+        local row=$1 file=$2 limit=$3 status=$4 diagnostic="''${5-}" rc=0
+        ${check} "$file" "$limit" probe 'Raise it.' 2>err || rc=$?
+        [ "$rc" -eq "$status" ] || fail "$row: expected exit $status''${diagnostic:+ ($diagnostic)}, got $rc: $(cat err)"
+        if [ -n "$diagnostic" ] && [ "$(cat err)" != "$diagnostic" ]; then
+          fail "$row: expected '$diagnostic', got '$(cat err)'"
+        fi
+      }
+      #      row                      file        limit  exit
+      expect above-limit              above.md    32768  1 \
+        'probe: above.md renders to 32769 bytes, exceeding its limit (32768 bytes). Raise it.'
+      expect at-limit                 exact.md    32768  0
+      expect below-limit              below.md    32768  0
+      expect unicode-at               unicode.md  3      0
+      expect unicode-bytes-not-chars  unicode.md  2      1 \
+        'probe: unicode.md renders to 3 bytes, exceeding its limit (2 bytes). Raise it.'
 
       echo PASS >"$out"
     '';

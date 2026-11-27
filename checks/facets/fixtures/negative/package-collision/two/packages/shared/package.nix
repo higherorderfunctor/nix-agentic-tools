@@ -1,2 +1,2 @@
-{runCommandLocal}:
-runCommandLocal "facet-shared-two" {} "touch $out"
+{writeText}:
+writeText "facet-shared-two" ""

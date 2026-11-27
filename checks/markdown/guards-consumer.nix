@@ -1,5 +1,6 @@
 # Public guard programs and the consumer check, exercised on authored Markdown.
 {
+  harness,
   lib,
   pkgs,
   self,
@@ -89,44 +90,52 @@
     };
   };
   json = text: pkgs.writeText "data.json" text;
-  rejected = value: !(builtins.tryEval (builtins.seq value true)).success;
 in {
-  checks.guards-consumer = assert lib.assertMsg (guards ? kiroFrontmatterFlow)
-  "guards-consumer: lib.ai.guards does not export kiroFrontmatterFlow";
-  assert lib.assertMsg (rejected (guards.check {
-    src = fixtureTree;
-    guards.parseCompare = true;
-  })) "guards-consumer: parseCompare was accepted by check";
+  checks.guards-consumer = assert harness.checkRows "guards-consumer" {
+    "check rejects parseCompare (which needs two file versions)" = harness.rejectsChange (settings:
+      lib.isDerivation (guards.check {
+        src = fixtureTree;
+        guards = settings;
+      })) {
+      valid = {};
+      invalid.parseCompare = true;
+      expected = true;
+    };
+    "lib.ai.guards exports kiroFrontmatterFlow" = guards ? kiroFrontmatterFlow;
+  };
     pkgs.runCommand "guards-consumer-check" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       cd ${fixtureTree}
 
-      # expect NAME EXIT PROGRAM ARGS...: run PROGRAM, require EXIT.
+      found() { ${pkgs.gnugrep}/bin/grep -q -F "$1" "$2"; }
+
+      # expect NAME EXIT FINDING PROGRAM ARGS...: empty FINDING for success.
       expect() {
-        local name=$1 want=$2 rc=0
-        shift 2
-        "$@" >"$TMPDIR/$name.log" 2>&1 || rc=$?
-        if [ "$rc" -ne "$want" ]; then
-          echo "FAIL: $name exited $rc, expected $want" >&2
-          ${pkgs.coreutils}/bin/cat "$TMPDIR/$name.log" >&2
+        local name=$1 want=$2 finding=$3 rc=0 log="$TMPDIR/$1.log"
+        shift 3
+        "$@" >"$log" 2>&1 || rc=$?
+        if [ "$rc" -ne "$want" ] || { [ -n "$finding" ] && ! found "$finding" "$log"; }; then
+          echo "FAIL: $name expected exit $want and finding '$finding', got exit $rc:" >&2
+          ${pkgs.coreutils}/bin/cat "$log" >&2
           exit 1
         fi
       }
-      expect split-bad 1 ${lib.getExe guards.splitCodeSpans} split-span.md
-      expect split-good 0 ${lib.getExe guards.splitCodeSpans} clean.md
-      expect table-bad 1 ${lib.getExe guards.tableCells} table-pipe.md
-      expect table-good 0 ${lib.getExe guards.tableCells} clean.md
+      expect parse-changed 1 "parsed json values differ from" ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{"a":false}''}
+      expect parse-same 0 "" ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{ "a": true }''}
+      expect parse-unparseable 2 "Nothing was compared: BEFORE must parse on its own." ${lib.getExe guards.parseCompare} json ${json ''{"a":''} ${json ''{}''}
+      expect split-bad 1 "split-span.md:3:" ${lib.getExe guards.splitCodeSpans} split-span.md
+      expect split-good 0 "" ${lib.getExe guards.splitCodeSpans} clean.md
+      expect table-bad 1 "table-pipe.md:14 MD056" ${lib.getExe guards.tableCells} table-pipe.md
+      expect table-good 0 "" ${lib.getExe guards.tableCells} clean.md
       # Inline suppression is honoured; inline rules other than MD056 add nothing.
-      expect table-inline 0 ${lib.getExe guards.tableCells} inline-disable.md
-      expect table-other-rules 0 ${lib.getExe guards.tableCells} inline-widen.md
-      expect parse-same 0 ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{ "a": true }''}
-      expect parse-changed 1 ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{"a":false}''}
-      expect parse-unparseable 2 ${lib.getExe guards.parseCompare} json ${json ''{"a":''} ${json ''{}''}
+      expect table-inline 0 "" ${lib.getExe guards.tableCells} inline-disable.md
+      expect table-other-rules 0 "" ${lib.getExe guards.tableCells} inline-widen.md
 
-      found() { ${pkgs.gnugrep}/bin/grep -q -F "$1" "$2"; }
       found "Guard splitCodeSpans failed." ${badDefault}/testBuildFailure.log
+      found "split-span.md:3:" ${badDefault}/testBuildFailure.log
       found "Guard tableCells failed." ${badTableOnly}/testBuildFailure.log
+      found "table-pipe.md:14 MD056" ${badTableOnly}/testBuildFailure.log
       found ".kiro/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroDefault}/testBuildFailure.log
       found "custom/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroCustom}/testBuildFailure.log
       found "kiro[1]/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroMeta}/testBuildFailure.log
@@ -140,6 +149,7 @@ in {
       test -e ${kiroMetaUnrelated}
       ${lib.concatMapStrings (drv: ''
         found "Guard tableCells failed." ${drv}/testBuildFailure.log
+        found "MD056" ${drv}/testBuildFailure.log
       '') (lib.attrValues badConfigured)}
       ${pkgs.coreutils}/bin/touch "$out"
     '';

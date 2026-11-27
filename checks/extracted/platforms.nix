@@ -4,6 +4,7 @@
 {
   harness,
   lib,
+  pkgs,
   ...
 }: let
   inherit (import ../../lib/extracted/platforms.nix) carry merge project;
@@ -13,7 +14,7 @@
     x86_64-linux = linux;
   };
   fork = darwin: linux: {__platforms = split darwin linux;};
-  throws = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
+  runner = (import ./runner.nix {inherit lib pkgs;}).nix;
   raws =
     split {
       flags = ["--a" "--b"];
@@ -49,17 +50,16 @@
     inherit systems;
   };
   # A forked command object whose parent the fresh Linux raw removes or retypes.
-  commands = merge (split {
-      cmd = {
-        flags = ["--a" "--d"];
-        help = "h";
-      };
-    } {
-      cmd = {
-        flags = ["--a"];
-        help = "h";
-      };
-    });
+  commands = {
+    cmd = {
+      flags = fork ["--a" "--d"] ["--a"];
+      help = "h";
+    };
+  };
+  darwinCommand = {
+    flags = ["--a" "--d"];
+    help = "h";
+  };
   darwinAfter = fresh:
     project (carry {
       fresh.x86_64-linux = fresh;
@@ -74,17 +74,6 @@
     one-platform-only = merged.only == {__platforms.aarch64-darwin = "darwin";} && !(project merged "x86_64-linux" ? only);
     round-trip = lib.all (system: project merged system == raws.${system}) systems;
     single-raw-unforked = merge {inherit (raws) x86_64-linux;} == raws.x86_64-linux;
-    sentinel-refused = throws (merge (split {} {nested.__platforms = 1;}));
-    sentinel-in-list-refused = throws (merge {x86_64-linux.a = [{__platforms = 1;}];});
-    mixed-fork-refused = throws (project {
-      a = {
-        __platforms.x86_64-linux = 1;
-        b = 2;
-      };
-    } "x86_64-linux");
-    nested-sentinel-refused = throws (project {a.__platforms.x86_64-linux.__platforms = 1;} "x86_64-linux");
-    missing-root-refused = throws (project {__platforms.x86_64-linux = {};} "aarch64-darwin");
-
     # carry: the fresh system's side is replaced; the other keeps its forks
     # and follows every unforked node, new and removed keys included.
     carry-follows =
@@ -120,7 +109,15 @@
         merged = committed;
         inherit systems;
       }
-      == merged;
+      == {
+        flags = fork ["--a" "--b"] ["--a"];
+        nested = {
+          count = fork 2 1;
+          same = "x";
+        };
+        only.__platforms.aarch64-darwin = "darwin";
+        same.deep = true;
+      };
     # Only the base system's carry makes the others follow: a Darwin carry
     # leaves Linux's projection as committed and forms the fork, which the
     # next Linux carry keeps.
@@ -153,19 +150,53 @@
     carry-removed-parent-kept-whole =
       darwinAfter {other = 1;}
       == {
-        inherit (project commands "aarch64-darwin") cmd;
+        cmd = darwinCommand;
         other = 1;
       };
-    carry-retyped-parent-kept-whole = darwinAfter {cmd = "gone";} == project commands "aarch64-darwin";
-    carry-two-fresh-refused = throws (carry {
-      fresh = split {} {};
-      merged = {};
-      systems = systems ++ ["i686-linux"];
-    });
+    carry-retyped-parent-kept-whole = darwinAfter {cmd = "gone";} == {cmd = darwinCommand;};
   };
-  failures = builtins.attrNames (lib.filterAttrs (_: passed: !passed) rows);
+  refused = {
+    carry-two-fresh = {
+      expr = ''        platforms.carry {
+                fresh = {aarch64-darwin = {}; x86_64-linux = {};};
+                merged = {};
+                systems = ["aarch64-darwin" "i686-linux" "x86_64-linux"];
+              }'';
+      names = ["i686-linux must follow exactly one fresh system, not aarch64-darwin x86_64-linux"];
+    };
+    merge-sentinel = {
+      expr = ''platforms.merge {aarch64-darwin = {}; x86_64-linux.nested.__platforms = 1;}'';
+      names = ["`x86_64-linux.nested` holds the reserved key `__platforms` in measured data"];
+    };
+    merge-sentinel-in-list = {
+      expr = ''platforms.merge {x86_64-linux.a = [{__platforms = 1;}];}'';
+      names = ["`x86_64-linux.a[]` holds the reserved key `__platforms` in measured data"];
+    };
+    project-missing-root = {
+      expr = ''platforms.project {__platforms.x86_64-linux = {};} "aarch64-darwin"'';
+      names = ["the committed tree has no aarch64-darwin side"];
+    };
+    project-mixed-fork = {
+      expr = ''platforms.project {a = {__platforms.x86_64-linux = 1; b = 2;};} "x86_64-linux"'';
+      names = ["`x86_64-linux.a` mixes `__platforms` with other keys"];
+    };
+    project-nested-sentinel = {
+      expr = ''platforms.project {a.__platforms.x86_64-linux.__platforms = 1;} "x86_64-linux"'';
+      names = ["`x86_64-linux.a` holds the reserved key `__platforms` in measured data"];
+    };
+  };
+  runRefusal = label: case:
+    runner {
+      inherit label;
+      inherit (case) names;
+      expr = ''let platforms = import ${../../lib/extracted/platforms.nix}; in ${case.expr}'';
+    };
 in {
-  checks.extracted-platforms = harness.mkTest "extracted-platforms" (
-    assert lib.assertMsg (failures == []) (builtins.toJSON failures); true
-  );
+  checks.extracted-platforms = assert harness.checkRows "extracted-platforms" rows;
+    pkgs.runCommand "extracted-platforms" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${lib.concatStrings (lib.mapAttrsToList runRefusal refused)}
+      echo "PASS: extracted-platforms" > "$out"
+    '';
 }

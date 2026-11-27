@@ -34,5 +34,7 @@ in {
     );
 
     factory-gitlab-mcp-disable-version-check-false = mkTest "gitlab-mcp-disable-version-check-false" (!((renderEnv {disableVersionCheck = false;}) ? GITLAB_DISABLE_VERSION_CHECK));
+
+    factory-gitlab-mcp-instance-url-default = mkTest "gitlab-mcp-instance-url-default" (!((renderEnv {}) ? GITLAB_API_URL));
   };
 }

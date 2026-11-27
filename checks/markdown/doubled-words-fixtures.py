@@ -109,7 +109,21 @@ def main(argv):
         print("A fixture run over nothing is not a pass.", file=sys.stderr)
         return 1
 
-    failures = []
+    # Keep these regression inputs mandatory even when the glob still finds
+    # other fixtures. New fixtures are picked up without changing this list.
+    required = {
+        "README.md.fixture",
+        "cross-line-doubling.md.fixture",
+        "fenced-block.md.fixture",
+        "hyphen-glue.md.fixture",
+        "nested-fence-at-column-four.md.fixture",
+        "plain-bullet-continuation.md.fixture",
+        "task-list-continuation.md.fixture",
+        "top-level-indented-code.md.fixture",
+    }
+    missing = required - {path.name for path in fixtures}
+    failures = [f"{name}: required fixture is missing" for name in sorted(missing)]
+    has_missing_hits = False
     for path in fixtures:
         expected = expectations(path)
         if expected is None:
@@ -124,6 +138,7 @@ def main(argv):
         for line, bigram in sorted(actual - expected):
             failures.append(f'{path.name}:{line}: unexpected hit "{bigram}"')
         for line, bigram in sorted(expected - actual):
+            has_missing_hits = True
             failures.append(f'{path.name}:{line}: expected hit "{bigram}" was NOT reported')
         for marker in stale:
             failures.append(f'{path.name}: allow marker "{marker}" suppressed nothing')
@@ -133,12 +148,16 @@ def main(argv):
         print()
         for failure in failures:
             print(f"  {failure}")
-        print()
-        print("A MISSING hit is the dangerous direction: it means prose is being")
-        print("blanked before the scan reads it, which presents as a clean file.")
-        print("Start at `strip_code_blocks` in lib/markdown/split-code-spans.py, and")
-        print("re-measure the corpus figures in checks/markdown/doubled-words.py's")
-        print("docstring before changing them.")
+        if missing:
+            print()
+            print("Restore each missing fixture or update the required fixture list.")
+        if has_missing_hits:
+            print()
+            print("A MISSING hit is the dangerous direction: it means prose is being")
+            print("blanked before the scan reads it, which presents as a clean file.")
+            print("Start at `strip_code_blocks` in lib/markdown/split-code-spans.py, and")
+            print("re-measure the corpus figures in checks/markdown/doubled-words.py's")
+            print("docstring before changing them.")
         return 1
 
     print(f"All {len(fixtures)} doubled-words fixtures match their expectations.")

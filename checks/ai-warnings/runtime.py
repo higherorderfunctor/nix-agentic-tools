@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -7,69 +6,94 @@ import sys
 import tempfile
 
 
-def run(argv, *, env=None, stdin="", warning=None, output=None):
+def run(label, argv, *, env=None, stdin="", status=0, diagnostic=None, output=""):
     result = subprocess.run(argv, input=stdin, env=env, text=True, capture_output=True)
-    assert result.returncode == 0, result
-    if warning is None:
-        assert "WARNING:" not in result.stderr, result.stderr
+    assert result.returncode == status, (label, result)
+    if diagnostic is None:
+        assert result.stderr == "", (label, result.stderr)
     else:
-        assert warning in result.stderr, result.stderr
+        assert diagnostic in result.stderr, (label, result.stderr)
     if output is not None:
-        assert output in result.stdout, result.stdout
+        assert result.stdout == output, (label, result.stdout)
     return result
 
 
 def guard(script, root):
     root.mkdir()
     env = os.environ | {"HOME": str(root), "XDG_RUNTIME_DIR": str(root / "runtime")}
-    run(["bash", script], env=env, stdin='{"tool_input":{"file_path":"/ordinary/file"}}')
-    run(["bash", script], env=env, stdin="invalid", warning="ai.claude.memoryCollisionGuard.enable: invalid hook envelope")
+    argv = ["bash", script]
+    option = "WARNING: ai.claude.memoryCollisionGuard.enable:"
+    run("ordinary path", argv, env=env, stdin='{"tool_input":{"file_path":"/ordinary/file"}}')
+    run("malformed envelope", argv, env=env, stdin="invalid", diagnostic=f"{option} invalid hook envelope")
     memory = root / ".claude/projects/probe/memory"
     memory.mkdir(parents=True)
     envelope = json.dumps({"session_id": "probe", "tool_input": {"file_path": str(memory / "new.md")}})
     marker_dir = root / "runtime/claude-memory-collision-guard"
     marker_dir.parent.mkdir()
     marker_dir.write_text("obstruction")
-    run(["bash", script], env=env, stdin=envelope, warning="cannot create marker directory")
+    run("marker directory is blocked", argv, env=env, stdin=envelope, diagnostic=f"{option} cannot create marker directory")
     marker_dir.unlink()
-    marker_dir.mkdir()
-    key = hashlib.sha256(str(memory / "new.md").encode()).hexdigest()[:16]
-    marker = marker_dir / f"probe-{key}"
-    marker.symlink_to(root / "missing/marker")
-    run(["bash", script], env=env, stdin=envelope, warning="cannot write session marker")
+    first = run("first memory write", argv, env=env, stdin=envelope, output=None)
+    assert json.loads(first.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny", first.stdout
+    run("retry of the same write", argv, env=env, stdin=envelope)
+
+    # Obstruct the actual marker recorded by the healthy invocation. The
+    # cannot-write probe must not depend on the production filename algorithm.
+    (marker,) = marker_dir.iterdir()
     marker.unlink()
-    run(["bash", script], env=env, stdin=envelope, output='"permissionDecision":"deny"')
-    result = run(["bash", script], env=env, stdin=envelope)
-    assert result.stdout == ""
+    marker.symlink_to(root / "missing/marker")
+    run("session marker is blocked", argv, env=env, stdin=envelope, diagnostic=f"{option} cannot write session marker")
 
 
 def credentials(manifest):
-    for case, package in json.loads(Path(manifest).read_text()).items():
-        argv = [f"{package}/bin/kiro-cli"]
-        if case in ["absent", "good"]:
-            result = run(argv, output="launched")
-        else:
-            result = subprocess.run(argv, text=True, capture_output=True)
-            assert result.returncode != 0, result
-            assert "launched" not in result.stdout, result.stdout
-            assert "ai.kiro.mcpServers.probe.headers.Authorization" in result.stderr, result.stderr
-        assert "fixture-token" not in result.stderr + result.stdout
+    cases = {
+        "absent": ("launched\n", None),
+        "empty": ("", "reference resolved empty"),
+        "failed": ("", "reference command failed"),
+        "good": ("launched with credential\n", None),
+        "missing": ("", "reference file is missing"),
+    }
+    wrappers = json.loads(Path(manifest).read_text())
+    assert wrappers.keys() == cases.keys(), wrappers.keys()
+    env = os.environ.copy()
+    env.pop("PROBE", None)
+    option = "ai.kiro.mcpServers.probe.headers.Authorization"
+    for case, (output, reason) in cases.items():
+        result = run(
+            f"credential {case}",
+            [f"{wrappers[case]}/bin/kiro-cli"],
+            env=env,
+            status=0 if reason is None else 1,
+            diagnostic=None if reason is None else f"{option}: {reason}",
+            output=output,
+        )
+        assert "fixture-token" not in result.stderr + result.stdout, f"credential {case} leaked"
 
 
 def global_feature_notices(script, root):
     for feature, setting in [("codeToSpec", "chat.enableC2s"), ("workflows", "chat.enableWorkflows")]:
         config = root / feature
         argv = [sys.executable, script, str(config), feature, setting]
-        needle = f"ai.kiro.cli.{feature}.enable"
-        run(argv, warning=needle)
         settings = config / "settings/cli.json"
+        needle = (
+            f"WARNING: Kiro {feature} requested by ai.kiro.cli.{feature}.enable, but "
+            f"devenv cannot enable its global setting: {settings} does not set {setting}=true"
+        )
         settings.parent.mkdir(parents=True)
-        for value in ['{}', json.dumps({setting: False}), 'invalid', '[]', json.dumps({setting: "true"})]:
-            settings.write_text(value)
-            result = run(argv, warning=needle)
-            assert setting in result.stderr
-        settings.write_text(json.dumps({setting: True}))
-        run(argv)
+        for label, value in {
+            "disabled": json.dumps({setting: False}),
+            "enabled": json.dumps({setting: True}),
+            "malformed JSON": "invalid",
+            "missing file": None,
+            "missing key": "{}",
+            "non-object JSON": "[]",
+            "string true": json.dumps({setting: "true"}),
+        }.items():
+            if value is None:
+                settings.unlink(missing_ok=True)
+            else:
+                settings.write_text(value)
+            run(f"{feature}: {label}", argv, diagnostic=None if label == "enabled" else needle)
 
 
 with tempfile.TemporaryDirectory() as directory:

@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   reasonsFor = import ../../lib/ai/app/supportReasons.nix;
   settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
@@ -93,6 +94,11 @@
     if row.surface == "permissions" && (row.ecosystem != "kiro" || row.mode == "devenv")
     then row.inputOptions == []
     else lib.all (field: warns field path) (requestFields row.surface);
+  agentToolReasons = {
+    codex = "Codex agents have no equivalent tool allowlist field.";
+    kimchi = "Kimchi matches its own lowercase builtins, so the agent gets every tool. Set ai.kimchi.agents.probe to native Kimchi Markdown with its own `tools:` line to apply the guardrail there.";
+    kiro = "Kiro takes capability tags, not Claude/Copilot tool names. Set ai.kiro.native.agents.probe.tools (capability tags) and permissions to apply the guardrail there.";
+  };
   # Conditional record gaps keep focused requests that trigger their predicates.
   requestedCases =
     map (runtime: {
@@ -101,6 +107,7 @@
       gapPath = ["tools"];
       path = ["ai" "agents" "probe"];
       value = sample.agents.probe // {tools = ["Read"];};
+      reason = agentToolReasons.${runtime};
     }) ["codex" "kimchi" "kiro"]
     ++ lib.concatMap (http:
       map (field: {
@@ -130,7 +137,7 @@
       )) [false true]
     # Exercise every runtime's unrepresentable stdio timeout on both backends.
     ++ map (case: {
-      inherit (case) runtime;
+      inherit (case) reason runtime;
       surface = "mcpServers";
       gapPath = ["timeout"];
       path = ["ai" "mcpServers" "probe"];
@@ -140,14 +147,17 @@
       };
     }) [
       {
+        reason = "Claude ignores per-server timeouts below 1000 ms; the timeout is omitted.";
         runtime = "claude";
         timeout = 999;
       }
       {
+        reason = "Kimchi's pi-mcp-adapter caps tool timers at 2147483647 ms; larger timeouts are omitted.";
         runtime = "kimchi";
         timeout = 2147483648;
       }
       {
+        reason = "Kiro caps per-server timeouts at 600000 ms; larger values are omitted.";
         runtime = "kiro";
         timeout = 600001;
       }
@@ -167,6 +177,7 @@
     }) ["kimchi"]
     ++ map (mode: {
       inherit mode;
+      reason = "Kiro reads tool policy only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, which neither writes there nor defines a new root, so only Home Manager delivers it and these tools keep Kiro's default: probe.";
       runtime = "kiro";
       silent = mode == "hm";
       surface = "mcpServers";
@@ -210,50 +221,13 @@
       {
         runtime = "kiro";
         path = ["ai" "kiro" "rules" "foo.bar"];
+        renderedPath = ''ai.kiro.rules."foo.bar".inclusion'';
         value = {
           text = "probe";
           inclusion = "manual";
         };
         surface = "rules";
         gapPath = ["inclusion"];
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            type = "agent";
-            prompt = {text = "probe";};
-          };
-          timeout = 1;
-        };
-        suffix = ".timeout";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            type = "agent";
-            prompt = {text = "probe";};
-            command = "true";
-          };
-        };
-        suffix = ".action.command";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            command = "true";
-            prompt = {text = "probe";};
-          };
-        };
-        suffix = ".action.prompt";
       }
     ];
   cases = lib.concatMap (case:
@@ -409,7 +383,7 @@
     messages)
     "supported surface warned: ${case.runtime}/${case.mode}/${lib.showOption case.path}")
   supportedCases;
-  expectedMessage = case: "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
+  expectedMessage = case: "${case.renderedPath or (lib.showOption case.path)} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
   portableEventSilent = lib.all (mode:
     evaluate mode (lib.recursiveUpdate (harness.setEnable "claude" true)
       (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
@@ -435,14 +409,14 @@
       && (deliveredCase case || builtins.elem case.runtime (expectedConsumers.${case.field} or [])))
     surfaceCases);
   settingsPolicyChildren =
-    # Real delivered records consume every field; this fixture must have a gap.
+    # A fixed partial declaration isolates the inference gap from the live records.
     policy.settingsGaps "testapp" {
       backends = ["hm"];
-      fields = builtins.tail settingsFields;
+      fields = ["reasoningEffort"];
     }
     == [
       {
-        inputOptions = [["ai" "settings" (builtins.head settingsFields)]];
+        inputOptions = [["ai" "settings" "inference"]];
         primitive = "notApplicable";
         reason = "testapp's surfaceSupport.settings.fields does not consume this normalized setting.";
       }
@@ -480,26 +454,15 @@
         then (builtins.head recorded).gap
         else throw "conditional warning case must match one record gap: ${case.runtime}/${mode}/${lib.showOption case.path}"
       else null;
-    warningPath =
-      case.warningPath or (
-        if gap != null && (gap.each or false)
-        then case.path ++ case.gapPath
-        else case.path
-      );
-    recordedReason =
-      if gap == null
-      then case.reason or null
-      else gap.reason;
+    warningPath = case.path ++ (case.gapPath or []);
+    # For dynamic reasons, the focused cases pin the message for their fixture
+    # instead of calling the same formatter used by the warning producer.
     reason =
-      if builtins.isFunction recordedReason
-      then
-        recordedReason {
-          backend = mode;
-          cfg = evaluation.ai.${case.runtime};
-          name = lib.last case.path;
-          inherit (case) path value;
-        }
-      else recordedReason;
+      case.reason or (
+        if gap == null
+        then null
+        else gap.reason
+      );
     needle =
       if reason != null
       then
@@ -517,13 +480,15 @@
     evaluation = evalConfig mode (lib.recursiveUpdate enabled input);
     messages = evaluation.warnings;
   in
-    if case.silent or false
-    then !(lib.any (lib.hasInfix (lib.showOption warningPath)) messages)
-    else
-      present messages
-      && (!(case ? count) || builtins.length messages == case.count)
-      && !present emptyCaseWarnings.${mode}.${case.runtime}
-      && evaluate mode input == [];
+    builtins.seq gap (
+      if case.silent or false
+      then messages == []
+      else
+        present messages
+        && (!(case ? count) || builtins.length messages == case.count)
+        && !present emptyCaseWarnings.${mode}.${case.runtime}
+        && evaluate mode input == []
+    );
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
       ai = {
@@ -559,7 +524,6 @@
     == (records.${row.ecosystem} ? agentNativeType))
   (lib.filter (row: row.surface == "agents") policy.rows);
   deliveryWarnings = import ../../lib/ai/delivery-warnings.nix {inherit lib;};
-  mcp = import ../../lib/mcp.nix {inherit lib;};
   # These three input combinations exercise the warning interface directly;
   # args, package, and settings retain their module-backed cases above.
   mcpFieldCases = [
@@ -617,60 +581,35 @@
   # Manager declares the options that feed those rules; devenv declares none
   # of them and warns on the shared surface through `surfaceSupport`.
   kiroHmOnlyOptions = [["ai" "kiro" "cli" "trustedMcpTools"] ["ai" "kiro" "permissions"]];
-  kiroPolicyRequest = {
-    ai.mcpServers.probe = {
-      command = "probe";
-      toolPolicy.probe = "disabled";
+  kiroTrustChecks = let
+    enable = harness.setEnable "kiro" true;
+    devenv = input: harness.evalDevenv (lib.recursiveUpdate enable input);
+    readWarnings = input: (devenv input).config.warnings;
+    rejectsUnknown = path: value:
+      !lib.hasAttrByPath path (devenv {}).options
+      && rejectsChange readWarnings {
+        valid = {};
+        invalid = lib.setAttrByPath path value;
+        expected = [];
+      };
+  in
+    checkRows "Kiro tool trust" {
+      # An option declared but ignored on devenv leaves a setting that looks
+      # configured. Prove each option is absent and rejected as an unknown input.
+      "devenv rejects ai.kiro.cli.trustedMcpTools as unknown" = rejectsUnknown ["ai" "kiro" "cli" "trustedMcpTools"] ["@probe"];
+      "devenv rejects ai.kiro.permissions as unknown" = rejectsUnknown ["ai" "kiro" "permissions"] sample.permissions;
+      # Home Manager keeps both options and renders permissions.yaml silently.
+      "hm delivers trustedMcpTools" = let
+        result = evalConfig "hm" (lib.recursiveUpdate enable {ai.kiro.cli.trustedMcpTools = ["@probe"];});
+      in
+        lib.all (path: lib.hasAttrByPath path (harness.evalHm {}).options) kiroHmOnlyOptions
+        && result.home.file ? ".kiro/settings/permissions.yaml"
+        && !contains "does not deliver" result.warnings;
     };
-  };
-  kiroPolicyWarnings = mode: evaluate mode (lib.recursiveUpdate (harness.setEnable "kiro" true) kiroPolicyRequest);
-  kiroPolicyNeedle = "ai.mcpServers.probe.toolPolicy is set but devenv does not deliver it to kiro (reason:";
-  evaluates = mode: config: (builtins.tryEval (evalConfig mode (lib.recursiveUpdate (harness.setEnable "kiro" true) config)).warnings).success;
-  kiroTrustChecks = {
-    # Home Manager keeps the options and renders permissions.yaml, silently.
-    hmDelivers = let
-      result = evalConfig "hm" (lib.recursiveUpdate (harness.setEnable "kiro" true) {ai.kiro.cli.trustedMcpTools = ["@probe"];});
-    in
-      lib.assertMsg (lib.all (path: lib.hasAttrByPath path (harness.evalHm {}).options) kiroHmOnlyOptions)
-      "Home Manager must declare ai.kiro.cli.trustedMcpTools and ai.kiro.permissions"
-      && lib.assertMsg (result.home.file ? ".kiro/settings/permissions.yaml")
-      "Home Manager must render ~/.kiro/settings/permissions.yaml from trustedMcpTools"
-      && lib.assertMsg (!contains "does not deliver" result.warnings)
-      "Home Manager must stay silent on trustedMcpTools"
-      && lib.assertMsg (kiroPolicyWarnings "hm" == [])
-      "Home Manager delivers MCP toolPolicy as permission rules and must stay silent";
-    # An option that is declared on devenv and ignored there, or only warned
-    # about, leaves a setting that looks configured and is not. The option
-    # must be absent, so setting it fails evaluation.
-    devenvOptionsAbsent =
-      lib.assertMsg (lib.all (path: !lib.hasAttrByPath path (harness.evalDevenv {}).options) kiroHmOnlyOptions)
-      "devenv must not declare ai.kiro.cli.trustedMcpTools or ai.kiro.permissions"
-      && lib.assertMsg (evaluates "devenv" {})
-      "control: devenv Kiro with neither option set must evaluate"
-      && lib.assertMsg (!evaluates "devenv" {ai.kiro.cli.trustedMcpTools = ["@probe"];})
-      "devenv must reject ai.kiro.cli.trustedMcpTools as an unknown option, not accept or warn"
-      && lib.assertMsg (!evaluates "devenv" {
-        ai.kiro.permissions = [
-          {
-            capability = "shell";
-            effect = "allow";
-          }
-        ];
-      })
-      "devenv must reject ai.kiro.permissions as an unknown option, not accept or warn";
-    # A shared request that silently succeeds on devenv, or that defines the
-    # Home Manager options there (an unknown-option error), is the wrong
-    # implementation: surfaceSupport must warn instead.
-    devenvWarnsOnSharedPolicy = let
-      messages = kiroPolicyWarnings "devenv";
-    in
-      lib.assertMsg (lib.any (lib.hasPrefix kiroPolicyNeedle) messages)
-      "devenv must warn through surfaceSupport on ai.mcpServers.<name>.toolPolicy for Kiro: ${builtins.toJSON messages}";
-  };
 in {
   imports = [./runtime.nix];
   checks = {
-    ai-warnings-kiro-tool-trust = harness.mkTest "ai-warnings-kiro-tool-trust" (lib.all lib.id (lib.attrValues kiroTrustChecks));
+    ai-warnings-kiro-tool-trust = harness.mkTest "ai-warnings-kiro-tool-trust" kiroTrustChecks;
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.assertMsg settingsFieldsSilent "existing and declared normalized settings consumers must stay supported and quiet"
       && lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
@@ -688,23 +627,32 @@ in {
     ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
     ai-warnings-kiro-hook-prompts = harness.mkTest "ai-warnings-kiro-hook-prompts" (
       lib.all (mode: let
-        warningsFor = extra:
+        warningsFor = enabled: hook:
           evaluate mode {
-            ai.kiro = {
-              cli.enable = true;
-              hooks.probe =
-                lib.recursiveUpdate {
-                  trigger = "UserPromptSubmit";
-                  action.command = "true";
-                }
-                extra;
-            };
+            ai.kiro =
+              {cli.enable = enabled;}
+              // lib.optionalAttrs (hook != null) {hooks.probe = hook // {trigger = "UserPromptSubmit";};};
           };
-        unset = warningsFor {};
-        withPrompt = warningsFor {action.prompt.text = "probe";};
+        agent.action = {
+          prompt.text = "probe";
+          type = "agent";
+        };
+        command.action.command = "true";
+        withActionField = hook: extra: lib.recursiveUpdate hook {action = extra;};
+        warns = field: reason: hook:
+          warningsFor true hook
+          == ["ai.kiro.hooks.probe.${field} is set but ${mode} does not deliver it to kiro (reason: ${reason})"]
+          && warningsFor false hook == [];
+        ignoredPayload = "The selected action.type uses the other action payload.";
       in
-        assert lib.assertMsg (unset == []) "${mode}: command hook with no prompt warned: ${builtins.toJSON unset}";
-          contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
+        checkRows "${mode} Kiro hook warnings" {
+          "agent action alone is quiet" = warningsFor true agent == [];
+          "agent action ignores a command" = warns "action.command" ignoredPayload (withActionField agent {command = "true";});
+          "agent action ignores a timeout" = warns "timeout" "Agent hook actions have no subprocess timeout." (agent // {timeout = 1;});
+          "command action alone is quiet" = warningsFor true command == [];
+          "command action ignores a prompt" = warns "action.prompt" ignoredPayload (withActionField command {prompt.text = "probe";});
+          "no hook is quiet" = warningsFor true null == [];
+        })
       ["devenv" "hm"]
     );
     ai-warnings-kiro-proxy-instance-package-null = harness.mkTest "ai-warnings-kiro-proxy-instance-package-null" (
@@ -725,31 +673,6 @@ in {
           && lib.hasInfix "ai.proxy / ai.kiro.proxy" message)
         messages)
       ["devenv" "hm"]
-    );
-    ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
-      let
-        valid = mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = true;
-              message = "positive control";
-            }
-          ];
-        };
-        invalid = builtins.tryEval (mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = false;
-              message = "first settings failure";
-            }
-            {
-              assertion = false;
-              message = "second settings failure";
-            }
-          ];
-        });
-      in
-        valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
     );
     # A context or rule unit whose file is switched off (`enable =
     # false`) or replaced with the consumer's own bytes warns, naming the

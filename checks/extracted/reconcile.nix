@@ -12,52 +12,59 @@
     rows.value = {};
     secretNeeds = ["excluded"];
   };
+  failure = kind: name: details: {
+    inherit details kind name;
+    surface = "config";
+  };
+  badRow = failure "bad-row" "value";
+  removed = failure "removed";
+  secret = name: failure "secret" name ["excluded"];
   # Every case names its refused input or the consumer-visible result.
   cases = {
     bad-field = {
       input.rows.value.bogus = true;
-      kinds = ["bad-row"];
+      failures = [(badRow ["bogus"])];
     };
     bad-ignored = {
       input.rows.value.ignored = " ";
-      kinds = ["bad-row"];
+      failures = [(badRow ["ignored must give a non-blank reason"])];
     };
     bad-replace = {
       input.rows.value.replace = "type";
-      kinds = ["bad-row"];
+      failures = [(badRow ["replace must list supplied allowed fields"])];
     };
     bad-row = {
       input.rows.value = null;
-      kinds = ["bad-row"];
+      failures = [(badRow ["row must be an object"])];
     };
     blank-alias = {
       input.rows.value.aliasFor = "";
-      kinds = ["bad-row"];
+      failures = [(badRow ["aliasFor"])];
     };
     blank-controls = {
       input = {
         fields = ["controls"];
         rows.value.controls = "";
       };
-      kinds = ["bad-row"];
+      failures = [(badRow ["controls"])];
     };
     blank-excluded = {
       input = {
         facts = {token.type = "string";};
         rows.token.excluded = "";
       };
-      kinds = ["bad-row" "secret"];
+      failures = [(failure "bad-row" "token" ["excluded"]) (secret "token")];
     };
     blank-non-secret-excluded = {
       input.rows.value.excluded = "";
-      kinds = ["bad-row"];
+      failures = [(badRow ["excluded"])];
     };
     boolean-secret-name = {
       input = {
         facts = {token.type = "boolean";};
         rows = {};
       };
-      kinds = [];
+      failures = [];
     };
     fill-only = {
       input = {
@@ -65,7 +72,7 @@
         rows.value.description = "hand prose";
       };
       description = "hand prose";
-      kinds = [];
+      failures = [];
     };
     ignored = {
       input = {
@@ -73,15 +80,15 @@
         rows.value.ignored = "owned by the host";
       };
       entries = [];
-      kinds = [];
+      failures = [];
     };
     needs-human = {
       input.facts.value.type = null;
-      kinds = ["needs-human"];
+      failures = [(failure "needs-human" "value" ["type"])];
     };
     new-name = {
       input.rows = {};
-      kinds = [];
+      failures = [];
     };
     # A pattern row fills every fact it matches, a credential included.
     pattern = {
@@ -93,8 +100,19 @@
         patterns."keys.*[].token".excluded = "runtime file delivery";
         rows = {};
       };
-      kinds = [];
-      check = result: lib.all (entry: entry.excluded == "runtime file delivery") (builtins.attrValues result.entries);
+      failures = [];
+      check = result:
+        result.entries
+        == {
+          "keys.a[].token" = {
+            excluded = "runtime file delivery";
+            type = "string";
+          };
+          "keys.b-c[].token" = {
+            excluded = "runtime file delivery";
+            type = "string";
+          };
+        };
     };
     # A `*` matches one key, never a path.
     pattern-one-key = {
@@ -103,7 +121,7 @@
         patterns."keys.*.leaf".description = "hand prose";
         rows = {};
       };
-      kinds = ["removed"];
+      failures = [(removed "keys.*.leaf" "delete the stale pattern row")];
       check = result: !(result.entries."keys.a.b.leaf" ? description);
     };
     pattern-overlap = {
@@ -112,7 +130,7 @@
         patterns."keys.*.leaf".description = "hand prose";
         rows."keys.a.leaf".description = "other prose";
       };
-      kinds = ["bad-row"];
+      failures = [(failure "bad-row" "keys.a.leaf" ["claimed by several rows: keys.a.leaf, keys.*.leaf"])];
     };
     pattern-pattern-overlap = {
       input = {
@@ -123,25 +141,25 @@
         };
         rows = {};
       };
-      kinds = ["bad-row"];
+      failures = [(failure "bad-row" "keys.a.leaf" ["claimed by several rows: *.a.leaf, keys.*.leaf"])];
     };
     pattern-stale = {
       input.patterns."keys.*.leaf".description = "hand prose";
-      kinds = ["removed"];
+      failures = [(removed "keys.*.leaf" "delete the stale pattern row")];
     };
     removed-row = {
       input = {
         facts = {};
         rows.value.description = "hand prose";
       };
-      kinds = ["removed"];
+      failures = [(removed "value" "delete the stale row")];
     };
     removed-unused = {
       input = {
         facts = {};
         rows = {};
       };
-      kinds = [];
+      failures = [];
     };
     removed-use = {
       input = {
@@ -149,14 +167,14 @@
         rows = {};
         uses.value = "launcher flag";
       };
-      kinds = ["removed"];
+      failures = [(removed "value" "launcher flag")];
     };
     replace = {
       input.rows.value = {
         replace = ["type"];
         type = "number";
       };
-      kinds = [];
+      failures = [];
       type = "number";
     };
     replace-not-allowed = {
@@ -165,32 +183,32 @@
         replace = ["ignored"];
       };
       entries = [];
-      kinds = ["bad-row"];
+      failures = [(badRow ["replace must list supplied allowed fields"])];
     };
     replace-not-supplied = {
       input.rows.value.replace = ["description"];
-      kinds = ["bad-row"];
+      failures = [(badRow ["replace must list supplied allowed fields"])];
     };
     secret = {
       input = {
         facts = {token.type = "string";};
         rows = {};
       };
-      kinds = ["secret"];
+      failures = [(secret "token")];
     };
     secret-delivered = {
       input = {
         facts = {token.type = "string";};
         rows = {token.excluded = "runtime file delivery";};
       };
-      kinds = [];
+      failures = [];
     };
     secret-filled-type = {
       input = {
         facts = {token.type = null;};
         rows = {token.type = "string";};
       };
-      kinds = ["secret"];
+      failures = [(secret "token")];
     };
     secret-map = {
       input = {
@@ -202,7 +220,7 @@
         };
         rows = {gitTokens = {};};
       };
-      kinds = ["secret"];
+      failures = [(secret "gitTokens")];
     };
     secret-no-needs = {
       input = {
@@ -210,7 +228,7 @@
         rows = {};
         secretNeeds = [];
       };
-      kinds = ["secret"];
+      failures = [(failure "secret" "token" [])];
     };
     secret-retyped = {
       input = {
@@ -222,11 +240,11 @@
           };
         };
       };
-      kinds = ["secret"];
+      failures = [(secret "token")];
     };
     shadow = {
       input.rows.value.type = "number";
-      kinds = ["bad-row"];
+      failures = [(badRow ["type"])];
       type = "string";
     };
     struct-secret-name = {
@@ -234,7 +252,7 @@
         facts = {token.type = "object";};
         rows = {};
       };
-      kinds = [];
+      failures = [];
     };
   };
   run = case: let
@@ -251,15 +269,14 @@
       };
     result = (reconcile {config = surface;}).config;
   in
-    map (failure: failure.kind) result.failures
-    == case.kinds
+    result.failures
+    == case.failures
     && builtins.attrNames result.entries == (case.entries or (builtins.attrNames surface.facts))
     && (!(case ? description) || result.entries.value.description == case.description)
     && (!(case ? type) || result.entries.value.type == case.type)
     && (!(case ? check) || case.check result);
-  failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
 in {
   checks.extracted-reconcile = harness.mkTest "extracted-reconcile" (
-    assert lib.assertMsg (failures == []) (builtins.toJSON failures); true
+    harness.checkRows "extracted-reconcile" (lib.mapAttrs (_: run) cases)
   );
 }
