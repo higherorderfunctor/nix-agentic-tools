@@ -8,7 +8,7 @@
 }: let
   redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm launchdAgentRunsLauncher mcpLib mkTest;
+  inherit (harness) checkRows claudeMcpPath claudeMcpServers evalDevenv evalHm launchdAgentRunsLauncher mcpLib mkTest rejectsChange;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   webexResult = backend: clients: assignServers:
     (
@@ -196,73 +196,66 @@ in {
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          empty=$(mktemp) && : > "$empty"
-          full=$(mktemp) && printf 'a-real-token' > "$full"
-          sed "s|/run/redact-test-secret|$full|"  ${runner} > full.sh
-          sed "s|/run/redact-test-secret|$empty|" ${runner} > empty.sh
+          : > empty
+          printf 'a-real-token' > full
+          mkdir secret-dir
 
-          # Positive control. Without it, a guard that rejected EVERYTHING would
-          # still pass the negative case below and look correct.
-          got=$(${pkgs.bash}/bin/bash full.sh 2>&1)
+          run_case() {
+            sed "s|/run/redact-test-secret|$PWD/$1|" ${runner} > case.sh
+            ${pkgs.bash}/bin/bash case.sh
+          }
+
+          # Positive control: rejecting every path must not pass.
+          got=$(run_case full 2>&1)
           [ "$got" = "REACHED-PROGRAM" ] || {
             echo "FAIL: populated secret was rejected (got: $got)" >&2
             exit 1
           }
 
-          # A DIRECTORY must abort with the guard's own message. `-r` alone is
-          # true for a readable directory, so without the `-d` branch this
-          # sails past and dies on `cat: …: Is a directory`, losing the
-          # variable name and the path the guard exists to report.
-          mkdir -p secret-dir
-          sed "s|/run/redact-test-secret|$PWD/secret-dir|" ${runner} > dir.sh
-          if got=$(${pkgs.bash}/bin/bash dir.sh 2>&1); then
-            echo "FAIL: a directory as the secret path did not abort (got: $got)" >&2
-            exit 1
-          fi
-          case "$got" in
-            *"reference is a directory"*) : ;;
-            *)
-              echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
-              exit 1 ;;
-          esac
+          expect_guard() {
+            local path="$1" diagnostic="$2" got
+            if got=$(run_case "$path" 2>&1); then
+              echo "FAIL: $path did not abort the wrapper (got: $got)" >&2
+              exit 1
+            fi
+            if [ "$got" != "TEST_TOKEN: $diagnostic" ]; then
+              echo "FAIL: $path did not abort via the expected guard (got: $got)" >&2
+              exit 1
+            fi
+          }
 
-          # The real case: an empty file must abort, non-zero, before the
-          # program is reached.
-          if got=$(${pkgs.bash}/bin/bash empty.sh 2>&1); then
-            echo "FAIL: empty secret did not abort the wrapper (got: $got)" >&2
-            exit 1
-          fi
-          case "$got" in
-            *REACHED-PROGRAM*)
-              echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
-            *"TEST_TOKEN: reference resolved empty"*) : ;;
-            *)
-              echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
-          esac
+          # A readable directory passes `-r` alone, so a generic read failure
+          # is not evidence that the directory guard ran.
+          expect_guard secret-dir 'reference is a directory'
+          expect_guard empty 'reference resolved empty'
 
           echo PASS > "$out"
         '';
 
-      # A credential-valued http header reaching the shared renderServer via a
-      # non-Kiro path throws — non-Kiro ecosystems do not inject secret
-      # headers (rather than serialize the raw file path). Forced via toJSON.
-      module-mcp-credential-header-non-kiro-throws =
-        mkTest "mcp-credential-header-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
-          type = "http";
-          url = "u";
-          headers.H = redact.file "/f";
-        })))
-    .success);
-
-      # A credential-valued http URL reaching the shared renderServer via a
-      # non-Kiro path throws (mirrors the header guard) — only Kiro assembles
-      # a private mcp.json for a secret url.
-      module-mcp-credential-url-non-kiro-throws =
-        mkTest "mcp-credential-url-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
-          type = "http";
-          url = redact.file "/f";
-        })))
-    .success);
+      # Kiro preprocesses credential-valued URLs and headers before the shared
+      # renderer. Other runtimes must not serialize an unresolved reference.
+      module-mcp-credential-non-kiro = mkTest "mcp-credential-non-kiro" (
+        let
+          literal = {
+            type = "http";
+            url = "https://example.invalid/";
+            headers.H = "public";
+          };
+          render = mcpLib.renderServer pkgs "example";
+        in
+          checkRows "shared HTTP renderer rejects unresolved credentials" {
+            "credential header is rejected instead of serialized" = rejectsChange (server: (render server).headers.H) {
+              valid = literal;
+              invalid = literal // {headers.H = redact.file "/run/secrets/header";};
+              expected = "public";
+            };
+            "credential URL is rejected instead of serialized" = rejectsChange (server: (render server).url) {
+              valid = literal;
+              invalid = literal // {url = redact.file "/run/secrets/url";};
+              expected = "https://example.invalid/";
+            };
+          }
+      );
 
       # `admin off` does not disable Caddy's config autosave. Exercise the
       # packaged binary against isolated dummy XDG homes: the historical variant
@@ -316,7 +309,20 @@ in {
 
       # An empty delete list renders an unfiltered global log, which writes
       # every request header to the journal, so the shared helper throws.
-      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
+      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (
+        let
+          inherit (import ../../lib/ai/caddy.nix {inherit lib pkgs;}) globalBlock;
+        in
+          checkRows "Caddy request log redaction" {
+            "empty delete list cannot render an unfiltered log" =
+              rejectsChange
+              (logDeletes: lib.hasInfix "request>headers delete" (globalBlock {inherit logDeletes;})) {
+                valid = ["request>headers"];
+                invalid = [];
+                expected = true;
+              };
+          }
+      );
 
       # The proxy renders its Caddyfile from the shared lib/ai/caddy.nix
       # helpers. This pins the whole rendering to a copy taken before they
@@ -438,50 +444,37 @@ in {
           && !(lib.hasInfix "X-Api-Key" (builtins.toJSON entry))
       );
 
-      # A credential in a PROXIED server's top-level `headers` must be a hard
-      # error, not an absorption. Those headers go to the client, so absorbing
-      # them silently (the pre-2026-08-13 behavior) made one key mean two
-      # things, and passing them through would hand the client the credential
-      # the proxy exists to withhold. The assertion is also the migration
-      # message for config written against the old shape.
-      module-mcp-proxy-credential-in-client-headers-throws =
-        mkTest "mcp-proxy-credential-in-client-headers-throws" (
-          let
-            result =
-              builtins.tryEval
+      # Top-level headers belong to the client, not the proxy. Moving the
+      # credential to proxy.headers must clear the assertion without banning
+      # ordinary client headers. evalHm returns the assertions without enforcing
+      # them, so an eval throw is not evidence of the expected rejection.
+      module-mcp-proxy-client-header-restrictions = mkTest "mcp-proxy-client-header-restrictions" (
+        let
+          failed = header:
+            map (item: item.message) (builtins.filter (item: !item.assertion)
               (evalHm {
                 ai.kiro = {
                   cli.enable = true;
                   mcpServers.jira = {
                     type = "http";
                     url = redact.file "/run/secrets/jira-url";
-                    # WRONG on purpose: belongs under proxy.headers.
-                    headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
+                    headers."X-Client-Sent" = header;
                     proxy = {
                       enable = true;
                       port = 9501;
+                      headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
                     };
                   };
                 };
-              })
-      .config.assertions;
-            failed =
-              if result.success
-              then builtins.filter (a: !a.assertion) result.value
-              else [];
-          in
-            # Require the eval to SUCCEED and the failing assertion to be OURS.
-            #
-            # Accepting a throw here instead (`!result.success || …`) is what
-            # this originally did, and it was wrong: `evalHm` returns
-            # `config.assertions` WITHOUT checking them, so a failed assertion
-            # never throws — the throw branch could only ever be reached by an
-            # unrelated evaluation error, which it would then silently convert
-            # into a pass. `tryEval` stays only so such an error surfaces as a
-            # test failure rather than as an eval crash.
-            result.success
-            && builtins.any (a: lib.hasInfix "proxy.headers" a.message) failed
-        );
+              }).config.assertions);
+        in
+          checkRows "proxied Kiro client headers" {
+            "credential header names its migration destination" =
+              lib.any (message: lib.hasInfix "put a CREDENTIAL in the server's top-level `headers`" message && lib.hasInfix "Move them to `proxy.headers`" message)
+              (failed (redact.file "/run/secrets/client-token"));
+            "literal client header and separate proxy credential pass" = failed "yes" == [];
+          }
+      );
 
       module-mcp-proxy-devenv-emits-process = mkTest "mcp-proxy-devenv-emits-process" (
         let
@@ -497,68 +490,57 @@ in {
           && (claudeMcpServers "devenv" result).shared.url == "http://127.0.0.1:9501/"
       );
 
-      module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (!(builtins.tryEval (builtins.deepSeq (mcpProxyLib.specFor "example" {
-          url = "https://example.com/mcp";
-          proxy = {
-            host = "127.0.0.1";
-            port = 9501;
-            headers = {
-              "X-Key" = redact.file "/run/secrets/one";
-              "X_Key" = redact.file "/run/secrets/two";
-            };
-          };
-        })
-        true)).success);
-
-      # `proxy.host` takes a bare address: the client url brackets IPv6 itself,
-      # so a pre-bracketed host would render `[[::1]]`, and a `%` zone suffix is
-      # neither a valid url authority nor a usable `bind`. `::1` is the control.
-      module-mcp-proxy-host-refuses-brackets-and-zones = mkTest "mcp-proxy-host-refuses-brackets-and-zones" (
+      module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (
         let
-          hostAccepted = host:
-            (builtins.tryEval (builtins.deepSeq
-              (evalHm {
-                ai.mcpServers.example = lib.recursiveUpdate proxySampleServer {proxy.host = host;};
-              })
-              .config
-              .ai
-              .mcpServers
-              .example
-              .proxy
-              .host
-              null))
-            .success;
-        in
-          hostAccepted "::1"
-          && hostAccepted "127.0.0.1"
-          && !(hostAccepted "[::1]")
-          && !(hostAccepted "fe80::1%eth0")
-          && !(hostAccepted "")
-      );
-
-      # A plain-string header on a proxied server is NOT a credential and must
-      # keep working — the guard above has to reject secrets without rejecting
-      # ordinary client config.
-      module-mcp-proxy-literal-client-headers-allowed = mkTest "mcp-proxy-literal-client-headers-allowed" (
-        let
-          result = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              mcpServers.jira = {
-                type = "http";
-                url = redact.file "/run/secrets/jira-url";
-                headers."X-Client-Sent" = "yes";
-                proxy = {
-                  enable = true;
-                  port = 9501;
-                  headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
+          one = redact.file "/run/secrets/one";
+          two = redact.file "/run/secrets/two";
+          readSecrets = second:
+            (mcpProxyLib.specFor "example" {
+              url = "https://example.invalid/mcp";
+              proxy = {
+                host = "127.0.0.1";
+                port = 9501;
+                headers = {
+                  "X-Key" = one;
+                  "${second}" = two;
                 };
               };
-            };
-          };
-          failed = builtins.filter (a: !a.assertion) result.config.assertions;
+            }).headerSecrets;
         in
-          builtins.all (a: !(lib.hasInfix "proxy.headers" a.message)) failed
+          checkRows "proxy startup credential variables" {
+            "different headers cannot map to the same variable" = rejectsChange readSecrets {
+              valid = "X-Other";
+              invalid = "X_Key";
+              expected = {
+                MCP_PROXY_EXAMPLE_HEADER_X_KEY = one;
+                MCP_PROXY_EXAMPLE_HEADER_X_OTHER = two;
+              };
+            };
+          }
+      );
+
+      # `proxy.host` takes a bare address: the client URL brackets IPv6 itself,
+      # so a pre-bracketed host would render `[[::1]]`, and a `%` zone suffix is
+      # neither a valid URL authority nor a usable `bind`.
+      module-mcp-proxy-host-refuses-brackets-and-zones = mkTest "mcp-proxy-host-refuses-brackets-and-zones" (
+        let
+          readHost = host:
+            (evalHm {
+              ai.mcpServers.example = lib.recursiveUpdate proxySampleServer {proxy.host = host;};
+            }).config.ai.mcpServers.example.proxy.host;
+          rejectHost = invalid:
+            rejectsChange readHost {
+              inherit invalid;
+              valid = "::1";
+              expected = "::1";
+            };
+        in
+          checkRows "proxy host merge" {
+            "accepts a bare IPv4 loopback address" = readHost "127.0.0.1" == "127.0.0.1";
+            "rejects a bracketed IPv6 address" = rejectHost "[::1]";
+            "rejects a scoped IPv6 address" = rejectHost "fe80::1%eth0";
+            "rejects an empty address" = rejectHost "";
+          }
       );
 
       # Unconditional: a proxy injecting no credential still drops headers. A
@@ -692,11 +674,12 @@ in {
           printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$XDG_RUNTIME_DIR/mcp-proxy-plain/config" "$XDG_RUNTIME_DIR/mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
           ${pkgs.diffutils}/bin/diff -u expected actual
           test "$(${pkgs.coreutils}/bin/stat -c %a "$XDG_RUNTIME_DIR/mcp-proxy-plain")" = 700
-          if PROXY_READER_FAIL=1 ${secret}/bin/ai-service-mcp-proxy-secret > failed; then
+          if PROXY_READER_FAIL=1 ${secret}/bin/ai-service-mcp-proxy-secret > failed 2> error; then
             echo "a failed secret read started the proxy" >&2
             exit 1
           fi
           test ! -s failed
+          ${pkgs.gnugrep}/bin/grep -Fx 'ai.services.mcp-proxy-secret.environment.MCP_PROXY_SECRET_URL: reference command failed' error
           touch "$out"
         '';
 
@@ -837,24 +820,46 @@ in {
           && !(lib.hasInfix "X-Service-Token" rendered)
       );
 
-      module-mcp-proxy-unit-uses-services-launcher = mkTest "mcp-proxy-unit-uses-services-launcher" (
-        let
-          result = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              mcpServers.jira = proxySampleServer;
-            };
+      # Follow the command emitted by the module, not a freshly rendered
+      # script. A correctly named script can still use the wrong declaration.
+      module-mcp-proxy-unit-uses-services-launcher = let
+        result = evalHm {
+          ai.kiro = {
+            cli.enable = true;
+            mcpServers.jira = lib.recursiveUpdate proxySampleServer {proxy.host = "127.0.0.2";};
           };
-          unit = result.config.systemd.user.services.mcp-proxy-jira;
-          service = result.config.ai.services.mcp-proxy-jira;
-        in
-          lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
-          && unit.Unit.Description == "mcp-proxy-jira (ai.services)"
-          && !(unit.Service ? Environment)
-          && service.command == [(lib.getExe (mcpProxyLib.runScriptFor (mcpProxyLib.specFor "jira" proxySampleServer)))]
-          && result.config.ai.claims.service.mcp-proxy-jira == ["kiro"]
-          && result.config.ai.claims.port."9501" == ["kiro:mcp-proxy-jira.ports.main"]
-      );
+        };
+        unit = result.config.systemd.user.services.mcp-proxy-jira;
+        service = result.config.ai.services.mcp-proxy-jira;
+      in
+        assert checkRows "Kiro Jira proxy service" {
+          "claims the declared port" = result.config.ai.claims.port."9501" == ["kiro:mcp-proxy-jira.ports.main"];
+          "identifies Kiro as the service owner" = result.config.ai.claims.service.mcp-proxy-jira == ["kiro"];
+          "uses the named proxy command" = map builtins.baseNameOf service.command == ["mcp-proxy-jira"];
+          "uses the services launcher without unit environment" =
+            lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
+            && unit.Unit.Description == "mcp-proxy-jira (ai.services)"
+            && !(unit.Service ? Environment);
+        };
+          pkgs.runCommandLocal "module-test-mcp-proxy-unit-uses-services-launcher" {
+            nativeBuildInputs = [pkgs.gnugrep pkgs.gnused];
+            proxyCommand = builtins.head service.command;
+          } ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+
+            grep -Fx '_url="''${MCP_PROXY_JIRA_URL}"' "$proxyCommand"
+            caddyfile=$(sed -n 's/^exec .* run --config \([^ ]*\) --adapter caddyfile$/\1/p' "$proxyCommand")
+            grep -Fx ':9501 {' "$caddyfile"
+            grep -Fx $'\tbind 127.0.0.2' "$caddyfile"
+            grep -F 'rewrite * {$MCP_PROXY_JIRA_PATH}' "$caddyfile"
+            grep -F 'reverse_proxy {$MCP_PROXY_JIRA_ORIGIN} {' "$caddyfile"
+            grep -F 'header_up X-Api-Key "{$MCP_PROXY_JIRA_HEADER_X_API_KEY}"' "$caddyfile"
+            grep -F 'header_up X-Route "primary"' "$caddyfile"
+            grep -F 'header_up X-Service-Token "{$MCP_PROXY_JIRA_HEADER_X_SERVICE_TOKEN}"' "$caddyfile"
+            grep -F 'header_up -X-Drop-Me' "$caddyfile"
+            touch "$out"
+          '';
 
       # A top-level owner is lazy: if every enabled capable runtime replaces or
       # tombstones the key, no client can reach it and no managed daemon exists.

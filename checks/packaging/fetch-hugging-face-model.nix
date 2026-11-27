@@ -2,20 +2,24 @@
 # nixpkgs owns and tests the fetching itself.
 #
 # The wrapper takes the caller's `pkgs` as an argument, and this check passes
-# two, neither of which touches the network:
+# three variants, none of which touches the network:
 # - `stubbed` is pkgs with a fetchFromHuggingFace that records the arguments
 #   the wrapper passed and writes one small file per sparseCheckout entry, so
 #   the LICENSE / ATTRIBUTION layer can actually be built.
 # - the real pkgs is only EVALUATED (name, meta, drvPath). That is enough for
 #   getName and the licence gate, and proves nixpkgs accepts what the wrapper
 #   passes.
-# Both go through the flake's public self.lib, so the exposure is tested too.
+# - the validation stub accepts every argument, so only the wrapper's own
+#   assertions can reject an input.
+# All three go through the flake's public self.lib, so the exposure is tested too.
 {
+  harness,
   lib,
   pkgs,
   self,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   inherit (pkgs.stdenv.hostPlatform) system;
   inherit (self.lib.packaging) fetchHuggingFaceModel;
   rev = "0123456789abcdef0123456789abcdef01234567";
@@ -35,6 +39,9 @@
       inherit (args) meta;
       passthru = args.passthru // {inherit args;};
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       for path in ${lib.escapeShellArgs (map (lib.removePrefix "/") args.sparseCheckout)}; do
         mkdir -p "$out/$(dirname "$path")"
         printf '%s\n' "$path" > "$out/$path"
@@ -45,14 +52,30 @@
   passed = overrides: (fake overrides).args;
 
   real = overrides: fetchHuggingFaceModel ({inherit pkgs;} // base // overrides);
-  rejects = overrides: !(builtins.tryEval (real overrides).drvPath).success;
+  # Unlike the real fetcher, this stub has no rev/tag xor.
+  readValidation = overrides:
+    (fetchHuggingFaceModel ({pkgs = pkgs // {fetchFromHuggingFace = _: {accepted = true;};};} // base // overrides)).accepted;
+  rejects = invalid:
+    rejectsChange readValidation {
+      inherit invalid;
+      valid = {};
+      expected = true;
+    };
   # The licence gate itself, not just the meta value: check-meta must refuse
   # the unfree default on both layers once the CALLER's allowUnfree is off.
   strict = import pkgs.path {
     inherit system;
     config.allowUnfree = false;
   };
-  evaluates = overrides: (builtins.tryEval (fetchHuggingFaceModel ({pkgs = strict;} // base // overrides)).drvPath).success;
+  strictFetch = overrides: let
+    result = fetchHuggingFaceModel ({pkgs = strict;} // base // overrides);
+  in
+    builtins.seq result.drvPath result.name;
+  rejectsUnfree = valid: invalid:
+    rejectsChange strictFetch {
+      inherit invalid valid;
+      expected = "fixture-model-0123456";
+    };
 
   plain = fake {};
   noticedTree = fake noticed;
@@ -124,33 +147,33 @@ in {
   # No makeOverridable `override`: it would skip the wrapper.
   assert !((real {}) ? override || (real {}) ? overrideDerivation);
   assert (real {}) ? overrideAttrs && (real noticed) ? overrideAttrs;
-  # The licence gate on both layers.
-  assert !(evaluates {});
-  assert !(evaluates {inherit attribution;});
-  assert evaluates mit;
-  assert evaluates noticed;
-  # Rejects.
-  assert !(rejects {});
-  assert rejects {rev = "main";};
-  assert rejects {rev = builtins.substring 0 7 rev;};
-  assert rejects {
-    rev = null;
-    tag = "v1";
+  assert checkRows "fetch-hugging-face-model arguments" {
+    "a free licence allows both notices" = strictFetch noticed == "fixture-model-0123456";
+    "absolute paths are not model-relative" = rejects {files = ["/abs"];};
+    "branch names are not full commit hashes" = rejects {rev = "main";};
+    "case-folded paths must be unique" = rejects {files = ["config.json" "Config.json"];};
+    "dot components are not allowed" = rejects {files = ["./x"];};
+    "empty path components are not allowed" = rejects {files = ["a//b"];};
+    "empty paths are not allowed" = rejects {files = [""];};
+    "exact path lists must not be empty" = rejects {files = [];};
+    "exact paths cannot be combined with sparse patterns" = rejects {sparseCheckout = ["/*.json"];};
+    "licence belongs in license rather than meta.license" = rejects {meta.license = lib.licenses.mit;};
+    "nested parent components are not allowed" = rejects {files = ["a/../x"];};
+    "notice layer is unfree without an explicit free licence" = rejectsUnfree (mit // {inherit attribution;}) {inherit attribution;};
+    "revision must not be null" = rejects {rev = null;};
+    "short commit hashes are not full commit hashes" = rejects {rev = "0123456";};
+    "tag-only selectors are forbidden" = rejects {
+      rev = null;
+      tag = "v1";
+    };
+    "tags cannot accompany a pinned commit" = rejects {tag = "v1";};
+    "top-level parent components are not allowed" = rejects {files = ["../x"];};
+    "unwrapped model is unfree without an explicit free licence" = rejectsUnfree mit {};
   };
-  assert rejects {tag = "v1";};
-  # The wrapper's own refusal: the stub has no rev/tag xor of its own.
-  assert !(builtins.tryEval (fake {tag = "v1";}).drvPath).success;
-  assert rejects {meta.license = lib.licenses.mit;};
-  assert rejects {sparseCheckout = ["/*.json"];};
-  assert rejects {files = [];};
-  assert rejects {files = ["../x"];};
-  assert rejects {files = ["a/../x"];};
-  assert rejects {files = ["./x"];};
-  assert rejects {files = ["/abs"];};
-  assert rejects {files = [""];};
-  assert rejects {files = ["a//b"];};
-  assert rejects {files = ["config.json" "Config.json"];};
     pkgs.runCommand "fetch-hugging-face-model" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       for file in ${lib.escapeShellArgs files}; do
         cmp "${plain}/$file" "${noticedTree}/$file"
       done

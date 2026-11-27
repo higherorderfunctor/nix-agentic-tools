@@ -6,6 +6,19 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai mkTest;
+  inherit (harness) checkRows rejectsChange;
+
+  # These fixtures emit plain Markdown links, one complete destination
+  # per capture; resolve each against the file containing that link.
+  resolvedLinks = filename: text:
+    lib.sort builtins.lessThan (lib.unique (map
+      (capture: toString (/. + "/workspace/${builtins.dirOf filename}/${builtins.head capture}"))
+      (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" text))));
+
+  # Split only at top-level rule bullets, not indented glob or link bullets.
+  hasRule = text: name: markers:
+    lib.any (rule: lib.hasPrefix "`${name}`**\n" rule && lib.all (marker: lib.hasInfix marker rule) markers)
+    (builtins.tail (lib.splitString "\n- **" text));
 in {
   checks = {
     # ── Transformer shape tests ─────────────────────────────────────
@@ -42,43 +55,60 @@ in {
         frontmatter.applyTo == "**/*.nix,**/*.toml"
     );
 
-    factory-transformer-kiro-always = mkTest "transformer-kiro-always" (
+    factory-transformer-kiro-frontmatter = mkTest "transformer-kiro-frontmatter" (
       let
-        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
+        inherit (ai.transformers.kiro) render;
+        always = {
           inclusion = "always";
           paths = ["**/*.nix"];
           text = "body";
         };
-      in
-        frontmatter.inclusion == "always" && !(frontmatter ? fileMatchPattern)
-    );
-
-    factory-transformer-kiro-auto = mkTest "transformer-kiro-auto" (
-      let
-        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
-          description = "Semantic Kiro guidance";
-          inclusion = "auto";
-          name = "semantic-guidance";
-          paths = ["**/*.nix"];
-          text = "body";
-        };
-      in
-        frontmatter.description
-        == "Semantic Kiro guidance"
-        && frontmatter.inclusion == "auto"
-        && frontmatter.name == "semantic-guidance"
-        && !(frontmatter ? fileMatchPattern)
-    );
-
-    factory-transformer-kiro-fileMatch = mkTest "transformer-kiro-fileMatch" (
-      let
-        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
+        automatic =
+          always
+          // {
+            description = "Semantic Kiro guidance";
+            inclusion = "auto";
+            name = "semantic-guidance";
+          };
+        scoped = {
           description = "Kiro rule";
-          paths = ["**/*.nix"];
+          inherit (always) paths;
           text = "body";
         };
+        explicit = scoped // {inclusion = "fileMatch";};
+        alwaysOutput = "---\ninclusion: \"always\"\n---\n\nbody";
+        autoOutput = "---\ndescription: \"Semantic Kiro guidance\"\ninclusion: \"auto\"\nname: \"semantic-guidance\"\n---\n\nbody";
+        scopedOutput = "---\ndescription: \"Kiro rule\"\nfileMatchPattern: \"**/*.nix\"\ninclusion: \"fileMatch\"\n---\n\nbody";
+        # Keep the body inline and the remaining YAML fields valid so only
+        # the tested inclusion validation can reject each changed input.
+        rejectsRender = rejectsChange render;
       in
-        frontmatter.inclusion == "fileMatch" && frontmatter.fileMatchPattern == "**/*.nix"
+        checkRows "Kiro frontmatter" {
+          "always ignores paths" = render always == alwaysOutput;
+          "auto requires a non-empty name" = rejectsRender {
+            expected = autoOutput;
+            invalid = builtins.removeAttrs automatic ["name"];
+            valid = automatic;
+          };
+          "fileMatch requires paths" = rejectsRender {
+            expected = scopedOutput;
+            invalid = builtins.removeAttrs explicit ["paths"];
+            valid = explicit;
+          };
+          "manual emits name but no path pattern" =
+            render (always
+              // {
+                inclusion = "manual";
+                name = "on-demand";
+              })
+            == "---\ninclusion: \"manual\"\nname: \"on-demand\"\n---\n\nbody";
+          "path list with one glob implies fileMatch and emits a scalar" = render scoped == scopedOutput;
+          "unknown inclusion mode is rejected" = rejectsRender {
+            expected = alwaysOutput;
+            invalid = always // {inclusion = "unknown";};
+            valid = always;
+          };
+        }
     );
 
     # Several paths are a block sequence, one quoted glob per line. Prettier
@@ -96,49 +126,13 @@ in {
       == "---\ndescription: \"Kiro rule\"\nfileMatchPattern:\n  - \"**/*.nix\"\n  - \"lib/**\"\ninclusion: \"fileMatch\"\n---\n\nbody"
     );
 
-    factory-transformer-kiro-manual = mkTest "transformer-kiro-manual" (
-      let
-        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
-          inclusion = "manual";
-          name = "on-demand";
-          text = "body";
-        };
-      in
-        frontmatter.inclusion
-        == "manual"
-        && frontmatter.name == "on-demand"
-        && !(frontmatter ? fileMatchPattern)
-    );
-
     factory-transformer-kiro-path-text = mkTest "transformer-kiro-path-text" (
-      let
-        args = {
-          inclusion = "manual";
-          name = "path-backed";
-          text = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-        };
-        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData args;
-        out = ai.transformers.kiro.render args;
-      in
-        frontmatter.inclusion
-        == "manual"
-        && lib.hasInfix "Alpha steering body." out
-    );
-
-    factory-transformer-kiro-validates-required-fields = mkTest "transformer-kiro-validates-required-fields" (
-      let
-        succeeds = fragment:
-          (builtins.tryEval (builtins.deepSeq (ai.transformers.kiro.render fragment) true)).success;
-      in
-        !(succeeds {
-          description = "Missing name";
-          inclusion = "auto";
-          text = "body";
-        })
-        && !(succeeds {
-          inclusion = "fileMatch";
-          text = "body";
-        })
+      ai.transformers.kiro.render {
+        inclusion = "manual";
+        name = "path-backed";
+        text = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+      }
+      == "---\ninclusion: \"manual\"\nname: \"path-backed\"\n---\n\nAlpha steering body.\n"
     );
 
     factory-transformer-agentsmd-no-frontmatter = mkTest "transformer-agentsmd-no-frontmatter" (
@@ -193,74 +187,77 @@ in {
           inherit audiences index;
           hasOnDemandIndex = true;
         };
-        # These fixtures emit plain Markdown links, one complete destination
-        # per capture; resolve each against the file containing that link.
-        resolvedLinks = filename: text:
-          lib.sort builtins.lessThan (lib.unique (map
-            (capture: toString (/. + "/workspace/${builtins.dirOf filename}/${builtins.head capture}"))
-            (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" text))));
         sourceTargets = map (ref: "/workspace/${ref}") scoped.references;
-        ungrouped = refs:
+        child = tier.children.${childPath} or "";
+        tiersWithoutAudiences = filename: entries:
           transformer.tierIndex {
-            filename = "AGENTS.md";
+            inherit filename;
             audiences = {};
             hasOnDemandIndex = false;
-            index = lib.genAttrs ["a" "b"] (_:
-              scoped
-              // {
-                matcher = ["a"];
-                references = refs;
-              });
+            index = entries;
           };
+        paired = refs: lib.genAttrs ["a" "b"] (_: scoped // {references = refs;});
+        staysInRoot = filename: entries: let
+          ungrouped = tiersWithoutAudiences filename entries;
+        in
+          ungrouped.children == {} && ungrouped.indexGroups == [] && ungrouped.index == entries;
+        # Use enough links that the pair would save space if grouped; a short
+        # list could stay in the root even if the link restriction disappeared.
+        longLinks = prefix: map (ref: "${prefix}${ref}") scoped.references;
+        staysInDefaultRoot = refs: staysInRoot "AGENTS.md" (paired refs);
       in
-        lib.attrNames tier.children
-        == [childPath]
-        && lib.attrNames tier.index == ["automatic" "manual"]
-        && (builtins.head tier.indexGroups).audiences == ["codex" "kimchi"]
-        && (builtins.head tier.indexGroups).entry.matcher == ["lib/shared.nix" "src-other/**" "src/**" "wild/*/**" "wild/*/leaf.nix"]
-        && resolvedLinks "nested/CUSTOM.md" root == lib.sort builtins.lessThan (sourceTargets ++ ["/workspace/${childPath}"])
-        && resolvedLinks childPath tier.children.${childPath} == lib.sort builtins.lessThan sourceTargets
-        && lib.hasInfix "  - Audience: `codex`" tier.children.${childPath}
-        && lib.hasInfix "  - Audience: `kimchi`" tier.children.${childPath}
-        && lib.hasInfix "`src/alpha/**`" tier.children.${childPath}
-        && lib.hasInfix "`src/*.nix`" tier.children.${childPath}
-        && lib.hasInfix "`src/beta/**`" tier.children.${childPath}
-        && builtins.stringLength root < builtins.stringLength original
-        && lib.all (refs: (ungrouped refs).children == {}) [
-          ["https://example.org/docs/one.md"]
-          ["docs/a.md#anchor"]
-          ["docs/a.md?query"]
-          ["/absolute/a.md"]
-          ["docs/a.md" "other/b.md"]
-        ]
-        && (transformer.tierIndex {
-          filename = "${lib.concatStrings (lib.replicate 100 "long-custom-target-")}.md";
-          audiences = {};
-          hasOnDemandIndex = false;
-          index = lib.genAttrs ["a" "b"] (_: scoped // {references = ["a.md"];});
-        }).children
-        == {}
-        && (transformer.tierIndex {
-          filename = "AGENTS.md";
-          audiences = {};
-          hasOnDemandIndex = false;
-          index.alpha = scoped;
-        }).children
-        == {}
+        checkRows "AGENTS.md tier index" {
+          "absolute links stay in the root" = staysInDefaultRoot (longLinks "/");
+          "child links resolve to the source documents" = resolvedLinks childPath child == lib.sort builtins.lessThan sourceTargets;
+          "child retains alpha's audience and original globs" = hasRule child "alpha" [
+            "  - Audience: `codex`\n"
+            "`src/*.nix`"
+            "`src/alpha/**`"
+          ];
+          "child retains beta's audience and original globs" = hasRule child "beta" [
+            "  - Audience: `kimchi`\n"
+            "`src/beta/**`"
+          ];
+          "documents from different directories stay in the root" = staysInDefaultRoot (scoped.references ++ ["other/b.md"]);
+          "fragment links stay in the root" = staysInDefaultRoot (scoped.references ++ ["docs/guidance/a.md#anchor"]);
+          "group uses the union of audiences and drops only covered globs" =
+            map (group: {
+              inherit (group) audiences;
+              inherit (group.entry) matcher;
+            })
+            tier.indexGroups
+            == [
+              {
+                audiences = ["codex" "kimchi"];
+                matcher = ["lib/shared.nix" "src-other/**" "src/**" "wild/*/**" "wild/*/leaf.nix"];
+              }
+            ];
+          "long child link would increase the root size" = staysInRoot "${lib.concatStrings (lib.replicate 100 "long-custom-target-")}.md" (paired scoped.references);
+          "on-demand rules stay in the root" = lib.attrNames tier.index == ["automatic" "manual"];
+          "one child is emitted in the custom target namespace" = lib.attrNames tier.children == [childPath];
+          "query links stay in the root" = staysInDefaultRoot (scoped.references ++ ["docs/guidance/a.md?query"]);
+          "relative links can move into a child" = lib.attrNames (tiersWithoutAudiences "AGENTS.md" (paired scoped.references)).children == [".agents/rules/guidance.md"];
+          "remote links stay in the root" = staysInDefaultRoot (longLinks "https://example.org/");
+          "root links resolve to the child and on-demand documents" = resolvedLinks "nested/CUSTOM.md" root == lib.sort builtins.lessThan (sourceTargets ++ ["/workspace/${childPath}"]);
+          "single rule stays in the root" = staysInRoot "AGENTS.md" {alpha = scoped;};
+          "tiering makes the root smaller" = builtins.stringLength root < builtins.stringLength original;
+        }
     );
 
     factory-transformer-agentsmd-tier-readable-paths = mkTest "transformer-agentsmd-tier-readable-paths" (
       let
         transformer = ai.transformers.agentsmd;
-        parents = [
-          "dev/fragments/ai-module"
-          "docs/guidance"
-          "docs/guidance/index.md"
-          "other/guidance"
-          "other/index.md"
-          "packages/kimchi/docs"
-          "packages/kiro-cli/docs"
-        ];
+        childNames = {
+          "dev/fragments/ai-module" = "ai-module.md";
+          "docs/guidance" = "by-path/docs/guidance/index.md";
+          "docs/guidance/index.md" = "by-path/docs/guidance/index_dot_md/index.md";
+          "other/guidance" = "by-path/other/guidance/index.md";
+          "other/index.md" = "by-path/other/index_dot_md/index.md";
+          "packages/kimchi/docs" = "kimchi.md";
+          "packages/kiro-cli/docs" = "kiro-cli.md";
+        };
+        sourceRefs = parent: map (n: "${parent}/long-document-name-${n}.md") ["one" "two" "three" "four" "five" "six"];
+        parents = lib.attrNames childNames;
         index = lib.listToAttrs (lib.concatMap (parent:
           map (name: {
             name = "${parent}-${name}";
@@ -268,49 +265,39 @@ in {
               description = "";
               inclusion = "fileMatch";
               matcher = ["src/${name}/**"];
-              references = map (n: "${parent}/long-document-name-${n}.md") ["one" "two" "three" "four" "five" "six"];
+              references = sourceRefs parent;
             };
           }) ["alpha" "beta"])
         parents);
-        makeTier = filename:
-          transformer.tierIndex {
-            inherit filename index;
-            audiences = {};
-            hasOnDemandIndex = false;
-          };
-        expected = [
-          "ai-module.md"
-          "by-path/docs/guidance/index.md"
-          "by-path/docs/guidance/index_dot_md/index.md"
-          "by-path/other/guidance/index.md"
-          "by-path/other/index_dot_md/index.md"
-          "kimchi.md"
-          "kiro-cli.md"
-        ];
-        targets = ["AGENTS.md" "CUSTOM.md" "nested/AGENTS.md" "nested/CUSTOM.md"];
-        tiers = lib.genAttrs targets makeTier;
+        targets = {
+          "AGENTS.md" = ".agents/rules/";
+          "CUSTOM.md" = ".agents/rules/targets/CUSTOM_dot_md/";
+          "nested/AGENTS.md" = "nested/.agents/rules/";
+          "nested/CUSTOM.md" = "nested/.agents/rules/targets/CUSTOM_dot_md/";
+        };
         # Each child resolves its links to the original workspace documents,
         # regardless of target namespace or collision-disambiguation depth.
-        sourceLinksResolve = filename: tier:
-          lib.all (group: let
-            child = builtins.head group.entry.references;
-            childPath = lib.optionalString (builtins.dirOf filename != ".") "${builtins.dirOf filename}/" + child;
-            original = lib.unique (lib.concatMap (entry: entry.references) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "${group.name}-" name) index)));
-            actual = lib.unique (map
-              (capture: toString (/. + "/workspace/${builtins.dirOf childPath}/${builtins.head capture}"))
-              (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" tier.children.${childPath})));
-          in
-            lib.sort builtins.lessThan actual == lib.sort builtins.lessThan (map (ref: "/workspace/${ref}") original))
-          tier.indexGroups;
-        allPaths = lib.concatMap (target: lib.attrNames tiers.${target}.children) targets;
+        checkTarget = target: prefix: let
+          tier = transformer.tierIndex {
+            audiences = {};
+            filename = target;
+            hasOnDemandIndex = false;
+            inherit index;
+          };
+          childPath = parent: prefix + childNames.${parent};
+          root = transformer.renderKeyed {inherit (tier) index indexGroups;};
+        in
+          checkRows target ({
+              "child paths match exactly" = lib.attrNames tier.children == lib.sort builtins.lessThan (map childPath parents);
+              "root links resolve to every child" = resolvedLinks target root == lib.sort builtins.lessThan (map (parent: "/workspace/${childPath parent}") parents);
+            }
+            // lib.mapAttrs' (parent: _:
+              lib.nameValuePair "child for ${parent} links to its source documents" (
+                resolvedLinks (childPath parent) (tier.children.${childPath parent} or "") == lib.sort builtins.lessThan (map (ref: "/workspace/${ref}") (sourceRefs parent))
+              ))
+            childNames);
       in
-        lib.attrNames tiers."AGENTS.md".children
-        == map (name: ".agents/rules/${name}") expected
-        && lib.attrNames tiers."CUSTOM.md".children == map (name: ".agents/rules/targets/CUSTOM_dot_md/${name}") expected
-        && lib.attrNames tiers."nested/AGENTS.md".children == map (name: "nested/.agents/rules/${name}") expected
-        && lib.attrNames tiers."nested/CUSTOM.md".children == map (name: "nested/.agents/rules/targets/CUSTOM_dot_md/${name}") expected
-        && builtins.length allPaths == builtins.length (lib.unique allPaths)
-        && lib.all (target: sourceLinksResolve target tiers.${target}) targets
+        checkRows "AGENTS.md tier namespaces" (lib.mapAttrs checkTarget targets)
     );
 
     factory-transformer-agentsmd-index-audience-deduplication = mkTest "transformer-agentsmd-index-audience-deduplication" (
@@ -332,14 +319,21 @@ in {
         };
         private = render {};
       in
-        lib.hasInfix "This fallback index applies only to: `codex`, `kimchi`.\n" uniform
-        && !(lib.hasInfix "  - Audience:" uniform)
-        && lib.hasInfix "If your runtime is not named, skip this index." uniform
-        && lib.hasInfix "Runtimes with native rule injection" uniform
-        && lib.hasInfix "  - Audience: `codex`\n" mixed
-        && lib.hasInfix "  - Audience: `kimchi`\n" mixed
-        && !(lib.hasInfix "This fallback index" private)
-        && !(lib.hasInfix "Audience:" private)
+        checkRows "AGENTS.md index audiences" {
+          "mixed audiences are attributed to their own rule" =
+            hasRule mixed "alpha" ["  - Audience: `codex`\n"]
+            && hasRule mixed "beta" ["  - Audience: `kimchi`\n"];
+          "uniform audience is declared globally, not per rule" =
+            lib.hasInfix "This fallback index applies only to: `codex`, `kimchi`.\n" uniform
+            && !(lib.hasInfix "  - Audience:" uniform)
+            && lib.hasInfix "If your runtime is not named, skip this index." uniform
+            && lib.hasInfix "Runtimes with native rule injection" uniform;
+          "untagged rules render without fallback guidance" =
+            hasRule private "alpha" ["[`guide.md`](guide.md)"]
+            && hasRule private "beta" ["[`guide.md`](guide.md)"]
+            && !(lib.hasInfix "This fallback index" private)
+            && !(lib.hasInfix "Audience:" private);
+        }
     );
 
     factory-transformer-agentsmd-index-heading-uses-structure = mkTest "transformer-agentsmd-index-heading-uses-structure" (
@@ -351,11 +345,13 @@ in {
           references = ["guide.md"];
         };
       in
-        lib.hasPrefix "## Path-scoped rules\n" (ai.transformers.agentsmd.renderKeyed {inherit index;})
-        && lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {
-          hasOnDemandIndex = true;
-          inherit index;
-        })
+        checkRows "AGENTS.md index headings" {
+          "description alone does not make a rule on demand" = lib.hasPrefix "## Path-scoped rules\n" (ai.transformers.agentsmd.renderKeyed {inherit index;});
+          "on-demand index uses the generic heading" = lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {
+            hasOnDemandIndex = true;
+            inherit index;
+          });
+        }
     );
   };
 }

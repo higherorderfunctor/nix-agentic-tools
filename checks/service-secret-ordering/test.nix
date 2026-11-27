@@ -79,11 +79,8 @@
         extra
       ];
     };
-  in {
-    path = configuration.activationPackage;
-    # What each daemon must log once it has read this generation's value.
-    readers = lib.mapAttrs (_: daemon: fixtures.secrets.${secrets}.${daemon.secret}) daemons;
-  };
+  in
+    configuration.activationPackage;
 
   generations = lib.mapAttrs generation {
     base = {};
@@ -148,7 +145,7 @@ in
         isNormalUser = true;
       };
       virtualisation = {
-        additionalPaths = [sopsFiles] ++ lib.mapAttrsToList (_: generation: generation.path) generations;
+        additionalPaths = [sopsFiles] ++ lib.attrValues generations;
         memorySize = 2048;
       };
     };

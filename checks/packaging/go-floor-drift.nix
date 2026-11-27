@@ -157,10 +157,12 @@
 
         ${vu.goModFloorFn {inherit pkgs;}}
 
-        if go_floor_of "$goModFile" 2>/dev/null; then
+        if go_floor_of "$goModFile" >floor 2>diagnostic; then
           echo "FAIL: go_floor_of accepted a go.mod with no 'go' directive" >&2
           exit 1
         fi
+        test ! -s floor
+        grep -F "go-floor: no 'go' directive in $goModFile" diagnostic
         echo "ok — rejected go.mod with no 'go' directive" > "$out"
       '';
 
@@ -170,13 +172,13 @@
         goMod = "module example.com/x\n\ngo 1.25.0\n";
         expect = "1.25.0";
       };
-      # `toolchain` ABOVE `go` — the directive that raises the real floor.
+      # `toolchain` higher than `go` — the directive that raises the real floor.
       go-floor-parse-toolchain-higher = mkParserTest {
         name = "toolchain-higher";
         goMod = "module example.com/x\n\ngo 1.25.0\n\ntoolchain go1.26.5\n";
         expect = "1.26.5";
       };
-      # `toolchain` BELOW `go` — `go` still wins; this is a max, not a
+      # `toolchain` lower than `go` — `go` still wins; this is a max, not a
       # last-one-wins.
       go-floor-parse-toolchain-lower = mkParserTest {
         name = "toolchain-lower";

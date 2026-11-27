@@ -1,6 +1,10 @@
 # go-floor-fixer — exercise both mkGoFloorFix destinations and its exclusive
 # destination contract with one synthetic pinned source.
-{pkgs, ...}: {
+{
+  harness,
+  pkgs,
+  ...
+}: {
   checks.go-floor-fixer = let
     vu = import ../../lib/packaging.nix;
     source = pkgs.writeTextDir "go.mod" ''
@@ -15,39 +19,36 @@
       printf '%s\n' ${source}
     '';
     helperPkgs = pkgs // {nix = fakeNix;};
-    recipeFixer = vu.mkGoFloorFix {
-      attr = "fixture";
-      pkgs = helperPkgs;
-      pname = "recipe-fixture";
-      recipeFile = "./package.nix";
+    inherit (harness) checkRows rejectsChange;
+    mkFixer = overrides:
+      vu.mkGoFloorFix ({
+          attr = "fixture";
+          pkgs = helperPkgs;
+          pname = "fixture";
+        }
+        // overrides);
+    recipe = {recipeFile = "./package.nix";};
+    sidecar = {sourcesFile = "./sources.json";};
+    recipeFixer = mkFixer recipe;
+    sidecarFixer = mkFixer sidecar;
+    destination = args: let
+      fixer = mkFixer args;
+    in
+      builtins.seq fixer.drvPath fixer.goFloorDestination;
+    rejectsDestination = invalid:
+      rejectsChange destination {
+        inherit invalid;
+        valid = recipe;
+        expected = "recipe";
+      };
+    cases = {
+      "recipe destination reports its writer" = destination recipe == "recipe";
+      "rejects both recipeFile and sourcesFile" = rejectsDestination (recipe // sidecar);
+      "rejects omitted recipeFile and sourcesFile" = rejectsDestination {};
+      "sidecar destination reports its writer" = destination sidecar == "sidecar";
     };
-    sidecarFixer = vu.mkGoFloorFix {
-      attr = "fixture";
-      pkgs = helperPkgs;
-      pname = "sidecar-fixture";
-      sourcesFile = "./sources.json";
-    };
-    missingDestination =
-      builtins.tryEval
-      (vu.mkGoFloorFix {
-        attr = "fixture";
-        pkgs = helperPkgs;
-        pname = "missing-destination";
-      }).drvPath;
-    duplicateDestination =
-      builtins.tryEval
-      (vu.mkGoFloorFix {
-        attr = "fixture";
-        pkgs = helperPkgs;
-        pname = "duplicate-destination";
-        recipeFile = "./package.nix";
-        sourcesFile = "./sources.json";
-      }).drvPath;
   in
-    assert recipeFixer.goFloorDestination == "recipe";
-    assert sidecarFixer.goFloorDestination == "sidecar";
-    assert !missingDestination.success;
-    assert !duplicateDestination.success;
+    assert checkRows "go-floor-fixer" cases;
       pkgs.runCommand "go-floor-fixer-check" {
         nativeBuildInputs = [pkgs.jq];
       } ''

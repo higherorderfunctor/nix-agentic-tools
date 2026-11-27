@@ -1,11 +1,25 @@
-{pkgs, ...}: let
+{
+  harness,
+  lib,
+  pkgs,
+  ...
+}: let
   certificateBundle = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-  snapshots = [pkgs.docs.kimchi-docs pkgs.docs.slack-mcp.src];
+  snapshots = {
+    kimchi = pkgs.docs.kimchi-docs;
+    slack = pkgs.docs.slack-mcp.src;
+  };
+  bundleRows =
+    lib.concatMapAttrs (name: snapshot: {
+      "${name}.NIX_SSL_CERT_FILE" = (snapshot.NIX_SSL_CERT_FILE or null) == certificateBundle;
+      "${name}.SSL_CERT_FILE" = (snapshot.SSL_CERT_FILE or null) == certificateBundle;
+    })
+    snapshots;
 in {
   checks.web-docs-fixtures =
     # Both variables must be pinned: OpenSSL prefers NIX_SSL_CERT_FILE, and
     # stdenv otherwise supplies the unreadable /no-cert-file.crt sentinel.
-    assert builtins.all (snapshot: snapshot.NIX_SSL_CERT_FILE == certificateBundle && snapshot.SSL_CERT_FILE == certificateBundle) snapshots;
+    assert harness.checkRows "documentation snapshots must use ${certificateBundle}" bundleRows;
       pkgs.runCommand "web-docs-fixtures" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

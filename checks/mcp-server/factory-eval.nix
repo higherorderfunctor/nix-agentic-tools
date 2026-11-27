@@ -5,165 +5,110 @@
   harness,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai evalService mkServiceServerDef mkTest;
+
+  stdio = {
+    command = "hello";
+    package = pkgs.hello;
+    type = "stdio";
+  };
 in {
   checks = {
-    # ── mcpServer.commonSchema tests ────────────────────────────────
-    factory-mcpServer-commonSchema-minimal = mkTest "mcpServer-commonSchema-minimal" (
+    factory-mcpServer-commonSchema = mkTest "mcpServer-commonSchema" (
       let
-        evaluated = lib.evalModules {
-          modules = [
-            ai.mcpServer.commonSchema
-            {
-              config = {
-                type = "stdio";
-                package = pkgs.hello;
-                command = "hello";
-                args = ["--version"];
-              };
-            }
-          ];
-        };
-      in
-        evaluated.config.type
-        == "stdio"
-        && evaluated.config.command == "hello"
-    );
-
-    factory-mcpServer-commonSchema-type-enforced = mkTest "mcpServer-commonSchema-type-enforced" (
-      # `type` is nullable in the new schema (renderServer infers from
-      # which other fields are set), but the enum constraint still
-      # applies when a value is provided. Setting an invalid type must
-      # fail evaluation.
-      let
-        result =
-          builtins.tryEval
+        readConfig = config:
           (lib.evalModules {
-            modules = [
-              ai.mcpServer.commonSchema
-              {config.type = "BOGUS_TRANSPORT";}
-            ];
-          }).config.type;
+            modules = [ai.mcpServer.commonSchema {inherit config;}];
+          }).config;
       in
-        !result.success
-    );
-
-    # Bridge mode honors service.host in the shared mcp-proxy wrapper, so it
-    # needs no per-server metadata declaration and still accepts overrides.
-    factory-mcpServer-service-host-bridge-accepted = mkTest "mcpServer-service-host-bridge-accepted" (
-      let
-        result = evalService {
-          config.service.host = "127.0.0.2";
-          serverDef = mkServiceServerDef "bridge" {};
-        };
-      in
-        result.config.server.service.host == "127.0.0.2"
-    );
-
-    # A native mode must state its audit result. This is the structural guard
-    # that turns a future bridge -> native switch into an evaluation failure.
-    factory-mcpServer-service-host-native-audit-required = mkTest "mcpServer-service-host-native-audit-required" (
-      let
-        attempt = builtins.tryEval (builtins.deepSeq
-          (evalService {
-            serverDef = mkServiceServerDef "test-mcp --http" {};
-          }).config.server.service.host
-          true);
-      in
-        !attempt.success
-    );
-
-    factory-mcpServer-service-host-native-supported = mkTest "mcpServer-service-host-native-supported" (
-      let
-        result = evalService {
-          config.service.host = "127.0.0.2";
-          serverDef = mkServiceServerDef "test-mcp --http" {honorsServiceHost = true;};
-        };
-      in
-        result.config.server.service.host == "127.0.0.2"
-    );
-
-    # Any concrete value is rejected for an unsupported native mode, including
-    # the old apparent default. Leaving it unset is the only accepted shape.
-    factory-mcpServer-service-host-native-unsupported-rejected = mkTest "mcpServer-service-host-native-unsupported-rejected" (
-      let
-        attempt = builtins.tryEval (builtins.deepSeq
-          (evalService {
-            config.service.host = "127.0.0.1";
-            serverDef = mkServiceServerDef "test-mcp --http" {honorsServiceHost = false;};
-          }).config.server.service.host
-          true);
-      in
-        !attempt.success
-    );
-
-    # ── mcpServer.mkMcpServer tests ─────────────────────────────────
-    factory-mcpServer-mkMcpServer-returns-function = mkTest "mkMcpServer-returns-function" (
-      let
-        factory = ai.mcpServer.mkMcpServer {
-          name = "test";
-          defaults = {package = pkgs.hello;};
-        };
-      in
-        builtins.isFunction factory
-    );
-
-    factory-mcpServer-mkMcpServer-builds-instance = mkTest "mkMcpServer-builds-instance" (
-      let
-        factory = ai.mcpServer.mkMcpServer {
-          name = "test";
-          defaults = {
-            package = pkgs.hello;
-            type = "stdio";
-            command = "hello";
+        checkRows "MCP server common schema" {
+          # The transport is nullable for renderer inference, but explicit
+          # values must still pass the enum check.
+          "an explicit transport must be a supported enum member" = rejectsChange (config: (readConfig config).type) {
+            expected = "stdio";
+            invalid = stdio // {type = "unsupported-transport";};
+            valid = stdio;
           };
-        };
-        instance = factory {args = ["--version"];};
-      in
-        instance.type
-        == "stdio"
-        && instance.command == "hello"
-        && instance.args == ["--version"]
+          "the command and arguments survive schema evaluation" = let
+            config = readConfig (stdio // {args = ["--version"];});
+          in
+            config.command == "hello" && config.args == ["--version"];
+        }
     );
 
-    factory-mcpServer-mkMcpServer-custom-options = mkTest "mkMcpServer-custom-options" (
+    factory-mcpServer-mkMcpServer = mkTest "mkMcpServer" (
       let
-        factory = ai.mcpServer.mkMcpServer {
-          name = "weird";
-          defaults = {
-            package = pkgs.hello;
-            type = "stdio";
-            command = "hello";
+        mkInstance = {
+          defaults ? {},
+          options ? {},
+        }:
+          ai.mcpServer.mkMcpServer {
+            inherit options;
+            defaults = stdio // defaults;
+            name = "test";
           };
-          options = {
-            turboMode = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
+      in
+        checkRows "MCP server factory" {
+          "arguments from defaults and the consumer concatenate without extra members" = let
+            instance = mkInstance {defaults.args = ["--from-defaults"];} {args = ["--from-consumer"];};
+          in
+            # Pin membership and multiplicity without specifying relative order.
+            lib.sort builtins.lessThan instance.args == ["--from-consumer" "--from-defaults"];
+          "consumer values can set custom options" = let
+            instance = mkInstance {
+              options.turboMode = lib.mkOption {
+                default = false;
+                type = lib.types.bool;
+              };
+            } {turboMode = true;};
+          in
+            instance.turboMode == true;
+          "factory defaults survive construction with consumer arguments" = let
+            instance = mkInstance {} {args = ["--version"];};
+          in
+            {inherit (instance) args command type;}
+            == {
+              args = ["--version"];
+              command = "hello";
+              type = "stdio";
             };
-          };
-        };
-        instance = factory {turboMode = true;};
-      in
-        instance.turboMode or false
+        }
     );
 
-    factory-mcpServer-mkMcpServer-list-merge = mkTest "mkMcpServer-list-merge" (
+    factory-mcpServer-service-host = mkTest "mcpServer-service-host" (
       let
-        factory = ai.mcpServer.mkMcpServer {
-          name = "test";
-          defaults = {
-            package = pkgs.hello;
-            type = "stdio";
-            command = "hello";
-            args = ["--from-defaults"];
-          };
-        };
-        instance = factory {args = ["--from-consumer"];};
+        audited = {serverDef = native {honorsServiceHost = true;};};
+        native = mkServiceServerDef "test-mcp --http";
+        readHost = input: (evalService input).config.server.service.host;
+        unsupported = {serverDef = native {honorsServiceHost = false;};};
       in
-        # With module-system merge on listOf: ["--from-defaults" "--from-consumer"]
-        # Both values must be present (concatenation semantics).
-        builtins.elem "--from-defaults" instance.args
-        && builtins.elem "--from-consumer" instance.args
+        checkRows "MCP HTTP service bind host" {
+          # Bridge mode honors service.host in the shared mcp-proxy wrapper, so it
+          # needs no per-server metadata declaration and still accepts overrides.
+          "bridge mode accepts a host override without an audit" =
+            readHost {
+              config.service.host = "127.0.0.2";
+              serverDef = mkServiceServerDef "bridge" {};
+            }
+            == "127.0.0.2";
+          # A native mode must state its audit result. This is the structural guard
+          # that turns a future bridge -> native switch into an evaluation failure.
+          "native mode requires an explicit audit even when the host is unset" = rejectsChange readHost {
+            expected = "127.0.0.1";
+            invalid = {serverDef = native {};};
+            valid = audited;
+          };
+          "supported native mode accepts a host override" =
+            readHost (audited // {config.service.host = "127.0.0.2";}) == "127.0.0.2";
+          # Any concrete value is rejected for an unsupported native mode, including
+          # the old apparent default. Leaving it unset is the only accepted shape.
+          "unsupported native mode rejects even the default address when explicitly set" = rejectsChange readHost {
+            expected = "127.0.0.1";
+            invalid = unsupported // {config.service.host = "127.0.0.1";};
+            valid = unsupported;
+          };
+        }
     );
   };
 }

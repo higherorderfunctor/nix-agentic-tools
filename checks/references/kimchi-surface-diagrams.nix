@@ -36,6 +36,15 @@
 
   renders = import ../../dev/references/kimchi-surface/renders.nix {inherit lib;};
 
+  # The published pair must still be compared if its render is dropped or
+  # renamed. Also compare new outputs automatically; renders.nix owns the
+  # invocation arguments, not the minimum set of published diagrams.
+  comparedOutputs = lib.unique ([
+      "kimchi-capabilities.svg"
+      "kimchi-endpoints.svg"
+    ]
+    ++ lib.mapAttrsToList (_: spec: spec.out) renders.renders);
+
   # Byte counts alone are not a diagnosis — a one-character substitution
   # drifts at identical length, which reads as a false alarm. The first
   # few diff lines are what says WHAT moved, and an SVG's lines are one
@@ -43,15 +52,18 @@
   # wall. `2>&1` for the same reason instructions-drift.nix does it: a
   # diff-level error would otherwise reach the real stderr and leave the
   # printed excerpt blank.
-  compareOne = spec: ''
-    if ! "$diff" -u "${reference}/${spec.out}" "rendered/${spec.out}" \
-      >"$tmp/${spec.out}.diff" 2>&1; then
-      failed=1
+  compareOne = name: ''
+    if [ ! -f "rendered/${name}" ]; then
+      missing=1
+      echo "MISSING RENDER: ${name} is expected but renders.nix did not produce it" >&2
+    elif ! "$diff" -u "${reference}/${name}" "rendered/${name}" \
+      >"$tmp/${name}.diff" 2>&1; then
+      drifted=1
       echo "" >&2
-      echo "DRIFT: dev/references/kimchi-surface/${spec.out}" >&2
-      echo "  committed $("$wc" -c < "${reference}/${spec.out}") bytes," \
-        "re-rendered $("$wc" -c < "rendered/${spec.out}") bytes" >&2
-      "$sed" -n '1,12p' "$tmp/${spec.out}.diff" >&2
+      echo "DRIFT: dev/references/kimchi-surface/${name}" >&2
+      echo "  committed $("$wc" -c < "${reference}/${name}") bytes," \
+        "re-rendered $("$wc" -c < "rendered/${name}") bytes" >&2
+      "$sed" -n '1,12p' "$tmp/${name}.diff" >&2
     fi
   '';
 in {
@@ -64,7 +76,8 @@ in {
     wc="${pkgs.coreutils}/bin/wc"
     tmp="$(${pkgs.coreutils}/bin/mktemp -d)"
     ${pkgs.coreutils}/bin/mkdir -p rendered
-    failed=0
+    drifted=0
+    missing=0
 
     ${renders.invocations {
       python3 = "${pkgs.python3}/bin/python3";
@@ -73,13 +86,16 @@ in {
       outDir = "rendered";
     }}
 
-    ${lib.concatStringsSep "\n" (lib.mapAttrsToList (_: compareOne) renders.renders)}
+    ${lib.concatMapStringsSep "\n" compareOne comparedOutputs}
 
-    if [ "$failed" -ne 0 ]; then
+    if [ "$drifted" -ne 0 ]; then
       echo "" >&2
       echo "The committed diagrams do not match the reference markdown." >&2
       echo "Regenerate and 'git add' the results:" >&2
       echo "  devenv tasks run --mode before generate:references:kimchi-surface" >&2
+    fi
+
+    if [ "$drifted" -ne 0 ] || [ "$missing" -ne 0 ]; then
       exit 1
     fi
 

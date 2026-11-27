@@ -38,8 +38,12 @@ fi
 pr=$(cat "$FIX/.current")
 poll=$(cat "$FIX/.poll.$pr")
 [ ! -e "$FIX/$pr/$poll/$kind.fail" ] || exit 1
-[ ! -e "$FIX/$pr/$poll/$kind.hang" ] || exec sleep 300
-if [ -e "$FIX/$pr/$poll/$kind.hang-term" ]; then trap '' TERM && exec sleep 300; fi
+fixture="$FIX/$pr/$poll/$kind"
+if [ -e "$fixture.hang" ] || [ -e "$fixture.hang-term" ]; then
+  if [ -e "$fixture.hang-term" ]; then trap '' TERM; fi
+  touch "$fixture.started"
+  exec sleep 300
+fi
 for ((p = poll; p >= 1; p--)); do
   if [ -e "$FIX/$pr/$p/$kind.json" ]; then cat "$FIX/$pr/$p/$kind.json" && exit 0; fi
 done
@@ -84,14 +88,22 @@ expect() {
 	local name=$1 want_rc=$2 want=$3 got rc=0
 	shift 3
 	got=$(timeout 60 bash "$script" --repo o/r --interval 0 --settle 0 --timeout 10 "${@:-1}" 2>"$work/err") || rc=$?
-	if [ "$rc" = "$want_rc" ] && [ "$got" = "$want" ]; then
+	if [ "$rc" = "$want_rc" ] && [ "$got" = "$want" ] &&
+		{ [ -z "${want_error:-}" ] || grep -qF -- "$want_error" "$work/err"; }; then
 		echo "ok   - $name"
 		pass=$((pass + 1))
 	else
-		printf 'FAIL - %s: exit %s (want %s)\n  got:  %s\n  want: %s\n  err:  %s\n' \
-			"$name" "$rc" "$want_rc" "$got" "$want" "$(cat "$work/err")" >&2
+		printf 'FAIL - %s: exit %s (want %s)\n  got:  %s\n  want: %s\n  err:  %s\n  expected error text: %s\n' \
+			"$name" "$rc" "$want_rc" "$got" "$want" "$(cat "$work/err")" "${want_error:-}" >&2
 		fail=$((fail + 1))
 	fi
+}
+# expect_error STDERR-FRAGMENT NAME EXIT [ARGS...]; stdout must remain empty.
+# Bash's dynamic scope lets expect read the local want_error during this call.
+expect_error() {
+	local want_error=$1 name=$2 rc=$3
+	shift 3
+	expect "$name" "$rc" "" "$@"
 }
 polls() { grep -qx "$1" "$FIX/.poll.${2:-1}" || { echo "FAIL - expected $1 polls" >&2 && fail=$((fail + 1)); }; }
 
@@ -126,11 +138,15 @@ expect "head move with a pending rerun" 0 "#1 head-moved 5788f8d5->def67890"
 expect "re-armed watcher still asks for the rerun" 0 "#1 rerun-cancelled 100"
 
 # A cancelled run past GitHub's 30-day rerun window is never asked for again.
+# A later merge proves the watcher kept polling instead of exiting on a rerun
+# request; unlike a timeout, it cannot pass if fixture processing stalls.
 fresh
 put 1 1 checks "$(checks "$(check lint COMPLETED '"CANCELLED"' 100 1),$(check lint COMPLETED '"SUCCESS"' 101 2)")"
 put 1 1 runs "$(runs '{id: 100, workflow_id: 7, status: "completed", conclusion: "cancelled", created_at: "2020-01-01T00:00:00Z"},
   {id: 101, workflow_id: 7, status: "completed", conclusion: "success", created_at: "2020-01-02T00:00:00Z"}')"
-expect "no rerun request for an expired run" 3 "" --timeout 1 1
+put 1 3 meta "$(meta '.state = "MERGED"')"
+expect "no rerun request for an expired run" 0 "#1 merged 5788f8d5"
+polls 3
 
 fresh
 put 1 1 meta "$(meta '.baseRefName = "feat/x"')"
@@ -169,7 +185,7 @@ put 1 1 checks "$(checks "$(check lint IN_PROGRESS null 100 1)")"
 put 1 2 checks "$(checks "$(check lint COMPLETED '"SUCCESS"' 100 1),$(check copilot COMPLETED '"SUCCESS"' 9 3)")"
 expect "all green" 0 "#1 checks-green"
 
-# A later batch of checks resets the settle wait: no checks-green at poll 2.
+# A green poll must not end the watch before the late checks can report.
 fresh
 put 1 2 checks "$(checks "$(check lint COMPLETED '"SUCCESS"' 100 1)")"
 put 1 3 checks "$(checks "$(check lint COMPLETED '"SUCCESS"' 100 1),$(check late IN_PROGRESS null 100 2)")"
@@ -257,24 +273,31 @@ expect "every event of the poll, across PRs" 0 "#1 draft
 
 fresh
 rm -r "$FIX/1"
-expect "ten failed polls exit 2" 2 ""
+expect_error '10 consecutive polls failed' 'ten failed polls exit 2' 2
 polls 10
 
 fresh
-expect "timeout exits 3" 3 "" --timeout 0 1
+expect_error 'no change on 1 after 0s' 'timeout exits 3' 3 --timeout 0 1
 
-fresh
-mkdir -p "$FIX/1/2" && touch "$FIX/1/2/meta.hang"
-start=$SECONDS
-expect "hung gh call ends at the timeout" 3 "" --timeout 1 1
-[ $((SECONDS - start)) -le 5 ] || { echo "FAIL - hung gh took $((SECONDS - start))s" >&2 && fail=$((fail + 1)); }
-fresh
-mkdir -p "$FIX/1/2" && touch "$FIX/1/2/meta.hang-term"
-start=$SECONDS
-expect "gh ignoring TERM is killed at the timeout" 3 "" --timeout 1 1
-[ $((SECONDS - start)) -le 6 ] || { echo "FAIL - TERM-proof gh took $((SECONDS - start))s" >&2 && fail=$((fail + 1)); }
+expect_bounded_gh() {
+	local name=$1 fixture=$2 max_seconds=$3 start elapsed
+	fresh
+	# Hang on the first call so slow setup cannot consume the deadline before
+	# the stub reaches the hanging response.
+	touch "$FIX/1/1/meta.$fixture"
+	start=$SECONDS
+	expect_error 'no change on 1 after 1s' "$name" 3 --timeout 1 1
+	elapsed=$((SECONDS - start))
+	if [ ! -f "$FIX/1/1/meta.started" ] || [ "$elapsed" -gt "$max_seconds" ]; then
+		printf 'FAIL - %s: expected gh to start and return within %ss, watcher took %ss\n' \
+			"$name" "$max_seconds" "$elapsed" >&2
+		fail=$((fail + 1))
+	fi
+}
+expect_bounded_gh 'hung gh call ends at the timeout' hang 5
+expect_bounded_gh 'gh ignoring TERM is killed at the timeout' hang-term 6
 
-expect "usage error exits 64" 64 "" --bogus
+expect_error 'usage: pr-watch.sh' 'usage error exits 64' 64 --bogus
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

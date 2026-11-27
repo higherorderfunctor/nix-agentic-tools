@@ -113,9 +113,9 @@
         echo "$controlOutput" >&2
         exit 1
       fi
-      if ! grep -q "is not an executable file" <<<"$controlOutput"; then
+      if ! grep -F -- "  $controlName: " <<<"$controlOutput" | grep -F -- "is not an executable file (directory)"; then
         echo "ERROR: positive control failed for the wrong reason (expected" >&2
-        echo "the executable-file remedy message):" >&2
+        echo "the rigged target to be rejected as a directory):" >&2
         echo "$controlOutput" >&2
         exit 1
       fi

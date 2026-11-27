@@ -283,28 +283,42 @@ check 'sibling-abort call sites in bundle' 2 \
 check 'joinAll aborts on failed OR aborted' 1 \
 	"$(occ_re "$bundle" 'settled === "failed" \|\| settled === "aborted"')"
 
-# ... and joinAllSettled's whole body contains no abort at all. The body is
-# located by its own signature so the window cannot drift onto a neighbour.
-jas="$({ grep -aboE -e 'async function joinAllSettled\(' "$bundle" || true; } |
-	head -1 | cut -d: -f1)"
-control 'joinAllSettled body located' "${jas:-0}"
-if [ -n "$jas" ]; then
-	body="$(head -c $((jas + 140)) "$bundle" | tail -c 140)"
-	check 'joinAllSettled body mentions abort' 0 \
-		"$(printf '%s' "$body" | { grep -coF 'abort' || true; })"
-	control 'joinAllSettled body control - awaits allSettled' \
-		"$(printf '%s' "$body" | { grep -coF 'Promise.allSettled' || true; })"
-fi
+# Read the named top-level function through its closing brace. The captured
+# bundle indents nested closures; the unindented brace ends the function.
+function_body() {
+	awk -v name="$1" '
+		$0 ~ "^(async )?function " name "\\(" { found = 1 }
+		found { print }
+		found && /^}/ { exit }
+	' "$bundle"
+}
+
+join_all_settled="$(function_body joinAllSettled)"
+check 'joinAllSettled body awaits allSettled' 1 \
+	"$(occ - 'await Promise.allSettled' <<<"$join_all_settled")"
+check 'joinAllSettled body mentions abort' 0 \
+	"$(occ - 'abort' <<<"$join_all_settled")"
 
 # allSettled still REPORTS failure; it just does not act on it.
+check 'joinAllSettled returns the overall result' 1 \
+	"$(occ_re - '^ +return overallFromResults\(results\);$' <<<"$join_all_settled")"
 check 'overallFromResults reports failed on failed-or-aborted' 1 \
-	"$(occ_re "$bundle" 'function overallFromResults\(results\) \{')"
-control 'overallFromResults call sites' "$(occ "$bundle" 'overallFromResults(results)')"
+	"$(function_body overallFromResults | occ_re - 'if \(results\.some\(\(r[0-9]*\) => r[0-9]*\.outcome === "failed" \|\| r[0-9]*\.outcome === "aborted"\)\) return "failed";')"
 
-# An outer abort still reaches every branch under EVERY policy. This is the
-# caveat the record states, so it is asserted rather than assumed.
-control 'outer abort handler aborts all branch controllers' \
-	"$(occ "$bundle" 'const onOuterAbort = ()')"
+# An outer abort still reaches every branch under EVERY policy. Check the
+# handler's loop, not just that a handler with the expected name exists.
+scheduler="$(function_body scheduleParallel)"
+outer_abort="$(awk '
+	/^  const onOuterAbort = / { found = 1 }
+	found { print }
+	found && /^  };/ { exit }
+' <<<"$scheduler")"
+check 'outer abort handler iterates every branch controller' 1 \
+	"$(occ_re - 'for \(const c[0-9]* of branchControllers\)' <<<"$outer_abort")"
+check 'outer abort handler aborts the current controller' 1 \
+	"$(occ_re - 'if \(!c[0-9]*\.signal\.aborted\) c[0-9]*\.abort\(\);' <<<"$outer_abort")"
+check 'scheduler registers the outer abort handler' 1 \
+	"$(occ - '.addEventListener("abort", onOuterAbort,' <<<"$scheduler")"
 
 echo
 echo 'C-17 documentation locality: where the sentence lives'

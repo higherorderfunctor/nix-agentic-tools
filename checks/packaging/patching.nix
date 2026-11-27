@@ -59,7 +59,7 @@ in {
           echo 'changed context unexpectedly applied' >&2
           exit 1
         fi
-        grep 'FAILED' failure.log
+        grep -Fx 'Hunk #1 FAILED at 2.' failure.log
         cp failure.log "$out"
       '';
   };

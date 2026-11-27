@@ -1,11 +1,13 @@
 # Recorded rust-toolchain channels select only stable locked overlay releases.
 {
+  harness,
   inputs,
   lib,
   pkgs,
   ...
 }: {
   checks.rust-toolchain-selection = let
+    inherit (harness) checkRows rejectsChange;
     vu = import ../../lib/toolchains.nix {inherit inputs;};
     versions = ["1.86.0" "1.86.9" "1.86.10" "1.86.11rc1" "1.99.1"];
     stable = lib.genAttrs versions (version: {
@@ -23,8 +25,31 @@
           pname = "fixture";
         }
         // args);
-    probe = args: builtins.tryEval (resolve args).outPath;
-    rejects = args: !(probe args).success;
+    rejectsSelection = valid: invalid: expected:
+      rejectsChange (args: (resolve args).outPath) {inherit expected invalid valid;};
+    rejects = invalid:
+      rejectsSelection {channel = "1.86.0";} invalid "/fixture/rust-1.86.0";
+    rejectsOverride = override:
+      rejectsSelection {override = "1.86.0";} {inherit override;} "/fixture/rust-1.86.0";
+    hostedExact = "1.86.0-x86_64-unknown-linux-gnu";
+    hostedMinor = "1.86-x86_64-unknown-linux-gnu";
+    rejectsStaleOverride = channel: override: expected:
+      rejectsSelection {inherit channel;} {inherit channel override;} expected;
+    platform = args:
+      fixture.mkRustPlatform ({
+          inherit pkgs;
+          channel = hostedExact;
+          pname = "fixture";
+        }
+        // args);
+    recipe = {recipeFile = "./package.nix";};
+    platformChannel = args: (platform args).passthru.rustToolchainChannel;
+    rejectsDestination = invalid:
+      rejectsChange platformChannel {
+        inherit invalid;
+        valid = recipe;
+        expected = "1.86.0-x86_64-unknown-linux-gnu";
+      };
     locked = inputs.rust-overlay.lib.mkRustBin {} pkgs;
     cases = {
       "bare minor selects newest stable patch within its minor" = (resolve {channel = "1.86";}).version == "1.86.10";
@@ -35,7 +60,7 @@
           extensions = ["rust-src"];
         }).extensions
         == ["rust-src"];
-      "host-suffixed exact channel selects its release" = (resolve {channel = "1.86.0-x86_64-unknown-linux-gnu";}).version == "1.86.0";
+      "host-suffixed exact channel selects its release" = (resolve {channel = hostedExact;}).version == "1.86.0";
       "latest override skips prereleases" = (resolve {override = "latest";}).version == "1.99.1";
       "locked exact release matches overlay derivation" =
         (vu.mkRustToolchain {
@@ -51,67 +76,37 @@
           override = "latest";
         }).version
         == "1.99.1";
-      "mkRustPlatform preserves host-suffixed channel for drift" =
-        (fixture.mkRustPlatform {
-          inherit pkgs;
-          channel = "1.86.0-x86_64-unknown-linux-gnu";
-          pname = "recipe-fixture";
-          recipeFile = "./package.nix";
-        }).passthru.rustToolchainChannel
-        == "1.86.0-x86_64-unknown-linux-gnu";
-      "rejects a bare minor override" = rejects {override = "1.86";};
+      "mkRustPlatform preserves host-suffixed channel for drift" = platformChannel recipe == "1.86.0-x86_64-unknown-linux-gnu";
+      "nonnumeric source channel permits an exact override" =
+        (resolve {
+          channel = "nightly";
+          override = "1.86.0";
+        }).outPath
+        == "/fixture/rust-1.86.0";
+      "rejects a bare minor override" = rejectsOverride "1.86";
+      "rejects a dated numeric channel as no host" = rejects {channel = "1.86-2026-10-27";};
       "rejects a declared beta alias" = rejects {channel = "beta";};
       "rejects a declared dated beta" = rejects {channel = "beta-2026-10-27";};
       "rejects a declared dated nightly" = rejects {channel = "nightly-2026-10-27";};
       "rejects a declared nightly alias" = rejects {channel = "nightly";};
       "rejects a declared stable alias" = rejects {channel = "stable";};
-      "rejects a nonnumeric override" = rejects {override = "stable";};
+      "rejects a nonnumeric override" = rejectsOverride "stable";
       "rejects a prerelease" = rejects {channel = "1.86.11rc1";};
-      "rejects a stale exact override" = rejects {
-        channel = "1.86.0";
-        override = "1.86.0";
-      };
-      "rejects a stale host-suffixed exact override" = rejects {
-        channel = "1.86.0-x86_64-unknown-linux-gnu";
-        override = "1.86.0";
-      };
-      "rejects a dated numeric channel as no host" = rejects {
-        channel = "1.86-2026-10-27";
-      };
-      "rejects a stale host-suffixed minor override" = rejects {
-        channel = "1.86-x86_64-unknown-linux-gnu";
-        override = "1.86.0";
-      };
-      "rejects a stale host-suffixed latest override" = rejects {
-        channel = "1.86.0-x86_64-unknown-linux-gnu";
-        override = "latest";
-      };
-      "rejects a stale latest override" = rejects {
-        channel = "1.86.0";
-        override = "latest";
-      };
+      "rejects a stale exact override" = rejectsStaleOverride "1.86.0" "1.86.0" "/fixture/rust-1.86.0";
+      "rejects a stale host-suffixed exact override" = rejectsStaleOverride hostedExact "1.86.0" "/fixture/rust-1.86.0";
+      "rejects a stale host-suffixed latest override" = rejectsStaleOverride hostedExact "latest" "/fixture/rust-1.86.0";
+      "rejects a stale host-suffixed minor override" = rejectsStaleOverride hostedMinor "1.86.0" "/fixture/rust-1.86.10";
+      "rejects a stale latest override" = rejectsStaleOverride "1.86.0" "latest" "/fixture/rust-1.86.0";
       "rejects an empty channel" = rejects {channel = "";};
       "rejects an omitted channel" = rejects {};
       "rejects an unavailable patch of a known minor" = rejects {channel = "1.86.1";};
       "rejects an unknown channel" = rejects {channel = "99.0.0";};
-      "rejects an unknown override" = rejects {override = "99.0.0";};
-      "rejects mkRustPlatform with both recipeFile and sourcesFile" =
-        !(builtins.tryEval (fixture.mkRustPlatform {
-          inherit pkgs;
-          pname = "duplicate-destination";
-          recipeFile = "./package.nix";
-          sourcesFile = "./sources.json";
-        })).success;
-      "rejects mkRustPlatform without recipeFile or sourcesFile" =
-        !(builtins.tryEval (fixture.mkRustPlatform {
-          inherit pkgs;
-          pname = "missing-destination";
-        })).success;
-      "tryEval positive control forces a resolvable compiler" = (probe {channel = "1.86.0";}).success && (probe {channel = "1.86.0";}).value == stable."1.86.0".default.outPath;
+      "rejects an unknown override" = rejectsOverride "99.0.0";
+      "rejects mkRustPlatform with both recipeFile and sourcesFile" = rejectsDestination (recipe // {sourcesFile = "./sources.json";});
+      "rejects mkRustPlatform without recipeFile or sourcesFile" = rejectsDestination {};
     };
-    failing = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
   in
-    assert lib.assertMsg (failing == []) "rust-toolchain-selection: ${lib.concatStringsSep ", " failing}";
+    assert checkRows "rust-toolchain-selection" cases;
       pkgs.runCommand "rust-toolchain-selection" {passthru = {inherit cases;};} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

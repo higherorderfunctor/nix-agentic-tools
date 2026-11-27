@@ -60,54 +60,37 @@
     tokenEndpoint = false;
     "toolSearch.minTokens" = false;
   };
-  contextCases = [
-    {
-      expected = false;
-      input.path = [];
-    }
-    {
-      expected = true;
-      input = {
+  contextCases = {
+    "empty path, no hint" = classify {path = [];} == false;
+    "keyring hint on a public leaf" =
+      classify {
+        hints.keyring = true;
+        path = ["host"];
+      }
+      == true;
+    "keyring hint without a path" =
+      classify {
         hints.keyring = true;
         path = [];
-      };
-    }
-    {
-      expected = false;
-      input = {
+      }
+      == true;
+    "only the last path component is a candidate" = classify {path = ["token" "host"];} == false;
+    "public leaf with keyring disabled" =
+      classify {
         hints.keyring = false;
         path = ["host"];
-      };
-    }
-    {
-      expected = true;
-      input = {
-        hints.keyring = true;
-        path = ["host"];
-      };
-    }
-    {
-      expected = true;
-      input = {
+      }
+      == false;
+    "secret container with a public name" =
+      classify {
         path = ["host"];
         secretContainer = true;
-      };
-    }
-    {
-      expected = false;
-      input.path = ["token" "host"];
-    }
-  ];
-  expectations =
-    lib.mapAttrsToList (name: expected: {
-      inherit expected;
-      input.path = [name];
-    })
-    cases
-    ++ contextCases;
-  mismatches = builtins.filter (entry: classify entry.input != entry.expected) expectations;
+      }
+      == true;
+  };
 in {
   checks.redact-classifier = harness.mkTest "redact-classifier" (
-    assert lib.assertMsg (mismatches == []) (builtins.toJSON mismatches); true
+    harness.checkRows "redaction context" contextCases
+    && harness.checkRows "credential name" (lib.mapAttrs (name: expected: classify {path = [name];} == expected) cases)
   );
 }

@@ -45,6 +45,17 @@ def request(body=b'{"jsonrpc":"2.0","method":"tools/list","id":1}'):
     return conn, conn.getresponse()
 
 
+def expect_unavailable(case):
+    before = len(requests)
+    client, response = request()
+    try:
+        actual = response.status, response.read()
+        assert actual == (503, b"Credential unavailable"), (case, actual)
+    finally:
+        client.close()
+    assert len(requests) == before, f"{case}: request reached upstream"
+
+
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     token, second = root / "token", root / "second"
@@ -96,13 +107,18 @@ with tempfile.TemporaryDirectory() as directory:
                 assert headers["X-Token"] == "Other.Secret", "default prefix was not empty"
                 assert body == b'{"jsonrpc":"2.0","method":"tools/list","id":1}'
                 assert process.pid == pid and process.poll() is None
-            for invalid in [b"", b"bad space", b"bad\nline", b"bad\rline", b"bad\x00", b"=", b"bad\n\n"]:
-                publish(token, invalid)
-                before = len(requests)
-                client, response = request()
-                assert (response.status, response.read()) == (503, b"Credential unavailable")
-                client.close()
-                assert len(requests) == before, "invalid token reached upstream"
+            invalid_contents = {
+                "blank": b"",
+                "embedded carriage return": b"bad\rline",
+                "embedded newline": b"bad\nline",
+                "embedded null": b"bad\x00",
+                "embedded space": b"bad space",
+                "padding without a token": b"=",
+                "two trailing newlines": b"bad\n\n",
+            }
+            for case, contents in invalid_contents.items():
+                publish(token, contents)
+                expect_unavailable(case)
             for unavailable in ["missing", "unreadable"]:
                 publish(token, b"Hidden.Secret")
                 if unavailable == "missing":
@@ -115,19 +131,10 @@ with tempfile.TemporaryDirectory() as directory:
                         pass
                     else:
                         raise AssertionError("unreadable fixture is readable by this user")
-                before = len(requests)
-                client, response = request()
-                assert (response.status, response.read()) == (503, b"Credential unavailable")
-                client.close()
-                assert len(requests) == before
+                expect_unavailable(unavailable)
             publish(token, b"Restored.Secret")
             publish(second, b"")
-            before = len(requests)
-            client, response = request()
-            assert response.status == 503, "only first file was guarded"
-            response.read()
-            client.close()
-            assert len(requests) == before
+            expect_unavailable("second credential file blank despite a valid first file")
             release.set()
             assert stream.read() == b"data: second\n\n", "rotation interrupted existing stream"
             conn.close()

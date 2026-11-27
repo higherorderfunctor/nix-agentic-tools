@@ -35,7 +35,6 @@
 }: {
   checks = let
     docs = import ../../lib/options-doc.nix {inherit lib pkgs self;};
-    optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
     # The shared runtime registry. This site used to hardcode a FOUR-element list
     # without kimchi, which was a coverage gap rather than an exclusion: kimchi's
     # HM and devenv facets predate this check by about six weeks, and nothing
@@ -202,11 +201,11 @@
         fi
       }
 
-      # Flattened names catch missing leaves (not only missing top-level roots),
-      # while the normalized type map catches a declaration that still exists
-      # but accepts a different value shape in one backend. Defaults and
-      # descriptions may intentionally differ with lifecycle/scope, so they are
-      # documented and behavior-tested rather than mechanically equated here.
+      # The normalized type map is keyed by flattened option names, so its diff
+      # catches missing leaves as well as options that accept a different value
+      # shape in one backend. Defaults and descriptions may intentionally differ
+      # with lifecycle/scope, so they are documented and behavior-tested rather
+      # than mechanically equated here.
       ${lib.concatMapStringsSep "\n" (backend: let
         doc =
           if backend == "hm"
@@ -214,9 +213,7 @@
           else devenvJson;
       in ''
         "$jq" -S '${comparable backend} | map_values({type: .type})' "${doc}" > ${backend}-ai-types.json
-        "$jq" -r 'keys[]' ${backend}-ai-types.json > ${backend}-ai-options-comparable
       '') ["devenv" "hm"]}
-      "$diff" -u hm-ai-options-comparable devenv-ai-options-comparable
       "$diff" -u hm-ai-types.json devenv-ai-types.json
 
       ${lib.concatMapStringsSep "\n" (backend: let
@@ -246,13 +243,20 @@
         (scope: map (field: "ai.${scope}settings.inference.${field}") ["clientKey" "instance" "key" "url"])
         ["" "claude." "codex."])}
 
-      # Every runtime with a settings file owns it under an ordinary
-      # namespace (Kiro's is CLI-specific); Kimchi owns a second, harness
-      # settings file. The former flat names are a deliberate clean cut rather
-      # than a compatibility alias.
-      ${guardEach "require_key" jsonDocs [] (map (runtime: lib.showOption (optionPaths.nativeSettings runtime)) (lib.filter optionPaths.hasNativeSettings runtimes))}
+      # Pin the published paths independently of the declarations, so losing a
+      # settings option from both backends still fails. Add a row when a
+      # runtime gains a settings file. Kiro's namespace is CLI-specific; Kimchi
+      # owns a second, harness settings file. Copilot's github.com arm reads no
+      # settings file, so it declares none. The former flat names are not
+      # compatibility aliases.
+      ${guardEach "require_key" jsonDocs [] [
+        "ai.claude.native.settings"
+        "ai.codex.native.settings"
+        "ai.kimchi.native.harnessSettings"
+        "ai.kimchi.native.settings"
+        "ai.kiro.cli.native.settings"
+      ]}
       ${guardEach "forbid_key" jsonDocs [] (map (runtime: "ai.${runtime}.nativeSettings") runtimes)}
-      ${guard "require_key" jsonDocs ["ai.kimchi.native.harnessSettings"]}
       ${guard "forbid_key" jsonDocs ["ai.kimchi.harnessSettings"]}
 
       # Semantic-agent `.instructions` fields and Semble's nested program feature
@@ -280,7 +284,7 @@
 
       # The successful check output is also the requested machine-readable parity
       # report: one complete, sorted contract shared by both backends.
-      cp hm-ai-options-comparable "$out"
+      "$jq" -r 'keys[]' hm-ai-types.json > "$out"
     '';
   };
 }

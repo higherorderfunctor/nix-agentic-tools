@@ -28,24 +28,16 @@ pass_n=0
 fail_n=0
 
 check() {
-	local label="$1" want="$2"
-	shift 2
-	local out rc
-	set +e
-	out="$("$@" 2>&1)"
-	rc=$?
-	set -e
-	if [ "$want" = "pass" ] && [ "$rc" -eq 0 ]; then
+	local label="$1" want_rc="$2" want_text="$3"
+	shift 3
+	local out rc=0
+	out="$("$@" 2>&1)" || rc=$?
+	if [ "$rc" -eq "$want_rc" ] && [[ $out == *"$want_text"* ]]; then
 		printf 'ok    %s\n' "$label"
 		pass_n=$((pass_n + 1))
 		return 0
 	fi
-	if [ "$want" = "fail" ] && [ "$rc" -ne 0 ]; then
-		printf 'ok    %s (refused as expected)\n' "$label"
-		pass_n=$((pass_n + 1))
-		return 0
-	fi
-	printf 'FAIL  %s (wanted %s, got rc=%d)\n' "$label" "$want" "$rc" >&2
+	printf 'FAIL  %s (wanted rc=%d and %s, got rc=%d)\n' "$label" "$want_rc" "$want_text" "$rc" >&2
 	printf '      %s\n' "$out" >&2
 	fail_n=$((fail_n + 1))
 	return 0
@@ -78,76 +70,90 @@ write_log() {
 setup() {
 	rm -rf "$root"
 	export KIRO_FIXTURE_SCRATCH="$root"
-	local out
+	local out seed_out
 	out="$("$here/scratch-up.sh")"
 	eval "$out"
-	SEED_OUT="$("$here/seed-session.sh")"
-	SID="$(printf '%s' "$SEED_OUT" | sed -n 's/^session_id=//p')"
-	SESSION_DIR="$(printf '%s' "$SEED_OUT" | sed -n 's/^session_dir=//p')"
+	seed_out="$("$here/seed-session.sh")"
+	SID="$(printf '%s' "$seed_out" | sed -n 's/^session_id=//p')"
+	SESSION_DIR="$(printf '%s' "$seed_out" | sed -n 's/^session_dir=//p')"
 }
 
-# --- the happy path --------------------------------------------------------
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "$KIRO_FIXTURE_HOME/.kiro/sessions"
-check "a well-formed run is accepted" pass "$here/assert-seed-took.sh" "$SID"
+check_seed() {
+	local scenario="$1" want_rc="$2" want_text="$3"
+	setup
+	local session_root="$KIRO_FIXTURE_HOME/.kiro/sessions" extra='' loads=2
+	case "$scenario" in
+	empty-bucket)
+		rm -- "$SESSION_DIR/session.json"
+		rmdir -- "$SESSION_DIR"
+		;;
+	flag-cleared)
+		jq '.workflowsEnabled = false' "$SESSION_DIR/session.json" >"$root/session.json"
+		mv "$root/session.json" "$SESSION_DIR/session.json"
+		;;
+	missing-metadata) rm -- "$SESSION_DIR/session.json" ;;
+	no-log | well-formed) ;;
+	one-load) loads=1 ;;
+	# The on-disk footprint is independent of the log marker.
+	rival-session) mkdir -p "$(dirname "$SESSION_DIR")/sess_rival-0000-0000-0000-000000000000" ;;
+	# A missing seed silently creates a fresh session with workflows off.
+	seed-recreated) extra='{"level":"info","msg":"session.load.create_uncreated"}' ;;
+	# The engine wrote logs but resolved a different session root.
+	wrong-root) session_root='/some/other/home/.kiro/sessions' ;;
+	zero-loads) loads=0 ;;
+	*)
+		printf 'unknown seed scenario: %s\n' "$scenario" >&2
+		exit 2
+		;;
+	esac
+	if [ "$scenario" != no-log ]; then
+		write_log "$KIRO_FIXTURE_HOME" "$SID" "$session_root" "$extra" "$loads"
+	fi
+	check "$scenario" "$want_rc" "$want_text" "$here/assert-seed-took.sh" "$SID"
+}
 
-# --- branch 1: no log at all ----------------------------------------------
-setup
-check "no engine log is refused" fail "$here/assert-seed-took.sh" "$SID"
-
-# --- branch 1b: the log names the WRONG session root ----------------------
-# This is the two-root failure: the redirect did not reach the engine, so it
-# initialized persistence against the real home instead of the scratch one.
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "/some/other/home/.kiro/sessions"
-check "a wrong session root is refused" fail "$here/assert-seed-took.sh" "$SID"
-
-# --- branch 2: the create-uncreated marker -------------------------------
-# The silent failure this whole script exists for: the seed was not found, a
-# fresh session was created, and workflows are off.
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "$KIRO_FIXTURE_HOME/.kiro/sessions" \
-	'{"level":"info","msg":"session.load.create_uncreated"}'
-check "the create_uncreated marker is refused" fail "$here/assert-seed-took.sh" "$SID"
-
-# --- branch 3: zero load lines -------------------------------------------
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "$KIRO_FIXTURE_HOME/.kiro/sessions" '' 0
-check "zero 'Loaded session' lines is refused" fail "$here/assert-seed-took.sh" "$SID"
-
-# --- branch 4: a rival session directory ---------------------------------
-# The on-disk footprint of create-uncreated, caught independently of the log
-# string in case that string is ever renamed.
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "$KIRO_FIXTURE_HOME/.kiro/sessions"
-mkdir -p "$(dirname "$SESSION_DIR")/sess_rival-0000-0000-0000-000000000000"
-check "a rival session directory is refused" fail "$here/assert-seed-took.sh" "$SID"
-
-# --- branch 5: the flag did not survive ----------------------------------
-setup
-write_log "$KIRO_FIXTURE_HOME" "$SID" "$KIRO_FIXTURE_HOME/.kiro/sessions"
-tmp="$(mktemp "${TMPDIR:-/tmp}/kiro-seed-self_test.XXXXXX")"
-jq '.workflowsEnabled = false' "$SESSION_DIR/session.json" >"$tmp"
-mv "$tmp" "$SESSION_DIR/session.json"
-check "workflowsEnabled=false after the run is refused" fail "$here/assert-seed-took.sh" "$SID"
+# Scenario, exit status, and the verdict, diagnosis, or warning to observe.
+check_seed empty-bucket 1 "contains no session directories at all"
+check_seed flag-cleared 1 "the gate resolved false and persisted it"
+check_seed missing-metadata 1 "FAIL  no session.json at"
+check_seed no-log 1 'FAIL  no engine log under the scratch HOME'
+check_seed one-load 0 'warn  expected 2 "Loaded session" lines, saw 1'
+check_seed rival-session 1 'holds 2 session directories, expected exactly 1'
+check_seed seed-recreated 1 "FAIL  'session.load.create_uncreated' is present in the log"
+check_seed well-formed 0 'PASS  the seed was loaded and the workflow gate saw it'
+check_seed wrong-root 1 "FAIL  session root is '/some/other/home/.kiro/sessions', expected"
+check_seed zero-loads 1 'the engine never loaded this id'
 
 # --- seed-session's own refusals -----------------------------------------
 setup
-check "an id failing the engine charset is refused" fail \
+check "an id failing the engine charset is refused" 1 "fails the engine's own charset check" \
 	"$here/seed-session.sh" 'bad id with spaces'
+printf -v long_id '%0129d' 0
+check "an id over the 128-character limit is refused" 1 "fails the engine's own charset check" \
+	"$here/seed-session.sh" "$long_id"
 
 # --- teardown guards -----------------------------------------------------
-# The guard that matters: a scratch root pointing at the real home must be
-# refused, because teardown is a recursive delete.
-setup
-check "teardown refuses the real home as the scratch root" fail \
-	env KIRO_FIXTURE_SCRATCH="$HOME" "$here/scratch-down.sh"
-check "teardown refuses / as the scratch root" fail \
-	env KIRO_FIXTURE_SCRATCH=/ "$here/scratch-down.sh"
+# Use the scratch HOME and block rm in the refusal cases so a broken guard
+# cannot delete anything. The stub's exit status cannot satisfy the check.
+mkdir -p "$root/no-delete"
+cat >"$root/no-delete/rm" <<'EOF'
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
+echo 'unexpected attempt to delete an unsafe scratch root' >&2
+exit 99
+EOF
+chmod +x "$root/no-delete/rm"
+for unsafe in / "$KIRO_FIXTURE_HOME"; do
+	check "teardown refuses $unsafe as the scratch root" 1 "refusing: scratch root '$unsafe' is unsafe" \
+		env HOME="$KIRO_FIXTURE_HOME" KIRO_FIXTURE_SCRATCH="$unsafe" PATH="$root/no-delete:$PATH" "$here/scratch-down.sh"
+done
+check "teardown refuses an ancestor of HOME" 1 "refusing: the real $KIRO_FIXTURE_HOME/.kiro lies under the scratch root" \
+	env HOME="$KIRO_FIXTURE_HOME" PATH="$root/no-delete:$PATH" "$here/scratch-down.sh"
 
 # --- teardown happy path -------------------------------------------------
 setup
-check "teardown removes its own scratch root" pass "$here/scratch-down.sh"
+check "teardown removes its own scratch root" 0 'done' "$here/scratch-down.sh"
 if [ -d "$root" ]; then
 	echo 'FAIL  teardown reported success but the scratch root still exists' >&2
 	fail_n=$((fail_n + 1))

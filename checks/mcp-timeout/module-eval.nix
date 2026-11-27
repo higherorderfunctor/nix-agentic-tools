@@ -5,50 +5,64 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeMcpServers evalDevenv evalHm mcpLib mkTest setEnable;
+  inherit (harness) checkRows claudeMcpServers evalDevenv evalHm mcpLib mkTest rejectsChange setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib;}) hmCodexSettings;
   backends = {
     devenv = evalDevenv;
     hm = evalHm;
   };
-  runtimes = ["claude" "codex" "kimchi" "kiro"];
+  raw = {command = "probe";};
+  packageEntry = extra: mcpLib.mkStdioEntry ({package = pkgs.hello;} // extra);
+  packaged = packageEntry {};
   entries = {
-    nixos-mcp = mcpLib.mkStdioEntry {
-      package = pkgs.hello;
-      timeout = 1501;
+    nixos-mcp = packageEntry {timeout = 1501;};
+    raw = raw // {timeout = 1501;};
+  };
+  evaluate = backend: runtime: config:
+    backends.${backend} (lib.recursiveUpdate (setEnable runtime true) config);
+  timeoutWarnings = ev: builtins.filter (lib.hasInfix ".timeout is set but") ev.config.warnings;
+
+  # Fixed fixture outputs; don't call the shared renderer to get expected files.
+  rawStdio = runtime: command:
+    {
+      args = [];
+      inherit command;
+    }
+    // lib.optionalAttrs (runtime != "codex") {
+      env = {};
+      type = "stdio";
     };
-    raw = {
-      command = "probe";
-      timeout = 1501;
+  packagedStdio = runtime:
+    rawStdio runtime "${pkgs.hello}/bin/mcp-nixos"
+    // {
+      env = {
+        PYTHONNOUSERSITE = "true";
+        PYTHONPATH = "";
+      };
+    };
+  http = {url = "https://example.test/mcp";};
+  nativeTimeouts = {
+    claude = {
+      httpMs = 999;
+      replacement.timeout = 2501;
+      shared.timeout = 1501;
+    };
+    codex = {
+      httpMs = 1501;
+      replacement.tool_timeout_sec = 2.501;
+      shared.tool_timeout_sec = 1.501;
+    };
+    kimchi = {
+      httpMs = 2147483648;
+      replacement.requestTimeoutMs = 2501;
+      shared.requestTimeoutMs = 1501;
+    };
+    kiro = {
+      httpMs = 600001;
+      replacement.timeout = 2501;
+      shared.timeout = 1501;
     };
   };
-  evaluate = backend: runtime: extra:
-    backends.${backend} (lib.recursiveUpdate
-      (lib.recursiveUpdate (setEnable runtime true) {ai.mcpServers = entries;})
-      extra);
-  timeoutWarnings = ev: builtins.filter (lib.hasInfix ".timeout is set but") ev.config.warnings;
-  # Only the unrelated package command/env is reused. Timeout expectations below
-  # are literals, so losing or mis-converting either stdio branch fails.
-  withoutTimeout = servers:
-    lib.mapAttrs (name: server:
-      removeAttrs (mcpLib.renderServer pkgs name server) ["timeout"])
-    servers;
-  expected = runtime: servers: value:
-    lib.mapAttrs (_: server:
-      (
-        if runtime == "codex"
-        then lib.filterAttrs (_: value: value != {}) (removeAttrs server ["type"])
-        else server
-      )
-      // (
-        if value == null
-        then {}
-        else if runtime == "codex"
-        then {tool_timeout_sec = value;}
-        else if runtime == "kimchi"
-        then {requestTimeoutMs = value;}
-        else {timeout = value;}
-      )) (withoutTimeout servers);
   matches = backend: runtime: ev: wanted:
     if runtime == "kiro"
     then let
@@ -72,193 +86,143 @@
           }/mcp.json".content.value.mcpServers
       )
       == wanted;
-  perBackend = name: test:
-    lib.mapAttrs' (backend: _:
-      lib.nameValuePair "module-mcp-timeout-${name}-${backend}"
-      (mkTest "mcp-timeout-${name}-${backend}" (test backend)))
-    backends;
-  # Null keeps the old shape; HTTP must not be routed through stdio conversion.
-  direct = {
-    module-mcp-timeout-direct = mkTest "mcp-timeout-direct" (
-      (mcpLib.renderServer pkgs "raw" entries.raw).timeout
-      == 1501
-      && (mcpLib.renderServer pkgs "nixos-mcp" entries.nixos-mcp).timeout == 1501
-      && !(mcpLib.mkStdioEntry {package = pkgs.hello;} ? timeout)
-      && !(mcpLib.renderServer pkgs "nixos-mcp" (mcpLib.mkStdioEntry {package = pkgs.hello;}) ? timeout)
-      && mcpLib.renderServer pkgs "remote" {
-        url = "https://example.test/mcp";
-        timeout = 1501;
-      }
-      == {
-        type = "http";
-        url = "https://example.test/mcp";
-        timeout = 1501;
-      }
-    );
-    # Reject zero/negative at the common schema, before a runtime renderer.
-    module-mcp-timeout-domain = mkTest "mcp-timeout-domain" (let
-      timeoutType = (import ../../lib/ai/mcpServer/commonSchema.nix {inherit lib;}).options.timeout.type;
-    in
-      timeoutType.check null
-      && timeoutType.check 1
-      && !timeoutType.check 0
-      && !timeoutType.check (-1));
-  };
-in {
-  checks = lib.mkMerge (
-    [direct]
-    ++ map (runtime:
-      perBackend runtime (backend: let
-        ev = evaluate backend runtime {};
-      in
-        # Exact output rejects generic timeout leakage and startup_timeout_sec.
-        matches backend runtime ev (expected runtime entries (
-          if runtime == "codex"
-          then 1.501
-          else 1501
-        ))
-        && timeoutWarnings ev == []))
-    runtimes
-    ++ map (runtime:
-      perBackend "${runtime}-overrides" (backend: let
-        ev = evaluate backend runtime {
-          ai.${runtime}.mcpServers = {
-            nixos-mcp = null;
-            raw = {
-              command = "override";
-              timeout = null;
-            };
-          };
-        };
-      in
-        # Runtime entries replace shared entries, and null suppresses a server
-        # or timeout instead of resurrecting the shared value.
-        matches backend runtime ev (expected runtime {raw.command = "override";} null)
-        && timeoutWarnings ev == []))
-    runtimes
-    ++ map (runtime:
-      perBackend "${runtime}-override-value" (backend: let
-        ev = evaluate backend runtime {
-          ai.${runtime}.mcpServers.raw = {
+  checkDelivery = backend: runtime: config: wanted: warnings: let
+    ev = evaluate backend runtime config;
+  in
+    matches backend runtime ev wanted && timeoutWarnings ev == warnings;
+  deliveryRows = backend: runtime: native: let
+    check = checkDelivery backend runtime;
+    shared = {
+      nixos-mcp = packagedStdio runtime // native.shared;
+      raw = rawStdio runtime "probe" // native.shared;
+    };
+    withOverrides = servers: {
+      ai = {
+        mcpServers = entries;
+        ${runtime}.mcpServers = servers;
+      };
+    };
+    # Use HTTP values outside the stdio bounds where the runtime has one.
+    remote = http // {timeout = native.httpMs;};
+  in
+    checkRows "${backend}/${runtime} timeout delivery" ({
+        "HTTP preserves milliseconds without stdio conversion or bounds" = check {ai.mcpServers = {inherit remote;};} {
+          remote = remote // lib.optionalAttrs (runtime != "codex") {type = "http";};
+        } [];
+        "runtime timeout replaces the shared value" = check (withOverrides {
+          raw = {
             command = "override";
             timeout = 2501;
           };
-        };
-        wanted = expected runtime entries (
-          if runtime == "codex"
-          then 1.501
-          else 1501
-        );
-        replacement = expected runtime {raw.command = "override";} (
-          if runtime == "codex"
-          then 2.501
-          else 2501
-        );
-      in
-        # A runtime timeout replaces the shared value instead of losing to it.
-        matches backend runtime ev (wanted // replacement)
-        && timeoutWarnings ev == []))
-    runtimes
-    ++ [
-      (perBackend "codex-native" (backend: let
-        ev = evaluate backend "codex" {
-          ai.mcpServers.raw.codex = {
-            startupTimeoutSec = 7;
-            toolTimeoutSec = 9;
+        }) (shared // {raw = rawStdio runtime "override" // native.replacement;}) [];
+        # Runtime entries replace shared entries, and null suppresses a server
+        # or timeout instead of resurrecting the shared value.
+        "runtime tombstone and null timeout suppress the inherited values" = check (withOverrides {
+          nixos-mcp = null;
+          raw = {
+            command = "override";
+            timeout = null;
           };
-        };
-        wanted = expected "codex" entries 1.501;
-      in
+        }) {raw = rawStdio runtime "override";} [];
+        # Exact output rejects generic timeout leakage and startup_timeout_sec.
+        "shared raw and packaged servers use the native timeout field" =
+          check {ai.mcpServers = entries;} shared [];
+      }
+      // lib.optionalAttrs (runtime == "codex") {
         # Native tool timeout wins; generic timeout never changes startup.
-        matches backend "codex" ev (wanted
-          // {
-            raw =
-              wanted.raw
-              // {
-                startup_timeout_sec = 7;
-                tool_timeout_sec = 9;
+        "native tool timeout wins and startup remains independent" =
+          check {
+            ai.mcpServers = lib.recursiveUpdate entries {
+              raw.codex = {
+                startupTimeoutSec = 7;
+                toolTimeoutSec = 9;
               };
-          })))
-      (perBackend "copilot" (backend: let
-        ev = evaluate backend "copilot" {};
-      in
-        # github.com has no local MCP surface; retain its whole-pool warning.
-        lib.any (lib.hasPrefix "ai.mcpServers is set but") ev.config.warnings))
-      (perBackend "http" (backend:
-        lib.all (
-          runtime: let
-            ev = backends.${backend} (lib.recursiveUpdate (setEnable runtime true) {
-              ai.mcpServers.remote = {
-                url = "https://example.test/mcp";
-                timeout = 1501;
-              };
-            });
-            server = {
-              type = "http";
-              url = "https://example.test/mcp";
+            };
+          } (shared
+            // {
+              raw =
+                rawStdio runtime "probe"
+                // {
+                  startup_timeout_sec = 7;
+                  tool_timeout_sec = 9;
+                };
+            }) [];
+      });
+  bounds = {
+    claude = {
+      accepted.timeout = 1000;
+      invalid = 999;
+      reason = "Claude ignores per-server timeouts below 1000 ms; the timeout is omitted.";
+      valid = 1000;
+    };
+    kimchi = {
+      accepted.requestTimeoutMs = 2147483647;
+      invalid = 2147483648;
+      reason = "Kimchi's pi-mcp-adapter caps tool timers at 2147483647 ms; larger timeouts are omitted.";
+      valid = 2147483647;
+    };
+    kiro = {
+      accepted.timeout = 600000;
+      invalid = 600001;
+      reason = "Kiro caps per-server timeouts at 600000 ms; larger values are omitted.";
+      valid = 600000;
+    };
+  };
+  boundRows = backend: runtime: bound: let
+    check = timeout: expected:
+      checkDelivery backend runtime {ai.mcpServers.raw = raw // {inherit timeout;};} {
+        raw = rawStdio runtime "probe" // expected;
+      };
+  in
+    checkRows "${backend}/${runtime} stdio timeout bounds" {
+      "${toString bound.invalid} ms is omitted with the bound warning" =
+        check bound.invalid {} ["ai.mcpServers.raw.timeout is set but ${backend} does not deliver it to ${runtime} (reason: ${bound.reason})"];
+      "${toString bound.valid} ms is delivered without a warning" = check bound.valid bound.accepted [];
+    };
+  domainRows = backend: eval: let
+    # Force just the shared option's timeout merge, before a client renderer.
+    read = timeout: (eval {ai.mcpServers.raw = raw // {inherit timeout;};}).config.ai.mcpServers.raw.timeout;
+    rejects = invalid:
+      rejectsChange read {
+        inherit invalid;
+        expected = 1;
+        valid = 1;
+      };
+  in
+    checkRows "${backend} shared timeout domain" {
+      "fractional milliseconds are rejected" = rejects 1.5;
+      "negative milliseconds are rejected" = rejects (-1);
+      "null selects the client default" = read null == null;
+      "zero milliseconds are rejected" = rejects 0;
+    };
+  render = mcpLib.renderServer pkgs;
+in {
+  checks =
+    {
+      module-mcp-timeout-direct = mkTest "mcp-timeout-direct" (checkRows "direct MCP timeout" {
+        "HTTP keeps the supplied timeout" =
+          render "remote" (http // {timeout = 1501;})
+          == (http
+            // {
               timeout = 1501;
-            };
-          in
-            # Do not repair or translate the existing HTTP output in this change.
-            matches backend runtime ev {
-              remote =
-                if runtime == "codex"
-                then removeAttrs server ["type"]
-                else server;
-            }
-        )
-        runtimes))
-    ]
-    ++ map (case:
-      perBackend "${case.runtime}-${toString case.value}" (
-        backend: let
-          ev = backends.${backend} (lib.recursiveUpdate (setEnable case.runtime true) {
-            ai.mcpServers.raw = {
-              command = "probe";
-              timeout = case.value;
-            };
-          });
-        in
-          # Unsupported bounds must warn AND omit; supported boundaries do neither.
-          matches backend case.runtime ev (expected case.runtime {raw.command = "probe";} case.rendered)
-          && builtins.length (timeoutWarnings ev) == case.warnings
-      )) [
-      {
-        rendered = null;
-        runtime = "claude";
-        value = 999;
-        warnings = 1;
-      }
-      {
-        rendered = 1000;
-        runtime = "claude";
-        value = 1000;
-        warnings = 0;
-      }
-      {
-        rendered = 2147483647;
-        runtime = "kimchi";
-        value = 2147483647;
-        warnings = 0;
-      }
-      {
-        rendered = null;
-        runtime = "kimchi";
-        value = 2147483648;
-        warnings = 1;
-      }
-      {
-        rendered = 600000;
-        runtime = "kiro";
-        value = 600000;
-        warnings = 0;
-      }
-      {
-        rendered = null;
-        runtime = "kiro";
-        value = 600001;
-        warnings = 1;
-      }
-    ]
-  );
+              type = "http";
+            });
+        "constructor omits the default timeout" = !(packaged ? timeout);
+        "constructor retains the supplied timeout" = entries.nixos-mcp.timeout == 1501;
+        "package renderer omits the default timeout" = !(render "nixos-mcp" packaged ? timeout);
+        "package renderer retains the supplied timeout" = (render "nixos-mcp" entries.nixos-mcp).timeout == 1501;
+        "raw renderer retains the supplied timeout" = (render "raw" entries.raw).timeout == 1501;
+      });
+      module-mcp-timeout-domain = mkTest "mcp-timeout-domain" (
+        checkRows "shared MCP timeout" (lib.mapAttrs domainRows backends)
+      );
+    }
+    // lib.mapAttrs' (backend: _:
+      lib.nameValuePair "module-mcp-timeout-${backend}" (
+        mkTest "mcp-timeout-${backend}" (checkRows "${backend} MCP timeouts" {
+          bounds = checkRows "${backend} stdio bounds" (lib.mapAttrs (boundRows backend) bounds);
+          delivery = checkRows "${backend} delivery" (lib.mapAttrs (deliveryRows backend) nativeTimeouts);
+        })
+      ))
+    backends;
 }

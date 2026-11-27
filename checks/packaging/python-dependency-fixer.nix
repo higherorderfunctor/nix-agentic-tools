@@ -39,6 +39,9 @@
 
             printf '%s\n' "$*" >>prefetch.log
             printf '%s\n' fixture-base32
+            if [ ${toString prefetch} -ne 0 ]; then
+              echo 'fixture prefetch refused the archive' >&2
+            fi
             exit ${toString prefetch}
           '')
           (pkgs.writeShellScriptBin "nix" ''
@@ -101,16 +104,24 @@
       unchanged 'unchanged selection'
       test ! -e prefetch.log || fail 'unchanged selection prefetched'
 
+      rejects() {
+        local label="$1" diagnostic="$2"
+        shift 2
+        if "$@" > output 2>&1; then
+          fail "$label exited zero"
+        fi
+        grep -F -- "$diagnostic" output || fail "$label failed for the wrong reason: $(cat output)"
+        unchanged "$label"
+      }
+
       require '>=3'
       pin 1.29.0
-      ! ${fixer 0} || fail 'unsatisfiable requirement exited zero'
-      unchanged 'unsatisfiable requirement'
+      rejects 'unsatisfiable requirement' 'No stable PyPI release of mcp satisfies' ${fixer 0}
+      test ! -e prefetch.log || fail 'unsatisfiable requirement reached prefetch'
 
       require '>=1.30,<2'
       pin 1.29.0
-      ! ${fixer 1} || fail 'failed prefetch exited zero'
-      unchanged 'failed prefetch'
-      test -e prefetch.log || fail 'failed prefetch case never reached the prefetch'
+      rejects 'failed prefetch' 'fixture prefetch refused the archive' ${fixer 1}
 
       touch "$out"
     '';

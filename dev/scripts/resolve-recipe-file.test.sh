@@ -3,8 +3,8 @@
 # resolve_recipe_file. Pure bash + fixtures, no nix. Run directly:
 #   bash dev/scripts/resolve-recipe-file.test.sh
 #
-# Reproduces the context7 → effect-mcp mis-resolution regression and
-# verifies the deterministic resolver + exactly-one-match guard.
+# Checks that a context7 mention in an effect-mcp comment does not resolve
+# and that the resolver requires exactly one matching recipe.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
@@ -12,121 +12,77 @@ here=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=dev/scripts/resolve-recipe-file.sh
 source "$here/resolve-recipe-file.sh"
 
-pass=0
-fail=0
-ok() {
-	echo "  ok   - $1"
-	pass=$((pass + 1))
-}
-ko() {
-	echo "  FAIL - $1" >&2
-	fail=$((fail + 1))
-}
-# assert_base <expected-basename> <path> <label>
-assert_base() {
-	if [ "$(basename "$2")" = "$1" ]; then
-		ok "$3"
-	else
-		ko "$3 (got $2)"
-	fi
-}
-
-# The old, buggy resolution — kept here only to demonstrate the
-# regression it caused on the fixture below.
-old_resolve() {
-	local git_url="$1" root="$2" repo_name
-	repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
-	grep -rl "$repo_name" "$root" --include='*.nix' | head -1
-}
-
-# ── Fixture: the exact shape that triggered the bug ────────────────────
 fixture=$(mktemp -d)
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/mcp-servers"
 
-# effect-mcp overlay: fetchFromGitHub tim-smart/effect-mcp, AND a comment
-# that names context7 (this is the substring that fooled the old grep).
-cat >"$fixture/mcp-servers/effect-mcp.nix" <<'NIX'
-{...}: let
-  # Pin pnpm_10 for the deps fetch and build. Mirrors context7-mcp.nix.
-  rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
-  src = fetchFromGitHub {
-    owner = "tim-smart";
-    repo = "effect-mcp";
-    inherit rev;
-    hash = "sha256-effectplaceholderhashvaluegoeshere000000000=";
-  };
-in {}
-NIX
+write_recipe() {
+	local file="$1" fetcher="$2"
+	shift 2
+	{
+		printf '%s\n' '{...}: let' '  rev = "83a768303839b9e125f6c286369a5d9cc26c666e";' "  src = $fetcher {"
+		printf '    %s\n' "$@" 'inherit rev;' 'hash = "";'
+		printf '%s\n' '  };' 'in {}'
+	} >"$fixture/$file"
+}
 
-# context7-mcp overlay: fetchFromGitHub upstash/context7.
-cat >"$fixture/mcp-servers/context7-mcp.nix" <<'NIX'
-{...}: let
-  rev = "29edf154d82d503532575a73836135eca225b6f4";
-  src = fetchFromGitHub {
-    owner = "upstash";
-    repo = "context7";
-    inherit rev;
-    hash = "sha256-context7placeholderhashvaluegoeshere0000000=";
-  };
-in {}
-NIX
+assert_rejected() {
+	local label="$1" url="$2" expected="$3" diagnostic status=0
+	resolve_recipe_file "$url" "$fixture" >"$fixture/stdout" 2>"$fixture/stderr" || status=$?
+	diagnostic=$(<"$fixture/stderr")
+	if [[ $status != 1 || -s "$fixture/stdout" || $diagnostic != "$expected" ]]; then
+		printf 'FAIL: %s (%s): expected status 1, empty stdout, stderr %q; got status %s, stdout %q, stderr %q\n' \
+			"$label" "$url" "$expected" "$status" "$(<"$fixture/stdout")" "$diagnostic" >&2
+		return 1
+	fi
+	printf 'ok: %s\n' "$label"
+}
 
-# kiro-gateway-style overlay: fetchgit URL form.
-cat >"$fixture/kiro-gateway.nix" <<'NIX'
-{...}: let
-  rev = "0398d74f15549bd771480da8fceb21916ce333e5";
-  src = fetchgit {
-    url = "https://github.com/jwadow/kiro-gateway.git";
-    inherit rev;
-    hash = "sha256-kirogatewayplaceholderhashvaluegoeshere0000=";
-  };
-in {}
-NIX
+# The old substring lookup picked up this comment in the effect-mcp recipe.
+# Make it the only context7 mention first: a substring resolver cannot pick
+# the right file by chance when no actual context7 recipe exists yet.
+write_recipe mcp-servers/effect-mcp.nix fetchFromGitHub \
+	'# Pin pnpm_10 for the deps fetch and build. Mirrors context7-mcp.nix.' \
+	'owner = "tim-smart";' 'repo = "effect-mcp";'
+context7_url=https://github.com/upstash/context7.git
+assert_rejected 'context7 mentioned only in an unrelated recipe comment' "$context7_url" \
+	'resolve_recipe_file: expected exactly 1 recipe pinning upstash/context7, found 0: <none>'
 
-# aggregator that names every overlay (like overlays/default.nix).
+write_recipe mcp-servers/context7-mcp.nix fetchFromGitHub 'owner = "upstash";' 'repo = "context7";'
+write_recipe kiro-gateway.nix fetchgit 'url = "https://github.com/jwadow/kiro-gateway.git";'
+
+# The aggregator mentions every recipe but is not itself a recipe.
 cat >"$fixture/default.nix" <<'NIX'
 {...}: {
-  effect-mcp = import ./mcp-servers/effect-mcp.nix {};
   context7-mcp = import ./mcp-servers/context7-mcp.nix {};
+  effect-mcp = import ./mcp-servers/effect-mcp.nix {};
   kiro-gateway = import ./kiro-gateway.nix {};
 }
 NIX
 
-echo "test: regression — the OLD resolver mis-resolves context7 on this fixture"
-old_pick=$(old_resolve "https://github.com/upstash/context7.git" "$fixture" || true)
-case "$old_pick" in
-*context7-mcp.nix) echo "  note - old resolver happened to pick correctly (race); bug is nondeterministic" ;;
-*) echo "  note - old resolver picked WRONG file: $(basename "$old_pick") (this is the bug)" ;;
-esac
+# Registry metadata names the exact upstream but has no inline revision.
+cat >"$fixture/mcp-servers/registry.nix" <<NIX
+{
+  update.targets.context7-mcp.git = "$context7_url";
+}
+NIX
 
-echo "test: fetchFromGitHub identity resolves to the correct overlay"
-got=$(resolve_recipe_file "https://github.com/upstash/context7.git" "$fixture")
-assert_base "context7-mcp.nix" "$got" "context7 -> context7-mcp.nix"
+while read -r url path; do
+	expected="$fixture/$path"
+	if ! got=$(resolve_recipe_file "$url" "$fixture") || [[ $got != "$expected" ]]; then
+		printf 'FAIL: %s: expected %q, got %q\n' "$url" "$expected" "$got" >&2
+		exit 1
+	fi
+	printf 'ok: %s resolves to %s\n' "$url" "$path"
+done <<ROWS
+$context7_url mcp-servers/context7-mcp.nix
+https://github.com/jwadow/kiro-gateway.git kiro-gateway.nix
+https://github.com/tim-smart/effect-mcp.git mcp-servers/effect-mcp.nix
+ROWS
 
-got=$(resolve_recipe_file "https://github.com/tim-smart/effect-mcp.git" "$fixture")
-assert_base "effect-mcp.nix" "$got" "effect-mcp -> effect-mcp.nix"
+assert_rejected 'missing mapping' 'https://github.com/nobody/does-not-exist.git' \
+	'resolve_recipe_file: expected exactly 1 recipe pinning nobody/does-not-exist, found 0: <none>'
 
-echo "test: fetchgit URL identity resolves"
-got=$(resolve_recipe_file "https://github.com/jwadow/kiro-gateway.git" "$fixture")
-assert_base "kiro-gateway.nix" "$got" "kiro-gateway -> kiro-gateway.nix"
-
-echo "test: missing mapping fails loudly (0 matches -> non-zero)"
-if resolve_recipe_file "https://github.com/nobody/does-not-exist.git" "$fixture" >/dev/null 2>&1; then
-	ko "missing mapping should have failed"
-else
-	ok "missing mapping returns non-zero"
-fi
-
-echo "test: ambiguous mapping fails loudly (>1 match -> non-zero)"
 cp "$fixture/mcp-servers/context7-mcp.nix" "$fixture/mcp-servers/context7-dup.nix"
-if resolve_recipe_file "https://github.com/upstash/context7.git" "$fixture" >/dev/null 2>&1; then
-	ko "ambiguous mapping should have failed"
-else
-	ok "ambiguous mapping returns non-zero"
-fi
-rm -f "$fixture/mcp-servers/context7-dup.nix"
-
-echo
-echo "passed=$pass failed=$fail"
-[ "$fail" -eq 0 ]
+assert_rejected 'ambiguous mapping' "$context7_url" \
+	"resolve_recipe_file: expected exactly 1 recipe pinning upstash/context7, found 2: $fixture/mcp-servers/context7-dup.nix $fixture/mcp-servers/context7-mcp.nix"

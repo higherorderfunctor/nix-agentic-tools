@@ -2,15 +2,13 @@
 # rendered git-hooks configuration as well as the trunk guard's branch behavior.
 {
   ciConfig,
-  ciHookIds,
-  definitionNames,
-  diagnosticHookIds,
   localConfig,
   pkgs,
   rejectEntry,
+  ...
 }:
 pkgs.runCommandLocal "repo-validation-policy-check" {
-  nativeBuildInputs = [pkgs.coreutils pkgs.diffutils pkgs.git pkgs.jq];
+  nativeBuildInputs = [pkgs.coreutils pkgs.diffutils pkgs.git pkgs.gnugrep pkgs.jq];
 } ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
@@ -19,18 +17,22 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
   tail -n +3 ${localConfig} > local.json
   tail -n +3 ${ciConfig} > ci.json
 
-  {
-    ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") definitionNames}
-  } | sort > expected-local
-  jq -r '.repos[].hooks[].id' local.json | sort > actual-local
-  diff -u expected-local actual-local
+  assert_hook_ids() {
+    local config="$1" selection="$2"
+    shift 2
+    printf '%s\n' "$@" | LC_ALL=C sort > expected-ids
+    jq -r ".repos[].hooks[] | $selection | .id" "$config" | LC_ALL=C sort > actual-ids
+    diff -u --label "expected $config ($selection)" --label "actual $config ($selection)" \
+      expected-ids actual-ids
+  }
 
-  {
-    ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") diagnosticHookIds}
-  } | sort > expected-manual
-  jq -r '.repos[].hooks[] | select(.stages | index("manual")) | .id' local.json \
-    | sort > actual-manual
-  diff -u expected-manual actual-manual
+  # Pin the rendered membership independently of the policy's projections:
+  # a misclassified or missing hook must not change both the inputs and the oracle.
+  assert_hook_ids local.json . \
+    convco cspell deadnix gitleaks markdown-table-cells reject-default-branch-commit \
+    shellcheck statix treefmt treefmt-restage unique-map-keys
+  assert_hook_ids local.json 'select(.stages | index("manual"))' \
+    cspell deadnix markdown-table-cells shellcheck statix treefmt unique-map-keys
 
   # A single treefmt process owns its SQLite cache. prek's default file-batch
   # fanout makes concurrent processes contend on that database, which turns
@@ -42,11 +44,7 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
       and (.[0].entry | contains("--no-cache") | not)
   ' local.json >/dev/null
 
-  {
-    ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") ciHookIds}
-  } | sort > expected-ci
-  jq -r '.repos[].hooks[].id' ci.json | sort > actual-ci
-  diff -u expected-ci actual-ci
+  assert_hook_ids ci.json . cspell deadnix markdown-table-cells statix unique-map-keys
   jq -e 'all(.repos[].hooks[]; .stages == ["manual"])' ci.json >/dev/null
 
   # Local and CI cspell invocations must tolerate batches filtered entirely by
@@ -71,8 +69,11 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
   git add README
   git commit -qm base
 
-  if ${rejectEntry} >/dev/null 2>&1; then
-    echo "reject-default-branch-commit allowed main" >&2
+  status=0
+  ${rejectEntry} > /dev/null 2> guard.err || status=$?
+  if [ "$status" -ne 1 ] || ! grep -Fxq "error: refusing to commit directly on the default branch ('main')." guard.err; then
+    echo "reject-default-branch-commit: expected a trunk refusal on main, got exit $status" >&2
+    cat guard.err >&2
     exit 1
   fi
   git switch -qc feature/policy-probe

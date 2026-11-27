@@ -6,83 +6,75 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai mkTest;
+  inherit (harness) checkRows rejectsChange;
+  evaluate = config: lib.evalModules {modules = [ai.sharedOptions {inherit config;}];};
+  readEffort = value: (evaluate {ai.settings.reasoningEffort = value;}).config.ai.settings.reasoningEffort;
+  unset = evaluate {};
 in {
   checks = {
     # ── sharedOptions tests ─────────────────────────────────────────
-    factory-sharedOptions-empty-defaults = mkTest "sharedOptions-empty-defaults" (
+    factory-sharedOptions-accepts-mcpServer-entry = mkTest "sharedOptions-accepts-mcpServer-entry" (
       let
-        evaluated = lib.evalModules {
-          modules = [
-            ai.sharedOptions
-            {config = {};}
-          ];
+        evaluated = evaluate {
+          ai.mcpServers.test = {
+            command = "/fixture/bin/hello";
+            type = "stdio";
+          };
         };
+        servers = evaluated.config.ai.mcpServers;
       in
-        evaluated.config.ai.mcpServers
-        == {}
-        && evaluated.config.ai.rules == {}
-        && evaluated.config.ai.settings.reasoningEffort == null
-        && evaluated.config.ai.skills == {}
+        checkRows "shared MCP server" {
+          "only the declared server is present" = builtins.attrNames servers == ["test"];
+          "the stdio command is preserved" = servers.test.command == "/fixture/bin/hello";
+          "the transport remains stdio" = servers.test.type == "stdio";
+        }
     );
 
-    factory-sharedOptions-settings-nullable = mkTest "sharedOptions-settings-nullable" (
-      let
-        evaluated = lib.evalModules {modules = [ai.sharedOptions];};
-        fields = builtins.removeAttrs (evaluated.options.ai.settings.type.getSubOptions []) ["_module"];
-        fieldNames = (import ../../lib/ai/ai-common.nix {inherit lib;}).normalizedSettingsFields;
-        nullOrName = (lib.types.nullOr lib.types.str).name;
-      in
-        fields
-        != {}
-        && lib.all (field: let
-          option = fields.${field};
-        in
-          if field == "inference"
-          then option.default == {} && lib.all (value: value == null) (builtins.attrValues evaluated.config.ai.settings.inference)
-          else
-            option.default
-            == null
-            && option.type.name == nullOrName
-            && evaluated.config.ai.settings.${field} == null)
-        fieldNames
+    factory-sharedOptions-empty-defaults = mkTest "sharedOptions-empty-defaults" (
+      checkRows "unset shared pools" {
+        "MCP servers are empty" = unset.config.ai.mcpServers == {};
+        "rules are empty" = unset.config.ai.rules == {};
+        "skills are empty" = unset.config.ai.skills == {};
+      }
     );
 
     factory-sharedOptions-reasoning-effort-is-portable-intersection = mkTest "sharedOptions-reasoning-effort-is-portable-intersection" (
       let
-        accepts = value:
-          (builtins.tryEval
-            (lib.evalModules {
-              modules = [
-                ai.sharedOptions
-                {config.ai.settings.reasoningEffort = value;}
-              ];
-            }).config.ai.settings.reasoningEffort)
-        .success;
+        rejectsNativeEffort = invalid:
+          rejectsChange readEffort {
+            inherit invalid;
+            expected = "xhigh";
+            valid = "xhigh";
+          };
       in
-        accepts "low"
-        && accepts "medium"
-        && accepts "high"
-        && accepts "xhigh"
-        && !(accepts "max")
-        && !(accepts "ultra")
+        checkRows "portable reasoning effort" {
+          "high is preserved" = readEffort "high" == "high";
+          "low is preserved" = readEffort "low" == "low";
+          "max is outside the portable enum" = rejectsNativeEffort "max";
+          "medium is preserved" = readEffort "medium" == "medium";
+          "null explicitly unsets effort" = readEffort null == null;
+          "ultra is outside the portable enum" = rejectsNativeEffort "ultra";
+        }
     );
 
-    factory-sharedOptions-accepts-mcpServer-entry = mkTest "sharedOptions-accepts-mcpServer-entry" (
+    factory-sharedOptions-settings-nullable = mkTest "sharedOptions-settings-nullable" (
       let
-        evaluated = lib.evalModules {
-          modules = [
-            ai.sharedOptions
-            {
-              config.ai.mcpServers.test = {
-                type = "stdio";
-                package = pkgs.hello;
-                command = "hello";
-              };
-            }
-          ];
-        };
+        fields = unset.options.ai.settings.type.getSubOptions [];
       in
-        evaluated.config.ai.mcpServers.test.type == "stdio"
+        checkRows "unset shared settings" {
+          "the inference declaration supplies no selections" = fields.inference.default == {};
+          "the public settings resolve to null leaves" =
+            unset.config.ai.settings
+            == {
+              inference = {
+                clientKey = null;
+                instance = null;
+                key = null;
+                url = null;
+              };
+              reasoningEffort = null;
+            };
+        }
     );
   };
 }
