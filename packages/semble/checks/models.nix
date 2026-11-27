@@ -8,6 +8,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  inherit (import ../../../lib/packaging.nix) huggingFaceModelCacheDirName;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
 
@@ -20,10 +21,8 @@
   fallbackModel = fixtureModel 3;
   # Served from a seeded Hugging Face cache as Semble's built-in model.
   builtinModel = fixtureModel 4;
-  # Upstream's built-in model ID, written out here so a changed default fails
-  # the check; the cache directory name is derived from it.
-  builtinModelId = "minishlab/blink-code-16M-int8";
-  builtinModelCacheDir = "models--${lib.replaceStrings ["/"] ["--"] builtinModelId}";
+  expectedBuiltinDefaultModelId = import ./expected-builtin-default-model-id.nix;
+  builtinModelCacheDir = huggingFaceModelCacheDirName expectedBuiltinDefaultModelId;
   # A model package that lists its files, minus a real download.
   withFiles = files: model: model // {passthru = (model.passthru or {}) // {inherit files;};};
 
@@ -633,7 +632,7 @@ in {
       # ── Vanilla: upstream's package and its built-in model ──
       check no ${vanillaPackage}/bin/semble search alpha repo
       expect_indexes ${vanillaCacheHome}/semble "index " "a vanilla search"
-      expect_model ${vanillaCacheHome}/semble index ${builtinModelId}
+      expect_model ${vanillaCacheHome}/semble index ${expectedBuiltinDefaultModelId}
 
       # ── MCP: per-call routing through the patched server ──
       export SEMBLE_CACHE_LOCATION="$TMPDIR/mcp-cache"

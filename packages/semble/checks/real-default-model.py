@@ -1,10 +1,13 @@
 """Check Semble loads and encodes with its real default from the offline Hub cache."""
 
+import sys
+
 import numpy as np
 from semble.index.dense import load_model
 
+expected_builtin_default_model_id = sys.argv[1]
 model, model_id = load_model()
-assert model_id == "minishlab/blink-code-16M-int8", model_id
+assert model_id == expected_builtin_default_model_id, model_id
 
 vectors = model.encode(["def alpha():\n    return beta", "install guide"])
 assert vectors.shape == (2, 256), vectors.shape

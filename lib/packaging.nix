@@ -984,4 +984,8 @@ rec {
             '')
             notices}
         '';
+
+  # huggingFaceModelCacheDirName — the Hub cache directory basename for a model
+  # repo ID, with each slash replaced by the Hub's double-hyphen separator.
+  huggingFaceModelCacheDirName = repoId: "models--${builtins.replaceStrings ["/"] ["--"] repoId}";
 }

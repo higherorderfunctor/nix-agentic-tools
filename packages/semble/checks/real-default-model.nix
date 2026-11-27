@@ -5,16 +5,16 @@
   pkgs,
   ...
 }: let
-  inherit (import ../../../lib/packaging.nix) fetchHuggingFaceModel;
-  modelId = "minishlab/blink-code-16M-int8";
+  inherit (import ../../../lib/packaging.nix) fetchHuggingFaceModel huggingFaceModelCacheDirName;
+  expectedBuiltinDefaultModelId = import ./expected-builtin-default-model-id.nix;
   revision = "0b033346145bfcc95b81658349da73c50abfc7a3";
-  cacheDirectory = "models--${lib.replaceStrings ["/"] ["--"] modelId}";
+  cacheDirectory = huggingFaceModelCacheDirName expectedBuiltinDefaultModelId;
   modelSnapshot = fetchHuggingFaceModel {
     inherit pkgs;
     files = ["config.json" "model.safetensors" "tokenizer.json"];
     hash = "sha256-HgWuVJZd/3E33s40KsRRbex/PTxl3wEydfv2EjCCORk=";
     license = lib.licenses.mit;
-    repoId = modelId;
+    repoId = expectedBuiltinDefaultModelId;
     rev = revision;
   };
   script = import ./semble-script.nix pkgs "real-default-model" pkgs.ai.semble ./real-default-model.py;
@@ -31,7 +31,7 @@ in {
     ${pkgs.coreutils}/bin/mkdir -p "$HOME" "$model_cache/refs" "$model_cache/snapshots"
     printf '%s' '${revision}' > "$model_cache/refs/main"
     ${pkgs.coreutils}/bin/ln -s ${modelSnapshot} "$model_cache/snapshots/${revision}"
-    ${script}
+    ${script} ${lib.escapeShellArg expectedBuiltinDefaultModelId}
     ${pkgs.coreutils}/bin/touch "$out"
   '';
 }
