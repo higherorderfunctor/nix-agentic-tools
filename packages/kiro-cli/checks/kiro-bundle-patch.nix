@@ -21,8 +21,8 @@
   routingEdit = routed.prompts.allowWorktreeCreation;
   routedKas =
     (package.withBundlePatches {
-      inherit replace;
-      prompts.allowWorktreeCreation = assert routingEdit.enable; removeAttrs routingEdit ["enable"];
+      replace = builtins.attrNames (pkgs.lib.filterAttrs (_: enabled: enabled) routed.tweaks);
+      prompts.allowWorktreeCreation = assert routingEdit.enable; {inherit (routingEdit) match replace target;};
     }).kas;
   patched = package.withBundlePatches {
     inherit replace;

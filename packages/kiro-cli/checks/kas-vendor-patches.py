@@ -36,7 +36,7 @@ PATH_RULE = (
     "A `fileCheck.path` that never resolves spins the loop to `maxIterations`."
 )
 # Measured on the pinned release: gate-file sites and lines the creator tweak may touch.
-GATE_SITES, REWRITTEN_LINES = 4, 2
+GATE_SITES = 4
 WORKTREE_PROHIBITION = " Do not create the worktree yourself."
 
 
@@ -61,10 +61,14 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not errors, errors
     creator_only, errors = patcher.patch(stock, original, patcher.TWEAKS["relativeFileCheckPaths"])
     assert not errors, errors
-    for label, result in (
-        ("stock", unedited),
-        ("creator-only", creator_only),
-        ("delegate-routing", Path(patched_kas, server).read_bytes()),
+    lines = text[creator].replace(gate, relative_gate).split("\n")
+    lines[85] = lines[85].replace("names the gate file's absolute path in its prompt", GATE_SENTENCE)
+    lines[88] = PATH_RULE
+    creator_only_text = "\n".join(lines)
+    for label, result, expected_creator, expected_orchestration in (
+        ("stock", unedited, text[creator], text[orchestration]),
+        ("creator-only", creator_only, creator_only_text, text[orchestration]),
+        ("delegate-routing", Path(patched_kas, server).read_bytes(), creator_only_text, text[orchestration].replace(WORKTREE_PROHIBITION, "", 1)),
     ):
         path.write_bytes(result)
         subprocess.run(["node", "--check", str(path)], check=True)
@@ -72,24 +76,7 @@ with tempfile.TemporaryDirectory() as tmp:
         now = {name: fact["text"] for name, fact in facts.items()}
         assert outside_literals(result, facts) == outside_literals(stock, original), f"{label}: bytes outside the prompts changed"
         assert now[planner] == text[planner], f"{label}: the planner changed"
-        if label == "creator-only":
-            creator_only_text = now[creator]
-            changed = [
-                (was, line)
-                for was, line in zip(text[creator].replace(gate, relative_gate).split("\n"), now[creator].split("\n"))
-                if was != line
-            ]
-            assert len(changed) == REWRITTEN_LINES, f"{label}: {len(changed)} creator lines differ from the expected rewrite"
-            for instruction in (GATE_SENTENCE, PATH_RULE):
-                assert now[creator].count(instruction) == 1, f"{label}: an authored creator instruction is not present exactly once"
-            assert now[creator].count(relative_gate) == GATE_SITES, f"{label}: the relative gate path is not at exactly the example sites"
-            assert now[creator].count("\n") == text[creator].count("\n") and gate not in now[creator], label
-        else:
-            expected_creator = creator_only_text if label == "delegate-routing" else text[creator]
-            assert now[creator] == expected_creator, f"{label}: the creator changed"
-        expected = text[orchestration]
-        if label == "delegate-routing":
-            expected = expected.replace(WORKTREE_PROHIBITION, "", 1)
-        assert now[orchestration] == expected, f"{label}: orchestration does not match the expected edit"
+        assert now[creator] == expected_creator, f"{label}: the creator changed"
+        assert now[orchestration] == expected_orchestration, f"{label}: orchestration does not match the expected edit"
         assert (result == stock) == (label == "stock"), f"{label}: stock bytes must stay identical only with no edits"
 print("PASS: stock, creator-only and delegate-routing selections match independent expectations")

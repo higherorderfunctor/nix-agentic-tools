@@ -429,6 +429,16 @@ trimmed, after the other entries are applied. The build refuses it otherwise,
 and refuses one whose `replace` also contains a Mustache delimiter change
 (`{{=`, with or without spaces after the braces).
 
+The optional `worktrees = { base; location; };` selection changes only the base
+instruction and the worktree path in the orchestration prompt. `upstream` uses
+the session branch's configured upstream, or its own tip if it has none. On
+detached HEAD it uses that commit. `remote-default` uses the local symbolic HEAD
+of the branch's remote, `origin`, or the sole remote, in that order. An
+unresolvable selected ref fails instead of guessing. `location` names the parent
+of `<name>`; `../{{repo}}-worktrees` puts it beside the primary checkout, even
+from a linked worktree. Absolute locations are left absolute. Without a repo
+root the two fragments stay unchanged; literal edits still apply.
+
 The creator tweak defaults off. On a reached managed workflow CLI, delegate
 routing defaults it on and supplies the overridable `allowWorktreeCreation`
 prompt edit. That edit removes only the prohibition on creating the worktree.

@@ -33,10 +33,12 @@ const extract = (bundle) =>
       maxBuffer: 1 << 26,
     }),
   );
-const patch = (name, entries) => {
+const patch = (name, entries, worktrees) => {
   const out = path.join(scratch, name);
   fs.mkdirSync(out);
   fs.writeFileSync(path.join(scratch, `${name}.json`), JSON.stringify(entries));
+  const selection = path.join(out, "worktrees.json");
+  if (worktrees) fs.writeFileSync(selection, JSON.stringify(worktrees));
   const run = spawnSync(
     "python3",
     [
@@ -46,6 +48,7 @@ const patch = (name, entries) => {
       path.join(out, "acp-server.js"),
       "--prompts",
       path.join(scratch, `${name}.json`),
+      ...(worktrees ? ["--worktrees", selection] : []),
       "--session-fill",
       src,
     ],
@@ -237,11 +240,12 @@ try {
       }),
     })(text, { safeParse: (data) => ({ success: true, data }) }).prompt;
   const agent = await evaluate(agentReader.getText(file), kiro);
-  const steering = (cwd, text) => {
+  const steering = (cwd, text, fill = module.fillPrompt) => {
     const binding = block.properties.find((p) => p.name.text === "text")
       .initializer.expression.arguments[1].text;
     return evaluate(`(async () => (${block.getText(file)}))()`, {
       ...kiro,
+      __kiroFillPrompt: fill,
       [binding]: text,
       [session]: { workspacePaths: [cwd] },
     }).then((filled) => filled.text);
@@ -364,6 +368,76 @@ try {
     base.includes("LITERAL") && !stock.includes("LITERAL"),
   );
 
+  const prohibition = " Do not create the worktree yourself.";
+  const routing = { target: orchestration, match: prohibition, replace: "" };
+  const setup = stock.split("\n\n")[20].slice(0, 214);
+  const absolute = path.join(scratch, "absolute$&{{native}}");
+  const variant = async (base, location) => {
+    const { out, run } = patch(
+      base,
+      { ...entries, routing },
+      { base, location },
+    );
+    if (run.status !== 0)
+      throw new Error(`worktree patch failed: ${run.stderr}`);
+    const { fillPrompt } = await import(path.join(out, "session-prompts.mjs"));
+    const { text } = extract(path.join(out, "acp-server.js"))[orchestration];
+    expect(base, text === after[orchestration].text.replace(prohibition, ""));
+    return (cwd) => steering(cwd, text, fillPrompt);
+  };
+  const upstreamMode = await variant("upstream", "../{{repo}}-worktrees");
+  const remoteMode = await variant("remote-default", absolute);
+  const oid = (cwd) => git(cwd, "rev-parse", "HEAD").toString().trim();
+  const commit = (cwd, name) =>
+    git(cwd, "commit", "-qm", name, "--allow-empty");
+  const tracked = oid(odd);
+  commit(odd, "remote tip");
+  const remoteTip = oid(odd);
+  commit(linked, "local tip");
+  const local = oid(linked);
+  const detached = path.join(scratch, "detached");
+  git(odd, "worktree", "add", "-q", "--detach", detached, remoteTip);
+  commit(detached, "detached tip");
+  const initial = base.replace(prohibition, "");
+  const consumerMatch = entries[`${orchestration}-session`].match;
+  const sibling = path.join(scratch, "odd$&name-worktrees");
+  const check = async (label, cwd, root, hash, parent, read = upstreamMode) => {
+    const body = expected(initial, consumerMatch, root);
+    const sentence = `When asked to run in a worktree, plan its name and branch and use commit \`${hash}\` as the base.`;
+    const wanted = root
+      ? body
+          .replace(setup, sentence)
+          .replace(".worktrees/<name>", () => `${parent}/<name>`)
+      : body;
+    expect(
+      label,
+      (await read(cwd)) === wanted,
+      "OID, location or surrounding bytes differ",
+    );
+  };
+  await check("local tip", linked, odd, local, sibling);
+  await check("detached tip", detached, odd, oid(detached), sibling);
+  await check("primary tip", odd, odd, remoteTip, sibling);
+  await check("no root", dir("nongit"));
+  for (const name of ["origin", "upstream"])
+    git(odd, "remote", "add", name, ".");
+  const tracking = "refs/remotes/upstream/topic";
+  git(odd, "update-ref", tracking, tracked);
+  git(linked, "branch", "--set-upstream-to=upstream/topic");
+  await check("upstream tip", linked, odd, tracked, sibling);
+  const remoteHead = "refs/remotes/upstream/HEAD";
+  const trunk = "refs/remotes/upstream/trunk";
+  git(odd, "update-ref", trunk, remoteTip);
+  git(odd, "symbolic-ref", remoteHead, trunk);
+  await check("symbolic default", linked, odd, remoteTip, absolute, remoteMode);
+  const refuses = async (ref, read, diagnostic) => {
+    git(odd, "update-ref", "--no-deref", "-d", ref);
+    const error = await read(linked).catch((e) => e.message);
+    expect(diagnostic, typeof error === "string" && error.includes(diagnostic));
+  };
+  await refuses(remoteHead, remoteMode, "missing local symbolic remote HEAD");
+  await refuses(tracking, upstreamMode, "@{upstream} does not resolve");
+
   const duplicate = entries[`${orchestration}-literal`].match;
   const refused = [
     [
@@ -452,5 +526,5 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  "PASS: session-prompts fills both readers per session and keeps the original without a root",
+  "PASS: session-prompts fills both readers and worktree setup per session; unresolved bases refuse",
 );

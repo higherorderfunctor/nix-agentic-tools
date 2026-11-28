@@ -16,7 +16,7 @@ value; unedited prompts and every byte outside the literals stay as they were.
 A replacement that names `{{primary}}` or `{{repo}}` cannot be settled at build
 time, because those come from each session's checkout. Its edit is validated like
 the rest, but instead of being spliced it becomes an `[original, replacement]`
-fragment in `prompt-fragments.json`, and the two readers of the prompts call
+fragment in `prompt-fragments.json`, as do the tagged worktree setup edits, and the two readers of the prompts call
 `src/session-prompts.mjs` to apply it per session before Kiro renders the text.
 """
 
@@ -56,11 +56,12 @@ class Edit:
     replace: str
     until: str = ""
     sha256: str = ""
+    session_kind: str = ""
 
     @property
     def per_session(self):
         """True when the replacement can only be completed from a session's checkout."""
-        return PLACEHOLDER.search(self.replace) is not None
+        return bool(self.session_kind) or PLACEHOLDER.search(self.replace) is not None
 
 
 GATE_FILE = "/repo/.agents/tasks/fix-throttle/review.json"
@@ -108,6 +109,24 @@ TWEAKS = {
     ), key=lambda edit: edit.id)),
 }
 
+WORKTREE_PATH = ".worktrees/<name>"
+
+
+def worktree_edits(text, base, location):
+    """Select only the base sentence and location in the pinned setup paragraph."""
+    if base not in ("upstream", "remote-default") or not isinstance(location, str) or not location:
+        raise ValueError("worktrees requires base (upstream or remote-default) and a nonempty location")
+    paragraphs = [p for p in text.split("\n\n") if WORKTREE_PATH in p]
+    if len(paragraphs) != 1:
+        raise ValueError("worktrees: expected one orchestration paragraph with a worktree location")
+    sentence, stop, _ = paragraphs[0].partition(". ")
+    return [
+        Edit("worktrees.base", ORCHESTRATION, sentence + stop[:1], base,
+             sha256="642b3b6cc37b1e8bc3bc4eaea889e9ddf7c21b90e2c2390e9764f355ea55257d", session_kind="worktree-base"),
+        Edit("worktrees.location", ORCHESTRATION, WORKTREE_PATH, location, session_kind="worktree-location"),
+    ]
+
+
 def occurrences(text, needle):
     """Start offsets of every occurrence of a non-empty needle, overlapping ones included."""
     found, at = [], text.find(needle) if needle else -1
@@ -126,15 +145,15 @@ def select(edit, text):
     if len(starts) != 1:
         return miscount("match", len(starts))
     start = starts[0]
-    if not edit.until:
-        return start, start + len(edit.match)
-    ends = occurrences(text, edit.until)
-    if len(ends) != 1:
-        return miscount("end anchor", len(ends))
-    end = ends[0] + len(edit.until)
-    if ends[0] < start + len(edit.match):
-        return f"{edit.id}: the end anchor does not follow the match"
-    if hashlib.sha256(text[start:end].encode()).hexdigest() != edit.sha256:
+    end = start + len(edit.match)
+    if edit.until:
+        ends = occurrences(text, edit.until)
+        if len(ends) != 1:
+            return miscount("end anchor", len(ends))
+        if ends[0] < end:
+            return f"{edit.id}: the end anchor does not follow the match"
+        end = ends[0] + len(edit.until)
+    if edit.sha256 and hashlib.sha256(text[start:end].encode()).hexdigest() != edit.sha256:
         return f"{edit.id}: the selected text differs from its pinned digest"
     return start, end
 
@@ -201,19 +220,19 @@ def session_refusals(edit, selected, text):
 
     `text` is the leaf after the build-time edits; the readers must find the match once in `reader_text`.
     """
-    if SET_DELIMITERS.search(edit.replace):
+    if not edit.session_kind and SET_DELIMITERS.search(edit.replace):
         return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement cannot also change Mustache delimiters ({{{{=)"]
     if len(occurrences(reader_text(edit.leaf, text), selected)) != 1:
-        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]
+        return [f"{edit.id}: a per-session edit must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]
     return []
 
 
 def session_fragments(facts, edits):
-    """`{reader key: [[original text, replacement], ...]}` for the per-session edits `patch` validated."""
+    """`{reader key: [[original text, value, kind], ...]}` for the per-session edits `patch` validated."""
     table = {}
     for edit in sorted((edit for edit in edits if edit.per_session), key=lambda edit: edit.id):
         start, end = select(edit, facts[edit.leaf]["text"])
-        table.setdefault(SESSION_KEYS[edit.leaf], []).append([facts[edit.leaf]["text"][start:end], edit.replace])
+        table.setdefault(SESSION_KEYS[edit.leaf], []).append([facts[edit.leaf]["text"][start:end], edit.replace, edit.session_kind])
     return table
 
 
@@ -274,6 +293,7 @@ def main():
     parser.add_argument("--prompts", type=Path, help="JSON object of consumer edits: {key: {target, match, replace}}")
     parser.add_argument("--replace", action="append", choices=TWEAKS, default=[])
     parser.add_argument("--session-fill", type=Path, help="directory of the session fill modules, installed beside the destination when an entry needs them")
+    parser.add_argument("--worktrees", type=Path, help="JSON worktree setup selection with base and location")
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
@@ -288,10 +308,13 @@ def main():
         custom = [Edit(f"prompts.{key}", entry["target"], entry["match"], entry["replace"]) for key, entry in sorted(entries.items())]
         source = args.source.read_bytes()
         edits = [edit for name in names for edit in TWEAKS[name]] + custom
+        if args.worktrees:
+            selection = json.loads(args.worktrees.read_text(encoding="utf-8"))
+            edits += worktree_edits(facts[ORCHESTRATION]["text"], **selection)
         result, errors = patch(source, facts, edits)
         table = {} if errors else session_fragments(facts, edits)
         if table and not args.check and args.session_fill is None:
-            errors.append("--session-fill is required when an entry uses {{primary}} or {{repo}}")
+            errors.append("--session-fill is required for per-session edits")
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
         if errors:

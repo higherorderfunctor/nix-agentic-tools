@@ -12,12 +12,15 @@
   # else `replace` (built-in tweak names), `prompts` (consumer entries) and/or
   # `sessionRoots` (`["additionalDirectories"]`). Entries that name `{{primary}}` or
   # `{{repo}}` install the per-session fill from `../src`; `sessionRoots` installs
-  # the session-roots patch and its runtime module from there.
+  # the session-roots patch and its runtime module from there. `worktrees`
+  # installs two session edits from its `{base, location}` selection.
   selected = patches != {};
   prompts = patches.prompts or {};
   replace = patches.replace or [];
   sessionRoots = patches.sessionRoots or [];
+  worktrees = patches.worktrees or {};
   promptsFile = pkgs.writeText "kiro-prompt-edits.json" (builtins.toJSON prompts);
+  worktreesFile = pkgs.writeText "kiro-worktrees.json" (builtins.toJSON worktrees);
 in
   pkgs.stdenvNoCC.mkDerivation {
     pname = "kiro-cli-kas" + lib.optionalString selected "-patched";
@@ -41,7 +44,9 @@ in
       ${vu.kiroPromptFactsExtractScript pkgs} "$server" > "$TMPDIR/prompt-leaves.json"
       python3 ${./kiro-bundle-patch.py} "$server" "$TMPDIR/prompt-leaves.json" "$server" \
         --export-leaves "$out/share/kiro/vendorSteering" \
-        ${lib.optionalString (prompts != {}) "--prompts ${promptsFile} --session-fill ${../src}"} \
+        ${lib.optionalString (prompts != {}) "--prompts ${promptsFile}"} \
+        ${lib.optionalString (worktrees != {}) "--worktrees ${worktreesFile}"} \
+        ${lib.optionalString (prompts != {} || worktrees != {}) "--session-fill ${../src}"} \
         ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       ${lib.optionalString (sessionRoots != []) ''
         node ${../src/patch-session-roots.mjs} "$server" ${pkgs.typescript_5}/lib/node_modules/typescript
