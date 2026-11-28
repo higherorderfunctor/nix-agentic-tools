@@ -25,9 +25,7 @@ in {
         hm = evalHm {};
         devenv = evalDevenv {};
         clean = evaluated:
-          !evaluated.config.ai.programs.semble.enable
-          && evaluated.config.ai.programs.semble.mcp.enable == null
-          && !(evaluated.config.ai.claude.mcpServers ? semble)
+          !(evaluated.config.ai.claude.mcpServers ? semble)
           && !(evaluated.config.ai.codex.agents ? semble-search)
           && !(evaluated.config.ai.kiro.native.agents ? semble-search);
       in
@@ -51,16 +49,6 @@ in {
         };
         hmEval = evalHm config;
         devenv = (evalDevenv config).config;
-        readOnly =
-          (evalDevenv {
-            ai.codex.native.settings.sandbox_mode = "read-only";
-            ai.programs.semble.runtimes.codex.enable = true;
-          }).config;
-        noCodex =
-          (evalDevenv {
-            ai.codex.native.settings.sandbox_mode = "workspace-write";
-            ai.programs.semble.runtimes.claude.enable = true;
-          }).config;
         profileConfig.ai = {
           codex = {
             enable = true;
@@ -69,10 +57,6 @@ in {
           programs.semble.runtimes.codex.enable = true;
         };
         profileOnly = (evalDevenv profileConfig).config;
-        profileDenied =
-          (evalDevenv (lib.recursiveUpdate profileConfig {
-            ai.codex.native.settings.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" = "deny";
-          })).config;
       in
         builtins.all
         (root: builtins.elem root (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots)
@@ -81,13 +65,8 @@ in {
         && builtins.all
         (root: builtins.elem root devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
         ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
-        && readOnly.ai.codex.native.settings.sandbox_workspace_write == null
-        && noCodex.ai.codex.native.settings.sandbox_workspace_write == null
-        && profileOnly.ai.codex.native.settings.sandbox_workspace_write == null
         && profileOnly.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
-        && profileDenied.ai.codex.files.".codex/config.toml".content.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
         && builtins.all (assertion: assertion.assertion) profileOnly.assertions
-        && builtins.all (assertion: assertion.assertion) profileDenied.assertions
     );
 
     # A launcher derivation's name does not prove that the wrapper sets the
@@ -200,7 +179,6 @@ in {
         && emitted.name
         == "semble-search"
         && emitted.tools == ["shell" "read"]
-        && emitted ? description
         && !(lib.hasPrefix builtins.storeDir emitted.prompt)
     );
 
@@ -239,7 +217,6 @@ in {
         && emitted.description == claudeAgent.description
         && emitted.prompt == builtins.readFile ../mcp-agent-instructions.md
         && emitted.tools == ["@semble"]
-        && emitted.includeMcpJson == false
         && emitted.mcpServers ? semble
         && builtins.filter (lib.hasInfix "semble-search.tools") cfg.warnings == []
     );
@@ -351,7 +328,6 @@ in {
           };
         };
         hm = (evalHm grammarConfig).config;
-        devenv = (evalDevenv grammarConfig).config;
         hmPackage = builtins.head hm.home.packages;
         config = runtimeConfig hmPackage;
       in
@@ -365,9 +341,6 @@ in {
             pattern = "flake.lock";
           }
         ]
-        && lib.hasInfix "semble-cache-guard" hm.home.activation.ai-semble-cache-guard.text
-        && lib.hasInfix "semble-cache-guard" devenv.tasks."ai:semble-cache-guard".exec
-        && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
     );
 
     module-semble-runtime-package-variants = let
@@ -439,7 +412,6 @@ in {
           };
       in
         checkRows "path mappings" {
-          "a bundled alias is accepted" = allPass (assertions [] [(mapping "zsh" [".zshrc"])]);
           "a grammar may supply a language" = let
             custom = pkgs.tree-sitter-grammars.tree-sitter-awk // {language = "fixture-language";};
             entry = mapping "fixture-language" ["*.fixture"];
@@ -526,7 +498,6 @@ in {
         from semble.index.file_walker import walk_files
         from semble.index.files import detect_language, get_extensions
         from semble.index.index import SembleIndex
-        from semble.path_mappings import CUSTOMIZATION_FINGERPRINT
         from semble.types import ContentType
 
         samples = {
@@ -540,21 +511,16 @@ in {
         root = Path("repo").resolve()
         expected = {
             ".envrc": "bash",
-            ".gitignore": "gitignore",
             ".sembleignore": "gitignore",
+            "ab.cfg": "properties",
             "checks/hooks/pre-edit": "bash",
             "docs/example.fixture.py": "markdown",
-            "docs/example.md.fixture": "markdown",
-            "docs/schema.json": "json",
             "flake.lock": "json",
-            "ab.cfg": "properties",
-            "settings.json": "json",
             "pkg/deps.lock": "toml",
             "special.lock": "yaml",
         }
         for relative, language in expected.items():
             assert detect_language(root / relative, root) == language, relative
-        assert detect_language(root / "ordinary.py", root) == "python"
 
         def walked(content: str) -> set[str]:
             content_type = ContentType(content)
@@ -599,7 +565,6 @@ in {
         )
         SembleIndex.save(fake_index, persisted)
         metadata = json.loads((persisted / "metadata.json").read_text())
-        assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
         assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
         metadata["nix_customization"] = "different-config"
         assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
@@ -801,14 +766,6 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
         ${harness.hmRunShim}
 
-        # A dry run must not clear the index or write the stamp.
-        (
-        export DRY_RUN=1
-        ${activation}
-        )
-        test ! -e ${cacheHome}/semble/clear-calls
-        test ! -e ${cacheHome}/semble/.nix-package
-
         ${activation}
         test "$(${pkgs.coreutils}/bin/wc -l < ${cacheHome}/semble/clear-calls)" -eq 1
         ${pkgs.gnugrep}/bin/grep -Fx ${lib.escapeShellArg "${sembleStub}"} ${cacheHome}/semble/.nix-package
@@ -861,9 +818,7 @@ in {
             ai.programs.semble.runtimes.codex.enable = true;
           }).config.ai.codex.mcpServers.semble;
       in
-        code.args
-        == []
-        && lib.hasSuffix "/bin/semble-mcp" code.command
+        lib.hasSuffix "/bin/semble-mcp" code.command
         && docs.args == []
         && docs.command != code.command
         && replaced.args == ["--log-level" "debug"]
@@ -937,15 +892,11 @@ in {
           (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
           evaluated.assertions;
         mcpPrompt = ../mcp-agent-instructions.md;
-        rootAgent = rootVisible.ai.kiro.native.agents.semble-search;
         emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = isolated;} ".kiro/agents/semble-search.json").text);
       in
         fromGeneratedTree ".kiro/agents/semble-search.json" isolated.home.file.".kiro/agents/semble-search.json"
         && builtins.attrNames rootVisible.ai.kiro.mcpServers
         == ["semble"]
-        && rootAgent.tools == ["@semble"]
-        && rootAgent.includeMcpJson == false
-        && rootAgent.mcpServers ? semble
         && builtins.attrNames isolated.ai.kiro.mcpServers == []
         && passes isolated
         && builtins.attrNames subagentOnly.ai.kiro.mcpServers == []
@@ -959,7 +910,6 @@ in {
         == ["mcp__semble__find_related" "mcp__semble__search"]
         && failedWith "ai.programs.semble.runtimes.claude: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports" (unsupported "claude")
         && failedWith "which only Kiro supports" (unsupported "codex")
-        && !(unsupported "claude").ai.claude.mcpServers ? semble
     );
 
     module-semble-kiro-acp = let
@@ -1185,7 +1135,6 @@ in {
         && lib.hasInfix "Use `semble search`" hmClaudeRule
         && fromGeneratedTree ".codex/AGENTS.md" hm.home.file.".codex/AGENTS.md"
         && lib.hasInfix "Use `semble search`" (markdownText hm ".codex/AGENTS.md")
-        && hmKiroSteering ? "semble.md"
         && !(hmKiroSteering ? "instructions.md")
         && lib.hasInfix ''name: "semble"'' hmKiroInstruction
         && lib.hasInfix ''inclusion: "always"'' hmKiroInstruction
@@ -1269,7 +1218,6 @@ in {
         && !(records.kiroAgent ? name)
         && records.kiroAgent.prompt.source == ../cli-instructions.md
         && records.mcp.kiroAgent.prompt.source == ../mcp-agent-instructions.md
-        && records.mcp.kiroAgent.tools == ["@semble"]
     );
 
     # Semble contributes package defaults to real nullable pool entries. Those

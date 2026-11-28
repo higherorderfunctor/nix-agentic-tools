@@ -1,18 +1,12 @@
 {
-  "args": {
-    "scenario": "fix-cache",
-    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
-  },
   "block_ids": [
-    "packages/stacked-workflows/skills/stack-test/SKILL.md::Steps::1",
     "packages/stacked-workflows/skills/stack-test/SKILL.md::Steps::1",
     "packages/stacked-workflows/skills/stack-test/SKILL.md::Fix Mode (formatting)::1"
   ],
-  "block_roles": ["selection", "selection", "mutator"],
+  "block_roles": ["selection", "mutator"],
   "env": {},
   "expected": {
-    "description": "A cached worktree-strategy run must not make fix mode silently skip rewriting either commit",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "A cached worktree-strategy run must not make fix mode silently skip rewriting either commit"
   },
   "id": "R4-S1",
   "kind": "fix-cache",

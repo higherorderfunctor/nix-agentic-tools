@@ -37,7 +37,7 @@ def archive(extra=(), server=extractor.SERVER, script=b"export const stock = tru
 
 
 def frame(data):
-    compressed = subprocess.check_output([zstd, "-q", "-c"], input=data)
+    compressed = subprocess.check_output([zstd, "-q", "-c", "--check"], input=data)
     return compressed + hashlib.sha256(compressed).hexdigest().encode()
 
 
@@ -63,6 +63,9 @@ class ExtractionTests(unittest.TestCase):
 
     def test_refuses_invalid_archives(self):
         valid = frame(archive())
+        # Damage the zstd checksum without changing the frame's structure.
+        corrupt = bytearray(valid[:-64])
+        corrupt[-1] ^= 1
         cases = (
             ("absolute member is rejected rather than sanitized", frame(archive((("/escape", b"bad"),))),
              ValueError, "unsafe archive path: /escape"),
@@ -78,6 +81,8 @@ class ExtractionTests(unittest.TestCase):
              ValueError, "missing regular KAS runtime file:"),
             ("parent traversal cannot leave the destination", frame(archive((("../escape", b"bad"),))),
              ValueError, r"unsafe archive path: \../escape"),
+            ("recognized frame that fails decompression is skipped", bytes(corrupt),
+             ValueError, "expected one valid KAS archive, found 0"),
             ("truncated compressed frame is not a candidate", valid[:10],
              ValueError, "expected one valid KAS archive, found 0"),
         )

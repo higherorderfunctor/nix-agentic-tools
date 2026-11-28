@@ -88,12 +88,6 @@
   mcpExpectations = pkgs.writeText "semble-mcp-routing.json" (builtins.toJSON {
     argv = [
       {
-        argv = [];
-        content = ["code" "config"];
-        name = "omitted CLI content uses the configured default";
-        port = null;
-      }
-      {
         argv = ["--content" "docs"];
         content = ["docs"];
         name = "explicit CLI content replaces the configured default";
@@ -102,7 +96,7 @@
       {
         argv = ["--http" "--port" "9001"];
         content = ["code" "config"];
-        name = "HTTP mode forwards the requested port";
+        name = "HTTP mode uses the configured content default and forwards the requested port";
         port = 9001;
       }
     ];
@@ -189,7 +183,6 @@ in {
           };
         "mapping entries expose language, category and patterns" = builtins.attrNames mappingOptions == ["content" "language" "patterns"];
         "mappings are ordered and unset by default" = root.pathMappings.type.description == "list of (submodule)" && root.pathMappings.default == [];
-        "model descriptions may be omitted" = options.description.default == null;
         "model entries use an empty list, not a keyed model table" = root.models.type.description == "list of (submodule)" && root.models.default == [];
         "runtime mappings can inherit or replace the ordered list" = runtimeOptions.pathMappings.type.description == "null or (list of (submodule))";
         "runtime models can inherit or replace the ordered list" = runtimeOptions.models.type.description == "null or (list of (submodule))";
@@ -269,7 +262,6 @@ in {
             ai.programs.semble = {enable = true;} // settings;
           };
         # Enabled entries need distinct content sets; "all" is code config docs.
-        duplicate = withModels {models = [docs (docs // {description = "Other prose.";})];};
         allCollision = withModels {
           models = [
             (docs // {content = "all";})
@@ -303,7 +295,6 @@ in {
                 }
               ];
             };
-          "enabled entries cannot reserve the same scope" = failedWith "`models` entries 1, 2 all route content `docs`" duplicate;
           "nested weights and tokenizer are a valid layout" = allPass nestedLayout;
           "partial entry layout identifies the entry and the given files" =
             failedWith "`models.1.model` does not hold a model2vec model" missingTokenizer

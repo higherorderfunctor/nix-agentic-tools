@@ -247,6 +247,7 @@ in {
             "host is not duplicated among plain settings" = !(settings ? host);
             "job token is not available as a plain setting" = !(settings ? job_token);
             "personal token is not available as a plain setting" = !(settings ? token);
+            "schema lowering keeps more than the defaulted subset" = builtins.length (builtins.attrNames (builtins.removeAttrs settings ["_module"])) > 20;
           }
       );
 

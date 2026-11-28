@@ -50,8 +50,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Plan routing must cover restructuring and recovery; the skill must not authorize destructive repairs",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Plan routing must cover restructuring and recovery; the skill must not authorize destructive repairs"
   },
   "id": "R5-unclear-plan",
   "kind": "static-set",

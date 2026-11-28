@@ -71,20 +71,24 @@
         expected = "work";
       };
     rejectRootProxy = rejectProxy (config: config.ai.mcpServers.meeting);
-  in {
-    "disabled accounts are not resolved" = rejectRoot {ai.mcp-oauth.accounts.work.enable = false;};
-    "generated header paths validate the backend state root" = rejectRoot (
-      if backend == "hm"
-      then {xdg.stateHome = "/bad root";}
-      else {devenv.state = "/bad root";}
-    );
-    "root proxy cannot bind a nonloopback address" = rejectRootProxy {ai.mcpServers.meeting.proxy.host = "0.0.0.0";};
-    "root proxy cannot override Authorization in mixed case" = rejectRootProxy {ai.mcpServers.meeting.proxy.headers.aUtHoRiZaTiOn = "override";};
-    "runtime proxy cannot delete Authorization" = rejectProxy (config: config.ai.claude.mcpServers.messaging) {ai.claude.mcpServers.messaging.proxy.headers.authorization = null;};
-    "runtime proxy must resolve its own account" = rejectRuntime {ai.claude.mcpServers.messaging.proxy.oauthAccount = lib.mkForce "missing";};
-    "unused root declaration cannot delete Authorization" = rejectUnused {ai.mcpServers.meeting.proxy.headers.authorization = null;};
-    "unused root declaration cannot disable its OAuth proxy" = rejectUnused {ai.mcpServers.meeting.proxy.enable = lib.mkForce false;};
-  };
+  in
+    {
+      "generated header paths validate the backend state root" = rejectRoot (
+        if backend == "hm"
+        then {xdg.stateHome = "/bad root";}
+        else {devenv.state = "/bad root";}
+      );
+    }
+    # Schema validation and account resolution are shared before backend lowering.
+    // lib.optionalAttrs (backend == "devenv") {
+      "disabled accounts are not resolved" = rejectRoot {ai.mcp-oauth.accounts.work.enable = false;};
+      "root proxy cannot bind a nonloopback address" = rejectRootProxy {ai.mcpServers.meeting.proxy.host = "0.0.0.0";};
+      "root proxy cannot override Authorization in mixed case" = rejectRootProxy {ai.mcpServers.meeting.proxy.headers.aUtHoRiZaTiOn = "override";};
+      "runtime proxy cannot delete Authorization" = rejectProxy (config: config.ai.claude.mcpServers.messaging) {ai.claude.mcpServers.messaging.proxy.headers.authorization = null;};
+      "runtime proxy must resolve its own account" = rejectRuntime {ai.claude.mcpServers.messaging.proxy.oauthAccount = lib.mkForce "missing";};
+      "unused root declaration cannot delete Authorization" = rejectUnused {ai.mcpServers.meeting.proxy.headers.authorization = null;};
+      "unused root declaration cannot disable its OAuth proxy" = rejectUnused {ai.mcpServers.meeting.proxy.enable = lib.mkForce false;};
+    };
 in {
   checks = lib.all (name: checkRows "OAuth proxy (${name})" (rows name)) ["devenv" "hm"];
   snapshots = lib.genAttrs ["devenv" "hm"] snapshot;

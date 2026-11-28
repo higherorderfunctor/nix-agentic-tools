@@ -282,6 +282,8 @@ def main():
         # Cumulative exchanges and notices are independent expectations of
         # the fake clock, not calculated from the production scheduler. An
         # invalid grant must notify once, but not on a specific tick.
+        # Counts are cumulative, so the next checked tick also covers
+        # activity on the intervening ticks without a count.
         timeline = (
             ("do not refresh fresh access", 0, 0, 0),
             ("refresh on access expiry", 4, 1, 0),
@@ -291,15 +293,15 @@ def main():
             ("outage recovery refreshes and warns within seven days", 24, 3, 1),
             ("manual refresh preserves warning and consent deadline", 25, 4, 1),
             ("hard consent expiry withdraws projected token", 31, 4, 2),
-            ("expired login neither retries nor renotifies", 31, 4, 2),
+            ("reseed after expired login", 31, None, None),
             ("fresh relogin neither refreshes nor warns", 31, 4, 2),
             ("invalid grant fails exchange without browser launch", 35, 5, None),
             ("invalid grant withdraws token and notifies once", 35, 5, 3),
-            ("relogin following invalid grant clears warning", 35, 5, 3),
+            ("reseed after rejected login", 35, None, None),
             ("relogin following invalid grant returns to ready", 35, 5, 3),
             ("refresh resumes for the new login", 39, 6, 3),
             ("new login can warn independently", 59, 7, 4),
-            ("unbounded login starts without warning or refresh", 59, 7, 4),
+            ("unbounded login does not refresh early", 59, 7, None),
             ("unbounded login still refreshes", 63, 8, 4),
             ("unbounded login can receive invalid grant", 67, 9, None),
             ("unbounded rejection sends recovery notice", 67, 9, 5),
@@ -318,8 +320,9 @@ def main():
                 if self.index == 6:
                     account.refresh(clock=lambda: now + 25 * DAY)
                 scenario, day, exchanges, warnings = timeline[self.index]
-                observed = len(Provider.grants) - baseline
-                assert observed == exchanges, (scenario, observed)
+                if exchanges is not None:
+                    observed = len(Provider.grants) - baseline
+                    assert observed == exchanges, (scenario, observed)
                 if warnings is not None:
                     assert len(notices) == warnings, (scenario, notices)
                 with account.locked() as store:

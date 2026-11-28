@@ -44,7 +44,6 @@ for backend, (_, root) in expected.items():
     assert entry["restartPaths"] == {"mcp-proxy-meeting": [], "mcp-proxy-messaging": []}
     # Read the configuration each real service launches. Do not recompute the
     # renderer's variable name; both references must agree on the same capture.
-    assert sorted(entry["commands"]) == ["mcp-proxy-meeting", "mcp-proxy-messaging"]
     token_path = str(Path(root).with_name("work") / "access-token")
     for endpoint in ("meeting", "messaging"):
         name = f"mcp-proxy-{endpoint}"

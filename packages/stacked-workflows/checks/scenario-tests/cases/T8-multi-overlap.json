@@ -1,8 +1,4 @@
 {
-  "args": {
-    "scenario": "squash-move",
-    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
-  },
   "block_ids": [
     "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
     "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::2",
@@ -17,8 +13,7 @@
   },
   "expected": {
     "conflict": true,
-    "description": "Ordinary move must stop on overlapping squashed patches; the scoped recovery must move only the open commit",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Ordinary move must stop on overlapping squashed patches; the scoped recovery must move only the open commit"
   },
   "id": "T8-multi-overlap",
   "kind": "squash-move",

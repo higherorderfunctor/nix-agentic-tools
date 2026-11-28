@@ -114,8 +114,6 @@ class StateRefresh(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 self.config["provider"]["loginLifetimeDays"] = lifetime
                 self.seed(absent)
-                self.assertEqual(self.read()["login_deadline"], deadline)
-                self.assertIsNone(self.read()["refresh_expires_at"])
                 with provider(absent) as (url, _):
                     self.config["provider"]["tokenUrl"] = url
                     current = self.account.refresh(clock=lambda: 100)

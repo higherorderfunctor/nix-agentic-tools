@@ -3,8 +3,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Structural fix mode must not prescribe hiding commits while the rewrite is unresolved",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Structural fix mode must not prescribe hiding commits while the rewrite is unresolved"
   },
   "id": "R4-S5",
   "kind": "static",

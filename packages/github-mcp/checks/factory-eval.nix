@@ -12,10 +12,14 @@ in {
       builtins.pathExists ../modules/mcp-server.nix
     );
 
-    # Resolve the package module through the standalone settings merge so a
-    # caller that omits credentials does not need a credential reference.
+    # The service submodule reads settingsOptions directly; the standalone
+    # merge also lets callers omit the credential reference.
     factory-loadServer-github-mcp-from-package-dir = mkTest "loadServer-github-mcp-from-package-dir" (
-      (harness.mcpLib.evalSettings "github-mcp" {}).credentials == null
+      let
+        serverDef = harness.mcpLib.loadServer "github-mcp";
+      in
+        serverDef.settingsOptions ? credentials
+        && (harness.mcpLib.evalSettings "github-mcp" {}).credentials == null
     );
   };
 }

@@ -1,9 +1,5 @@
 {
   "allowed_deleted": ["refs/heads/a-1", "refs/heads/a-2"],
-  "args": {
-    "scenario": "squash-move",
-    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
-  },
   "block_ids": [
     "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
     "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::2"
@@ -15,7 +11,6 @@
   },
   "expected": {
     "description": "Ordinary move must drop each disjoint squashed patch as empty and retain the open commit",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"],
     "skip": "Skipped now-empty commit"
   },
   "id": "T8-multi-nonoverlap",

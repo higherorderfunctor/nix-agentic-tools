@@ -3,8 +3,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Submit must not reintroduce recursive hide as squash cleanup: it can hide still-live descendants",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Submit must not reintroduce recursive hide as squash cleanup: it can hide still-live descendants"
   },
   "id": "R4-S2",
   "kind": "static",

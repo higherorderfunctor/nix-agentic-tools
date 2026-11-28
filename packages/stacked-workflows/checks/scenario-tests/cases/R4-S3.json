@@ -3,8 +3,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Absorb must not teach moving every child of the old commit: an abandoned fork can belong to another worktree",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Absorb must not teach moving every child of the old commit: an abandoned fork can belong to another worktree"
   },
   "id": "R4-S3",
   "kind": "static",

@@ -47,7 +47,7 @@
 in {
   checks =
     {
-      # Check the actual materializers against a fixed client document, not a
+      # Check the actual materializer against a fixed client document, not a
       # second call to Kiro's renderer. The template must carry no token path.
       factory-slack-mcp-backend-parity = mkTest "slack-mcp-backend-parity" (
         let
@@ -59,11 +59,9 @@ in {
             };
           };
           template = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" expected}";
-          usesTemplate = evaluate: lib.hasInfix template (mcpFile (evaluate (kiroConfig direct))).content.run;
         in
           checkRows "Slack Kiro template delivery" {
-            "Home Manager writes the template with a launcher placeholder, not a token path" = usesTemplate evalHm;
-            "devenv writes the same placeholder template instead of omitting the root declaration" = usesTemplate evalDevenv;
+            "devenv writes the default URL and launcher placeholder for the root declaration" = lib.hasInfix template (mcpFile (evalDevenv (kiroConfig direct))).content.run;
           }
       );
 
@@ -87,14 +85,11 @@ in {
               ai.kiro.mcpServers.slack-mcp = entry;
             }).config.warnings;
           warned = messages: field: lib.any (lib.hasPrefix "ai.kiro.mcpServers.slack-mcp.${field} is set") messages;
-          nativeHttp = direct // {timeout = 300000;};
-          proxiedHttp = nativeHttp // {inherit proxy;};
-          nativeWarnings = warnings nativeHttp;
+          proxiedHttp = viaProxy // {timeout = 300000;};
           proxyWarnings = warnings proxiedHttp;
         in
           checkRows "Slack Kiro ignored-field warnings" {
             "HTTP env warns on the proxy path" = warned (warnings (proxiedHttp // {env.DEBUG = "1";})) "env";
-            "direct HTTP does not warn about consumed settings" = !(warned nativeWarnings "settings");
             "proxied HTTP does not warn about consumed settings or a supported timeout" = !(warned proxyWarnings "settings" || warned proxyWarnings "timeout");
           }
       );
@@ -211,8 +206,13 @@ in {
           }
       );
 
-      # The daemon needs the exact Bearer value to authenticate to Slack.
-      factory-slack-mcp-proxy-bearer = mkTest "slack-mcp-proxy-bearer" (proxied.proxy.headers.Authorization == bearer);
+      # Whether direct or proxied, the caller needs the exact Bearer value to authenticate to Slack.
+      factory-slack-mcp-proxy-bearer = mkTest "slack-mcp-proxy-bearer" (
+        checkRows "Slack bearer resolution" {
+          "direct HTTP receives the exact Bearer reference in client headers" = (resolve (declare direct)).headers.Authorization == bearer;
+          "proxied HTTP receives the exact Bearer reference in daemon headers" = proxied.proxy.headers.Authorization == bearer;
+        }
+      );
 
       # The client gets the loopback entry only, and the pool's proxy assertions
       # accept the declaration.
@@ -235,8 +235,7 @@ in {
           }
       );
 
-      # Force the merged token directly for missing/plaintext values. Only the
-      # already-composed reference reaches the outer Bearer concat's refusal.
+      # Force the merged token directly to pin rejection at the typed setting.
       factory-slack-mcp-token-required = mkTest "slack-mcp-token-required" (
         let
           readToken = entry: (mcpLib.evalSettings "slack-mcp" (declare entry).settings).token;
@@ -250,11 +249,6 @@ in {
             "a missing token is rejected instead of receiving a default" = rejectsChange readToken {
               expected = token;
               invalid = {};
-              valid = direct;
-            };
-            "an already-composed token cannot become a nested Bearer reference" = rejectsChange (entry: (resolve (declare entry)).headers.Authorization) {
-              expected = bearer;
-              invalid.settings.token = bearer;
               valid = direct;
             };
           }

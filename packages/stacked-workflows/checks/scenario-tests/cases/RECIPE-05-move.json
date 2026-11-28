@@ -1,5 +1,4 @@
 {
-  "args": {},
   "block_ids": [
     "packages/stacked-workflows/references/git-branchless.md::Selecting your own stack::1",
     "packages/stacked-workflows/references/git-branchless.md::5. Move a commit stack to a new base::1"
@@ -7,8 +6,7 @@
   "block_roles": ["selection", "mutation"],
   "env": {},
   "expected": {
-    "description": "The reference move must not land on stale local main or carry along the unrelated sibling stack",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "The reference move must not land on stale local main or carry along the unrelated sibling stack"
   },
   "id": "RECIPE-05-move",
   "kind": "recipe-move",

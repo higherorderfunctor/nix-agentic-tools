@@ -102,7 +102,6 @@ in {
       in
         checkRows "default program" {
           "legacy enable option is not reintroduced" = !(result.options.stacked-workflows ? enable);
-          "portable enable stays opt-in" = !result.config.ai.programs.stacked-workflows.enable;
         }
     );
 

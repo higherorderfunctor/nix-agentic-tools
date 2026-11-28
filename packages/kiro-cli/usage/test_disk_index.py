@@ -424,10 +424,17 @@ class DiskIndexTests(unittest.TestCase):
         self.assertIsNone(self.ids(unlinked))
         self.assertEqual(self.count(), 3)
         self.assertIsNone(self.db.execute("SELECT 1 FROM disk_sources WHERE session_path=?", (str(unlinked),)).fetchone())
-        # A full scan, not just requested history, repairs legacy lineage even if the file did not change.
-        self.db.execute("UPDATE disk_sessions SET identifiers_json='{}',lineage_version=0 WHERE path=?", (str(step),))
+        # A matching file identity and extractor version do not excuse wrong identifiers.
+        self.db.execute("UPDATE disk_sessions SET identifiers_json='{}' WHERE path=?", (str(step),))
         self.db.commit()
         self.scan()
+        self.assertEqual(self.ids(step), step_ids)
+        # A full scan also refreshes an old version when the identifiers already match.
+        self.db.execute("UPDATE disk_sessions SET lineage_version=0 WHERE path=?", (str(step),))
+        self.db.commit()
+        self.scan()
+        version, = self.db.execute("SELECT lineage_version FROM disk_sessions WHERE path=?", (str(step),)).fetchone()
+        self.assertEqual(version, disk_index.LINEAGE_VERSION)
         self.assertEqual(self.ids(step), step_ids)
         self.assertEqual(self.count(), 3)
         self.db.execute("DELETE FROM captures")

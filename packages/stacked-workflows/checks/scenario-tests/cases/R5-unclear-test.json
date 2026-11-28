@@ -15,8 +15,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Test mode must not clear cached results shared with other worktrees without asking",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Test mode must not clear cached results shared with other worktrees without asking"
   },
   "id": "R5-unclear-test",
   "kind": "static-set",

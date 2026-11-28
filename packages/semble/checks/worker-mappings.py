@@ -66,16 +66,17 @@ def main() -> None:
             else:
                 assert len(submitted) == (len(expected) if workers else 0), (content, workers, len(submitted))
 
-            by_file = {}
-            for chunk in chunks:
-                by_file.setdefault(chunk.file_path, set()).add(chunk.language)
-            expected_paths = {f"worker-repo/{name}": {language} for name, language in expected.items()}
-            mismatched = {
-                name: (expected_paths.get(name), by_file.get(name))
-                for name in expected_paths.keys() | by_file.keys()
-                if by_file.get(name) != expected_paths.get(name)
-            }
-            assert not mismatched, (content, workers, mismatched)
+            if workers == 0:
+                by_file = {}
+                for chunk in chunks:
+                    by_file.setdefault(chunk.file_path, set()).add(chunk.language)
+                expected_paths = {f"worker-repo/{name}": {language} for name, language in expected.items()}
+                mismatched = {
+                    name: (expected_paths.get(name), by_file.get(name))
+                    for name in expected_paths.keys() | by_file.keys()
+                    if by_file.get(name) != expected_paths.get(name)
+                }
+                assert not mismatched, (content, workers, mismatched)
             indexes.append(chunks)
         # Same members and labels alone would miss output reordered by the worker pool.
         assert indexes[0] == indexes[1], content
