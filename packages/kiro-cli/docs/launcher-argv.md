@@ -427,7 +427,7 @@ contain braces. A `{{primary}}` or `{{repo}}` entry must select text that
 appears once in what Kiro reads: an agent's body without front matter and
 trimmed, after the other entries are applied. The build refuses it otherwise,
 and refuses one whose `replace` also contains a Mustache delimiter change
-(`{{=`).
+(`{{=`, with or without spaces after the braces).
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.

@@ -202,12 +202,16 @@ def reader_text(leaf, text):
     return text if leaf == ORCHESTRATION else text[len(front_matter(text)) :].strip(JS_SPACE)
 
 
+# Mustache reads `{{ =<% %>=}}` as a delimiter change too, so whitespace after the braces counts.
+SET_DELIMITERS = re.compile(r"\{\{\s*=")
+
+
 def session_refusals(edit, selected, text):
     """Errors for a per-session edit the readers could not find again.
 
     `text` is the leaf after the build-time edits; the readers must find the match once in `reader_text`.
     """
-    if "{{=" in edit.replace:
+    if SET_DELIMITERS.search(edit.replace):
         return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement cannot also change Mustache delimiters ({{{{=)"]
     if len(occurrences(reader_text(edit.leaf, text), selected)) != 1:
         return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]

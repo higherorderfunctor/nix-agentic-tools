@@ -389,6 +389,17 @@ try {
       "prompts.x",
     ],
     [
+      "spaced delimiter change beside a placeholder",
+      {
+        x: {
+          target: orchestration,
+          match: entries[`${orchestration}-session`].match,
+          replace: "{{ =<% %>=}}{{repo}}",
+        },
+      },
+      "prompts.x",
+    ],
+    [
       "match touching the trimmed end",
       {
         x: {
