@@ -92,6 +92,8 @@ class PatchTests(unittest.TestCase):
             "digest drift": ([Edit("e", "s", "héllo", "x", "A\n", "0" * 64)], ["e: the selected text differs from its pinned digest"]),
             "end anchor ambiguous": ([Edit("e", "s", "héllo", "x", "a", digest)], ["e: expected exactly one end anchor in s, found 3"]),
             "end anchor first": ([Edit("e", "s", "end", "x", "héllo", digest)], ["e: the end anchor does not follow the match"]),
+            "end anchor without digest": ([Edit("e", "s", "héllo", "x", "A\n")], ["e: the selected text differs from its pinned digest"]),
+            "single anchor digest drift": ([Edit("e", "s", "héllo", "x", sha256="0" * 64)], ["e: the selected text differs from its pinned digest"]),
             "valid edit beside a bad one": ([Edit("ok", "s", "héllo", "x"), Edit("bad", "t", "zzz", "y")], ["bad: expected exactly one match in t, found 0"]),
         }
         for label, (edits, expected) in rows.items():

@@ -7,7 +7,7 @@ import { fillPlaceholders, repoRoot, worktreeBase } from "./repo-root.mjs";
 // `prompt-fragments.json` (`{ key: [[original, value, kind], ...] }`) and calls
 // it where Kiro reads the three workflow prompts, before Kiro renders them. The
 // fill is per call, from the session's own directory, so no checkout is
-// remembered across sessions; edits without placeholders were applied at build.
+// remembered across sessions. Literal consumer edits were applied at build time.
 const fragments = JSON.parse(
   readFileSync(new URL("./prompt-fragments.json", import.meta.url), "utf8"),
 );
@@ -32,8 +32,14 @@ export async function fillPrompt(key, text, cwd, templated = false) {
   for (const { original, value, kind, at } of spans) {
     let replacement;
     if (kind === "worktree-base") {
-      const oid = await worktreeBase(cwd, value);
-      replacement = `When asked to run in a worktree, plan its name and branch and use commit \`${oid}\` as the base.`;
+      const { oid, reason } = await worktreeBase(cwd, value).catch((error) => ({
+        reason: error.killed
+          ? "the Git lookup timed out"
+          : "the Git lookup failed",
+      }));
+      replacement = oid
+        ? `When asked to run in a worktree, plan its name and branch and use commit \`${oid}\` as the base.`
+        : `Do not create a worktree this session: ${reason}.`;
     } else if (kind === "worktree-location") {
       const parent = fillPlaceholders(value, root);
       replacement = resolve(root.primary, parent, "<name>");

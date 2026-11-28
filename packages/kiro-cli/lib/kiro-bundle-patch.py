@@ -15,9 +15,9 @@ value; unedited prompts and every byte outside the literals stay as they were.
 
 A replacement that names `{{primary}}` or `{{repo}}` cannot be settled at build
 time, because those come from each session's checkout. Its edit is validated like
-the rest, but instead of being spliced it becomes an `[original, replacement]`
-fragment in `prompt-fragments.json`, as do the tagged worktree setup edits, and the two readers of the prompts call
-`src/session-prompts.mjs` to apply it per session before Kiro renders the text.
+the rest, but instead of being spliced it becomes a fragment in
+`prompt-fragments.json`, as do the tagged worktree setup edits. The two prompt
+readers call `src/session-prompts.mjs` to apply these edits before rendering.
 """
 
 import argparse
@@ -153,7 +153,7 @@ def select(edit, text):
         if ends[0] < end:
             return f"{edit.id}: the end anchor does not follow the match"
         end = ends[0] + len(edit.until)
-    if edit.sha256 and hashlib.sha256(text[start:end].encode()).hexdigest() != edit.sha256:
+    if (edit.until or edit.sha256) and hashlib.sha256(text[start:end].encode()).hexdigest() != edit.sha256:
         return f"{edit.id}: the selected text differs from its pinned digest"
     return start, end
 

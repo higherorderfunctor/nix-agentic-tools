@@ -11,7 +11,7 @@ import vm from "node:vm";
 // AST, and runs them (Kiro's `subagentPrompt` and the orchestration block of
 // `createDefinitionForMode`) for several working directories in turn. Vendor
 // text is read at run time to choose anchors and is never printed.
-// Usage: `node session-prompts.mjs <acp-server.js> <typescript> [<patcher> <extractor> <src>]`.
+// Usage: `node session-prompts.mjs <acp-server.js> <typescript> [<patcher> <extractor> <src> [<installed worktree bundle>]]`.
 const here = import.meta.dirname;
 const [
   pinned,
@@ -19,6 +19,7 @@ const [
   patcher = path.join(here, "../lib/kiro-bundle-patch.py"),
   extractor = path.join(here, "../extract/prompts.mjs"),
   src = path.join(here, "../src"),
+  installed,
 ] = process.argv.slice(2);
 const ts = createRequire(import.meta.url)(typescript);
 const scratch = fs.realpathSync(
@@ -125,14 +126,15 @@ try {
   const { out, run } = patch("filled", entries);
   expect("patch", run.status === 0, run.stderr);
   const patched = path.join(out, "acp-server.js");
-  const bundle = fs.readFileSync(patched, "utf8");
-  const file = ts.createSourceFile(
-    patched,
-    bundle,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  );
+  const parse = (bundle) =>
+    ts.createSourceFile(
+      bundle,
+      fs.readFileSync(bundle, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.JS,
+    );
+  const file = parse(patched);
   const after = extract(patched);
   const module = await import(path.join(out, "session-prompts.mjs"));
 
@@ -152,28 +154,12 @@ try {
   const agentReader = find(
     (n) => ts.isFunctionDeclaration(n) && named(registered)(n),
   );
-  const method = find(
-    (n) => ts.isMethodDeclaration(n) && named("createDefinitionForMode")(n),
-  );
-  const block = find(
-    (n) =>
-      ts.isObjectLiteralExpression(n) &&
-      n.properties.some(
-        (p) => p.name?.text === "text" && ts.isAwaitExpression(p.initializer),
-      ),
-    method,
-  );
-  expect(
-    "orchestration block is in createDefinitionForMode",
-    block !== undefined,
-  );
   const render = find(
     (n) =>
       ts.isCallExpression(n) &&
       n.arguments[1]?.getText(file).endsWith(".promptContext"),
     agentReader,
   ).expression.text;
-  const session = method.parameters[0].name.text;
   // Kiro's own registration (its `trim` of the text after the front matter) and
   // Mustache render, evaluated from the bundle; only the YAML reader is stubbed.
   let registration = find(
@@ -240,16 +226,32 @@ try {
       }),
     })(text, { safeParse: (data) => ({ success: true, data }) }).prompt;
   const agent = await evaluate(agentReader.getText(file), kiro);
-  const steering = (cwd, text, fill = module.fillPrompt) => {
+  const steeringReader = (syntax) => {
+    const method = find(
+      (n) => ts.isMethodDeclaration(n) && named("createDefinitionForMode")(n),
+      syntax,
+    );
+    const block = find(
+      (n) =>
+        ts.isObjectLiteralExpression(n) &&
+        n.properties.some(
+          (p) => p.name?.text === "text" && ts.isAwaitExpression(p.initializer),
+        ),
+      method,
+    );
+    const session = method.parameters[0].name.text;
     const binding = block.properties.find((p) => p.name.text === "text")
       .initializer.expression.arguments[1].text;
-    return evaluate(`(async () => (${block.getText(file)}))()`, {
-      ...kiro,
-      __kiroFillPrompt: fill,
-      [binding]: text,
-      [session]: { workspacePaths: [cwd] },
-    }).then((filled) => filled.text);
+    const code = `(async () => (${block.getText(syntax)}))()`;
+    return (cwd, text, fill = module.fillPrompt) =>
+      evaluate(code, {
+        ...kiro,
+        __kiroFillPrompt: fill,
+        [binding]: text,
+        [session]: { workspacePaths: [cwd] },
+      }).then((filled) => filled.text);
   };
+  const steering = steeringReader(file);
 
   const primary = repo("primary");
   const odd = repo("odd$&name");
@@ -401,18 +403,29 @@ try {
   const initial = base.replace(prohibition, "");
   const consumerMatch = entries[`${orchestration}-session`].match;
   const sibling = path.join(scratch, "odd$&name-worktrees");
-  const check = async (label, cwd, root, hash, parent, read = upstreamMode) => {
+  const baseSentence = (hash) =>
+    `When asked to run in a worktree, plan its name and branch and use commit \`${hash}\` as the base.`;
+  const setupText = (body, sentence, parent) =>
+    body
+      .replace(setup, sentence)
+      .replace(".worktrees/<name>", () => `${parent}/<name>`);
+  const check = async (
+    label,
+    cwd,
+    root,
+    hash,
+    parent,
+    read = upstreamMode,
+    reason,
+  ) => {
     const body = expected(initial, consumerMatch, root);
-    const sentence = `When asked to run in a worktree, plan its name and branch and use commit \`${hash}\` as the base.`;
-    const wanted = root
-      ? body
-          .replace(setup, sentence)
-          .replace(".worktrees/<name>", () => `${parent}/<name>`)
-      : body;
+    const sentence = reason
+      ? `Do not create a worktree this session: ${reason}.`
+      : baseSentence(hash);
     expect(
       label,
-      (await read(cwd)) === wanted,
-      "OID, location or surrounding bytes differ",
+      (await read(cwd)) === (root ? setupText(body, sentence, parent) : body),
+      "base or refusal, location, or surrounding bytes differ",
     );
   };
   await check("local tip", linked, odd, local, sibling);
@@ -430,13 +443,87 @@ try {
   git(odd, "update-ref", trunk, remoteTip);
   git(odd, "symbolic-ref", remoteHead, trunk);
   await check("symbolic default", linked, odd, remoteTip, absolute, remoteMode);
-  const refuses = async (ref, read, diagnostic) => {
-    git(odd, "update-ref", "--no-deref", "-d", ref);
-    const error = await read(linked).catch((e) => e.message);
-    expect(diagnostic, typeof error === "string" && error.includes(diagnostic));
+  if (installed) {
+    const { fillPrompt } = await import(
+      path.join(path.dirname(installed), "session-prompts.mjs")
+    );
+    const { text } = extract(installed)[orchestration];
+    const read = steeringReader(parse(installed));
+    expect(
+      "packaged worktrees-only build preserves the stock literal",
+      text === stock,
+    );
+    expect(
+      "packaged worktrees-only reader uses the upstream commit and sibling location",
+      (await read(linked, text, fillPrompt)) ===
+        setupText(stock, baseSentence(tracked), sibling),
+    );
+  }
+
+  const withGitEnv = async (vars, run) => {
+    const before = Object.fromEntries(
+      Object.keys(vars).map((key) => [key, process.env[key]]),
+    );
+    try {
+      Object.assign(process.env, vars);
+      await run();
+    } finally {
+      for (const [key, value] of Object.entries(before)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   };
-  await refuses(remoteHead, remoteMode, "missing local symbolic remote HEAD");
-  await refuses(tracking, upstreamMode, "@{upstream} does not resolve");
+  const branchRemote = `branch.${git(linked, "branch", "--show-current").toString().trim()}.remote`;
+  await withGitEnv(
+    {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: branchRemote,
+      GIT_CONFIG_VALUE_0: "missing",
+      GIT_OBJECT_DIRECTORY: path.join(primary, ".git", "objects"),
+    },
+    () =>
+      check(
+        "inherited Git config and object directory are ignored",
+        linked,
+        odd,
+        tracked,
+        sibling,
+      ),
+  );
+
+  const refuses = (label, read, parent, reason) =>
+    check(label, linked, odd, undefined, parent, read, reason);
+  git(odd, "update-ref", "--no-deref", "-d", remoteHead);
+  await refuses(
+    "missing symbolic default",
+    remoteMode,
+    absolute,
+    "missing local symbolic remote HEAD",
+  );
+  git(odd, "update-ref", "-d", tracking);
+  await refuses(
+    "stale upstream",
+    upstreamMode,
+    sibling,
+    "@{upstream} does not resolve to a local commit",
+  );
+  git(linked, "config", branchRemote, "missing");
+  await refuses(
+    "configured remote is absent despite origin",
+    remoteMode,
+    absolute,
+    "the configured branch remote does not exist",
+  );
+  git(linked, "config", "--unset", branchRemote);
+  git(odd, "remote", "remove", "origin");
+  git(odd, "remote", "add", "mirror", ".");
+  await refuses(
+    "multiple remotes without origin",
+    remoteMode,
+    absolute,
+    "no remote can be selected for remote-default",
+  );
 
   const duplicate = entries[`${orchestration}-literal`].match;
   const refused = [

@@ -3,21 +3,30 @@ import { realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 
-// Finds the primary checkout a working directory belongs to, so `{{primary}}`
-// and `{{repo}}` in prompt text mean the same thing from the primary checkout
-// and from any linked worktree. Input: a directory. Output: `{ primary, repo }`
-// or undefined when the directory is not inside one ordinary repository:
-// non-git directories, bare repositories, separate Git directories and
-// submodules have no primary checkout to name. Callers: `session-prompts.mjs`.
+// Local Git queries for the checkout and base used by `session-prompts.mjs`.
 const exec = promisify(execFile);
+const timeout = 10000;
+let localEnvNames;
 
 async function git(directory, ...args) {
-  const env = { ...process.env, GIT_NO_LAZY_FETCH: "1", LC_ALL: "C" };
-  for (const name of ["GIT_COMMON_DIR", "GIT_DIR", "GIT_WORK_TREE"])
+  // Git can list these names without opening a repository or reading its config.
+  localEnvNames ??= (
+    await exec("git", ["rev-parse", "--local-env-vars"], {
+      timeout,
+    })
+  ).stdout
+    .trim()
+    .split("\n");
+  const env = { ...process.env };
+  for (const name of [
+    ...localEnvNames,
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_NAMESPACE",
+  ])
     delete env[name];
   const { stdout } = await exec("git", ["-C", directory, ...args], {
-    env,
-    timeout: 10000,
+    env: { ...env, GIT_NO_LAZY_FETCH: "1", LC_ALL: "C" },
+    timeout,
   });
   return stdout.replace(/\n$/, "");
 }
@@ -25,6 +34,8 @@ async function git(directory, ...args) {
 const revParse = async (cwd, ...args) =>
   (await git(cwd, "rev-parse", ...args)).split("\n");
 
+// Map a directory in a primary checkout or linked worktree to `{ primary, repo }`.
+// Non-Git directories, bare repos, separate Git dirs and submodules have no result.
 export async function repoRoot(cwd) {
   try {
     const [common, bare, extra] = await revParse(
@@ -58,13 +69,15 @@ export async function repoRoot(cwd) {
   }
 }
 
+// A quiet lookup's exit status 1 means no value; other Git errors still fail.
 function gitOptional(cwd, ...args) {
   return git(cwd, ...args).catch((error) => {
     if (error.code !== 1) throw error;
   });
 }
 
-// Resolve a local commit for the session prompt without guessing or fetching refs.
+// Resolve the session directory's base for the given mode, without fetching.
+// Returns a local `{ oid }` or `{ reason }` for an unresolvable ref.
 export async function worktreeBase(cwd, mode) {
   const head = await gitOptional(cwd, "symbolic-ref", "-q", "HEAD");
   const branch = head?.match(/^refs\/heads\/(.+)$/)?.[1];
@@ -74,19 +87,21 @@ export async function worktreeBase(cwd, mode) {
   if (mode === "remote-default") {
     const configured = await config("remote");
     const remotes = (await git(cwd, "remote")).split("\n");
+    if (configured && configured !== "." && !remotes.includes(configured))
+      return { reason: "the configured branch remote does not exist" };
     const fallback = remotes.includes("origin")
       ? "origin"
       : remotes.length === 1 && remotes[0];
     const remote = configured && configured !== "." ? configured : fallback;
-    if (!remote || !remotes.includes(remote))
-      throw new Error("Kiro: no remote for remote-default");
+    if (!remote)
+      return { reason: "no remote can be selected for remote-default" };
     ref = await gitOptional(
       cwd,
       "symbolic-ref",
       "-q",
       `refs/remotes/${remote}/HEAD`,
     );
-    if (!ref) throw new Error("Kiro: missing local symbolic remote HEAD");
+    if (!ref) return { reason: "missing local symbolic remote HEAD" };
   } else if ((await config("merge")) !== undefined) ref = "@{upstream}";
   const oid = await gitOptional(
     cwd,
@@ -95,8 +110,9 @@ export async function worktreeBase(cwd, mode) {
     "--verify",
     `${ref}^{commit}`,
   );
-  if (!oid) throw new Error(`Kiro: ${ref} does not resolve to a local commit`);
-  return oid;
+  return oid
+    ? { oid }
+    : { reason: `${ref} does not resolve to a local commit` };
 }
 
 // Mustache has no escape for `{{`, so each inserted `{` is printed by swapping

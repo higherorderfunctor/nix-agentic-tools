@@ -28,6 +28,13 @@
     inherit replace;
     sessionRoots = ["additionalDirectories"];
   };
+  worktreeKas =
+    (package.withBundlePatches {
+      worktrees = {
+        base = "upstream";
+        location = "../{{repo}}-worktrees";
+      };
+    }).kas;
   wrap = package:
     (import ../lib/wrapPackage.nix {
       inherit pkgs;
@@ -103,7 +110,8 @@ in {
         node ${./prompt-extract.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript ${server package.kas} ${../extract/prompts.mjs}
         touch "$out"
       '';
-    # The per-session fill on the pinned bundle: both readers, several checkouts.
+    # The per-session fill on the pinned bundle: both readers, several checkouts,
+    # and the production worktrees-only patch path with no consumer edits.
     kiro-session-prompts =
       pkgs.runCommandLocal "kiro-cli-session-prompts-check" {
         nativeBuildInputs = [pkgs.git pkgs.nodejs pkgs.python3];
@@ -111,7 +119,7 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         node ${./session-prompts.mjs} ${server package.kas} ${pkgs.typescript_5}/lib/node_modules/typescript \
-          ${../lib/kiro-bundle-patch.py} ${../extract/prompts.mjs} ${../src}
+          ${../lib/kiro-bundle-patch.py} ${../extract/prompts.mjs} ${../src} ${server worktreeKas}
         touch "$out"
       '';
     # Real release data on BOTH native builders, never a user cache or final
