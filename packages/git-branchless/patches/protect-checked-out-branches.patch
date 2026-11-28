@@ -178,7 +178,7 @@ diff --git a/git-branchless-lib/src/git/repo.rs b/git-branchless-lib/src/git/rep
 +        }
 +        let names = main_repo.inner.worktrees().map_err(Error::ReadWorktrees)?;
 +        for name in names.iter() {
-+            let name = name.ok_or(Error::DecodeUtf8 {
++            let name = name.map_err(Error::ReadWorktrees)?.ok_or(Error::DecodeUtf8 {
 +                item: "worktree name",
 +            })?;
 +            let worktree = main_repo
