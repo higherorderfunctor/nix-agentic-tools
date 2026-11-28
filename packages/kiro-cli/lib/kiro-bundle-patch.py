@@ -178,6 +178,8 @@ def main():
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
+    if args.check and args.export_leaves:
+        parser.error("--check writes nothing, so it cannot be combined with --export-leaves")
     names = list(TWEAKS) if args.check else sorted(set(args.replace))
     try:
         facts = json.loads(args.facts.read_text(encoding="utf-8"))
