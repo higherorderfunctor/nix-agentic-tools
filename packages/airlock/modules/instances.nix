@@ -12,7 +12,15 @@ backend: {
 in {
   imports = [
     (instances.module {
-      arguments = instance: "serve --listen 127.0.0.1:${toString instance.port}";
+      arguments = instance:
+        "serve --listen 127.0.0.1:${toString instance.port}"
+        + lib.optionalString (instance.routePlan != null)
+        " --route-plan ${lib.escapeShellArg (toString instance.routePlan)}";
+      extraOptions.routePlan = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "Experimental JSON route plan containing runtime secret paths.";
+      };
       inherit backend;
       defaultPort = 8318;
       owner = "airlock";

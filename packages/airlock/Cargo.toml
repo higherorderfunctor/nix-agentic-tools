@@ -9,22 +9,29 @@ edition = "2024"
 license = "Unlicense"
 
 [workspace.dependencies]
+base64 = "0.23.1"
 clap = { version = "4.6.7", features = ["derive"] }
 h2 = "0.4.20"
 http-body-util = "0.1.5"
 hyper = { version = "1.12.0", features = ["http1", "server"] }
-hyper-util = { version = "0.1.21", features = ["tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring", "tls12", "webpki-tokio"] }
+hyper-util = { version = "0.1.21", features = ["client-legacy", "http1", "tokio"] }
 pem = "4.0.0"
 rcgen = { version = "0.14.10", default-features = false, features = [
   "pem",
   "ring",
+  "x509-parser",
   "zeroize",
 ] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustix = { version = "1.1.5", default-features = false, features = [
   "process",
   "std",
 ] }
 tempfile = "3.27.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
 time = { version = "0.3.55", default-features = false, features = ["std"] }
 tokio = { version = "1.54.1", features = [
   "io-util",
@@ -35,6 +42,7 @@ tokio = { version = "1.54.1", features = [
   "sync",
   "time",
 ] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 x509-parser = { version = "0.18.1", default-features = false, features = [
   "verify",
 ] }

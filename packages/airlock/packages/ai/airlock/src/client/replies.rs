@@ -4,7 +4,7 @@ use http_body_util::Full;
 use hyper::{
     Method, Response, StatusCode, Uri,
     body::Bytes,
-    header::{ALLOW, CONTENT_TYPE, HeaderValue},
+    header::{ALLOW, CONTENT_TYPE, HeaderValue, PROXY_AUTHENTICATE},
 };
 
 /// The status and body for a request addressed to Airlock itself.
@@ -31,6 +31,12 @@ pub(crate) fn response(status: StatusCode, body: &'static str) -> Response<Full<
         response
             .headers_mut()
             .insert(ALLOW, HeaderValue::from_static("GET"));
+    }
+    if status == StatusCode::PROXY_AUTHENTICATION_REQUIRED {
+        response.headers_mut().insert(
+            PROXY_AUTHENTICATE,
+            HeaderValue::from_static("Basic realm=\"airlock\""),
+        );
     }
     response
 }

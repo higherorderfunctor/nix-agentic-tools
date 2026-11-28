@@ -3,12 +3,8 @@
 //! task after hyper hands over the raw socket.
 use std::{convert::Infallible, io, os::fd::AsFd, sync::Arc, time::Duration};
 
-use http_body_util::Full;
 use hyper::{
-    Method, Request, Response, StatusCode,
-    body::{Bytes, Incoming},
-    server::conn::http1,
-    service::service_fn,
+    Method, Request, StatusCode, body::Incoming, server::conn::http1, service::service_fn,
     upgrade::OnUpgrade,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
@@ -25,11 +21,17 @@ use crate::{
         replies::{response, route},
         until_first_request,
     },
+    gateway::{self, Gateway, Reply},
     tunnel,
     upstream::CONNECT_TIMEOUT,
 };
 
-pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: Duration) {
+pub(crate) async fn serve(
+    socket: Prefixed,
+    deadline: Instant,
+    header_timeout: Duration,
+    gateway: Option<Arc<Gateway>>,
+) {
     let Ok(monitor) = error_monitor(socket.socket()) else {
         return;
     };
@@ -40,7 +42,7 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant, header_timeout: D
     let observed = Arc::clone(&started);
     let service = service_fn(move |request| {
         observed.notify_one();
-        handle(request, sender.clone())
+        handle(request, sender.clone(), gateway.clone())
     });
     let connection = http1::Builder::new()
         .timer(TokioTimer::new())
@@ -81,7 +83,7 @@ async fn transport_error(monitor: &TcpStream) {
 /// An accepted CONNECT waiting for hyper to hand over the client socket.
 struct PendingTunnel {
     upgrade: OnUpgrade,
-    upstream: TcpStream,
+    prepared: tunnel::Prepared,
 }
 
 impl PendingTunnel {
@@ -90,39 +92,46 @@ impl PendingTunnel {
     // grace, then abort, as any other connection.
     async fn relay(self) -> io::Result<()> {
         let upgraded = self.upgrade.await.map_err(io::Error::other)?;
-        tunnel::relay(TokioIo::new(upgraded), self.upstream).await
+        tunnel::relay(TokioIo::new(upgraded), self.prepared).await
     }
 }
 
 async fn open_tunnel(
     mut request: Request<Incoming>,
+    gateway: Option<Arc<Gateway>>,
     deadline: Instant,
 ) -> Result<PendingTunnel, (StatusCode, &'static str)> {
-    let upstream = tunnel::prepare(request.uri(), deadline).await?;
+    let prepared = tunnel::prepare(request.uri(), request.headers(), gateway, deadline).await?;
     Ok(PendingTunnel {
         upgrade: hyper::upgrade::on(&mut request),
-        upstream,
+        prepared,
     })
 }
 
 async fn handle(
     request: Request<Incoming>,
     sender: mpsc::Sender<PendingTunnel>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+    gateway: Option<Arc<Gateway>>,
+) -> Result<Reply, Infallible> {
     if request.method() == Method::CONNECT {
         let deadline = Instant::now() + CONNECT_TIMEOUT;
-        let pending = match open_tunnel(request, deadline).await {
+        let pending = match open_tunnel(request, gateway, deadline).await {
             Ok(pending) => pending,
-            Err((status, body)) => return Ok(response(status, body)),
+            Err((status, body)) => return gateway::reply(status, body),
         };
         if sender.send(pending).await.is_err() {
-            return Ok(response(
+            return gateway::reply(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "tunnel connection closed\n",
-            ));
+            );
         }
-        return Ok(response(StatusCode::OK, ""));
+        return gateway::reply(StatusCode::OK, "");
+    }
+    if let Some(gateway) = gateway
+        && matches!(request.uri().path(), "/v1/messages" | "/v1/passthrough")
+    {
+        return gateway.explicit(request).await;
     }
     let (status, body) = route(request.method(), request.uri());
-    Ok(response(status, body))
+    Ok(gateway::local(response(status, body)))
 }

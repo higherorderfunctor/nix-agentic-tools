@@ -27,6 +27,7 @@ use crate::{
         replies::{response, route},
         until_first_request,
     },
+    gateway::Gateway,
     tunnel,
     upstream::CONNECT_TIMEOUT,
 };
@@ -36,7 +37,7 @@ const MAX_STREAMS: usize = 32;
 // reserved for it.
 const MAX_FRAME_CHUNK: usize = 8192;
 
-pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
+pub(crate) async fn serve(socket: Prefixed, deadline: Instant, gateway: Option<Arc<Gateway>>) {
     let handshake = h2::server::Builder::new()
         .max_concurrent_streams(MAX_STREAMS as u32)
         .handshake::<_, Bytes>(socket);
@@ -44,11 +45,20 @@ pub(crate) async fn serve(socket: Prefixed, deadline: Instant) {
         return;
     };
     let started = Notify::new();
-    until_first_request(&started, deadline, accept_streams(connection, &started)).await;
+    until_first_request(
+        &started,
+        deadline,
+        accept_streams(connection, &started, gateway),
+    )
+    .await;
 }
 
 /// Run each accepted stream as a job until the client closes the connection.
-async fn accept_streams(mut connection: Connection<Prefixed, Bytes>, started: &Notify) {
+async fn accept_streams(
+    mut connection: Connection<Prefixed, Bytes>,
+    started: &Notify,
+    gateway: Option<Arc<Gateway>>,
+) {
     let mut jobs = JoinSet::new();
     loop {
         let available = jobs.len() < MAX_STREAMS;
@@ -68,7 +78,7 @@ async fn accept_streams(mut connection: Connection<Prefixed, Bytes>, started: &N
             }) => match accepted {
                 Some(Ok((request, respond))) => {
                     started.notify_one();
-                    jobs.spawn(handle(request, respond));
+                    jobs.spawn(handle(request, respond, gateway.clone()));
                 }
                 _ => break,
             }
@@ -77,7 +87,11 @@ async fn accept_streams(mut connection: Connection<Prefixed, Bytes>, started: &N
     jobs.shutdown().await;
 }
 
-async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) {
+async fn handle(
+    request: Request<RecvStream>,
+    mut respond: SendResponse<Bytes>,
+    gateway: Option<Arc<Gateway>>,
+) {
     if request.method() != Method::CONNECT {
         let (status, body) = route(request.method(), request.uri());
         let _ = reply(&mut respond, status, body);
@@ -87,10 +101,10 @@ async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) 
     let prepared = tokio::select! {
         biased;
         _ = poll_fn(|cx| respond.poll_reset(cx)) => return,
-        result = tunnel::prepare(request.uri(), deadline) => result,
+        result = tunnel::prepare(request.uri(), request.headers(), gateway, deadline) => result,
     };
-    let upstream = match prepared {
-        Ok(upstream) => upstream,
+    let prepared = match prepared {
+        Ok(prepared) => prepared,
         Err((status, body)) => {
             let _ = reply(&mut respond, status, body);
             return;
@@ -106,7 +120,7 @@ async fn handle(request: Request<RecvStream>, mut respond: SendResponse<Bytes>) 
     tokio::select! {
         biased;
         _ = poll_fn(|cx| reset.lock().unwrap().poll_reset(cx)) => {}
-        _ = tunnel::relay(TunnelIo::new(request.into_body(), send), upstream) => {}
+        _ = tunnel::relay(TunnelIo::new(request.into_body(), send), prepared) => {}
     }
 }
 
