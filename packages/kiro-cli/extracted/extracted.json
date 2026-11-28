@@ -1,4 +1,20 @@
 {
+  "agents": {
+    "workflow": {
+      "creator": {
+        "end": 8424707,
+        "kind": "StringLiteral",
+        "sha256": "7a994e34f791d297d7914edc3955959a314db3ea2dc3950647c648aaeaf44b63",
+        "start": 8408920
+      },
+      "planner": {
+        "end": 8327626,
+        "kind": "NoSubstitutionTemplateLiteral",
+        "sha256": "6196446a6bf9c801f3281e29730271c8b1c7762e7761a18f15f7db0c51d62c25",
+        "start": 8313321
+      }
+    }
+  },
   "cli": {
     "__platforms": {
       "x86_64-linux": {
@@ -781,6 +797,14 @@
     "voice.language",
     "voice.modelSize"
   ],
+  "workflow": {
+    "orchestration": {
+      "end": 16389790,
+      "kind": "StringLiteral",
+      "sha256": "b36d68d1f51caafc95ac5109c1d379b0c459704855e741b5fcf00f5019f4d58a",
+      "start": 16379389
+    }
+  },
   "workspaceOverridableSettings": [
     "chat.defaultAgent",
     "chat.defaultModel",

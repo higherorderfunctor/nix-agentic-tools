@@ -1,4 +1,12 @@
 {
+  "agents.workflow.creator": {
+    "source": "static",
+    "type": "object"
+  },
+  "agents.workflow.planner": {
+    "source": "static",
+    "type": "object"
+  },
   "cli.options.<name>.<name>": {
     "source": "host-run",
     "systems": ["x86_64-linux"],
@@ -36,6 +44,10 @@
   "settingKeys": {
     "source": "static",
     "type": "set"
+  },
+  "workflow.orchestration": {
+    "source": "static",
+    "type": "object"
   },
   "workspaceOverridableSettings": {
     "source": "static",

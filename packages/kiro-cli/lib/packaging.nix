@@ -254,6 +254,16 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/hook-triggers.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
+  # TypeScript locates the three workflow prompts in the engine bundle; emits
+  # `{ <fact key>: { end, kind, sha256, start } }`. Digests and byte spans only:
+  # the vendor text is never written to a fact (see docs/launcher-argv.md).
+  kiroPromptFactsExtractScript = pkgs:
+    pkgs.writeShellScript "kiro-prompt-facts-extract" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      exec ${pkgs.nodejs}/bin/node ${../extract/prompts.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript --digest
+    '';
+
   # embedded-kas.py's flags for a release whose CPU is `architecture`; shared
   # by `mkKiroExtract` and ./kas.nix.
   kiroEmbeddedArgs = pkgs: architecture: "--architecture ${pkgs.lib.escapeShellArg architecture} --zstd-library ${pkgs.lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} --zstd ${pkgs.zstd}/bin/zstd";
@@ -284,6 +294,7 @@ rec {
 
     "$python3" ${../extract/embedded-kas.py} "$kiroChatBin" kas ${embedded}
     hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js")
+    promptsJson=$(${kiroPromptFactsExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js")
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # Both settings fields come from the TUI JavaScript the chat binary
     # embeds; it has not been plaintext in the binary since 2.23.0.
@@ -292,9 +303,10 @@ rec {
     # `-S` sorts every object's keys, so every release emits one shape and the
     # field order written here carries no meaning.
     "$jq" -nS --argjson hooks "$hookTriggersJson" \
+      --argjson prompts "$promptsJson" \
       --argjson rollout "$rolloutJson" \
       --argjson settings "$settingsJson" \
-      '{hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "$out"
+      '{agents: {workflow: {creator: $prompts["agents.workflow.creator"], planner: $prompts["agents.workflow.planner"]}}, hookTriggerAliases: $hooks.hookTriggerAliases, hookTriggers: $hooks.hookTriggers, rolloutFeatures: $rollout.rolloutFeatures, rolloutPatchability: $rollout.rolloutPatchability, rolloutStates: $rollout.rolloutStates, settingKeys: $settings.settingKeys, workflow: {orchestration: $prompts["workflow.orchestration"]}, workspaceOverridableSettings: $settings.workspaceOverridableSettings}' > "$out"
   '';
 
   # The option tables of `kiro-cli --help`, `chat --help` and `acp --help`
