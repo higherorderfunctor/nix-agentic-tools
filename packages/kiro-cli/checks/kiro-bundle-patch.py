@@ -114,6 +114,9 @@ class PatchTests(unittest.TestCase):
             self.assertEqual(cli(str(root / "stock.js"), "--export-leaves", str(root / "out")).returncode, 0)
             self.assertEqual((root / "stock.js").read_bytes(), BUNDLE)
             self.assertEqual({p.name: p.read_text(encoding="utf-8") for p in (root / "out").iterdir()}, {f"{n}.txt": t for n, t in TEXTS.items()})
+            result = cli("--check", "--export-leaves", str(root / "checked"))
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse((root / "checked").exists())
             (root / "kept.js").write_bytes(b"untouched")
             for args in (["--check"], [str(root / "kept.js"), "--replace", "relativeFileCheckPaths"]):
                 result = cli(*args)
