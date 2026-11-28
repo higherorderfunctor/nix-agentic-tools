@@ -4,24 +4,18 @@
 # analyzes it; `$out` holds the result rows only. `codeql-pack-specs` only
 # evaluates engines. See docs/customize.md.
 {
+  harness,
   lib,
   pkgs,
   self,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   inherit (pkgs.stdenv.hostPlatform) system;
   packages = self.ciPackages.${system};
   engine = packages.codeql-javascript;
   # The namespace as a consumer reads it from the package set.
   codeql = pkgs.ai.devTools.codeql;
-  queries = codeql.mkQueryPack {
-    name = "nix-agentic-tools/fixture-queries";
-    src = ./fixtures/queries;
-  };
-  sinkQueries = codeql.mkQueryPack {
-    name = "nix-agentic-tools/fixture-sinks";
-    src = ./fixtures/model-queries;
-  };
   fetchModels = codeql.mkModelPack {
     name = "nix-agentic-tools/fixture-fetch-models";
     src = ./fixtures/fetch-models;
@@ -30,16 +24,21 @@
     name = "nix-agentic-tools/fixture-models";
     src = ./fixtures/models;
   };
-  # Writes the mark and, with CODEQL_NESTED set, what that codeql resolves.
+  queries = codeql.mkQueryPack {
+    name = "nix-agentic-tools/fixture-queries";
+    src = ./fixtures/queries;
+  };
+  sinkQueries = codeql.mkQueryPack {
+    name = "nix-agentic-tools/fixture-sinks";
+    src = ./fixtures/model-queries;
+  };
+  # Record what the nested CodeQL resolves with inherited config.
   marker = pkgs.writeShellApplication {
     name = "codeql-fixture-marker";
     bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
     text = ''
       shopt -s inherit_errexit 2>/dev/null || :
-      echo ran > "$CODEQL_FIXTURE_MARK"
-      if [ -n "''${CODEQL_NESTED:-}" ]; then
-        "$CODEQL_NESTED" resolve packs > "$CODEQL_FIXTURE_MARK.packs" 2>&1
-      fi
+      "$CODEQL_NESTED" resolve packs > "$CODEQL_FIXTURE_PACKS" 2>&1
     '';
   };
 
@@ -66,90 +65,92 @@
         "$1" database analyze "$2" "$3" --rerun --format=sarif-latest --output="$TMPDIR/results.sarif" >&2
         jq -r '.runs[].results[] | "\(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine) \(.message.text)"' "$TMPDIR/results.sarif" | sort
       }
+      # Drive the real wrapper; an unrelated CodeQL error is not a refusal.
+      refuses_config() {
+        local codeql="$1" config="$2" owned_options="$3" status=0
+        CODEQL_CONFIG_FILE="$config" "$codeql" resolve packs > "$TMPDIR/refusal.log" 2>&1 || status=$?
+        [ "$status" = 2 ] || fail "$(basename "$config"): exited $status, expected 2: $(cat "$TMPDIR/refusal.log")"
+        grep -Fxq -- "codeql: $config sets $owned_options, which this customized codeql sets from customizePackage." "$TMPDIR/refusal.log" || fail "$(basename "$config"): not a wrapper pack conflict: $(cat "$TMPDIR/refusal.log")"
+      }
       ${body}
     '';
 in {
   checks = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
-    # A precompiled two-query pack resolves by name with no flag, and its
-    # queries return the fixture rows, also with CODEQL_CONFIG_FILE=/dev/null
-    # or a link to it.
-    # A consumer's own config file, from CODEQL_CONFIG_FILE or HOME, still
-    # applies beside it, also with no final newline, and the merged file
-    # outlives the wrapper and is used as it is when given back; one that sets
-    # --additional-packs is refused, indented too or beside a merged file's
-    # lines, one whose comment names it is not. The TypeScript file is
-    # extracted only with the engine's Node.
+    # Precompiled siblings must both be shipped, including the calls query's
+    # imported .qll, and both must see the JavaScript and TypeScript inputs.
+    # Test config inputs through the real wrapper, not by grepping its source.
     codeql-custom-query-pack = let
       custom = engine.customizePackage {queries = [queries];};
     in
       check "codeql-custom-query-pack" ''
-        plain=${engine}/bin/codeql
         codeql=${custom}/bin/codeql
         pack=nix-agentic-tools/fixture-queries
         [ -n "$(find ${builtins.head custom.packs.queries} -name '*.qlx' -print -quit)" ] || fail "the realized query pack has no precompiled .qlx"
-        "$plain" resolve packs > "$TMPDIR/plain-packs" 2>&1
-        ! grep -q " $pack@" "$TMPDIR/plain-packs" || fail "the plain engine resolves $pack"
-        "$codeql" resolve packs > "$TMPDIR/packs" 2>&1
-        grep -q " $pack@" "$TMPDIR/packs" || fail "the customized engine does not resolve $pack"
-        CODEQL_CONFIG_FILE=/dev/null "$codeql" resolve packs > "$TMPDIR/devnull-packs" 2>&1 || fail "CODEQL_CONFIG_FILE=/dev/null: codeql failed: $(cat "$TMPDIR/devnull-packs")"
-        grep -q " $pack@" "$TMPDIR/devnull-packs" || fail "CODEQL_CONFIG_FILE=/dev/null hides $pack"
-        ln -s /dev/null "$TMPDIR/null-link"
-        CODEQL_CONFIG_FILE="$TMPDIR/null-link" "$codeql" resolve packs > "$TMPDIR/null-link-packs" 2>&1 || fail "a CODEQL_CONFIG_FILE link to /dev/null: codeql failed: $(cat "$TMPDIR/null-link-packs")"
-        grep -q " $pack@" "$TMPDIR/null-link-packs" || fail "a CODEQL_CONFIG_FILE link to /dev/null hides $pack"
         second=nix-agentic-tools/fixture-second
         mkdir -p "$TMPDIR/second" "$TMPDIR/home/.config/codeql"
         printf 'name: %s\nversion: 0.0.0\n' "$second" > "$TMPDIR/second/qlpack.yml"
-        # `merged <label>` resolves packs and fails unless both ours and the
-        # consumer's --search-path pack are listed.
-        merged() {
-          "$codeql" resolve packs > "$TMPDIR/$1-packs" 2>&1 || fail "$1: codeql failed: $(cat "$TMPDIR/$1-packs")"
-          grep -q " $pack@" "$TMPDIR/$1-packs" || fail "$1: the consumer config hides $pack"
-          grep -q " $second@" "$TMPDIR/$1-packs" || fail "$1: the consumer config's --search-path was lost"
+        # When checking membership, require our pack; consumer configs must
+        # also retain their --search-path, which our pack alone cannot prove.
+        resolves() {
+          local label="$1" output="$TMPDIR/$1-packs"
+          "$codeql" resolve packs > "$output" 2>&1 || fail "$label: codeql failed: $(cat "$output")"
+          if [ "$2" = status ]; then return; fi
+          grep -Fq " $pack@" "$output" || fail "$label: lost $pack"
+          if [ "$2" = both ]; then
+            grep -Fq " $second@" "$output" || fail "$label: lost the consumer's --search-path"
+          fi
         }
+        ln -s /dev/null "$TMPDIR/null-link"
         printf -- '--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/consumer-config"
-        CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged consumer
         printf -- '--search-path %s' "$TMPDIR/second" > "$TMPDIR/no-newline-config"
-        CODEQL_CONFIG_FILE="$TMPDIR/no-newline-config" merged no-newline
+        printf -- '# --additional-packs comes from customizePackage\n--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/comment-config"
         cp "$TMPDIR/consumer-config" "$TMPDIR/home/.config/codeql/config"
-        HOME="$TMPDIR/home" merged home
+        # A comment is not a clash; an explicit file does not need a final
+        # newline; HOME supplies the file when no environment override is set.
+        for config in comment no-newline; do
+          CODEQL_CONFIG_FILE="$TMPDIR/$config-config" resolves "$config" both
+        done
+        HOME="$TMPDIR/home" resolves home both
+        # A differently named link to the null device must not be read as a
+        # consumer file.
+        CODEQL_CONFIG_FILE="$TMPDIR/null-link" resolves null-link ours
         # The merged config outlives the wrapper under a name from its content:
         # two runs leave one file, the consumer's line before ours, and no
         # mktemp file behind.
         mkdir "$TMPDIR/run"
-        for run in first second; do
-          XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged "runtime-$run"
-        done
+        XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" resolves runtime-first status
+        XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" resolves runtime-second both
         persisted=("$TMPDIR"/run/codeql-config-*)
         [ "''${#persisted[@]}" = 1 ] && [ -f "''${persisted[0]}" ] || fail "two runs left $(ls "$TMPDIR/run"), not one codeql-config-* file"
         theirsAt="$(grep -nm1 -- '^--search-path ' "''${persisted[0]}" | cut -d: -f1)"
         oursAt="$(grep -nm1 -- '^--additional-packs ' "''${persisted[0]}" | cut -d: -f1)"
         [ -n "$theirsAt" ] && [ -n "$oursAt" ] && [ "$theirsAt" -lt "$oursAt" ] || fail "the merged config does not hold the consumer's line before ours: $(cat "''${persisted[0]}")"
         [ -z "$(find "$TMPDIR/run" -name 'codeql-config.*')" ] || fail "the wrapper left a mktemp file: $(ls "$TMPDIR/run")"
-        # Each run writes the file again rather than trusting what is there.
+        # Each run repairs a stale file at the same path, not just a file
+        # that happens to make both packs resolve.
+        cp "''${persisted[0]}" "$TMPDIR/original-config"
         echo JUNK > "''${persisted[0]}"
-        XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged runtime-rewrite
-        grep -q -- '^--additional-packs ' "''${persisted[0]}" && ! grep -qx JUNK "''${persisted[0]}" || fail "a run kept the stale ''${persisted[0]}: $(cat "''${persisted[0]}")"
-        # A merged file is used as it is, and a line beside ours that sets an
-        # option ours sets is still refused.
-        CODEQL_CONFIG_FILE="''${persisted[0]}" merged generated
+        XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" resolves runtime-rewrite both
+        cmp -s "$TMPDIR/original-config" "''${persisted[0]}" || fail "a run did not restore ''${persisted[0]}"
+        # Feeding the generated file back must not publish a second merge.
+        mkdir "$TMPDIR/reused"
+        XDG_RUNTIME_DIR="$TMPDIR/reused" CODEQL_CONFIG_FILE="''${persisted[0]}" resolves generated both
+        [ -z "$(ls -A "$TMPDIR/reused")" ] || fail "a generated config was merged again"
+
+        # Fallback has to publish in TMPDIR, not merely resolve the packs.
+        fallbackDir="$TMPDIR/fallback"
+        mkdir "$fallbackDir"
+        XDG_RUNTIME_DIR="$TMPDIR/missing" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" TMPDIR="$fallbackDir" resolves runtime-missing both
+        fallback=("$fallbackDir"/codeql-config-*)
+        [ "''${#fallback[@]}" = 1 ] && [ -f "''${fallback[0]}" ] || fail "no unique merged config in TMPDIR after XDG_RUNTIME_DIR fallback"
+
+        # An indented override still sets the option. Appending an override
+        # beside our own line must not pass as an already merged config.
         { cat "''${persisted[0]}"; printf -- '--additional-packs %s\n' "$TMPDIR"; } > "$TMPDIR/generated-clash-config"
-        status=0
-        CODEQL_CONFIG_FILE="$TMPDIR/generated-clash-config" "$codeql" resolve packs 2> "$TMPDIR/generated-clash.err" || status=$?
-        [ "$status" = 2 ] || fail "a merged config with a second --additional-packs line exited $status, not 2"
-        grep -q customizePackage "$TMPDIR/generated-clash.err" || fail "the generated-clash message does not name customizePackage"
-        # An XDG_RUNTIME_DIR that is not a directory falls back to TMPDIR.
-        XDG_RUNTIME_DIR="$TMPDIR/missing" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" merged runtime-missing
-        printf -- '# --additional-packs comes from customizePackage\n--search-path %s\n' "$TMPDIR/second" > "$TMPDIR/comment-config"
-        CODEQL_CONFIG_FILE="$TMPDIR/comment-config" merged comment
-        printf -- '--additional-packs %s\n' "$TMPDIR" > "$TMPDIR/clashing-config"
-        if CODEQL_CONFIG_FILE="$TMPDIR/clashing-config" "$codeql" resolve packs 2> "$TMPDIR/clash.err"; then
-          fail "a consumer --additional-packs line was accepted"
-        fi
-        grep -q customizePackage "$TMPDIR/clash.err" || fail "the clash message does not name customizePackage"
         printf -- '  --additional-packs %s\n' "$TMPDIR" > "$TMPDIR/indented-config"
-        status=0
-        CODEQL_CONFIG_FILE="$TMPDIR/indented-config" "$codeql" resolve packs 2> /dev/null || status=$?
-        [ "$status" = 2 ] || fail "an indented consumer --additional-packs line exited $status, not 2"
+        for config in generated-clash indented; do
+          refuses_config "$codeql" "$TMPDIR/$config-config" --additional-packs
+        done
         database "$codeql" db ${./fixtures/project} --build-mode=none
         grep -qF "Found Node.js at: ${lib.getExe engine.nodejs}" "$TMPDIR/db.log" || fail "the extractor did not run the engine's Node"
         results "$codeql" "$TMPDIR/db" "$pack" > "$out"
@@ -161,9 +162,9 @@ in {
         EOF
       '';
 
-    # `extraPackages` reach `database create --command`; the plain engine
-    # cannot find the program. That program runs the customized codeql again,
-    # which still resolves the pack, with and without a consumer config file.
+    # The customized engine's build command must find the marker on PATH.
+    # The marker launches another customized CodeQL, exercising inherited
+    # config both with and without a consumer file.
     codeql-extra-packages = let
       custom = engine.customizePackage {
         extraPackages = [marker];
@@ -172,19 +173,20 @@ in {
     in
       check "codeql-extra-packages" ''
         pack=nix-agentic-tools/fixture-queries
-        export CODEQL_FIXTURE_MARK="$TMPDIR/mark" CODEQL_NESTED=${custom}/bin/codeql
-        if database ${engine}/bin/codeql plain ${./fixtures/project} --command=codeql-fixture-marker 2> /dev/null; then
-          fail "the plain engine ran codeql-fixture-marker"
-        fi
-        [ ! -e "$CODEQL_FIXTURE_MARK" ] || fail "the plain engine wrote the mark"
-        database ${custom}/bin/codeql db ${./fixtures/project} --command=codeql-fixture-marker
-        grep -qx ran "$CODEQL_FIXTURE_MARK" || fail "codeql-fixture-marker did not run"
-        grep -q " $pack@" "$CODEQL_FIXTURE_MARK.packs" || fail "a nested codeql does not resolve $pack"
-        rm "$CODEQL_FIXTURE_MARK" "$CODEQL_FIXTURE_MARK.packs"
+        export CODEQL_FIXTURE_PACKS="$TMPDIR/nested-packs" CODEQL_NESTED=${custom}/bin/codeql
         printf -- '--threads 1\n' > "$TMPDIR/consumer-config"
-        CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" database ${custom}/bin/codeql consumer ${./fixtures/project} --command=codeql-fixture-marker
-        grep -qx ran "$CODEQL_FIXTURE_MARK" || fail "codeql-fixture-marker did not run beside a consumer config"
-        grep -q " $pack@" "$CODEQL_FIXTURE_MARK.packs" || fail "a nested codeql beside a consumer config does not resolve $pack"
+        # A nested invocation inherits the wrapper's config in both forms;
+        # losing the generated file only affects the consumer-config row.
+        for config in consumer default; do
+          rm -f "$CODEQL_FIXTURE_PACKS"
+          if [ "$config" = consumer ]; then
+            export CODEQL_CONFIG_FILE="$TMPDIR/consumer-config"
+          else
+            unset CODEQL_CONFIG_FILE
+          fi
+          database ${custom}/bin/codeql "$config" ${./fixtures/project} --command=codeql-fixture-marker
+          grep -Fq " $pack@" "$CODEQL_FIXTURE_PACKS" || fail "$config: nested codeql does not resolve $pack"
+        done
         echo "codeql-fixture-marker ran and resolved $pack" > "$out"
       '';
 
@@ -204,28 +206,22 @@ in {
         results ${queriesOnly}/bin/codeql "$TMPDIR/db" "$pack" > "$TMPDIR/without"
         [ ! -s "$TMPDIR/without" ] || fail "sinks without the model pack: $(cat "$TMPDIR/without")"
         printf -- '--model-packs %s\n' "$pack" > "$TMPDIR/clashing-config"
-        status=0
-        CODEQL_CONFIG_FILE="$TMPDIR/clashing-config" ${withModels}/bin/codeql resolve packs 2> "$TMPDIR/clash.err" || status=$?
-        [ "$status" = 2 ] || fail "a consumer --model-packs line exited $status, not 2"
-        grep -q customizePackage "$TMPDIR/clash.err" || fail "the clash message does not name customizePackage"
+        refuses_config ${withModels}/bin/codeql "$TMPDIR/clashing-config" '--additional-packs or --model-packs'
         results ${withModels}/bin/codeql "$TMPDIR/db" "$pack" > "$out"
         diff - "$out" <<'EOF' || fail "unexpected rows"
         nix-agentic-tools/request-forgery-sinks client.js:3 request-forgery sink
         nix-agentic-tools/request-forgery-sinks client.js:4 request-forgery sink
         EOF
-        # The merged file a consumer config yields gives the same rows used as
-        # it is, and refuses a line beside ours that sets either option.
+        # Reusing the merged file preserves the rows, but appending a foreign
+        # --model-packs line beside ours must still be refused.
         mkdir "$TMPDIR/run"
         printf -- '--threads 1\n' > "$TMPDIR/consumer-config"
         XDG_RUNTIME_DIR="$TMPDIR/run" CODEQL_CONFIG_FILE="$TMPDIR/consumer-config" ${withModels}/bin/codeql resolve packs > /dev/null
         generated=("$TMPDIR"/run/codeql-config-*)
         CODEQL_CONFIG_FILE="''${generated[0]}" results ${withModels}/bin/codeql "$TMPDIR/db" "$pack" | diff - "$out" || fail "the merged config used as it is gives other rows"
-        for option in "--model-packs $pack" "--additional-packs $TMPDIR"; do
-          { cat "''${generated[0]}"; printf '%s\n' "$option"; } > "$TMPDIR/generated-clash-config"
-          status=0
-          CODEQL_CONFIG_FILE="$TMPDIR/generated-clash-config" ${withModels}/bin/codeql resolve packs 2> /dev/null || status=$?
-          [ "$status" = 2 ] || fail "a merged config with a consumer ''${option%% *} line exited $status, not 2"
-        done
+        clash="$TMPDIR/generated-model-packs-config"
+        { cat "''${generated[0]}"; printf -- '--model-packs %s\n' "$pack"; } > "$clash"
+        refuses_config ${withModels}/bin/codeql "$clash" '--additional-packs or --model-packs'
       '';
 
     # Pack specs at eval, building no engine. A spec is plain data, so one spec
@@ -238,29 +234,39 @@ in {
     codeql-pack-specs = let
       drvOf = value: builtins.unsafeDiscardStringContext value.drvPath;
       named = codeql.mkQueryPack {
-        name = "nix-agentic-tools/fixture-queries";
-        src = ./fixtures/queries;
+        inherit (queries) name src;
         language = "javascript";
       };
       namedModels = codeql.mkModelPack {
-        name = "nix-agentic-tools/fixture-models";
-        src = ./fixtures/models;
+        inherit (models) name src;
         language = "javascript";
       };
       realizedBy = target: field: entry: builtins.head (target.customizePackage {${field} = [entry];}).packs.${field};
-      throws = target: field: entry: !(builtins.tryEval (drvOf (target.customizePackage {${field} = [entry];}))).success;
-      failures =
-        lib.optional (lib.isDerivation queries) "mkQueryPack returned a derivation"
-        ++ lib.optional (self.lib.ai.devTools.codeql.mkQueryPack {inherit (queries) name src;} != queries)
-        "lib.ai.devTools.codeql.mkQueryPack gives another spec than the package set's"
-        ++ lib.optional (drvOf (realizedBy engine "queries" named) == drvOf (realizedBy packages.codeql-full "queries" named))
-        "one query spec realized by codeql-javascript and codeql-full is one derivation"
-        ++ lib.optional (drvOf (realizedBy engine "models" namedModels) != drvOf (realizedBy packages.codeql-full "models" namedModels))
-        "one model spec realized by codeql-javascript and codeql-full is two derivations"
-        ++ lib.optional (!throws packages.codeql-bare "queries" queries) "codeql-bare realized a query spec"
-        ++ lib.optional (!throws packages.codeql-full "queries" queries) "codeql-full realized a query spec with no language"
-        ++ lib.optional (throws packages.codeql-full "queries" named) "codeql-full refused a query spec with a language"
-        ++ lib.optional (!throws engine "models" queries) "a query spec in `models` was taken";
+      # Force drvPath so these controls cover the actual exported engines'
+      # validation, not just the stand-in's diagnostic path below.
+      canCustomize = target: spec: builtins.seq (drvOf (target.customizePackage spec)) true;
+      valid = {queries = [named];};
+      specChecks = checkRows "codeql-pack-specs" {
+        "bare engine accepts customization without packs but rejects a query spec" = rejectsChange (canCustomize packages.codeql-bare) {
+          expected = true;
+          invalid = {queries = [queries];};
+          valid = {};
+        };
+        "full engine accepts a named language but rejects an inferred language" = rejectsChange (canCustomize packages.codeql-full) {
+          inherit valid;
+          expected = true;
+          invalid = {queries = [queries];};
+        };
+        "javascript models field rejects a query spec in place of a model spec" = rejectsChange (canCustomize engine) {
+          expected = true;
+          invalid = {models = [queries];};
+          valid = {models = [models];};
+        };
+        "mkQueryPack does not realize a derivation eagerly" = !lib.isDerivation queries;
+        "model spec does not depend on the realizing engine" = drvOf (realizedBy engine "models" namedModels) == drvOf (realizedBy packages.codeql-full "models" namedModels);
+        "package-set and flake-library query constructors do not diverge" = self.lib.ai.devTools.codeql.mkQueryPack {inherit (queries) name src;} == queries;
+        "query spec is compiled separately for each realizing engine" = drvOf (realizedBy engine "queries" named) != drvOf (realizedBy packages.codeql-full "queries" named);
+      };
       probe = pkgs.writeText "codeql-pack-specs.nix" ''
         {case}: let
           pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
@@ -285,14 +291,8 @@ in {
             name = "me/q";
             src = ${./fixtures/queries};
           };
-          model = specs.mkModelPack {
-            name = "me/m";
-            src = ${./fixtures/models};
-            language = "javascript";
-          };
           cases = {
             bare = customize "bare" [] {queries = [query];};
-            control = customize "full" ["javascript" "python"] {models = [model];};
             full = customize "full" ["javascript" "python"] {queries = [query];};
             kind = customize "javascript" ["javascript"] {models = [query];};
           };
@@ -300,7 +300,7 @@ in {
           builtins.seq cases.''${case}.drvPath true
       '';
     in
-      assert lib.assertMsg (failures == []) "codeql-pack-specs:\n${lib.concatStringsSep "\n" failures}";
+      assert specChecks;
         pkgs.runCommand "codeql-pack-specs" {nativeBuildInputs = [pkgs.nix];} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -317,7 +317,6 @@ in {
             grep -qF -- "$2" "$TMPDIR/$1.err" || fail "$1 failed without naming $2: $(cat "$TMPDIR/$1.err")"
             echo "$1: $2" >> "$out"
           }
-          nix-instantiate --eval --strict --store dummy:// ${probe} --argstr case control > /dev/null 2> "$TMPDIR/control.err" || fail "the control did not evaluate: $(cat "$TMPDIR/control.err")"
           refuses bare "codeql-bare carries no CodeQL libraries"
           refuses full "codeql-full needs \`language\` on the spec"
           refuses kind "is a query pack spec; put it in \`queries\`"

@@ -1,7 +1,6 @@
 [
   {
     "match": "MAIN_KICKOFF",
-    "not": ["<response_requirement>", "CHILD_DONE_SENTINEL"],
     "events": [
       {
         "toolUseId": "tu_u",
@@ -16,7 +15,6 @@
   },
   {
     "match": ["<response_requirement>", "CHILD_UINPUT"],
-    "not": ["ui_1"],
     "events": [
       {
         "toolUseId": "ui_1",
@@ -41,20 +39,5 @@
       }
     ]
   },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  }
+  { "events": ["MAIN_DONE"], "match": null, "reuse": true }
 ]

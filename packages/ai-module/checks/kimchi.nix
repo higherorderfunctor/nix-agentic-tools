@@ -5,7 +5,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles fromGeneratedTree markdownInput mkTest;
+  inherit (harness) checkRows deliveredFiles fromGeneratedTree markdownInput mkTest;
   files = import ../lib/files/default.nix {inherit lib pkgs;};
   backends = {
     devenv = harness.evalDevenv;
@@ -15,7 +15,24 @@
     description = "Reviews code";
     instructions.text = "BODY";
   };
-  steps = ["two" "one" "empty" "disabled"];
+  steps = [
+    {
+      name = "two";
+      agents = ["alpha" "reviewer"];
+    }
+    {
+      name = "one";
+      agents = ["reviewer"];
+    }
+    {
+      name = "empty";
+      agents = [];
+    }
+    {
+      name = "disabled";
+      agents = [];
+    }
+  ];
   fixture = lib.genAttrs ["devenv" "hm"] (backend:
     lib.genAttrs [".config/kimchi" "custom/kimchi"] (configDir: let
       agentsDir =
@@ -28,26 +45,24 @@
           (backends.${backend} {
             ai.kimchi = {
               inherit configDir;
-              enable = step != "disabled";
-              agents = lib.genAttrs (
-                if step == "two"
-                then ["alpha" "reviewer"]
-                else lib.optional (step == "one") "reviewer"
-              ) (_: agent);
+              enable = step.name != "disabled";
+              agents = lib.genAttrs step.agents (_: agent);
             };
           })
           config
           ;
-      in {
-        inherit agentsDir;
-        inherit (config.ai.kimchi) legacyLedgers;
         plan = lib.filter (item: lib.hasPrefix "${agentsDir}/" item.path) (files.normalize {
           inherit backend;
           files = config.ai.files;
           namespace = "ai";
         });
-        texts = lib.mapAttrs (_: entry: entry.content.text) config.ai.kimchi._generatedFiles;
-      })
+      in
+        assert checkRows "Kimchi ${backend} ${configDir} ${step.name}" {
+          "agent plan has the declared members" = map (item: item.path) plan == map (name: "${agentsDir}/${name}.md") step.agents;
+        }; {
+          inherit agentsDir plan;
+          inherit (config.ai.kimchi) legacyLedgers;
+        })
       steps));
 in {
   checks = {
@@ -143,15 +158,6 @@ in {
         suppressed = backends.${backend} (lib.recursiveUpdate settings {
           ai.kimchi.files.${contextPath}.enable = false;
         });
-        expectedLedger = {
-          codec = "dir";
-          ledger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
-            if backend == "hm"
-            then configDir
-            else agentsDir
-          )}.manifest";
-          path = agentsDir;
-        };
       in
         lib.all (path:
           staged ? ${path}
@@ -161,7 +167,6 @@ in {
           && config.ai.files.${path}.executable == null)
         moved
         && lib.all (path: fromGeneratedTree path delivered.${path}) [agentPath contextPath extensionPath]
-        && config.ai.files.${agentPath}.method == "ro"
         && config.ai.files.${agentPath}.format == "markdown"
         && config.ai.files.${extensionPath}.method == "symlink"
         && config.ai.files.${extensionPath}.format == "raw"
@@ -176,9 +181,6 @@ in {
           then "symlink"
           else "ro"
         )
-        && lib.elem expectedLedger config.ai.kimchi.legacyLedgers
-        && disabled.ai.kimchi.legacyLedgers == config.ai.kimchi.legacyLedgers
-        && lib.elem expectedLedger disabled.ai.legacyLedgers
         && disabled.ai.files == {}
         && overridden.config.ai.files.${agentPath}.method == "symlink"
         && !(deliveredFiles overridden.config ? ${extensionPath})

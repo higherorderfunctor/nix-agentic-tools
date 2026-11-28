@@ -28,7 +28,7 @@
     },
     {
       "op": "sh",
-      "cmd": "unzip -l '$ZIP' | grep -o 'sub-executions/.*' ; unzip -p '$ZIP' '*/sub-executions/*' | grep -o 'CHILD_DONE_SENTINEL\\|CHILD_TASK' | sort | uniq -c; find ../home/.kiro -path '*sub-executions*' -name '*.jsonl' | sed 's|.*/sessions/|sessions/|'; rm -rf \"$(dirname '$ZIP')\""
+      "cmd": "unzip -l '$ZIP' | grep -o 'sub-executions/.*' ; unzip -p '$ZIP' '*/sub-executions/*' | grep -o 'CHILD_DONE_SENTINEL' | uniq -c; find ../home/.kiro -path '*sub-executions*' -name '*.jsonl' | sed 's|.*/sessions/|sessions/|'; rm -rf \"$(dirname '$ZIP')\""
     }
   ]
 }

@@ -1,4 +1,4 @@
-{lib, ...}: let
+{lib}: let
   # Both backends inspect the same filtered settings tree. Keep module
   # assertions separate: spelling diagnostics must never become refusals.
   claudeAssertions = ev:
@@ -55,5 +55,5 @@
   hasGuardHook = blocks:
     builtins.any (lib.hasInfix "claude-memory-collision-guard") (handlerCommands blocks);
 in {
-  inherit claudeAssertionFails claudeAssertions claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
+  inherit claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
 }

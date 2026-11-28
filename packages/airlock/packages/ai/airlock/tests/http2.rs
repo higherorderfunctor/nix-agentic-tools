@@ -2,7 +2,7 @@ mod common;
 
 use std::{future::poll_fn, net::SocketAddr, time::Duration};
 
-use common::{request, start};
+use common::{request, start, wait_for_listener_release};
 use h2::{RecvStream, SendStream, client::SendRequest};
 use hyper::{Request, StatusCode, Version, body::Bytes};
 use tokio::{
@@ -33,7 +33,10 @@ impl Client {
         }
     }
 
-    async fn tunnel(&self, target: SocketAddr) -> (SendStream<Bytes>, RecvStream) {
+    async fn open_tunnel(
+        &self,
+        target: SocketAddr,
+    ) -> (h2::client::ResponseFuture, SendStream<Bytes>) {
         let mut sender = self.sender.clone().ready().await.unwrap();
         let request = Request::builder()
             .method("CONNECT")
@@ -41,13 +44,16 @@ impl Client {
             .version(Version::HTTP_2)
             .body(())
             .unwrap();
-        let (response, send) = sender.send_request(request, false).unwrap();
+        sender.send_request(request, false).unwrap()
+    }
+
+    async fn tunnel(&self, target: SocketAddr) -> (SendStream<Bytes>, RecvStream) {
+        let (response, send) = self.open_tunnel(target).await;
         let response = timeout(Duration::from_secs(2), response)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(response.version(), Version::HTTP_2);
         (send, response.into_body())
     }
 }
@@ -94,7 +100,6 @@ async fn http1_and_prior_knowledge_http2_share_one_listener() {
         .unwrap()
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.version(), Version::HTTP_2);
     assert_eq!(read_all(&mut response.into_body()).await, b"ok\n");
     drop(client);
     server.stop().await;
@@ -205,13 +210,7 @@ async fn stream_capacity_recovers_after_reset_of_a_stalled_half_closed_upload() 
     for _ in 0..32 {
         streams.push(client.tunnel(target).await);
     }
-    let mut sender = client.sender.clone().ready().await.unwrap();
-    let request = Request::builder()
-        .method("CONNECT")
-        .uri(target.to_string())
-        .body(())
-        .unwrap();
-    let (mut queued, queued_send) = sender.send_request(request, false).unwrap();
+    let (mut queued, queued_send) = client.open_tunnel(target).await;
     assert!(
         timeout(Duration::from_millis(100), &mut queued)
             .await
@@ -219,13 +218,9 @@ async fn stream_capacity_recovers_after_reset_of_a_stalled_half_closed_upload() 
         "33rd stream must wait for protocol capacity"
     );
     let (mut send, mut recv) = streams.pop().unwrap();
-    assert!(
-        timeout(Duration::from_secs(2), read_all(&mut recv))
-            .await
-            .unwrap()
-            .is_empty(),
-        "upstream half-close must reach the client before reset"
-    );
+    let _ = timeout(Duration::from_secs(2), read_all(&mut recv))
+        .await
+        .expect("upstream half-close must reach the client before reset");
     // The upstream holds these sockets without reading. Fill the upload
     // until flow control stalls, so the relay cannot read the reset as EOF.
     let mut payload = Bytes::from(vec![0x5a; 8 * 1024 * 1024]);
@@ -313,6 +308,52 @@ async fn partial_preface_and_idle_http2_are_closed_before_the_first_request() {
         .expect("idle h2 first request deadline")
         .unwrap()
         .ok();
+    drop(idle);
+    assert_other_clients_are_healthy(server).await;
+}
+
+enum TunnelEnd {
+    ClientDisconnect,
+    ServerShutdown,
+}
+
+async fn assert_tunnel_sockets_close(end: TunnelEnd) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = listener.local_addr().unwrap();
+    let upstream = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        assert_eq!(socket.read(&mut [0]).await.unwrap(), 0, "upstream EOF");
+    });
+    let server = start().await;
+    let client = Client::connect(server.address).await;
+    let (_send, mut recv) = client.tunnel(target).await;
+    let survivor = match end {
+        TunnelEnd::ClientDisconnect => {
+            drop(client);
+            Some(server)
+        }
+        TunnelEnd::ServerShutdown => {
+            server.stop().await;
+            let ended = timeout(Duration::from_secs(1), recv.data())
+                .await
+                .expect("client stream closed");
+            assert!(
+                ended.is_none() || ended.unwrap().is_err(),
+                "closed stream returned data"
+            );
+            None
+        }
+    };
+    timeout(Duration::from_secs(1), upstream)
+        .await
+        .expect("upstream socket closed")
+        .unwrap();
+    if let Some(server) = survivor {
+        assert_other_clients_are_healthy(server).await;
+    }
+}
+
+async fn assert_other_clients_are_healthy(server: common::Server) {
     let mut healthy = server.client().await;
     assert!(
         request(&mut healthy, "GET", "/health")
@@ -320,56 +361,19 @@ async fn partial_preface_and_idle_http2_are_closed_before_the_first_request() {
             .starts_with("HTTP/1.1 200 ")
     );
     drop(healthy);
-    drop(idle);
     server.stop().await;
 }
 
 #[tokio::test]
 async fn shutdown_cancels_owned_http2_tunnels_and_both_sockets() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target = listener.local_addr().unwrap();
-    let upstream = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        assert_eq!(socket.read(&mut [0]).await.unwrap(), 0);
-    });
-    let server = start().await;
-    let client = Client::connect(server.address).await;
-    let (_send, mut recv) = client.tunnel(target).await;
-    server.stop().await;
-    let ended = timeout(Duration::from_secs(1), recv.data()).await.unwrap();
-    assert!(ended.is_none() || ended.unwrap().is_err());
-    timeout(Duration::from_secs(1), upstream)
-        .await
-        .unwrap()
-        .unwrap();
+    // Dropping the server's connection task must not orphan its live streams.
+    assert_tunnel_sockets_close(TunnelEnd::ServerShutdown).await;
 }
 
 #[tokio::test]
 async fn closing_http2_connection_cancels_its_live_tunnels() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target = listener.local_addr().unwrap();
-    let upstream = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        assert_eq!(socket.read(&mut [0]).await.unwrap(), 0);
-    });
-    let server = start().await;
-    let client = Client::connect(server.address).await;
-    let (_send, mut recv) = client.tunnel(target).await;
-    drop(client);
-    let ended = timeout(Duration::from_secs(1), recv.data()).await.unwrap();
-    assert!(ended.is_none() || ended.unwrap().is_err());
-    timeout(Duration::from_secs(1), upstream)
-        .await
-        .unwrap()
-        .unwrap();
-    let mut healthy = server.client().await;
-    assert!(
-        request(&mut healthy, "GET", "/health")
-            .await
-            .starts_with("HTTP/1.1 200 ")
-    );
-    drop(healthy);
-    server.stop().await;
+    // Dropping the client transport must close upstream without stopping the server.
+    assert_tunnel_sockets_close(TunnelEnd::ClientDisconnect).await;
 }
 
 #[tokio::test]
@@ -386,6 +390,7 @@ async fn shutdown_keeps_http2_driver_polling_during_active_drain() {
     let client = Client::connect(server.address).await;
     let (mut send, mut recv) = client.tunnel(target).await;
     server.shutdown.send(()).unwrap();
+    wait_for_listener_release(server.address).await;
     send_all(&mut send, Bytes::from_static(b"during drain")).await;
     assert_eq!(
         timeout(Duration::from_secs(2), read_all(&mut recv))

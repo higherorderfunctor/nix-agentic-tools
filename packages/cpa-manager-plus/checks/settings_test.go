@@ -38,16 +38,19 @@ func TestNatLoad(t *testing.T) {
 	if err := json.Unmarshal(environment, &variables); err != nil {
 		t.Fatal(err)
 	}
+	clearConfigEnv(t)
 	for name, value := range variables {
 		t.Setenv(name, value)
 	}
 	t.Setenv(configEnvKey, path)
 	cfg, err := LoadWithoutCreatingDefault()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("load rendered config.json and environment: %v", err)
 	}
-	// A key-carrying variable reaches the loaded configuration.
-	if want := variables["CPA_MANAGEMENT_KEY"]; cfg.ManagementKey != want {
-		t.Fatalf("CPA_MANAGEMENT_KEY loads as %q, want %q", cfg.ManagementKey, want)
+	// Deriving want from the environment fixture would accept a dropped key
+	// if the loader also returned an empty ManagementKey.
+	const wantKey = "dummy-CPA_MANAGEMENT_KEY"
+	if cfg.ManagementKey != wantKey {
+		t.Errorf("CPA_MANAGEMENT_KEY loads as %q, want %q", cfg.ManagementKey, wantKey)
 	}
 }

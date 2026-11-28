@@ -1,6 +1,5 @@
 """Check the catalog builds' installed manifests and exercise capture retention on their CPA routes."""
 
-from collections import Counter
 import json
 from datetime import datetime
 from pathlib import Path
@@ -17,9 +16,9 @@ from credential_usage.transport import RequestFailure
 def packaged_manifest(skill: Path) -> str:
     """Follow the same skill-to-wrapper-to-manifest chain as the installed helper."""
     wrapper = re.search(r"`(/nix/store/[^` ]+/bin/delegate-routing-plan) --role", skill.read_text())
-    assert wrapper
+    assert wrapper, (skill, "routing skill no longer points at its installed wrapper")
     manifest = re.search(r"--manifest (/nix/store/[^\s]+)", Path(wrapper[1]).read_text())
-    assert manifest
+    assert manifest, (skill, "installed wrapper no longer points at its manifest")
     return Path(manifest[1]).read_text()
 
 
@@ -29,10 +28,10 @@ def check_collection(raw: str, expected_routes: list[dict[str, object]]) -> None
     cases = Path(__file__).with_name("attribution")
     inputs, expected = (json.loads((cases / f"{part}.json").read_text()) for part in ("input", "expected"))
     for name, first in inputs["first"].items():
-        calls: list[tuple[str, str, str | None, int]] = []
+        calls: list[tuple[str, str, str | None, int, float]] = []
 
         def read(instance: str, credential: str, reader: CredentialReader):
-            calls.append((instance, credential, reader.pin, reader.transport.retries))
+            calls.append((instance, credential, reader.pin, reader.transport.retries, reader.transport.timeout))
             if first is None:
                 if credential == "second":
                     return UnknownBinding.AMBIGUOUS
@@ -42,8 +41,8 @@ def check_collection(raw: str, expected_routes: list[dict[str, object]]) -> None
             return ReaderSuccess(datetime.fromisoformat(inputs["finished"][credential]), stdout)
 
         results = manifest.pacing.collect(read)
-        # Multiple offers for a credential must not trigger extra reader calls.
-        assert calls == [("test", "first", "account-17", 3), ("test", "second", None, 0)], (name, calls)
+        # Overlapping offers must not trigger extra calls, mix pins, or lose transport settings.
+        assert calls == [("test", "first", "account-17", 3, 11), ("test", "second", None, 0, 75)], (name, calls)
         routes = [result.route.model_dump() for result in results]
         assert routes == expected_routes, (name, routes)
         first_capture, first_repeat, second_capture, second_repeat, missing = [result.outcome for result in results]
@@ -63,16 +62,19 @@ def check_collection(raw: str, expected_routes: list[dict[str, object]]) -> None
 
 if __name__ == "__main__":
     expected = json.loads(Path(__file__).with_name("expected.json").read_text())
-    runtimes: Counter[str] = Counter()
+    runtimes = []
+    claude_manifest = None
     for skill in sys.argv[2:]:
         raw = packaged_manifest(Path(skill))
         shipped = json.loads(raw)
         runtime = shipped["runtime"]
-        runtimes[runtime] += 1
+        runtimes.append(runtime)
         assert shipped["pacing"] == expected[runtime], skill
         assert "synthetic-private-upstream-" not in raw and "/run/secrets/upstream" not in raw, skill
-        if runtime == "claude":
-            check_collection(raw, expected[runtime]["routes"])
-    # Each runtime has a manual and a module skill in both HM and devenv.
-    assert runtimes == {"claude": 4, "codex": 4}, runtimes
+        if runtime == "claude" and claude_manifest is None:
+            claude_manifest = raw
+    # Each backend supplies module then manual skills per runtime. Counting alone misses a swapped manifest.
+    assert runtimes == ["claude", "claude", "codex", "codex"] * 2, runtimes
+    # The collector reads only pacing; above, every Claude build proved it ships the same input.
+    check_collection(claude_manifest, expected["claude"]["routes"])
     print(f"PASS {len(sys.argv) - 2} packaged credential manifests and capture retention")

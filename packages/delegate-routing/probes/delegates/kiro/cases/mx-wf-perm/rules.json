@@ -1,7 +1,6 @@
 [
   {
     "match": "MAIN_KICKOFF",
-    "not": ["WFP_STEP do it"],
     "events": [
       {
         "toolUseId": "tw_p",
@@ -15,7 +14,6 @@
   },
   {
     "match": "WFP_STEP do it",
-    "not": ["STEP_BASH_RAN", "sb1"],
     "events": [
       {
         "toolUseId": "sb1",
@@ -27,28 +25,9 @@
     ]
   },
   {
-    "match": "WFP_STEP do it",
-    "events": ["STEP_AFTER_BASH"]
-  },
-  {
     "match": ["MAIN_KICKOFF", "started successfully"],
     "delay": 15,
     "events": ["MAIN_DONE"]
   },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  }
+  { "match": null, "reuse": true, "events": ["MAIN_DONE"] }
 ]

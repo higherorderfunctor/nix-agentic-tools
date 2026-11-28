@@ -1,17 +1,4 @@
 {
-  "new": {
-    "_meta": {
-      "kiro": {
-        "steering": [
-          {
-            "name": "snap-inline",
-            "inclusion": "always",
-            "content": "SNAP_INLINE_V2_SENTINEL"
-          }
-        ]
-      }
-    }
-  },
   "steps": [
     {
       "op": "call",
@@ -47,27 +34,6 @@
         ]
       },
       "timeout": 60
-    },
-    {
-      "op": "call",
-      "method": "_kiro/session/history",
-      "params": {
-        "sessionId": "@OLD@"
-      }
-    },
-    {
-      "op": "call",
-      "method": "_kiro/session/export",
-      "params": {
-        "sessionId": "@OLD@"
-      },
-      "save": {
-        "ZIP": "result.filePath"
-      }
-    },
-    {
-      "op": "sh",
-      "cmd": "unzip -l '$ZIP' | grep -o 'sub-executions/.*'; unzip -p '$ZIP' '*/sub-executions/*' | grep -c CHILD_DONE_SENTINEL; rm -rf \"$(dirname '$ZIP')\""
     }
   ]
 }

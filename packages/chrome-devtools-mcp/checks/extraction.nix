@@ -11,39 +11,48 @@
   checks =
     {
       chrome-devtools-mcp-extract-conflicts = let
-        # Computed groups prove this consumes the export's value, not literals
-        # found by searching source text. Include an alias's canonical key.
-        source = pkgs.writeText "conflicting-mcp-options.mjs" ''
-          export const mcpOptions = {
+        mkSource = name: options: groups:
+          pkgs.writeText "${name}.mjs" ''
+            export const mcpOptions = ${options};
+            export const CONFLICTING_ARGS = ${groups};
+          '';
+        options = ''
+          {
             allowUnrestrictedPaths: {type: "boolean"},
             filesystemRoot: {alias: "workspace", string: true, type: "array"},
             isolated: {type: "boolean"},
-          };
-          const group = Object.keys(mcpOptions);
-          export const CONFLICTING_ARGS = [group];
+          }
         '';
+        # A computed group must be read from the export, not scraped from
+        # literals or rewritten to use public aliases instead of canonical keys.
+        source = mkSource "computed-conflicts" options "[Object.keys(mcpOptions)]";
         invalid = let
-          case = value: message: {inherit message value;};
-        in [
-          (case "undefined" "must be a non-empty array of groups")
-          (case "[]" "must be a non-empty array of groups")
-          (case "[42]" "must contain at least two options")
-          (case "[['isolated']]" "must contain at least two options")
-          (case "[['isolated', 'unknown']]" "names an unknown option unknown")
-          (case "[['isolated', 42]]" "names an unknown option 42")
-          (case "[['isolated', 'isolated']]" "repeats an option")
-        ];
-        refuse = test: let
-          broken = pkgs.writeText "broken-conflicts.mjs" ''
-            export const mcpOptions = {isolated: {type: "boolean"}};
-            export const CONFLICTING_ARGS = ${test.value};
-          '';
+          case = groups: message: {inherit groups message options;};
+        in {
+          duplicate-member = case "[['isolated', 'isolated']]" "CONFLICTING_ARGS[0] repeats an option";
+          empty-groups = case "[]" "CONFLICTING_ARGS must be a non-empty array of groups";
+          missing-groups = case "undefined" "CONFLICTING_ARGS must be a non-empty array of groups";
+          # A string can pass a length-only check, but it is not a group array.
+          non-array-group = case "['isolated']" "CONFLICTING_ARGS[0] must contain at least two options";
+          # Reject a non-object yargs option before readers can mistake it for a settings record.
+          non-object-option = {
+            groups = "[['broken', 'isolated']]";
+            message = "mcpOptions.broken is not an object";
+            options = ''{broken: 42, isolated: {type: "boolean"}}'';
+          };
+          # A numeric member must not pass by coercing to a real string key.
+          non-string-member = {
+            groups = "[['isolated', 42]]";
+            message = "CONFLICTING_ARGS[0] names an unknown option 42";
+            options = ''{"42": {type: "boolean"}, isolated: {type: "boolean"}}'';
+          };
+          singleton-group = case "[['isolated']]" "CONFLICTING_ARGS[0] must contain at least two options";
+          unknown-member = case "[['isolated', 'unknown']]" "CONFLICTING_ARGS[0] names an unknown option unknown";
+        };
+        refuse = name: test: let
+          broken = mkSource name test.options test.groups;
         in ''
-          if ${lib.getBin pkgs.nodejs_22}/bin/node ${../extract/mcp-options.mjs} ${broken} >actual.json 2>actual.err; then
-            echo "FAIL: malformed conflict groups unexpectedly extracted" >&2
-            exit 1
-          fi
-          grep -F ${lib.escapeShellArg test.message} actual.err
+          refuse ${lib.escapeShellArg name} ${broken} ${lib.escapeShellArg test.message}
         '';
       in
         pkgs.runCommand "chrome-devtools-mcp-extract-conflicts" {
@@ -51,30 +60,26 @@
         } ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          ${lib.getBin pkgs.nodejs_22}/bin/node ${../extract/mcp-options.mjs} ${source} >actual.json
-          jq -e '.cli.conflicts.mcp == [["allowUnrestrictedPaths", "filesystemRoot", "isolated"]]' actual.json
-          ${lib.concatMapStringsSep "\n" refuse invalid}
-          touch "$out"
-        '';
 
-      # A yargs map member that is not an option object cannot be trusted as a
-      # settings record. This fails an extractor that serializes whatever it
-      # finds and relies on readers to notice the malformed option later.
-      chrome-devtools-mcp-extract-refuses-non-object = let
-        source = pkgs.writeText "broken-mcp-options.mjs" ''
-          export const mcpOptions = {broken: 42};
-        '';
-      in
-        pkgs.runCommand "chrome-devtools-mcp-extract-refuses-non-object" {
-          nativeBuildInputs = [pkgs.gnugrep];
-        } ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          if ${lib.getBin pkgs.nodejs_22}/bin/node ${../extract/mcp-options.mjs} ${source} >actual.json 2>actual.err; then
-            echo "FAIL: a non-object yargs option unexpectedly extracted" >&2
-            exit 1
-          fi
-          grep -F 'mcpOptions.broken is not an object' actual.err
+          extract() {
+            ${lib.getBin pkgs.nodejs_22}/bin/node ${../extract/mcp-options.mjs} "$1"
+          }
+          refuse() {
+            local name=$1 source=$2 expected=$3
+            if extract "$source" >actual.json 2>actual.err; then
+              echo "FAIL: $name unexpectedly extracted" >&2
+              exit 1
+            fi
+            if ! grep -Fx "chrome-devtools-mcp-extract: $expected" actual.err; then
+              echo "FAIL: $name should report $expected" >&2
+              cat actual.err >&2
+              exit 1
+            fi
+          }
+
+          extract ${source} >actual.json
+          jq -e '.cli.conflicts.mcp == [["allowUnrestrictedPaths", "filesystemRoot", "isolated"]]' actual.json
+          ${lib.concatStrings (lib.mapAttrsToList refuse invalid)}
           touch "$out"
         '';
     }
@@ -82,98 +87,38 @@
       dir = ../extracted;
       name = "chrome-devtools-mcp";
       extracted.x86_64-linux = self.ciPackages.x86_64-linux.chrome-devtools-mcp.passthru.extracted;
-      needs = [
-        {
-          key = "cli.conflicts.mcp";
-          contains = ["userDataDir" "isolated"];
-        }
-        {
-          key = "cli.options.mcp.executablePath.alias";
-          value = "e";
-        }
-        {
-          key = "cli.options.mcp.executablePath.type";
-          value = "string";
-        }
-        {
-          key = "cli.options.mcp.userDataDir.type";
-          value = "string";
-        }
-        {
-          key = "cli.options.mcp.usageStatistics.default";
-          value = true;
-        }
-        {
-          key = "cli.options.mcp.usageStatistics.type";
-          value = "boolean";
-        }
-        {
-          key = "cli.options.mcp.performanceCrux.default";
-          value = true;
-        }
-        {
-          key = "cli.options.mcp.performanceCrux.type";
-          value = "boolean";
-        }
-        {
-          key = "cli.options.mcp.redactNetworkHeaders.default";
-          value = false;
-        }
-        {
-          key = "cli.options.mcp.redactNetworkHeaders.type";
-          value = "boolean";
-        }
-        {
-          key = "cli.options.mcp.screenshotFormat.choices";
-          value = ["jpeg" "png" "webp"];
-        }
-        {
-          key = "cli.options.mcp.screenshotFormat.type";
-          value = "string";
-        }
-        {
-          key = "cli.options.mcp.screenshotMaxWidth.coerce";
-          value = {
-            function = {
-              name = "coerce";
-              source = lib.concatStringsSep "\n" [
-                "(value) => {"
-                "            if (value === undefined) {"
-                "                return;"
-                "            }"
-                "            if (!Number.isInteger(value) || value <= 0) {"
-                "                throw new Error(`Invalid screenshotMaxWidth \${value}. Expected a positive integer.`);"
-                "            }"
-                "            return value;"
-                "        }"
-              ];
-            };
+      # Independent pins for facts consumed as schema or used to justify a
+      # public spelling or a local type refinement.
+      needs =
+        [
+          {
+            key = "cli.conflicts.mcp";
+            contains = ["userDataDir" "isolated"];
+          }
+        ]
+        ++ lib.mapAttrsToList (key: value: {
+          key = "cli.options.mcp.${key}";
+          inherit value;
+        }) {
+          "filesystemRoot.alias" = "workspace";
+          "screenshotFormat.choices" = ["jpeg" "png" "webp"];
+          "screenshotFormat.type" = "string";
+          # A change in coercion (even with the same yargs type) needs review
+          # against the local positive-integer refinement.
+          "screenshotMaxWidth.coerce".function = {
+            name = "coerce";
+            source = lib.concatStringsSep "\n" [
+              "(value) => {"
+              "            if (value === undefined) {"
+              "                return;"
+              "            }"
+              "            if (!Number.isInteger(value) || value <= 0) {"
+              "                throw new Error(`Invalid screenshotMaxWidth \${value}. Expected a positive integer.`);"
+              "            }"
+              "            return value;"
+              "        }"
+            ];
           };
-        }
-        {
-          key = "cli.options.mcp.screenshotMaxWidth.type";
-          value = "number";
-        }
-        {
-          key = "cli.options.mcp.filesystemRoot.alias";
-          value = "workspace";
-        }
-        {
-          key = "cli.options.mcp.filesystemRoot.default";
-          value = ["/tmp"];
-        }
-        {
-          key = "cli.options.mcp.filesystemRoot.defaultDescription";
-          value = "OS temp directory";
-        }
-        {
-          key = "cli.options.mcp.filesystemRoot.string";
-          value = true;
-        }
-        {
-          key = "cli.options.mcp.filesystemRoot.type";
-          value = "array";
-        }
-      ];
+        };
     };
 }

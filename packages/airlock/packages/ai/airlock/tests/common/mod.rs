@@ -6,7 +6,7 @@ use tokio::{
     net::TcpStream,
     sync::oneshot,
     task::JoinHandle,
-    time::timeout,
+    time::{sleep, timeout},
 };
 
 pub struct Server {
@@ -42,6 +42,26 @@ impl Server {
             .unwrap()
             .unwrap();
     }
+}
+
+/// On shutdown, the server must release the listener before draining accepted
+/// connections: new connections stop arriving while existing ones get the grace
+/// period to finish. Rebinding proves shutdown was observed before the test
+/// resumes traffic on an accepted connection.
+pub async fn wait_for_listener_release(address: SocketAddr) {
+    timeout(Duration::from_secs(1), async {
+        loop {
+            match server::bind(address).await {
+                Ok(_) => break,
+                Err(error) if error.kind() == io::ErrorKind::AddrInUse => {
+                    sleep(Duration::from_millis(10)).await;
+                }
+                Err(error) => panic!("could not rebind {address}: {error}"),
+            }
+        }
+    })
+    .await
+    .expect("listener must be released before active connections finish draining");
 }
 
 pub async fn message(socket: &mut TcpStream) -> String {

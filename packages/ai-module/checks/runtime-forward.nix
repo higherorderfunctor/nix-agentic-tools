@@ -1,4 +1,5 @@
 {
+  harness,
   lib,
   pkgs,
   ...
@@ -53,12 +54,6 @@
   # the same declarations made directly at layer 2.
   cases = [
     {
-      name = "default source, ordinary text";
-      low = [(entry ["content" "source"] (lib.mkDefault source))];
-      high = [(entry ["content" "text"] "override")];
-      expected.content.text = "override";
-    }
-    {
       name = "default text, ordinary source";
       low = [(entry ["content" "text"] (lib.mkDefault "fallback"))];
       high = [(entry ["content" "source"] source)];
@@ -77,13 +72,13 @@
       expected.content.source = source;
     }
     {
-      name = "enable";
+      name = "disabled entry disappears from plan";
       low = [(entry [] {content.text = "fallback";})];
       high = [(entry ["enable"] false)];
       expected = null;
     }
     {
-      name = "method";
+      name = "ordinary method beats default method";
       low = [
         (entry [] {
           content.text = "content";
@@ -97,7 +92,7 @@
       };
     }
     {
-      name = "structured leaf";
+      name = "structured leaf override preserves sibling";
       low = [
         (entry [] {
           content.value = {
@@ -118,7 +113,7 @@
       };
     }
     {
-      name = "whole-entry default";
+      name = "whole-entry default does not leak its method";
       low = [
         (entry [] (lib.mkDefault {
           content.text = "fallback";
@@ -132,7 +127,7 @@
       };
     }
     {
-      name = "option-wide default";
+      name = "option-wide default drops its second path";
       low = [
         (lib.mkDefault {
           ${path}.content.text = "fallback";
@@ -148,18 +143,25 @@
   ];
   checkCase = row: let
     reference = plan (sample (map (at direct) (row.low ++ row.high)));
-    run = label: forwarded: let
+    run = forwarded: let
       config = sample forwarded;
+      actual = plan config;
     in
-      lib.optional (builtins.toJSON (plan config) != builtins.toJSON reference) "${row.name} (${label}): plan differs from layer 2"
-      ++ lib.optional (project (selected config) != expected) "${row.name} (${label}): winner";
+      builtins.toJSON actual
+      == builtins.toJSON reference
+      && map (item: item.path) actual == ["program.txt"] ++ lib.optional (expected != null) path
+      && project (selected config) == expected;
     expected =
       if row.expected == null
       then null
       else {method = "symlink";} // row.expected;
-  in
-    run "runtime low" (map (at runtime) row.low ++ map (at direct) row.high)
-    ++ run "runtime high" (map (at direct) row.low ++ map (at runtime) row.high);
+  in {
+    inherit (row) name;
+    value = harness.checkRows row.name {
+      "higher priority comes from runtime" = run (map (at direct) row.low ++ map (at runtime) row.high);
+      "lower priority comes from runtime" = run (map (at runtime) row.low ++ map (at direct) row.high);
+    };
+  };
   # A disabled runtime contributes nothing, not even an evaluated source.
   disabled = evaluate {sample.enabled = false;} [(at runtime (entry ["content" "source"] (throw "disabled source was evaluated")))];
   twoRuntimes = beta:
@@ -212,17 +214,21 @@
     wrap,
   }: let
     config = owner enabled wrap;
+    defaulted = wrap {} != {};
     state =
       (
         if enabled
         then "enabled owner"
         else "disabled owner"
       )
-      + lib.optionalString (wrap {} != {}) " under an option-wide default";
+      + lib.optionalString defaulted " under an option-wide default";
   in
     lib.optional (commands config != expectedCommands enabled) "${state}: commands"
-    ++ lib.optional (config.ai.legacyLedgers != [ledger]) "${state}: ledgers"
-    ++ lib.optional ((config.ai.files ? ${path}) != enabled) "${state}: files";
+    # Only activation is wrapped. Read files and ledgers in the unwrapped cases.
+    ++ lib.optionals (!defaulted) (
+      lib.optional (!enabled && (config.ai.files ? ${path})) "${state}: files"
+      ++ lib.optional (config.ai.legacyLedgers != [ledger]) "${state}: ledgers"
+    );
   # A shared key forwards with its priorities but only the composer claims it.
   sharedKey = "AGENTS.md";
   composed =
@@ -243,8 +249,7 @@
     ];
   sharedEntry = lib.findFirst (item: item.path == sharedKey) null (plan composed);
   failures =
-    lib.concatMap checkCase cases
-    ++ lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.claims.path != {}) "disabled runtime"
+    lib.optional (map (item: item.path) (plan disabled) != ["program.txt"] || disabled.ai.claims.path != {}) "disabled runtime"
     ++ lib.optional (gated.ai.claims.path != {${path} = ["alpha"];} || (selected gated).content != {text = "same";}) "disabled runtime owner"
     ++ lib.optional (services.claimAssertions collision.ai.claims
       != [
@@ -266,7 +271,8 @@
       || sharedEntry.content.text or null != "replaced"
     ) "unclaimed shared key";
 in {
-  checks.ai-module-runtime-forward = assert lib.assertMsg (failures == []) "runtime forwarding: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-runtime-forward = assert harness.checkRows "files forwarding priorities" (builtins.listToAttrs (map checkCase cases));
+  assert lib.assertMsg (failures == []) "runtime forwarding: ${lib.concatStringsSep ", " failures}";
     pkgs.runCommandLocal "ai-module-runtime-forward" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

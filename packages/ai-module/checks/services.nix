@@ -87,23 +87,9 @@
     };
     services.secret = watched;
   } [noLegacyNodes];
-  environmentOnly = backends.evaluate "hm" {
-    services.secret = daemon // {environment.TOKEN = redact.file "/run/secrets/env-only";};
-  };
   # A trigger path is read at start, as a reference is.
   triggerOnly = backends.evaluate "hm" {
     services.secret = daemon // {restartOnChange = ["/run/secrets/trigger-only"];};
-  };
-  fileOnly = backends.evaluate "hm" {
-    services.secret =
-      daemon
-      // {
-        files.config = {
-          content = builtins.toJSON {key = "{$KEY}";};
-          secrets.KEY = redact.file "/run/secrets/only-file";
-          variable = "CONFIG";
-        };
-      };
   };
   darwinServices.services =
     entries
@@ -135,7 +121,6 @@
         {ai = definitions;}
       ];
     }).config;
-  succeeds = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   failures = config: map (item: item.message) (builtins.filter (item: !item.assertion) config.assertions);
   collision = backend: definitions: expected: failures (evaluateOwners backend definitions) == [expected];
   positive = backend: let
@@ -230,7 +215,11 @@
     };
     variable = "SERVICE_CONFIG";
   };
-  refused = entry: !(succeeds (fileLauncher entry).drvPath);
+  rejectsLauncherChange = valid: invalid:
+    harness.rejectsChange (entry: builtins.isString (fileLauncher entry).drvPath) {
+      inherit invalid valid;
+      expected = true;
+    };
   # Secret files: what a redact.types.secretFile option hands ai.services.
   # Each reference kind is written to a 0600 file whose path reaches the
   # variable or the config field; a plain reference beside them still
@@ -334,27 +323,21 @@
         shopt -s inherit_errexit 2>/dev/null || :
         touch "$out"
       '';
-  # mkCheck over named rules, so a failure names each rule it broke.
-  mkRulesCheck = name: rules: let
-    broken = builtins.attrNames (lib.filterAttrs (_: holds: !holds) rules);
-  in
-    assert lib.assertMsg (broken == []) "${name}: ${lib.concatStringsSep ", " broken} failed";
-      mkCheck name true;
+  mkRulesCheck = name: rows: mkCheck name (harness.checkRows name rows);
 in {
   checks =
     {
       ai-module-services-launcher = pkgs.runCommandLocal "ai-module-services-launcher" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed; then
+        if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-test > failed 2> failure; then
           echo "failed reader started the receiver" >&2
           exit 1
         fi
+        ${pkgs.gnugrep}/bin/grep -F 'ai.services.test.environment.PRIVATE: reference command failed' failure
         test ! -s failed
         ${launcher}/bin/ai-service-test > actual
         ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "services-expected" "literal $(false) ' quote\nsecret value\nargument $(false)\nspace ' quote\n"} actual
-        ${pkgs.gnugrep}/bin/grep -F 'export PRIVATE' ${launcher}/bin/ai-service-test
-        ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-test
         touch "$out"
       '';
       # Rejects silence, or a warning that skips a service, on a Home Manager
@@ -363,107 +346,127 @@ in {
       # for such a host exists here; the result does not depend on the
       # evaluating host, so it runs on every CI platform.
       ai-module-services-other-host = mkRulesCheck "ai-module-services-other-host" {
-        otherHostWarns =
+        "unsupported Home Manager host names every service it skips" =
           services.hmWarnings otherHostPkgs hm.ai.services
           == ["ai.services: this platform has neither systemd user units nor launchd agents, so these services are not written: always, never, on-failure, watched"];
       };
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-      ai-module-services-backends = mkCheck "ai-module-services-backends" (
-        lib.all (restart: let
+      ai-module-services-backends = mkRulesCheck "ai-module-services-backends" (let
+        restartCases = {
+          always = {
+            devenv = "always";
+            hm = "always";
+          };
+          never = {
+            devenv = "never";
+            hm = "no";
+          };
+          "on-failure" = {
+            devenv = "on_failure";
+            hm = "on-failure";
+          };
+        };
+        restartRows = lib.mapAttrs' (restart: expected: let
           unit = hm.systemd.user.services.${restart};
           process = devenv.processes.${restart};
         in
-          unit
-          == {
-            Install.WantedBy = ["default.target"];
-            Service = {
-              ExecStart = process.exec;
-              Restart =
-                if restart == "never"
-                then "no"
-                else restart;
-              RestartSec = 5;
-            };
-            Unit = {
-              After = ["network.target"];
-              Description = "${restart} (ai.services)";
-              StartLimitBurst = 5;
-              StartLimitIntervalSec = 300;
-            };
-          }
-          && process.restart
-          == {
-            max = 4;
-            on =
-              if restart == "on-failure"
-              then "on_failure"
-              else restart;
-            window = 300;
-          }
-          && !(process ? watch)) (builtins.attrNames entries)
-        && lib.all (unit: unit.Unit.StartLimitBurst == 5 && unit.Unit.StartLimitIntervalSec == 300) (builtins.attrValues hm.systemd.user.services)
-        && lib.all (process: process.restart.max == 4 && process.restart.window == 300) (builtins.attrValues devenv.processes)
-        && devenv.processes.watched.watch.paths == expectedTriggers
-        && services.triggers hm.ai.services.watched == expectedTriggers
-        && hm.systemd.user.services.watched.Unit.After == ["network.target" "sops-nix.service"]
-        && hm.systemd.user.services.watched.Unit.Wants == ["sops-nix.service"]
-        && hm.systemd.user.services.watched.Service.ExecStart != devenv.processes.watched.exec
-        && hm.systemd.user.services.watched.Install.WantedBy == ["default.target"]
-        && fileOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
-        && fileOnly.systemd.user.services.secret.Install.WantedBy == ["default.target"]
-        && environmentOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
-        && triggerOnly.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
-        && triggerOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"]
-        && withSopsUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
-        && withSopsUnit.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service"]
-        && withSopsUnit.systemd.user.services.plain.Install.WantedBy == ["default.target"]
-        && withSopsUnit.systemd.user.services.plain.Unit.After == ["network.target"]
-        && withProvider.systemd.user.services.secret.Unit.After == ["network.target" "sops-nix.service" "vault-agent.service"]
-        && withProvider.systemd.user.services.secret.Unit.Wants == ["sops-nix.service" "vault-agent.service"]
-        && withProvider.systemd.user.services.secret.Install.WantedBy == ["default.target"]
-        && withProviderUnits.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
-        && withOneDefinedUnit.systemd.user.services.secret.Install.WantedBy == ["graphical-session-pre.target"]
-        && !(succeeds withMismatchedUnits.systemd.user.services.secret.Install.WantedBy)
-        && withMismatchedUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
-        && withProviderUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"]
-        && withProvider.home.activation.ai-probe.after == ["sops-nix" "vault:ready"]
-        && withProvider.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"]
-        && withoutSopsUnit.systemd.user.services.secret.Unit.After == ["network.target"]
-        && withoutSopsUnit.home.activation.ai-probe.after == ["custom:ready"]
-        && withProviderDevenv.tasks."ai:probe".after == ["vault:ready"]
-        && !(builtins.elem "vault-agent.service" withProviderDevenv.tasks."ai:probe".after)
-        && !(withProviderDevenv.tasks ? "ai:services-reconcile")
-        && !(succeeds
-          (backends.evaluate "hm" {
-            activationOrder.secretProviders.own.unit = "secret.service";
-            services.secret = watched;
-          }).systemd.user.services.secret.Install.WantedBy)
-        && hm.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"]
-        && !(devenv.tasks ? "ai:services-reconcile")
-        && !((backends.evaluate "hm" {services.plain = daemon;}).home.activation ? ai-services-reconcile)
-        && hm.launchd.agents == {}
-      );
-      ai-module-services-claims = mkCheck "ai-module-services-claims" (
-        lib.all (
-          backend:
-            positive backend
-            && collision backend {
-              alpha.services.same = daemon;
-              beta.services.same = daemon;
+          lib.nameValuePair "plain service with restart=${restart} maps policy, shares the launcher and has no watcher" (
+            unit
+            == {
+              Install.WantedBy = ["default.target"];
+              Service = {
+                ExecStart = process.exec;
+                Restart = expected.hm;
+                RestartSec = 5;
+              };
+              Unit = {
+                After = ["network.target"];
+                Description = "${restart} (ai.services)";
+                StartLimitBurst = 5;
+                StartLimitIntervalSec = 300;
+              };
             }
-            "ai.claims.service.same: claimed by alpha and beta"
-            && collision backend {
+            && process.restart
+            == {
+              max = 4;
+              on = expected.devenv;
+              window = 300;
+            }
+            && lib.hasSuffix "/bin/ai-service-${restart}" process.exec
+            && !(process ? watch)
+          ))
+        restartCases;
+        plain = backends.evaluate "hm" {services.plain = daemon;};
+        providerTargets = result: result.systemd.user.services.secret.Install.WantedBy;
+        selfProvider = unit:
+          backends.evaluate "hm" {
+            activationOrder.secretProviders.own = {inherit unit;};
+            services.secret = watched;
+          };
+        watchedUnit = hm.systemd.user.services.watched;
+      in
+        restartRows
+        // {
+          "command without trigger paths emits no HM reconcile entry" = !(plain.home.activation ? ai-services-reconcile);
+          "configured providers supply both unit dependencies and activation readiness" =
+            withProvider.systemd.user.services.secret.Unit.After
+            == ["network.target" "sops-nix.service" "vault-agent.service"]
+            && withProvider.systemd.user.services.secret.Unit.Wants == ["sops-nix.service" "vault-agent.service"]
+            && withProvider.home.activation.ai-probe.after == ["sops-nix" "vault:ready"]
+            && withProvider.home.activation.ai-services-reconcile.after == ["linkGeneration" "sops-nix" "vault:ready" "reloadSystemd"];
+          "devenv consumes readiness nodes rather than native units and never reconciles systemd" =
+            withProviderDevenv.tasks."ai:probe".after
+            == ["vault:ready"]
+            && !(withProviderDevenv.tasks ? "ai:services-reconcile")
+            && !(devenv.tasks ? "ai:services-reconcile");
+          "legacy readiness without a unit does not invent a systemd dependency" =
+            withoutSopsUnit.systemd.user.services.secret.Unit.After
+            == ["network.target"]
+            && withoutSopsUnit.home.activation.ai-probe.after == ["custom:ready"];
+          "Linux emits no launchd agents" = hm.launchd.agents == {};
+          "plain service never inherits provider dependencies or targets" =
+            withSopsUnit.systemd.user.services.plain.Install.WantedBy
+            == ["default.target"]
+            && withSopsUnit.systemd.user.services.plain.Unit.After == ["network.target"]
+            && withMismatchedUnits.systemd.user.services.plain.Install.WantedBy == ["default.target"];
+          "provider with no defined unit adds no target" = providerTargets withOneDefinedUnit == ["graphical-session-pre.target"];
+          "providers under different targets reject the secret reader's WantedBy" = harness.rejectsChange providerTargets {
+            valid = withProviderUnits;
+            invalid = withMismatchedUnits;
+            expected = ["graphical-session-pre.target"];
+          };
+          "reader cannot serve as its own secret provider" = harness.rejectsChange (unit: providerTargets (selfProvider unit)) {
+            valid = "other.service";
+            invalid = "secret.service";
+            expected = ["default.target"];
+          };
+          "trigger path alone gives both ordering and Wants" =
+            triggerOnly.systemd.user.services.secret.Unit.After
+            == ["network.target" "sops-nix.service"]
+            && triggerOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"];
+          "undefined provider units leave the reader on the default target" = providerTargets withProvider == ["default.target"];
+          "watched service keeps the same rate limits as plain services on both backends" =
+            watchedUnit.Unit.StartLimitBurst
+            == 5
+            && watchedUnit.Unit.StartLimitIntervalSec == 300
+            && devenv.processes.watched.restart.max == 4
+            && devenv.processes.watched.restart.window == 300;
+          "watcher gets every explicit, environment and file trigger once" = devenv.processes.watched.watch.paths == expectedTriggers;
+          "watching uses distinct HM and devenv launchers" =
+            lib.hasSuffix "/bin/ai-service-watched" watchedUnit.Service.ExecStart
+            && lib.hasSuffix "/bin/ai-service-watched" devenv.processes.watched.exec
+            && watchedUnit.Service.ExecStart != devenv.processes.watched.exec;
+        });
+      ai-module-services-claims = mkRulesCheck "ai-module-services-claims" (let
+        forBackend = backend:
+          lib.mapAttrsToList (name: holds: lib.nameValuePair "${backend}: ${name}" holds) {
+            "distinct service names and ports reach the backend" = positive backend;
+            "disabled entry still blocks another owner of its service name" = collision backend {
               alpha.services.same = daemon // {enable = false;};
               beta.services.same = daemon;
-            }
-            "ai.claims.service.same: claimed by alpha and beta"
-            && collision backend {
-              alpha.services.one = daemon // {ports.main = 9200;};
-              beta.services.two = daemon // {ports.main = 9200;};
-            }
-            "ai.claims.port.9200: claimed by alpha:one.ports.main and beta:two.ports.main"
-            && collision backend {
+            } "ai.claims.service.same: claimed by alpha and beta";
+            "two named ports within one service cannot share a number" = collision backend {
               alpha.services.one =
                 daemon
                 // {
@@ -472,32 +475,38 @@ in {
                     metrics = 9200;
                   };
                 };
-            }
-            "ai.claims.port.9200: claimed by alpha:one.ports.http and alpha:one.ports.metrics"
-            && collision backend {
-              alpha.files.same = {enable = false;};
-              beta.files.same = {content.text = "different";};
-            }
-            "ai.claims.path.same: claimed by alpha and beta"
-        ) ["devenv" "hm"]
-        && disabled.ai.claims.service.one == ["alpha"]
-        && disabled.ai.claims.port."9200" == ["alpha:one.ports.http"]
-        && disabled.systemd.user.services == {}
-        && !(succeeds (backends.evaluate "hm" {services."bad.name" = daemon;}).ai.services)
-      );
+            } "ai.claims.port.9200: claimed by alpha:one.ports.http and alpha:one.ports.metrics";
+          };
+      in
+        builtins.listToAttrs (lib.concatMap forBackend ["devenv" "hm"])
+        // {
+          "devenv: two owners cannot share a port number" = collision "devenv" {
+            alpha.services.one = daemon // {ports.main = 9200;};
+            beta.services.two = daemon // {ports.main = 9200;};
+          } "ai.claims.port.9200: claimed by alpha:one.ports.main and beta:two.ports.main";
+          "disabled service retains its name and port but emits no unit" =
+            disabled.ai.claims.service.one
+            == ["alpha"]
+            && disabled.ai.claims.port."9200" == ["alpha:one.ports.http"]
+            && disabled.systemd.user.services == {};
+          "service name grammar rejects dots" = harness.rejectsChange (name: builtins.attrNames (backends.evaluate "hm" {services.${name} = daemon;}).ai.services) {
+            valid = "good-name";
+            invalid = "bad.name";
+            expected = ["good-name"];
+          };
+        });
       # The launcher renders a file at start: placeholders filled as JSON
       # strings, 0600 in a 0700 directory, path exported, secrets never
       # exported; the store copy holds placeholders only. A mismatch between
       # placeholders and secrets, or a reused variable, fails evaluation.
       ai-module-services-files = let
-        launcher = fileLauncher (fileEntry {inherit config;});
+        control = fileEntry {inherit config;};
+        launcher = fileLauncher control;
+        rejects = rejectsLauncherChange control;
       in
-        assert lib.assertMsg (refused ((fileEntry {inherit config;}) // {environment._ai_dir = "collision";})) "ai-module-services-files: reserved environment variable was accepted";
-        assert lib.assertMsg (refused (fileEntry {config = config // {variable = "_ai_dir";};})) "ai-module-services-files: reserved file variable was accepted";
-        assert lib.assertMsg (
-          refused (fileEntry {config = config // {secrets = builtins.removeAttrs config.secrets ["TOKEN"];};})
-          && refused (fileEntry {config = config // {secrets = config.secrets // {UNUSED = redact.file "/run/secrets/unused";};};})
-          && refused (fileEntry {
+        assert harness.checkRows "service config file restrictions" {
+          "a file key cannot escape the runtime directory" = rejects (fileEntry {"../escape" = config;});
+          "a file variable cannot reuse another file's export" = rejects (fileEntry {
             inherit config;
             other =
               config
@@ -505,9 +514,12 @@ in {
                 content = "{}";
                 secrets = {};
               };
-          })
-          && refused (fileEntry {"../escape" = config;})
-        ) "ai-module-services-files: a mismatched file was accepted";
+          });
+          "file variable cannot use the launcher's reserved prefix" = rejects (fileEntry {config = config // {variable = "_ai_dir";};});
+          "placeholder must have a matching secret" = rejects (fileEntry {config = config // {secrets = builtins.removeAttrs config.secrets ["TOKEN"];};});
+          "service environment cannot use the launcher's reserved prefix" = rejects (control // {environment._ai_dir = "collision";});
+          "unused secret is rejected instead of silently unread" = rejects (fileEntry {config = config // {secrets = config.secrets // {UNUSED = redact.file "/run/secrets/unused";};};});
+        };
           pkgs.runCommandLocal "ai-module-services-files" {} ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
@@ -528,24 +540,24 @@ in {
             fi
             content="$(${pkgs.gnugrep}/bin/grep -o '/nix/store/[a-z0-9]*-ai-service-files-test-config.json' ${launcher}/bin/ai-service-files-test)"
             ${pkgs.diffutils}/bin/cmp "$content" ${pkgs.writeText "expected-content" fileContent}
-            # An existing owned directory remains reusable after restart.
-            ${launcher}/bin/ai-service-files-test
             # A pre-existing symlink or regular file must fail before writes
             # or chmod on its target.
             mv "$XDG_RUNTIME_DIR/ai-service-files-test" "$TMPDIR/redirect"
             chmod 0755 "$TMPDIR/redirect"
             ln -s "$TMPDIR/redirect" "$XDG_RUNTIME_DIR/ai-service-files-test"
-            if ${launcher}/bin/ai-service-files-test; then
+            if ${launcher}/bin/ai-service-files-test 2> refusal; then
               echo "a symlink runtime directory was accepted" >&2
               exit 1
             fi
+            ${pkgs.gnugrep}/bin/grep -F 'ai.services.files-test: runtime directory must be an owned directory, not a symlink:' refusal
             test "$(stat -c '%a' "$TMPDIR/redirect")" = 755
             unlink "$XDG_RUNTIME_DIR/ai-service-files-test"
             touch "$XDG_RUNTIME_DIR/ai-service-files-test"
-            if ${launcher}/bin/ai-service-files-test; then
+            if ${launcher}/bin/ai-service-files-test 2> refusal; then
               echo "a regular-file runtime directory was accepted" >&2
               exit 1
             fi
+            ${pkgs.gnugrep}/bin/grep -F 'ai.services.files-test: runtime directory must be an owned directory, not a symlink:' refusal
             # A shared fallback root separates users by numeric uid.
             mkdir "$TMPDIR/fallback"
             XDG_RUNTIME_DIR= TMPDIR="$TMPDIR/fallback" ${launcher}/bin/ai-service-files-test
@@ -586,19 +598,14 @@ in {
           name = "secret-files-test";
         };
       in
-        assert lib.assertMsg (
-          # The tag hides no trigger, and a command reads no file.
-          services.triggers secretFiles
-          == ["/build/secret-file"]
-          && services.triggers commandOnly.ai.services.secret == []
-          # A secret file waits for the providers as a reference does.
-          && commandOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"]
-          && (backends.evaluate "hm" {services.plain = daemon;}).systemd.user.services.plain.Unit.After == ["network.target"]
-        ) "ai-module-services-secret-files: triggers and ordering";
-        assert lib.assertMsg (
-          refused (secretFiles // {environment._KEY_FILE = asFile (redact.file "/build/secret-file");})
-          && !(refused secretFiles)
-        ) "ai-module-services-secret-files: a secret file name outside the file-name grammar was accepted";
+        assert harness.checkRows "secret file launcher" {
+          "command-backed secret file needs provider ordering but adds no file trigger" =
+            services.triggers commandOnly.ai.services.secret
+            == []
+            && commandOnly.systemd.user.services.secret.Unit.Wants == ["sops-nix.service"];
+          "secret-file environment name must start with an alphanumeric character" =
+            rejectsLauncherChange secretFiles (secretFiles // {environment._KEY_FILE = asFile (redact.file "/build/secret-file");});
+        };
           pkgs.runCommandLocal "ai-module-services-secret-files" {} ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
@@ -629,10 +636,11 @@ in {
             holds "$dir/config-KEY_FILE" rotated
             # A failed read aborts the start before the daemon runs.
             rm "$RECEIVED/paths"
-            if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-secret-files-test; then
+            if SERVICE_READER_FAIL=1 ${launcher}/bin/ai-service-secret-files-test 2> refusal; then
               echo "a failed secret-file read started the daemon" >&2
               exit 1
             fi
+            ${pkgs.gnugrep}/bin/grep -F 'ai.services.secret-files-test.environment.COMMAND_FILE: reference command failed' refusal
             test ! -e "$RECEIVED/paths"
             touch "$out"
           '';
@@ -725,8 +733,7 @@ in {
       # into the plist, a wrong restart mapping, and a missing or reworded
       # launchd gap warning.
       ai-module-services-darwin-launchd = mkRulesCheck "ai-module-services-darwin-launchd" {
-        agentNames = builtins.attrNames darwin.launchd.agents == ["always" "live" "never" "on-failure"];
-        keepAlive =
+        "only enabled agents land, with the expected KeepAlive values" =
           lib.mapAttrs (_: agent: agent.config.KeepAlive) darwin.launchd.agents
           == {
             always = true;
@@ -734,7 +741,7 @@ in {
             never = false;
             "on-failure" = {SuccessfulExit = false;};
           };
-        liveAgent =
+        "live agent uses the unstamped launcher and does not copy the environment into the plist" =
           darwin.launchd.agents.live
           == {
             config = {
@@ -749,9 +756,9 @@ in {
             };
             enable = true;
           };
-        noReconcile = !(darwin.home.activation ? ai-services-reconcile);
-        noSystemdUnits = darwin.systemd.user.services == {};
-        warnings =
+        "launchd never emits systemd reconciliation" = !(darwin.home.activation ? ai-services-reconcile);
+        "Darwin emits no systemd units" = darwin.systemd.user.services == {};
+        "Darwin warns which services lack rotation, ordering or restart limits" =
           darwin.warnings
           == [
             "ai.services: launchd does not restart a service when a file it read at start changes (a restartOnChange path or a file a reference reads); restart it with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.<name>`. Services: live"

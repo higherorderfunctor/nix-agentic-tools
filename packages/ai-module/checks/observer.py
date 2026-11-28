@@ -12,6 +12,7 @@ LEDGER = "ai-delivery-observed.json"
 OPTIONS = {
     "moved.json": 'ai.codex.files."moved.json"',
     "new.md": 'ai.codex.files."new.md"',
+    "tree/bin/tool": 'ai.files."tree"',
     "tree/nested/deep/leaf.md": 'ai.files."tree"',
 }
 
@@ -23,7 +24,7 @@ def run(bash, phase, root, state, expect=()):
     warnings = [line for line in result.stderr.splitlines() if line.startswith("WARNING:")]
     assert len(warnings) == len(expect), (expect, result.stderr)
     for needle in expect:
-        assert needle in result.stderr, (needle, result.stderr)
+        assert any(line.startswith(f"WARNING: {needle}") for line in warnings), (needle, result.stderr)
     return result.stderr
 
 
@@ -46,7 +47,7 @@ def main():
     fixture = json.loads(Path(sys.argv[1]).read_text())
     bash = sys.argv[2]
     before, after = fixture["before"], fixture["after"]
-    assert set(OPTIONS) <= set(before["links"]), before["links"]
+    assert set(before["links"]) == {*OPTIONS, "consumer.md"}, before["links"]
     with tempfile.TemporaryDirectory() as temporary:
         root, state = Path(temporary) / "root", Path(temporary) / "state"
         root.mkdir()
@@ -61,41 +62,58 @@ def main():
         # Delivered as declared: silent. Unclaimed native links are never inspected.
         link(root, before["links"])
         run(bash, before["inspect"], root, state)
-        assert set(OPTIONS) <= set(json.loads(ledger.read_text())) and "consumer.md" not in json.loads(ledger.read_text())
+        assert json.loads(ledger.read_text()) == {
+            name: {"option": option, "source": before["links"][name]} for name, option in OPTIONS.items()
+        }
 
-        # Every path kind devenv can leave instead of the declared link.
-        for name, option in OPTIONS.items():
-            target = root / name
-            for kind in ["absent", "file", "directory", "stale-link"]:
-                clear(target)
-                if kind == "file":
-                    target.write_text("user content")
-                elif kind == "directory":
-                    target.mkdir()
-                elif kind == "stale-link":
-                    target.symlink_to("/nix/store/old")
-                run(bash, before["inspect"], root, state, [f"{option} is set but devenv did not deliver {target}"])
-            link(root, {name: before["links"][name]})
+        def missing_delivery(name):
+            return f"{OPTIONS[name]} is set but devenv did not deliver {root / name}:"
+
+        # Remove all links to verify every warning uses its own option and path.
+        for name in OPTIONS:
+            clear(root / name)
+        run(bash, before["inspect"], root, state, [missing_delivery(name) for name in OPTIONS])
+        link(root, before["links"])
+
+        # The inspector uses the same link predicate for every path; exercise
+        # a non-link and a wrong target beside the silent valid links.
+        name = "new.md"
+        target = root / name
+        for kind in ("file", "stale-link"):
+            clear(target)
+            if kind == "file":
+                target.write_text("user content")
+            else:
+                target.symlink_to("/nix/store/old")
+            run(bash, before["inspect"], root, state, [missing_delivery(name)])
+        link(root, {name: before["links"][name]})
 
         # Retired: the store link cleanup left behind is reported, kept, and
-        # reported again. The engine's owned `moved.json` copy is not a removal.
+        # reported again. A path now in the engine plan is not a removal,
+        # even if cleanup has not yet removed its old store link.
         retired = [name for name in OPTIONS if name != "moved.json"]
-        assert "moved.json" not in after["links"], after["links"]
+        assert set(after["links"]) == {"consumer.md"}, after["links"]
         # What devenv cleanup does to the links `after` no longer declares.
         for name in set(before["links"]) - set(after["links"]):
             clear(root / name)
-        (root / "moved.json").write_text("user edit")
+        (root / "moved.json").symlink_to(before["links"]["moved.json"])
         for name in retired:
             (root / name).symlink_to(before["links"][name])
         link(root, after["links"])
+        retirement_warnings = [
+            f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}:" for name in retired
+        ]
         for _ in range(2):
-            run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}" for name in retired])
+            run(bash, after["inspect"], root, state, retirement_warnings)
+            assert all(os.readlink(root / name) == before["links"][name] for name in retired)
+            assert os.readlink(root / "moved.json") == before["links"]["moved.json"]
+            assert set(json.loads(ledger.read_text())) == set(retired)
         # A snapshot-only entry knows no source: any store link is reported.
         ledger.write_text(json.dumps({name: {"option": OPTIONS[name]} for name in retired}))
         for name in retired:
             clear(root / name)
             (root / name).symlink_to("/nix/store/other")
-        run(bash, after["inspect"], root, state, [f"{OPTIONS[name]} was removed but devenv left its store link at {root / name}" for name in retired])
+        run(bash, after["inspect"], root, state, retirement_warnings)
         # Whatever the user put there, or nothing, is forgotten silently and kept.
         for kind in ["absent", "file", "directory", "other-store-link", "foreign-link"]:
             ledger.write_text(json.dumps({name: {"option": OPTIONS[name], "source": before["links"][name]} for name in retired}))
@@ -110,8 +128,17 @@ def main():
                 elif kind == "foreign-link":
                     (root / name).symlink_to("../elsewhere")
             run(bash, after["inspect"], root, state)
-            assert not set(retired) & set(json.loads(ledger.read_text())), kind
-            assert kind != "file" or all((root / name).read_text() == "user edit" for name in retired)
+            assert json.loads(ledger.read_text()) == {}, kind
+            for name in retired:
+                target = root / name
+                if kind == "absent":
+                    assert not target.exists() and not target.is_symlink(), name
+                elif kind == "file":
+                    assert target.read_text() == "user edit", name
+                elif kind == "directory":
+                    assert target.is_dir() and not target.is_symlink(), name
+                else:
+                    assert os.readlink(target) == ("/nix/store/other" if kind == "other-store-link" else "../elsewhere"), name
         for name in retired:
             clear(root / name)
 

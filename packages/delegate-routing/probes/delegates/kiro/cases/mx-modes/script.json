@@ -1,11 +1,6 @@
 {
   "steps": [
     {
-      "op": "prompt",
-      "text": "MODE_VIBE_SENTINEL hi",
-      "timeout": 60
-    },
-    {
       "op": "call",
       "method": "session/new",
       "params": {
@@ -23,17 +18,9 @@
       "timeout": 60
     },
     {
-      "op": "call",
-      "method": "session/prompt",
-      "params": {
-        "sessionId": "$S_SPEC",
-        "prompt": [
-          {
-            "type": "text",
-            "text": "MODE_SPEC_SENTINEL hi"
-          }
-        ]
-      },
+      "op": "prompt",
+      "session": "$S_SPEC",
+      "text": "MODE_SPEC_SENTINEL hi",
       "timeout": 90
     },
     {
@@ -54,17 +41,9 @@
       "timeout": 60
     },
     {
-      "op": "call",
-      "method": "session/prompt",
-      "params": {
-        "sessionId": "$S_QUICK_SPEC",
-        "prompt": [
-          {
-            "type": "text",
-            "text": "MODE_QUICK_SPEC_SENTINEL hi"
-          }
-        ]
-      },
+      "op": "prompt",
+      "session": "$S_QUICK_SPEC",
+      "text": "MODE_QUICK_SPEC_SENTINEL hi",
       "timeout": 90
     },
     {
@@ -85,17 +64,9 @@
       "timeout": 60
     },
     {
-      "op": "call",
-      "method": "session/prompt",
-      "params": {
-        "sessionId": "$S_BUG_FIX",
-        "prompt": [
-          {
-            "type": "text",
-            "text": "MODE_BUG_FIX_SENTINEL hi"
-          }
-        ]
-      },
+      "op": "prompt",
+      "session": "$S_BUG_FIX",
+      "text": "MODE_BUG_FIX_SENTINEL hi",
       "timeout": 90
     },
     {
@@ -116,17 +87,9 @@
       "timeout": 60
     },
     {
-      "op": "call",
-      "method": "session/prompt",
-      "params": {
-        "sessionId": "$S_PLAN",
-        "prompt": [
-          {
-            "type": "text",
-            "text": "MODE_PLAN_SENTINEL hi"
-          }
-        ]
-      },
+      "op": "prompt",
+      "session": "$S_PLAN",
+      "text": "MODE_PLAN_SENTINEL hi",
       "timeout": 90
     },
     {
@@ -147,17 +110,9 @@
       "timeout": 60
     },
     {
-      "op": "call",
-      "method": "session/prompt",
-      "params": {
-        "sessionId": "$S_AUTONOMOUS",
-        "prompt": [
-          {
-            "type": "text",
-            "text": "MODE_AUTONOMOUS_SENTINEL hi"
-          }
-        ]
-      },
+      "op": "prompt",
+      "session": "$S_AUTONOMOUS",
+      "text": "MODE_AUTONOMOUS_SENTINEL hi",
       "timeout": 90
     }
   ]

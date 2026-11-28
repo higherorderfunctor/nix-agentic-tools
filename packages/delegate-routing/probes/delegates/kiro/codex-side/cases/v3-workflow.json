@@ -5,9 +5,6 @@
   "initSettings": {
     "workflows": {
       "enabled": true
-    },
-    "inlineAgents": {
-      "enabled": true
     }
   },
   "agents": [
@@ -82,12 +79,6 @@
     },
     {
       "sleep": 1
-    },
-    {
-      "method": "_kiro/workflow/inspect",
-      "params": {
-        "workflowId": "$WF"
-      }
     },
     {
       "method": "_kiro/workflow/pause",

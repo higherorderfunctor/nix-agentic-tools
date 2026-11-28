@@ -14,25 +14,15 @@ from pathlib import Path
 from typing import Any
 
 from hypothesis import example, given, settings, strategies as st
-from pydantic import BaseModel, JsonValue, RootModel, ValidationError
+from pydantic import BaseModel, ValidationError
 
 SCRIPTS = Path(sys.argv[1])
 sys.path[:0] = [str(SCRIPTS), str(Path(__file__).resolve().parent)]
 CASES = Path(sys.argv[2])
 import usage_normalize as N
-from reader_fixture import reader_stdout
+from reader_fixture import read_cases, reader_stdout
 
 NOW = 1794447300
-
-
-class RefusedConfiguration(BaseModel):
-    """Name the configuration error a handwritten case expects."""
-
-    validationError: str
-
-
-class ExpectedOutput(RootModel[JsonValue]):
-    """Preserve the expected JSON literally, including missing and extra keys."""
 
 
 class Case(BaseModel):
@@ -42,79 +32,73 @@ class Case(BaseModel):
     snapshot: Any
 
 
-def read_expected(path: Path) -> ExpectedOutput | RefusedConfiguration:
-    """Parse exactly one expected file, keeping normal and error outcomes separate."""
-    output_path = path / "expected.json"
-    error_path = path / "expected-error.json"
-    if output_path.exists() == error_path.exists():
-        raise ValueError(f"{path.name}: requires exactly one expected file")
-    if error_path.exists():
-        return RefusedConfiguration.model_validate_json(error_path.read_text())
-    return ExpectedOutput.model_validate_json(output_path.read_text())
-
-
-def load_cases() -> list[tuple[str, Case, ExpectedOutput | RefusedConfiguration]]:
-    """Parse each input and expected outcome once, in a stable order."""
-    paths = sorted(path for path in CASES.iterdir() if path.is_dir())
-    return [
-        (
-            path.name,
-            Case.model_validate_json((path / "input.json").read_text()),
-            read_expected(path),
-        )
-        for path in paths
-    ]
-
-
-def snapshot_with_windows(windows: dict[str, object]) -> N.Snapshot:
-    """Build the smallest registered snapshot that carries the tested windows."""
-    captures = {"budget": N.Capture(exit=0, stdout=reader_stdout(windows))}
+def snapshot_with_windows(limits: dict[str, N.LimitSpec], windows: dict[str, object] | None) -> N.Snapshot:
+    """Bind configured windows to a saved capture, or omit the failed capture."""
+    readers = {} if windows is None else {"budget": N.Capture(exit=0, stdout=reader_stdout(windows))}
     return N.Snapshot(
-        pools={
-            "budget": N.SnapshotRegistration(
-                readerPool="reader",
-                limits={
-                    "allowance": N.LimitSpec(
-                        capacity=40.0,
-                        models=["canonical-a"],
-                        role="pace",
-                        window="7d",
-                    )
-                },
-            )
-        },
-        readers=captures,
+        pools={"budget": N.SnapshotRegistration(readerPool="reader", limits=limits)},
+        readers=readers,
         routes=[N.Route(id="canonical-a", maker=None, model="served-fable")],
     )
-
 
 class WholeOutcomes(unittest.TestCase):
     """Check complete normalizer results and properties that span many inputs."""
 
     def test_handwritten_cases_match_the_complete_normalizer_result(self) -> None:
-        """Wrong: any changed or omitted output field passes unnoticed."""
-        cases = load_cases()
-        self.assertTrue(cases, "pacing case directory is empty")
-        for name, case, expected in cases:
-            with self.subTest(case=name):
-                if isinstance(expected, RefusedConfiguration):
+        regressions = {
+            "duplicate-window-refuses-configuration": "two limits claim one Reader window",
+            "exhausted-window-survives-broken-timing": "a malformed duration hides a recorded zero",
+            "expired-reset-is-stale": "an expired reset erases a proven zero or implies a refill",
+            "invalid-envelope-keeps-limit": "a structurally invalid Reader result loses the limit slot",
+            "invalid-json-keeps-limit": "malformed JSON is mislabeled as an invalid envelope",
+            "missing-reset-role-contrast": "gate and pace evidence with no reset are treated alike",
+            "missing-window-keeps-limit": "a valid Reader missing the registered window loses the limit slot",
+            "nonzero-exit-keeps-limit": "a failed Reader supplies allowance from its stdout",
+            "pool-mismatch-keeps-limit": "another pool's Reader supplies evidence",
+            "positive-broken-window-becomes-unknown": "an invalid reset still supplies positive allowance",
+            "unknown-route-refuses-configuration": "a served model name stands in for the canonical route id",
+            "unregistered-window-breaks-scope": "an unexplained extra window leaves scope resolved",
+            "valid-window-enforced-states": "unknown or invalid enforcement becomes known and enforced",
+        }
+        cases = read_cases(CASES)
+        self.assertEqual(cases.keys(), regressions.keys())
+        for name, (input_path, expected_path) in cases.items():
+            with self.subTest(case=name, regression=regressions[name]):
+                case = Case.model_validate_json(input_path.read_text())
+                expected = json.loads(expected_path.read_text())
+                if expected_path.name == "expected-error.json":
                     with self.assertRaises(ValidationError) as failure:
                         N.Snapshot.model_validate(case.snapshot)
-                    self.assertIn(expected.validationError, str(failure.exception))
-                    continue
-                actual = N.normalize(
-                    N.Snapshot.model_validate(case.snapshot), case.now
-                ).model_dump(mode="json")
-                self.assertEqual(actual, expected.root)
+                    location = ("pools", "budget") if name == "duplicate-window-refuses-configuration" else ()
+                    self.assertEqual(
+                        [(issue["loc"], issue["type"], str(issue.get("ctx", {}).get("error")))
+                         for issue in failure.exception.errors()],
+                        [(location, "value_error", expected["validationError"])],
+                    )
+                    limits = case.snapshot["pools"]["budget"]["limits"]
+                    if name == "duplicate-window-refuses-configuration":
+                        limits["second"]["window"] = "5h"
+                    else:
+                        limits["allowance"]["models"] = ["canonical-a"]
+                    control = N.normalize(N.Snapshot.model_validate(case.snapshot), case.now)
+                    self.assertEqual([item.id for item in control.pools["budget"].limits], sorted(limits))
+                else:
+                    actual = N.normalize(N.Snapshot.model_validate(case.snapshot), case.now)
+                    self.assertEqual(actual.model_dump(mode="json"), expected)
 
     def test_reader_requires_balances_and_bonuses_arrays(self) -> None:
         """Wrong: a missing or object-valued collection supplies usable Reader evidence."""
         fixtures = Path(__file__).resolve().parent / "invalid-reader-arrays"
         expected = json.loads((fixtures / "expected.json").read_text())
-        for name, stdout in json.loads((fixtures / "input.json").read_text()).items():
+        invalid = json.loads((fixtures / "input.json").read_text())
+        self.assertEqual(set(invalid), {"balances-missing", "balances-object", "bonuses-missing", "bonuses-object"})
+        registration = N.SnapshotRegistration(readerPool="reader", limits={})
+        for name, stdout in invalid.items():
             with self.subTest(case=name):
-                evidence = N.read_capture({"exit": 0, "stdout": stdout}, N.SnapshotRegistration(readerPool="reader", limits={}))
+                evidence = N.read_capture({"exit": 0, "stdout": stdout}, registration)
                 self.assertEqual(evidence._asdict(), expected)
+        evidence = N.read_capture({"exit": 0, "stdout": reader_stdout({})}, registration)
+        self.assertIsNone(evidence.reason)
 
     @example(remaining=0, breakage="quantities-total-not-100")
     @given(
@@ -140,10 +124,13 @@ class WholeOutcomes(unittest.TestCase):
         else:
             durations = {"negative-duration": -604800.0, "zero-duration": 0.0, "text-duration": "not-a-duration"}
             window["windowSeconds"] = durations[breakage]
-        result = N.normalize(snapshot_with_windows({"7d": window}), NOW)
-        observation = result.pools["budget"].limits[0]
-        self.assertEqual(observation.status, "invalid")
-        self.assertEqual(observation.remaining, 0 if remaining == 0 else None)
+        limits = {"allowance": N.LimitSpec(capacity=40.0, models=["canonical-a"], role="pace", window="7d")}
+        result = N.normalize(snapshot_with_windows(limits, {"7d": window}), NOW)
+        reason = "invalid-window: window" if breakage == "quantities-total-not-100" else "invalid-window: windowSeconds"
+        self.assertEqual(
+            [(item.id, item.status, item.reason, item.remaining) for item in result.pools["budget"].limits],
+            [("allowance", "invalid", reason, 0 if remaining == 0 else None)],
+        )
 
     @given(
         names=st.lists(
@@ -157,7 +144,7 @@ class WholeOutcomes(unittest.TestCase):
     def test_every_configured_limit_keeps_its_slot_when_capture_fails(
         self, names: list[str], capture_fails: bool
     ) -> None:
-        """Wrong: a failed Reader drops configured limits from the result."""
+        """Wrong: a failed Reader drops configured limit slots or reorders them."""
         limits = {
             name: N.LimitSpec(
                 capacity=10.0,
@@ -177,21 +164,11 @@ class WholeOutcomes(unittest.TestCase):
             }
             for spec in limits.values()
         }
-        snapshot = N.Snapshot(
-            pools={"budget": N.SnapshotRegistration(readerPool="reader", limits=limits)},
-            readers={} if capture_fails
-            else {
-                "budget": N.Capture(
-                    exit=0,
-                    stdout=reader_stdout(windows),
-                )
-            },
-            routes=[N.Route(id="canonical-a", maker=None, model="served-fable")],
-        )
+        snapshot = snapshot_with_windows(limits, None if capture_fails else windows)
         result = N.normalize(snapshot, NOW)
         self.assertEqual(
-            [observation.id for observation in result.pools["budget"].limits],
-            sorted(names),
+            [(item.id, item.reason) for item in result.pools["budget"].limits],
+            [(name, "missing-capture" if capture_fails else "enforced-unknown") for name in sorted(names)],
         )
 
 

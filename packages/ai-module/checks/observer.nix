@@ -33,18 +33,21 @@
   };
   evaluated = lib.mapAttrs (_: config: (harness.evalDevenv config).config) configs;
   edges = task: {inherit (task) after before;};
-  failures =
-    lib.optional (edges evaluated.before.tasks."ai:files-snapshot"
-      != {
-        after = [];
-        before = ["devenv:files:cleanup"];
-      }) "snapshot precedes cleanup"
-    ++ lib.optional (edges evaluated.before.tasks."ai:files-inspect"
-      != {
+  ordering = harness.checkRows "devenv observer" {
+    "inspect follows materialization and precedes shell entry" =
+      edges evaluated.before.tasks."ai:files-inspect"
+      == {
         after = ["ai:files-ready"];
         before = ["devenv:enterShell"];
-      }) "inspect follows materialized"
-    ++ lib.optional (!(evaluated.before.tasks."ai:files-inspect".showOutput or false)) "inspect output shown";
+      };
+    "passing task still shows delivery warnings" = evaluated.before.tasks."ai:files-inspect".showOutput or false;
+    "snapshot reads upstream state before cleanup can replace it" =
+      edges evaluated.before.tasks."ai:files-snapshot"
+      == {
+        after = [];
+        before = ["devenv:files:cleanup"];
+      };
+  };
   fixture = builtins.toJSON (lib.mapAttrs (_: config: {
       inspect = config.tasks."ai:files-inspect".exec;
       links = lib.mapAttrs (_: file: "${file.file}") (lib.filterAttrs (_: file: file.copyMode == "symlink") config.files);
@@ -52,7 +55,7 @@
     })
     evaluated);
 in {
-  checks.ai-module-observer = assert lib.assertMsg (failures == []) "ai-module observer: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-observer = assert ordering;
     pkgs.runCommandLocal "ai-module-observer" {passthru = {inherit fixture;};} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

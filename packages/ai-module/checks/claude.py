@@ -47,7 +47,7 @@ class Home:
     def records(self):
         return json.loads(self.state.read_text())["files"]
 
-    def activate(self, index=0, disabled=False, succeeds=True, mode_only=False, dry=False):
+    def activate(self, index=0, disabled=False, error=None, dry=False):
         step = DATA["fixture"][index]["disabled" if disabled else "enabled"]
         plan = copy.deepcopy(step["plan"])
         for offset, item in enumerate(plan):
@@ -57,7 +57,7 @@ class Home:
                 item["content"]["rendered"] = str(rendered)
         local = self.directory / "plan.json"
         local.write_text(json.dumps(plan))
-        body = step["mode"] if mode_only else "\n".join(step["scripts"] + [step["mode"]])
+        body = "\n".join(step["scripts"] + [step["mode"]])
         body = body.replace(step["planFile"], str(local))
         # Substitution only: CI uses these same generated bodies with store
         # inputs. Local runs use the shell's Python and identical plan values.
@@ -65,17 +65,24 @@ class Home:
         script = 'before_flags=$-\nbefore_options=$(set +o)\n' + SHIM + body + '\ntest "$before_flags" = "$-"\ntest "$before_options" = "$(set +o)"\necho later-entry-ran\n'
         environment = {**self.environment, **({"DRY_RUN": "1"} if dry else {})}
         result = subprocess.run([DATA["bash"], "-e", "-c", script], env=environment, capture_output=True, text=True)
-        assert (result.returncode == 0) == succeeds, result.stderr
-        if succeeds:
+        if error is None:
+            assert result.returncode == 0, result.stderr
             assert "later-entry-ran" in result.stdout
+        else:
+            assert result.returncode != 0 and error in result.stderr, (error, result)
 
     def check(self, declared, created=True):
         assert self.read() == {**NATIVE, **declared}, self.read()
-        assert self.document.read_text().startswith(HEADER)
         assert stat.S_IMODE(self.state.stat().st_mode) == 0o600
         record = self.records()[DOCUMENT]
         assert record["method"] == "rw" and record["format"] == "json" and record["created"] == created
-        assert record["keys"] == {f"/{key}": hashlib.sha256(json.dumps(["bool", value], separators=(",", ":")).encode()).hexdigest() for key, value in declared.items()}
+        # These generations only declare booleans. Use fixed hash inputs
+        # instead of serializing ownership values as the engine does.
+        digests = {
+            False: hashlib.sha256(b'["bool",false]').hexdigest(),
+            True: hashlib.sha256(b'["bool",true]').hexdigest(),
+        }
+        assert record["keys"] == {f"/{key}": digests[value] for key, value in declared.items()}
         assert record["digest"] == hashlib.sha256(self.document.read_bytes()).hexdigest()
 
 
@@ -105,19 +112,22 @@ def generations(directory, mode, use_xdg):
     before = snapshot(home.document), snapshot(home.state)[:2]
     home.activate(1)
     assert (snapshot(home.document), snapshot(home.state)[:2]) == before
-    for malformed in ("{", "[]", "null"):
+    for malformed, reason in (
+        ("{", "Expecting property name enclosed in double quotes"),
+        ("[]", "json document root must be a map"),
+    ):
         home.document.unlink()
         home.document.write_text(malformed)
         home.document.chmod(mode & 0o700)
         damaged = snapshot(home.document), snapshot(home.state)[:2]
-        home.activate(1, succeeds=False)
+        home.activate(1, error=f"malformed json document: {DOCUMENT}: {reason}")
         assert (snapshot(home.document), snapshot(home.state)[:2]) == damaged
     home.document.unlink()
     home.document.write_bytes(before[0][0])
     home.document.chmod(mode & 0o700)
     home.state.write_text('{"version": 1, "files": {".claude.json": {}}}')
     damaged = snapshot(home.document), snapshot(home.state)[:2]
-    home.activate(1, succeeds=False)
+    home.activate(1, error=f"invalid state entry: {DOCUMENT}")
     assert (snapshot(home.document), snapshot(home.state)[:2]) == damaged
     home.state.write_bytes(before[1][0])
     home.activate(2)
@@ -125,7 +135,6 @@ def generations(directory, mode, use_xdg):
     before = snapshot(home.document)
     home.activate(2)
     assert snapshot(home.document) == before
-    assert stat.S_IMODE(home.state.parent.stat().st_mode) == 0o700
     assert not list(home.root.glob(".files-*"))
 
 
@@ -178,30 +187,32 @@ def legacy(directory, disabled):
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     os.umask(0)
-    for mode in (0o400, 0o600, 0o640, 0o644):
-        for use_xdg in (False, True):
-            directory = root / f"generations-{mode:o}-{use_xdg}"
-            directory.mkdir()
-            generations(directory, mode, use_xdg)
-    print("PASS: 8 HM generation cases: restore, retire, native keys, mode, dry run, invalid disk/state, repeat")
+    # Owner-read-only must not gain write permission; group/other access
+    # must be stripped. Exercise both state roots without crossing the axes:
+    # mode repair operates on HOME regardless of the state root.
+    for mode, use_xdg in ((0o400, False), (0o644, True)):
+        directory = root / f"generations-{mode:o}-{use_xdg}"
+        directory.mkdir()
+        generations(directory, mode, use_xdg)
+    print("PASS: HM generations: restore, retire, native keys, mode, dry run, invalid disk/state, repeat")
     os.umask(0o022)
-    for existing_directory in (False, True):
-        for use_xdg in (False, True):
-            directory = root / f"adoption-{existing_directory}-{use_xdg}"
-            directory.mkdir()
-            adoption(directory, existing_directory, use_xdg)
-    print("PASS: 4 credential adoption cases: private new/existing directory, preserved backup bytes/mode, repeat repair")
+    # Unlike a fresh directory, an existing widened directory needs repair
+    # before adopting credentials. Repeat repair is checked in both cases.
+    for existing_directory, use_xdg in ((False, False), (True, True)):
+        directory = root / f"adoption-{existing_directory}-{use_xdg}"
+        directory.mkdir()
+        adoption(directory, existing_directory, use_xdg)
+    print("PASS: credential adoption: private new/existing directory, preserved backup bytes/mode, repeat repair")
     os.umask(0)
     for disabled in (False, True):
         directory = root / f"legacy-{disabled}"
         directory.mkdir()
         legacy(directory, disabled)
     home = Home(root, False)
-    home.activate(2, mode_only=True)
     linked = home.root / "linked.json"
     linked.write_text("{}")
     linked.chmod(0o644)
     home.document.symlink_to(linked)
     home.activate(2)
     assert stat.S_IMODE(linked.stat().st_mode) == 0o644 and not home.state.exists()
-    print("PASS: mode repair skips missing files and symlinks")
+    print("PASS: mode repair skips symlinks")

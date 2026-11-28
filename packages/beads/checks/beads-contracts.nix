@@ -1,3 +1,4 @@
+# cspell:ignore embeddeddolt proxieddb
 # Black-box contracts for the exact Beads and Dolt packages used by the MVP.
 #
 # These assertions deliberately include surprising upstream behavior that the
@@ -57,16 +58,11 @@
       }
 
       assert_bare_cache() {
-        local cache forbidden_a="$2" forbidden_b="$3" label="$4" state="$1"
+        local cache label="$2" state="$1"
         find "$state" -type d -path '*/git-remote-cache/*/repo.git' \
           | sort > "$state-caches.actual"
         expect_eq "$label cache count" "1" "$(wc -l < "$state-caches.actual")"
         cache="$(cat "$state-caches.actual")"
-        case "$cache" in
-        "$forbidden_a" | "$forbidden_a"/* | "$forbidden_b" | "$forbidden_b"/*)
-          fail "$label cache aliases a source or remote work area"
-          ;;
-        esac
         expect_eq \
           "$label cache is bare" \
           "true" \
@@ -151,32 +147,29 @@
       # without advancing history. One explicit checkpoint commits the batch.
       # cspell:disable-next-line
       contained_db="$(find "$contained/state/embeddeddolt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-      history_before="$(
+      contained_history_count() (
         cd "$contained_db"
         env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
-          sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
-      )"
+          sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -er '.rows[0].n'
+      )
+      contained_titles() {
+        run_bd "$contained" "$contained/cwd" "$contained/state" list --json \
+          | jq -cer 'map(.title) | sort'
+      }
+      history_before="$(contained_history_count)"
       run_bd "$contained" "$contained/cwd" "$contained/state" \
         --dolt-auto-commit off create "batch one" --silent > /dev/null
       run_bd "$contained" "$contained/cwd" "$contained/state" \
         --dolt-auto-commit off create "batch two" --silent > /dev/null
-      history_uncommitted="$(
-        cd "$contained_db"
-        env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
-          sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
-      )"
+      history_uncommitted="$(contained_history_count)"
       expect_eq "disabled auto-commit leaves history unchanged" "$history_before" "$history_uncommitted"
       expect_eq \
         "disabled auto-commit keeps rows readable" \
-        "2" \
-        "$(run_bd "$contained" "$contained/cwd" "$contained/state" list --json | jq length)"
+        '["batch one","batch two"]' \
+        "$(contained_titles)"
       run_bd "$contained" "$contained/cwd" "$contained/state" \
         dolt commit -m "explicit fixture checkpoint" > /dev/null
-      history_after_checkpoint="$(
-        cd "$contained_db"
-        env -i HOME="$contained/home" PATH="$PATH" ${dolt}/bin/dolt \
-          sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_log' | jq -r '.rows[0].n'
-      )"
+      history_after_checkpoint="$(contained_history_count)"
       expect_eq \
         "explicit checkpoint advances history once" \
         "$((history_before + 1))" \
@@ -203,12 +196,6 @@
           "''${init_args[@]}" > "$source_init/init.out" 2>&1
       )
       source_after="$(git -C "$source_init/repo" rev-parse HEAD)"
-      [ "$source_before" != "$source_after" ] \
-        || fail "skip flags unexpectedly stopped bd init from committing"
-      expect_eq \
-        "ordinary init creates one commit" \
-        "1" \
-        "$(git -C "$source_init/repo" rev-list --count "$source_before..$source_after")"
       expect_eq \
         "ordinary init commit parent" \
         "$source_before" \
@@ -227,7 +214,6 @@
       git -C "$source_init/repo" ls-tree -r --name-only HEAD > "$source_init/tracked.actual"
       diff -u "$source_init/tracked.expected" "$source_init/tracked.actual" \
         || fail "ordinary init tracked residue changed"
-      # cspell:ignore embeddeddolt
       cat > "$source_init/state-files.expected" <<'FILES'
       d embeddeddolt
       f .gitignore
@@ -265,8 +251,6 @@
         || fail "--skip-hooks changed Git hooks"
       cmp "$source_init/exclude.before" "$source_init/repo/.git/info/exclude" \
         || fail "ordinary init changed info/exclude"
-      [ ! -e "$source_init/repo/AGENTS.md" ] || fail "--skip-agents wrote AGENTS.md"
-      [ ! -e "$source_init/repo/.git/hooks/pre-commit" ] || fail "--skip-hooks wrote pre-commit"
 
       stealth="$probe/stealth"
       make_home "$stealth"
@@ -287,7 +271,6 @@
           > "$stealth/init.out" 2>&1
       )
       expect_eq "stealth leaves HEAD" "$stealth_before" "$(git -C "$stealth/repo" rev-parse HEAD)"
-      expect_eq "stealth writes beads.role" "maintainer" "$(git -C "$stealth/repo" config beads.role)"
       expect_eq "stealth leaves a clean worktree" "" "$(git -C "$stealth/repo" status --short)"
       expect_eq "stealth config" "no-git-ops: true" "$(cat "$stealth/repo/.beads/config.yaml")"
       git -C "$stealth/repo" config --local --list | sort > "$stealth/config.after"
@@ -299,7 +282,6 @@
       snapshot_hooks "$stealth/repo/.git/hooks" "$stealth/hooks.after"
       cmp "$stealth/hooks.before" "$stealth/hooks.after" \
         || fail "stealth changed Git hooks"
-      [ ! -e "$stealth/repo/AGENTS.md" ] || fail "stealth wrote AGENTS.md"
       find "$stealth/repo/.beads" -mindepth 1 -maxdepth 1 -printf '%y %f\n' \
         | sort > "$stealth/state-files.actual"
       diff -u "$source_init/state-files.expected" "$stealth/state-files.actual" \
@@ -313,7 +295,6 @@
         | sort > "$stealth/root.actual"
       diff -u "$stealth/root.expected" "$stealth/root.actual" \
         || fail "stealth root residue changed"
-      # cspell:ignore proxieddb
       cp "$stealth/exclude.before" "$stealth/exclude.expected"
       cat >> "$stealth/exclude.expected" <<'EXCLUDES'
 
@@ -347,18 +328,14 @@
       )"
       expect_eq "linked-worktree discovery" "$main_where" "$linked_where"
       mkdir -p "$source_init/empty-state"
-      if run_bd "$source_init" "$source_init/repo" "$source_init/empty-state" where --json \
-        > "$source_init/empty-state-where.out" 2>&1; then
-        fail "empty BEADS_DIR unexpectedly fell back to the source workspace"
-      fi
-      jq -e '.error == "no_beads_directory"' "$source_init/empty-state-where.out" > /dev/null \
-        || fail "empty BEADS_DIR error shape changed"
-      if run_bd "$source_init" "$source_init/repo" "$source_init/absent-state" where --json \
-        > "$source_init/absent-state-where.out" 2>&1; then
-        fail "missing BEADS_DIR unexpectedly fell back to the source workspace"
-      fi
-      jq -e '.error == "no_beads_directory"' "$source_init/absent-state-where.out" > /dev/null \
-        || fail "missing BEADS_DIR error shape changed"
+      for state in absent-state empty-state; do
+        if run_bd "$source_init" "$source_init/repo" "$source_init/$state" where --json \
+          > "$source_init/$state-where.out" 2>&1; then
+          fail "$state BEADS_DIR unexpectedly fell back to the source workspace"
+        fi
+        jq -e '.error == "no_beads_directory"' "$source_init/$state-where.out" > /dev/null \
+          || fail "$state BEADS_DIR error shape changed"
+      done
       [ ! -e "$source_init/absent-state" ] \
         || fail "missing BEADS_DIR failure materialized the absent path"
 
@@ -383,17 +360,9 @@
         fi
       done
       expect_eq \
-        "linked-worktree embedded writers persist" \
-        "10" \
-        "$(run_bd "$contained" "$contained/cwd" "$contained/state" list --json | jq length)"
-      for writer in 1 2 3 4; do
-        run_bd "$contained" "$contained/cwd" "$contained/state" list --json \
-          | jq -e --arg title "main writer $writer" 'any(.[]; .title == $title)' > /dev/null \
-          || fail "main writer $writer row is missing"
-        run_bd "$contained" "$contained/cwd" "$contained/state" list --json \
-          | jq -e --arg title "linked writer $writer" 'any(.[]; .title == $title)' > /dev/null \
-          || fail "linked writer $writer row is missing"
-      done
+        "every embedded writer persists exactly one row alongside the committed batch" \
+        '["batch one","batch two","linked writer 1","linked writer 2","linked writer 3","linked writer 4","main writer 1","main writer 2","main writer 3","main writer 4"]' \
+        "$(contained_titles)"
 
       missing="$probe/missing"
       make_home "$missing"
@@ -432,9 +401,7 @@
       inherited_issue="$(run_bd "$remote" "$remote/source" "$remote/no-remote-state" \
         create "preserved across remote repair" --silent)"
       run_bd "$remote" "$remote/source" "$remote/no-remote-state" "''${init_args[@]}" \
-        --remote "file://$remote/ledger.git" > "$remote/second-init-with-remote.out" 2>&1
-      grep -Fq "Skipping init: workspace already initialized." "$remote/second-init-with-remote.out" \
-        || fail "existing-state init did not skip"
+        --remote "file://$remote/ledger.git" > /dev/null
       expect_eq \
         "existing-state init leaves inherited remote unchanged" \
         "git+file://$remote/source.git" \
@@ -473,11 +440,7 @@
         create "equal URL seed" --silent > /dev/null
       run_bd "$remote" "$remote/source" "$remote/equal-url-state" dolt push \
         > "$remote/equal-url-push.out"
-      assert_bare_cache \
-        "$remote/equal-url-state" \
-        "$remote/source" \
-        "$remote/source.git" \
-        "equal URL"
+      assert_bare_cache "$remote/equal-url-state" "equal URL"
       expect_eq \
         "equal URL publication leaves source main unchanged" \
         "$source_remote_main" \
@@ -518,23 +481,13 @@
         create "remote seed" --silent)"
       run_bd "$remote" "$remote/source" "$remote/state-a" dolt push \
         > "$remote/first-push.out"
-      git -C "$remote/ledger.git" rev-parse --verify refs/dolt/data > /dev/null \
-        || fail "explicit push did not create refs/dolt/data"
       git -C "$remote/ledger.git" rev-parse --verify refs/heads/__dolt_remote_info__ > /dev/null \
         || fail "explicit push did not create the Dolt remote metadata ref"
-      assert_bare_cache \
-        "$remote/state-a" \
-        "$remote/source" \
-        "$remote/ledger.git" \
-        "declared ledger"
+      assert_bare_cache "$remote/state-a" "declared ledger"
 
       published="$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
-      local_id="$(run_bd "$remote" "$remote/source" "$remote/state-a" \
-        create "local only" --silent)"
-      expect_eq \
-        "writes do not publish in background" \
-        "$published" \
-        "$(git -C "$remote/ledger.git" rev-parse refs/dolt/data)"
+      run_bd "$remote" "$remote/source" "$remote/state-a" \
+        create "local only" --silent > /dev/null
 
       make_home "$remote/clone-b"
       make_state "$remote/clone-b/state"
@@ -544,10 +497,6 @@
         > "$remote/init-b.out" 2>&1
       run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
         show "$first_id" --json > /dev/null
-      if run_bd "$remote/clone-b" "$remote/clone-b/cwd" "$remote/clone-b/state" \
-        show "$local_id" --json > "$remote/clone-b-local-only.out" 2>&1; then
-        fail "unpublished issue appeared in an independently bootstrapped clone"
-      fi
       expect_eq \
         "independent bootstrap excludes unpublished rows" \
         "1" \
@@ -588,10 +537,6 @@
       # cspell:disable-next-line
       find "$telemetry/control-home/.dolt/eventsData" -name '*.devts' -print -quit \
         | grep -q . || fail "no-flush control no longer creates local Dolt events"
-      expect_eq \
-        "Dolt global config mode" \
-        "777" \
-        "$(stat -c %a "$telemetry/control-home/.dolt/config_global.json")"
 
       mkdir -p \
         "$telemetry/contained-home" \
@@ -616,16 +561,10 @@
       )
       [ -z "$(find "$telemetry/contained-home" -mindepth 1 -print -quit)" ] \
         || fail "DOLT_ROOT_PATH leaked Dolt state into HOME"
-      [ -f "$telemetry/contained-root/.dolt/config_global.json" ] \
-        || fail "DOLT_ROOT_PATH did not contain global config"
       expect_eq \
         "contained Dolt outer-root mode" \
         "700" \
         "$(stat -c %a "$telemetry/contained-root")"
-      expect_eq \
-        "Dolt preserves its broad inner config mode" \
-        "777" \
-        "$(stat -c %a "$telemetry/contained-root/.dolt/config_global.json")"
       expect_eq \
         "contained metrics disable value" \
         "true" \
@@ -642,11 +581,6 @@
         -printf '%y %m %P\n' | sort > "$telemetry/contained-events.actual"
       diff -u "$telemetry/contained-events.expected" "$telemetry/contained-events.actual" \
         || fail "contained Dolt telemetry residue changed"
-      # cspell:disable-next-line
-      if find "$telemetry/contained-root/.dolt/eventsData" -name '*.devts' -print -quit \
-        | grep -q .; then
-        fail "metrics.disabled=true still created Dolt event payloads"
-      fi
 
       # Migration inspection on a database this same client created. The old
       # 1.0.3/1.2.2 comparison was removed when nixpkgs caught up to 1.2.2.

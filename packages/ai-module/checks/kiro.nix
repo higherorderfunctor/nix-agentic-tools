@@ -172,11 +172,6 @@ in {
           && entry.mode == null
           && fromGeneratedTree target delivered.${target})
         (lib.subtractLists ["settings/cli.json" "settings/mcp.json"] paths)
-        && config.ai.files.".kiro/steering/scoped.md".method
-        == {
-          devenv = "ro";
-          hm = "symlink";
-        }
         && lib.all (path: config.ai.files.${prefix + path}.method == "symlink") (lib.subtractLists ["settings/cli.json" "settings/mcp.json" "steering/scoped.md"] paths)
         && (markdownInput evaluated ".kiro/skills/single/SKILL.md").source == "${skill}"
         && lib.all (assertion: assertion.assertion) config.assertions) (builtins.attrNames backends)

@@ -9,8 +9,6 @@
      1. PORTABLE FIRST
         continued
      2. PORTABLE ADDED
-     3. PORTABLE SECOND
-     4. SOURCE
-        continued
-     5. PORTABLE REPLACED
+     3. SOURCE
+     4. PORTABLE REPLACED
 ''

@@ -15,9 +15,5 @@
     "events": ["SUMMARY_SENTINEL"],
     "match": "automated summarization request"
   },
-  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
-  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
-  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
-  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
-  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null }
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null, "reuse": true }
 ]

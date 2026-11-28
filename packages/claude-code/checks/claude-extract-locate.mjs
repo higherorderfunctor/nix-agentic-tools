@@ -76,6 +76,17 @@ const check = (name, ok, detail) => {
   );
 };
 
+// Unexpected successes return no diagnostic; a throw only passes if the
+// caller matches the diagnostic for the constraint it meant to exercise.
+const failureMessage = (call) => {
+  try {
+    call();
+    return "";
+  } catch (error) {
+    return error.message;
+  }
+};
+
 // In the settings builder, a preprocess pipe holds the callback on its input.
 {
   const change = (value) => (value === "old" ? "new" : value);
@@ -126,16 +137,13 @@ check(
       "function B(e,n={}){let s=F(e,n);return new S(s).whole()}",
   ) === "B",
 );
-let schemaAmbiguity;
-try {
+const schemaAmbiguity = failureMessage(() =>
   L.locateBuilderByDescription(
     `function F(e){return {$schema:()=>z.describe(${JSON.stringify(schemaDescription)})}}` +
       "function B(e){let s=F(e);return new S(s).whole()}" +
       "function C(e){let s=F(e);return new S(s).whole()}",
-  );
-} catch (error) {
-  schemaAmbiguity = error.message;
-}
+  ),
+);
 check(
   "schema descriptor factory with two whole-schema wrappers: throws on ambiguity",
   schemaAmbiguity ===
@@ -143,66 +151,57 @@ check(
   schemaAmbiguity,
 );
 
-// ── Every shape that has shipped confirms, with the right local and count ──
+// ── Single-family cases cover the original registry cell and escaped aliases ──
 const shipped = [
-  ["memo-bun.js.txt", "k", "M", 3],
-  ["memo-registry-cell.js.txt", "f", "f", 2],
-  ["memo-registry-built.js.txt", "f", "f", 4],
+  [
+    "memo-registry-cell.js.txt",
+    "f",
+    "f",
+    2,
+    "rejects the original registry cell",
+  ],
   // A `$` in the importing module's local name is a RegExp metacharacter
   // when interpolated; the locator must escape it rather than mis-scan.
-  ["memo-registry-built.js.txt", "f", "$M", 2],
+  [
+    "memo-registry-built.js.txt",
+    "f",
+    "$M",
+    2,
+    "treats the local name as a regular expression",
+  ],
 ];
-for (const [file, exported, local, n] of shipped) {
+for (const [file, exported, local, n, regression] of shipped) {
   const src = settingsUsing(`./${file}`, exported, local, n);
   const memo = L.locateMemoizerLocal(src, readSpec);
   check(
-    `${file} as ${local}: confirmed from the defining module`,
-    memo !== null &&
-      memo.source === "import" &&
-      memo.local === local &&
-      memo.spec === `./${file}` &&
-      memo.thunkSites === n &&
-      memo.all.length === 1,
+    `${file} as ${local}: ${regression}`,
+    memo !== null && memo.all.length === 1 && memo.all[0].local === local,
     memo,
   );
-  if (memo)
-    check(
-      `${file} as ${local}: enumerates ${n} init thunks`,
-      L.locateInitThunks(src, memo.local).length === n,
-    );
 }
 
-// ── The registry method is recognised by contract, not by body text ──
-for (const file of [
-  "memo-registry-cell.js.txt",
-  "memo-registry-built.js.txt",
-]) {
-  const m = L.locateLazyRegistryMethod(fixture(file));
-  check(
-    `${file}: lazy(e) owns cell t`,
-    m !== null && m.param === "e" && m.cell === "t",
-    m,
-  );
-}
-check(
-  "memo-bun.js: bun lowering is NOT mistaken for the registry",
-  L.locateLazyRegistryMethod(fixture("memo-bun.js.txt")) === null,
+// The census executes thunks by binding name, in discovery order; a count
+// cannot detect a capture of the callee instead of the initialized binding.
+const thunks = L.locateInitThunks(
+  "var first=$M(()=>{});var decoy=M(()=>{});let second=$M(()=>{});",
+  "$M",
 );
 check(
-  "decoy-eager-fill.js: a returned arrow that only READS the cell is not lazy",
-  L.locateLazyRegistryMethod(fixture("decoy-eager-fill.js.txt")) === null,
+  "init thunks: captures the bindings in source order",
+  thunks.join() === "first,second",
+  thunks,
 );
 
 // ── Decoys must not confirm, however the importing module uses them ──
-for (const file of [
-  "decoy-eager-fill.js.txt",
-  "decoy-no-resetter.js.txt",
-  "decoy-plain-call.js.txt",
-  "decoy-two-registries.js.txt",
+for (const [file, regression] of [
+  ["decoy-eager-fill.js.txt", "accepts an eager cell fill"],
+  ["decoy-no-resetter.js.txt", "accepts a cell without a resetter"],
+  ["decoy-plain-call.js.txt", "guesses from call sites alone"],
+  ["decoy-two-registries.js.txt", "chooses the first ambiguous registry"],
 ]) {
   const src = settingsUsing(`./${file}`, "f", "f", 3);
   check(
-    `${file}: rejected despite 3 thunk-shaped call sites`,
+    `${file}: ${regression} despite defining-module confirmation`,
     L.locateMemoizerLocal(src, readSpec) === null,
   );
 }
@@ -223,13 +222,13 @@ check(
     settingsUsing("./memo-registry-built.js.txt", "f", "f", 3);
   const memo = L.locateMemoizerLocal(src, readSpec);
   check(
-    "bun + registry in one module: both families reported",
+    "mixed Bun __esm lowering and registry: loses a memoizer family or alias",
     memo !== null &&
       memo.all.length === 2 &&
       memo.all
-        .map((m) => m.thunkSites)
+        .map(({ local }) => local)
         .sort()
-        .join() === "2,3",
+        .join() === "M,f",
     memo,
   );
 }
@@ -261,8 +260,8 @@ try {
   );
   check(
     "resolveDefinition: two hops through export aliases reach the declaration",
-    d.path === path.join(chain, "decl.js") && d.local === "c" && d.hops === 2,
-    { path: path.basename(d.path), local: d.local, hops: d.hops },
+    d.path === path.join(chain, "decl.js") && d.local === "c",
+    { path: path.basename(d.path), local: d.local },
   );
   for (const [name, src, local, diagnostic] of [
     [
@@ -284,12 +283,9 @@ try {
       "n is imported from ./rel.js, which is not a bundled chunk",
     ],
   ]) {
-    let error = "";
-    try {
-      L.resolveDefinition(chain, path.join(chain, "start.js"), src, local);
-    } catch (e) {
-      error = e.message;
-    }
+    const error = failureMessage(() =>
+      L.resolveDefinition(chain, path.join(chain, "start.js"), src, local),
+    );
     check(`resolveDefinition: refuses ${name}`, error === diagnostic, error);
   }
 } finally {
@@ -403,48 +399,11 @@ for (const [name, src, roots, diagnostic] of [
     "root binding g is not a top-level declaration",
   ],
 ]) {
-  let error = "";
-  try {
-    slice(src, roots);
-  } catch (e) {
-    error = e.message;
-  }
+  const error = failureMessage(() => slice(src, roots));
   check(
     `slice: refuses ${name}`,
     error === `census-slice: chunk.js: ${diagnostic}`,
     error,
-  );
-}
-for (const [name, key, expected] of [
-  [
-    "model-catalog.js.txt",
-    "catalog",
-    ["claude-opus-4", "claude-haiku-5", "claude-opus-5", "claude-sonnet-5"],
-  ],
-  [
-    "model-pins.js.txt",
-    "pins",
-    ["unpinOpus47LaunchEffort", "unpinFable5LaunchEffort"],
-  ],
-  ["model-retired.js.txt", "retired", ["claude-opus-4"]],
-]) {
-  const sites = L.locateModelSites(fixture(name), ts);
-  check(
-    `${name}: structural site found`,
-    JSON.stringify(sites[key].flat()) === JSON.stringify(expected),
-    sites,
-  );
-}
-for (const name of [
-  "decoy-model-catalog.js.txt",
-  "decoy-model-pins.js.txt",
-  "decoy-model-retired.js.txt",
-]) {
-  const sites = L.locateModelSites(fixture(name), ts);
-  check(
-    `${name}: rejected`,
-    Object.values(sites).every((xs) => xs.length === 0),
-    sites,
   );
 }
 
@@ -463,12 +422,7 @@ for (const [name, diagnostic] of [
   ["model-pins-positive.js.txt", "launch pin unpinOpus48LaunchEffort"],
   ["model-retired-malformed.js.txt", 'retirement row "claude-opus-5"'],
 ]) {
-  let error = "";
-  try {
-    L.locateModelSites(fixture(name), ts);
-  } catch (e) {
-    error = e.message;
-  }
+  const error = failureMessage(() => L.locateModelSites(fixture(name), ts));
   check(
     `${name}: refuses unsupported structure with PROBE`,
     error.includes("PROBE failure:") && error.includes(diagnostic),
@@ -477,13 +431,13 @@ for (const [name, diagnostic] of [
 }
 
 // Drive the graph reader too: these refusals prevent a newly committed raw
-// from blessing missing sites, ambiguity, total retirement or a stray family.
+// from blessing missing sites, ambiguity, a missing family or a malformed entry.
 const graph = fs.mkdtempSync(path.join(os.tmpdir(), "claude-model-facts-"));
 try {
   for (const name of ["model-catalog", "model-pins", "model-retired"])
     fs.writeFileSync(path.join(graph, `${name}.js`), fixture(`${name}.js.txt`));
   check(
-    "graph: subtracts retirement membership and sorts aliases",
+    "graph: subtracts retired IDs and keeps both static pin guards but not the dynamic push",
     JSON.stringify(L.modelFacts(graph, ts)) ===
       JSON.stringify({
         launchEffortPins: [
@@ -497,22 +451,17 @@ try {
     [
       "model-catalog",
       fixture("decoy-model-catalog.js.txt"),
-      "LOCATION failure: catalog site",
+      "LOCATION failure: catalog site: expected exactly 1 chunk, found 0",
     ],
     [
       "model-pins",
       fixture("decoy-model-pins.js.txt"),
-      "LOCATION failure: pins site",
+      "LOCATION failure: pins site: expected exactly 1 chunk, found 0",
     ],
     [
       "model-retired",
       fixture("decoy-model-retired.js.txt"),
-      "LOCATION failure: retired site",
-    ],
-    [
-      "model-catalog",
-      'var C=[{id:"claude-opus-4",family:"opus"}];',
-      "every catalog id is marked retired",
+      "LOCATION failure: retired site: expected exactly 1 chunk, found 0",
     ],
     [
       "model-catalog",
@@ -527,12 +476,7 @@ try {
   ]) {
     const file = path.join(graph, `${name}.js`);
     fs.writeFileSync(file, source);
-    let error = "";
-    try {
-      L.modelFacts(graph, ts);
-    } catch (e) {
-      error = e.message;
-    }
+    const error = failureMessage(() => L.modelFacts(graph, ts));
     check(`graph: refuses ${diagnostic}`, error.includes(diagnostic), error);
     fs.writeFileSync(file, fixture(`${name}.js.txt`));
   }
@@ -540,12 +484,7 @@ try {
     path.join(graph, "duplicate.js"),
     fixture("model-catalog.js.txt"),
   );
-  let error = "";
-  try {
-    L.modelFacts(graph, ts);
-  } catch (e) {
-    error = e.message;
-  }
+  const error = failureMessage(() => L.modelFacts(graph, ts));
   check(
     "graph: refuses ambiguous catalog location",
     error.includes("catalog site: expected exactly 1 chunk, found 2"),

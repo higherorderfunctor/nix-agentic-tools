@@ -1,7 +1,6 @@
 [
   {
     "match": "MAIN_KICKOFF",
-    "not": ["not found in registry", "INLINE_DONE_SENTINEL"],
     "events": [
       {
         "toolUseId": "tu_i",
@@ -19,25 +18,5 @@
       }
     ]
   },
-  {
-    "match": ["<response_requirement>", "INLINE_TASK"],
-    "events": [
-      {
-        "toolUseId": "sr_i",
-        "name": "subagent_response",
-        "input": {
-          "response": "INLINE_DONE_SENTINEL",
-          "files": []
-        }
-      }
-    ]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  },
-  {
-    "match": null,
-    "events": ["MAIN_DONE"]
-  }
+  { "events": ["MAIN_DONE"], "match": null, "reuse": true }
 ]

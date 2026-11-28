@@ -57,22 +57,28 @@
     )
     scan "$src"
     echo "PASS: libraries and owner modules contain no direct native sink writes"
-    # Each forbidden form must fail in every newly covered location. A fixture
-    # goes through the same corpus discovery, exception filter and failure path.
+    # The library fixture exercises every spelling; one spelling per owner
+    # proves its tree is scanned.
     for path in ${lib.escapeShellArgs negatives}; do
-      for sink in home.file home.activation files tasks enterTest systemd.user launchd.agents processes; do
+      lines=('files.probe = {};')
+      case "$path" in
+        lib/probe.nix)
+          lines+=('enterTest.probe = {};' 'home = {};' 'home.activation.probe = {};' 'home.file.probe = {};' 'launchd.agents.probe = {};' 'processes.probe = {};' 'systemd.user.probe = {};' 'tasks.probe = {};')
+          ;;
+      esac
+      for line in "''${lines[@]}"; do
         fixture="$work/negative"
         ${pkgs.coreutils}/bin/mkdir -p "$fixture/lib" "$fixture/packages" "$fixture/''${path%/*}"
-        printf '  %s.probe = {};\n' "$sink" > "$fixture/$path"
+        printf '  %s\n' "$line" > "$fixture/$path"
         if scan "$fixture" 2> "$work/negative-error"; then
-          echo "FAIL: accepted direct $sink write in $path" >&2
+          echo "FAIL: accepted direct sink line $line in $path" >&2
           exit 1
         fi
-        ${pkgs.gnugrep}/bin/grep -Fq "$path:1:" "$work/negative-error"
+        ${pkgs.gnugrep}/bin/grep -Fxq "$path:1:  $line" "$work/negative-error"
         ${pkgs.coreutils}/bin/rm "$fixture/$path"
       done
     done
-    echo "PASS: 56 direct native sink fixtures refused" > "$out"
+    echo "PASS: direct native sink fixtures refused in every guarded tree" > "$out"
   '';
 in {
   checks.ai-module-no-direct-sink-writes =

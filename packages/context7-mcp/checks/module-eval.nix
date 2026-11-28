@@ -1,42 +1,32 @@
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
-  pkgs,
   harness,
+  pkgs,
+  self,
   ...
 }: let
-  inherit (harness) evalHm hmLib mkTest;
+  inherit (harness) checkRows evalHm hmLib mkTest;
 in {
-  checks = {
-    # Matches the module-claude-shared-mcp-pool-accepted naming precedent:
-    # this test verifies the shared ai.mcpServers pool ACCEPTS a context7
-    # entry alongside a loaded claude module without type conflicts. It
-    # does NOT verify the claude module's internal mergedServers fanout
-    # computation — that's covered in checks/ai-factory/factory-eval.nix via the
-    # factory-mkRuntime-fanout-* tests.
-    module-context7-shared-mcp-pool-accepted = mkTest "context7-shared-mcp-pool-accepted" (
-      let
-        evaluated = evalHm {
+  checks.module-context7-shared-mcp-pool-accepted = mkTest "context7-shared-mcp-pool-accepted" (
+    let
+      server = self.lib.ai.mcpServers.mkContext7 {
+        lib = hmLib;
+        inherit pkgs;
+      } {};
+      # Read the shared option to force its merge with Claude loaded, not to
+      # check Claude's fanout (covered in checks/ai-factory/factory-eval.nix).
+      pool =
+        (evalHm {
           ai.claude.enable = true;
-          ai.mcpServers.ctx = {
-            type = "stdio";
-            package = pkgs.ai.mcpServers.context7-mcp or pkgs.hello;
-            command = "context7-mcp";
-          };
-        };
-      in
-        evaluated.config.ai.mcpServers ? ctx
-    );
-
-    module-context7-factory-call = mkTest "context7-factory-call" (
-      let
-        mkContext7 = import ../lib/mkContext7.nix;
-        result = mkContext7 {
-          lib = hmLib;
-          pkgs = pkgs // {ai = pkgs.ai or {};};
-        } {};
-      in
-        result.type == "stdio"
-    );
-  };
+          ai.mcpServers.ctx = server;
+        }).config.ai.mcpServers;
+      merged = pool.ctx;
+    in
+      checkRows "Context7 defaults in the shared Home Manager MCP pool" {
+        "default command names the Context7 executable" = merged.command == "context7-mcp";
+        "default entry does not inject command-line arguments" = merged.args == [];
+        "default package is the Context7 build, not a generic substitute" = toString merged.package == toString pkgs.ai.mcpServers.context7-mcp;
+        "default transport is explicit stdio, not inferred" = merged.type == "stdio";
+      }
+  );
 }

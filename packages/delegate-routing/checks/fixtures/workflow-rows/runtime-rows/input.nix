@@ -1,4 +1,4 @@
-# Runtime-row module input for the workflow-rows check; it imports portable rows and replaces Claude rows.
+# Runtime-row module input for the workflow-rows check; Claude replaces the portable Added row.
 {pkgs}: let
   portable = import ../portable-rows/input.nix {inherit pkgs;};
 in {
@@ -9,8 +9,6 @@ in {
         before = ["First"];
         text = "RUNTIME ADDED";
       };
-      Replaced.text = "RUNTIME REPLACED";
-      Second.text = "RUNTIME SECOND";
     };
   };
 }

@@ -84,13 +84,6 @@
     {
       "op": "sleep",
       "s": 12
-    },
-    {
-      "op": "call",
-      "method": "_kiro/workflow/inspect",
-      "params": {
-        "workflowId": "$WF"
-      }
     }
   ]
 }

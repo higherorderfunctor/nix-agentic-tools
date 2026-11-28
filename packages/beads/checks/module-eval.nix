@@ -1,105 +1,81 @@
+# cspell:ignore passthru unwired
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
   lib,
   pkgs,
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv mkTest;
+  inherit (harness) checkRows evalDevenv mkTest;
+  base = {
+    enable = true;
+    issuePrefix = "fixture";
+    ledgerUrl = "file:///tmp/beads-ledger.git";
+  };
+  evaluate = settings: let
+    inherit ((evalDevenv {services.beads = settings;}).config) assertions packages processes tasks;
+  in {
+    inherit packages processes tasks;
+    failures = map (assertion: assertion.message) (lib.filter (assertion:
+      lib.hasPrefix "services.beads." assertion.message && !assertion.assertion)
+    assertions);
+  };
+  packageFixture = name: attrs:
+    pkgs.runCommand name attrs ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      mkdir -p "$out/bin"
+    '';
+  taskNames = config: builtins.filter (lib.hasPrefix "beads:") (builtins.attrNames config.tasks);
+  unwired = config:
+    config.packages
+    == []
+    && config.processes == {}
+    && taskNames config == []
+    && !(config.tasks ? "ai:beads-prepare");
+  # These are deferred module assertions, not merge exceptions. Read the exact
+  # failed diagnostics as well as the outputs that must stay unwired.
+  rejects = settings: expected: let
+    result = evaluate settings;
+  in
+    lib.sort builtins.lessThan result.failures == expected && unwired result;
+  packageRejects = package:
+    rejects (base // {inherit package;}) ["services.beads.package must expose its exact Dolt derivation as passthru.dolt"];
 in {
   checks = {
-    module-beads-credential-url-rejected = mkTest "beads-credential-url-rejected" (
-      let
-        ev = evalDevenv {
-          services.beads = {
-            enable = true;
-            issuePrefix = "fixture";
-            ledgerUrl = "https://embedded-token@example.invalid/ledger.git";
-          };
-        };
-        beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
-      in
-        lib.any (assertion: !assertion.assertion) beadsAssertions
-        && ev.config.packages == []
-    );
-
     module-beads-default-disabled = mkTest "beads-default-disabled" (
       let
-        ev = evalDevenv {};
+        inherit ((evalDevenv {}).config) packages processes services tasks;
       in
-        !ev.config.services.beads.enable
-        && ev.config.packages == []
-        && ev.config.processes == {}
-        && !(ev.config.tasks ? "ai:beads-prepare")
+        !services.beads.enable && unwired {inherit packages processes tasks;}
     );
 
     module-beads-devenv-wiring = mkTest "beads-devenv-wiring" (
       let
-        ev = evalDevenv {
-          services.beads = {
-            enable = true;
-            issuePrefix = "fixture";
-            ledgerUrl = "file:///tmp/beads-ledger.git";
-          };
-        };
-        assertionsPass = lib.all (assertion: assertion.assertion) (
-          lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions
-        );
+        active = evaluate base;
       in
-        assertionsPass
-        && builtins.length ev.config.packages == 1
-        && builtins.attrNames ev.config.processes == ["beads-publisher" "beads-server"]
-        && builtins.filter (lib.hasPrefix "beads:") (builtins.attrNames ev.config.tasks)
-        == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:status"]
-        && ev.config.tasks."ai:beads-prepare".before == ["devenv:enterShell"]
-        && lib.hasSuffix "/bin/ai-service-beads-publisher" ev.config.processes.beads-publisher.exec
-        && lib.hasSuffix "/bin/ai-service-beads-server" ev.config.processes.beads-server.exec
-    );
-
-    module-beads-invalid-dolt-passthru-rejected = mkTest "beads-invalid-dolt-passthru-rejected" (
-      let
-        ev = evalDevenv {
-          services.beads = {
-            enable = true;
-            issuePrefix = "fixture";
-            ledgerUrl = "file:///tmp/beads-ledger.git";
-            package = pkgs.runCommand "bd-with-invalid-dolt" {passthru.dolt = null;} "mkdir -p $out/bin";
-          };
-        };
-        beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
-      in
-        lib.any (assertion: !assertion.assertion) beadsAssertions
-        && ev.config.packages == []
-        && ev.config.processes == {}
-    );
-
-    module-beads-missing-required-options-rejected = mkTest "beads-missing-required-options-rejected" (
-      let
-        ev = evalDevenv {services.beads.enable = true;};
-        beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
-      in
-        builtins.length (lib.filter (assertion: !assertion.assertion) beadsAssertions)
-        == 2
-        && ev.config.packages == []
-        && ev.config.processes == {}
-    );
-
-    module-beads-package-without-dolt-rejected = mkTest "beads-package-without-dolt-rejected" (
-      let
-        ev = evalDevenv {
-          services.beads = {
-            enable = true;
-            issuePrefix = "fixture";
-            ledgerUrl = "file:///tmp/beads-ledger.git";
-            package = pkgs.writeShellScriptBin "bd" "exit 0";
-          };
-        };
-        beadsAssertions = lib.filter (assertion: lib.hasPrefix "services.beads" assertion.message) ev.config.assertions;
-      in
-        lib.any (assertion: !assertion.assertion) beadsAssertions
-        && ev.config.packages == []
-        && ev.config.processes == {}
+        checkRows "Beads lifecycle configuration" {
+          "guarded publisher and server are registered as separate native processes" =
+            builtins.attrNames active.processes
+            == ["beads-publisher" "beads-server"]
+            && lib.hasSuffix "/bin/ai-service-beads-publisher" active.processes.beads-publisher.exec
+            && lib.hasSuffix "/bin/ai-service-beads-server" active.processes.beads-server.exec;
+          "HTTP userinfo without a password is rejected" = rejects (base // {ledgerUrl = "https://embedded-token@example.invalid/ledger.git";}) [
+            "services.beads.ledgerUrl must be nonempty, single-line, and contain no embedded HTTP userinfo or URL password"
+          ];
+          "manual entry points are not dropped from native tasks" =
+            taskNames active == ["beads:bootstrap" "beads:checkpoint" "beads:diagnostics" "beads:status"];
+          "package missing Dolt cannot provision a lifecycle" = packageRejects (packageFixture "bd-without-dolt" {});
+          "package with a non-derivation Dolt cannot provision a lifecycle" =
+            packageRejects (packageFixture "bd-with-invalid-dolt" {passthru.dolt = null;});
+          "prepare runs before the shell starts" = active.tasks."ai:beads-prepare".before == ["devenv:enterShell"];
+          "required options cannot be omitted when enabled" = rejects {enable = true;} [
+            "services.beads.issuePrefix is required when services.beads.enable is true"
+            "services.beads.ledgerUrl is required when services.beads.enable is true"
+          ];
+          "valid settings pass assertions and install one package" =
+            active.failures == [] && builtins.length active.packages == 1;
+        }
     );
   };
 }

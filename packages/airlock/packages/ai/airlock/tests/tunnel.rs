@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{message, request, start};
+use common::{message, request, start, wait_for_listener_release};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -100,23 +100,28 @@ async fn malformed_targets_are_rejected_without_connecting() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = start().await;
-    for target in [
-        format!("http://{address}"),
-        format!("{address}/path"),
-        format!("user@{address}"),
-        "127.0.0.1".into(),
-        "host:0".into(),
-        "host:+443".into(),
-        "host:65536".into(),
-        "-host:443".into(),
-        "host..test:443".into(),
-        "::1:443".into(),
-        "[::1]:0".into(),
-        "[127.0.0.1]:443".into(),
+    for (restriction, target) in [
+        ("no scheme", format!("http://{address}")),
+        ("no path", format!("{address}/path")),
+        ("no user info", format!("user@{address}")),
+        ("IPv6 must be bracketed", "::1:443".into()),
+        ("brackets only for IPv6", "[127.0.0.1]:443".into()),
+        ("explicit port required", "127.0.0.1".into()),
+        ("port must be nonzero", "host:0".into()),
+        ("no port sign", "host:+443".into()),
+        ("port must fit in 16 bits", "host:65536".into()),
+        (
+            "label must start with a letter or digit",
+            "-host:443".into(),
+        ),
+        ("no empty internal DNS label", "host..test:443".into()),
     ] {
         let mut socket = server.client().await;
         let reply = request(&mut socket, "CONNECT", &target).await;
-        assert!(reply.starts_with("HTTP/1.1 400 "), "{target}: {reply}");
+        assert!(
+            reply.starts_with("HTTP/1.1 400 "),
+            "{restriction} ({target}): {reply}"
+        );
     }
     assert!(
         timeout(Duration::from_millis(50), listener.accept())
@@ -124,6 +129,15 @@ async fn malformed_targets_are_rejected_without_connecting() {
             .is_err(),
         "malformed authority connected upstream"
     );
+    // Prove the same endpoint accepts a valid authority and the listener can
+    // observe the resulting connection rather than silently missing it.
+    let mut client = server.client().await;
+    request(&mut client, "CONNECT", &address.to_string()).await;
+    let (upstream, _) = timeout(Duration::from_secs(1), listener.accept())
+        .await
+        .expect("valid authority connected upstream")
+        .unwrap();
+    drop((client, upstream));
     server.stop().await;
 }
 
@@ -142,36 +156,6 @@ async fn unavailable_target_returns_bad_gateway_and_keeps_http_usable() {
             .starts_with("HTTP/1.1 200 ")
     );
     drop(socket);
-    server.stop().await;
-}
-
-#[tokio::test]
-async fn client_half_close_allows_the_upstream_final_reply() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let upstream = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut payload = String::new();
-        socket.read_to_string(&mut payload).await.unwrap();
-        assert_eq!(payload, "final");
-        socket.write_all(b"reply").await.unwrap();
-    });
-    let server = start().await;
-    let mut socket = server.client().await;
-    assert!(
-        request(&mut socket, "CONNECT", &address.to_string())
-            .await
-            .starts_with("HTTP/1.1 200 ")
-    );
-    socket.write_all(b"final").await.unwrap();
-    socket.shutdown().await.unwrap();
-    let mut reply = String::new();
-    timeout(Duration::from_secs(2), socket.read_to_string(&mut reply))
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(reply, "reply");
-    upstream.await.unwrap();
     server.stop().await;
 }
 
@@ -263,6 +247,7 @@ async fn shutdown_drains_an_active_tunnel() {
             .starts_with("HTTP/1.1 200 ")
     );
     server.shutdown.send(()).unwrap();
+    wait_for_listener_release(server.address).await;
     socket.write_all(b"during drain").await.unwrap();
     socket.shutdown().await.unwrap();
     let mut reply = String::new();

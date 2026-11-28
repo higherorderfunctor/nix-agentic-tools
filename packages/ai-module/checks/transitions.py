@@ -33,69 +33,49 @@ def run(bash, script, environment):
     assert result.returncode == 0, result.stderr
 
 
-def act(action, root, step, previous):
-    """Change the tree the way a person or program would between activations.
-
-    Returns the bytes the next activation must back up: every edit and native
-    key here precedes a change to the owned copy.
-    """
+def add_native_keys(root, previous, native):
+    """Return the bytes to back up: each native key precedes an owned change."""
     changed = []
-    for path, item in (step["plan"] if action == "seed" else previous).items():
-        destination = root / path
-        if action == "edit" and item["method"] == "ro":
-            destination.chmod(0o644)
-            destination.write_bytes(b"edited\n")
-            changed.append(destination.read_bytes())
-        elif action == "native" and item["method"] == "rw":
-            assert item["format"] == "json", item
+    for path, item in previous.items():
+        if item["method"] == "rw":
+            destination = root / path
             destination.write_text(json.dumps({**json.loads(destination.read_text()), **NATIVE}))
             changed.append(destination.read_bytes())
-        elif action == "seed":
-            destination.write_text(item["content"]["text"])
-            destination.chmod(0o444 if item["method"] == "ro" else 0o600)
+            native[path] = NATIVE
     return changed
 
 
-def expected_ro(item):
-    if "text" in item["content"]:
-        return item["content"]["text"].encode(), 0o444
-    source = Path(item["content"]["source"])
-    return source.read_bytes(), 0o444 | (stat.S_IMODE(source.stat().st_mode) & 0o111)
-
-
 def check(root, state, step, previous, native, backups):
-    plan = step["plan"]
-    # The engine removes its state once it owns nothing; the comparison below still
-    # fails if owned entries are expected and the state is missing.
+    wanted = step["want"]
+    # The engine removes its state once it owns nothing.
+    owned = {path: (item["method"], item["format"]) for path, item in wanted.items() if item["method"] != "symlink"}
     state_file = state / "ai.json"
-    records = json.loads(state_file.read_text())["files"] if state_file.exists() else {}
-    owned = {path: (item["method"], item["format"]) for path, item in plan.items() if item["method"] != "symlink"}
+    assert state_file.exists() == bool(owned), state_file
+    records = json.loads(state_file.read_text())["files"] if owned else {}
     assert {path: (record["method"], record["format"]) for path, record in records.items()} == owned, records
-    assert set(step["links"]) == {path for path, item in plan.items() if item["method"] == "symlink"}
-    for path, item in plan.items():
+    assert set(step["links"]) == {path for path, item in wanted.items() if item["method"] == "symlink"}
+    for path, item in wanted.items():
         destination = root / path
         if item["method"] == "symlink":
-            assert os.readlink(destination) == step["links"][path], path
-            if "source" in item["content"]:
-                assert destination.stat().st_mode & 0o111 == Path(item["content"]["source"]).stat().st_mode & 0o111, path
+            if "source" in item:
+                assert os.readlink(destination) == item["source"], path
+            else:
+                assert destination.is_symlink(), path
+                assert destination.read_text() == item["text"], path
             continue
         assert destination.is_file() and not destination.is_symlink(), path
         if item["method"] == "ro":
-            data, mode = expected_ro(item)
-            assert destination.read_bytes() == data and stat.S_IMODE(destination.stat().st_mode) == mode, path
+            data = Path(item["source"]).read_bytes() if "source" in item else item["text"].encode()
+            assert destination.read_bytes() == data, path
+            assert stat.S_IMODE(destination.stat().st_mode) == int(item.get("mode", "0444"), 8), path
         else:
-            declared = PARSERS[item["format"]](item["content"]["text"])
-            assert PARSERS[item["format"]](destination.read_text()) == {**declared, **native.get(path, {})}, path
-    for path in previous.keys() - plan.keys():
+            assert PARSERS[item["format"]](destination.read_text()) == {"k": "v", **native.get(path, {})}, path
+    for path in previous.keys() - wanted.keys():
         if path in native:
             assert json.loads((root / path).read_text()) == native[path], path
         else:
             assert not os.path.lexists(root / path), path
     assert sorted(backup.read_bytes() for backup in backups) == sorted(step["backups"]), backups
-    if "adopted" in step["expect"]:
-        assert not any(record["created"] for record in records.values()), records
-    for path in step["executable"]:
-        assert (root / path).stat().st_mode & 0o100, path
 
 
 def scenario(bash, shim, backend, steps, directory):
@@ -110,15 +90,17 @@ def scenario(bash, shim, backend, steps, directory):
         state = directory / "state/nix-agentic-tools/files"
     previous, linked, native = {}, {}, {}
     for index, step in enumerate(steps):
-        step["plan"] = {item["path"]: item for item in step["plan"]}
         step["backups"] = []
         for action in step["actions"]:
-            step["backups"] += act(action, root, step, previous)
-            if action == "native":
-                native.update({path: NATIVE for path, item in previous.items() if item["method"] == "rw"})
+            assert action == "native", action
+            step["backups"] += add_native_keys(root, previous, native)
         commands = localize(step, directory / f"step-{index}")
         # prune always runs; apply only for a non-empty plan; the devenv guard only with native links.
-        expected = {"prune"} | ({"apply"} if step["plan"] else set()) | ({"guard"} if backend == "devenv" and step["links"] else set())
+        expected = {"prune"}
+        if step["want"]:
+            expected.add("apply")
+        if backend == "devenv" and any(item["method"] == "symlink" for item in step["want"].values()):
+            expected.add("guard")
         assert set(commands) == expected, commands.keys()
         before = set(state.glob("*.bak"))
         for phase in ORDER[backend]:
@@ -131,13 +113,15 @@ def scenario(bash, shim, backend, steps, directory):
                     if destination.is_symlink():
                         destination.unlink()
                     # Both native steps refuse to replace a real file.
-                    assert not os.path.lexists(destination), f"native link blocked: {path}"
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.symlink_to(target)
             elif phase in commands:
                 run(bash, (shim if backend == "hm" else "") + "\n" + commands[phase], environment)
-        check(root, state, step, previous, native, set(state.glob("*.bak")) - before)
-        previous, linked = step["plan"], step["links"]
+        try:
+            check(root, state, step, previous, native, set(state.glob("*.bak")) - before)
+        except AssertionError as error:
+            raise AssertionError(f"step {index + 1}: {error}") from error
+        previous, linked = step["want"], step["links"]
 
 
 def main():

@@ -1,4 +1,4 @@
-# Exercise the remaining Kiro surfaces and secret-provider edges on both backends.
+# Exercise Kiro settings, hooks, and secret URL rendering on both backends.
 {
   harness,
   lib,
@@ -7,7 +7,6 @@
 }: let
   redact = import ../../../lib/redact {inherit lib;};
   files = import ../lib/files/default.nix {inherit lib pkgs;};
-  dagLib = import ./dag-lib.nix harness.hmLib;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit harness lib pkgs;}) renderedMcpJson;
   plainUrl = "https://example.invalid/mcp";
   servers = {
@@ -39,7 +38,7 @@
   fixture = lib.genAttrs ["devenv" "hm"] (backend: let
     evaluate =
       if backend == "hm"
-      then harness.evalHmWithSpecialArgs {lib = dagLib;}
+      then harness.evalHm
       else harness.evalDevenv;
     generate = name: let
       enabled = name != "disabled";
@@ -54,7 +53,6 @@
       inherit
         (evaluate {
           ai = {
-            activationOrder.secretNodes = ["fixture-provider"];
             kiro = {
               cli.enable = enabled;
               cli.native.settings = lib.optionalAttrs (lib.elem name ["helper" "plain" "private" "secret"]) {chat.enableTangentMode = true;};
@@ -82,26 +80,11 @@
         ++ lib.optional (name == "directory") ".kiro/hooks/sample.json"
         ++ lib.optionals (enabled && (backend == "hm" || lib.elem name ["helper" "plain" "private" "secret"])) [".kiro/settings/cli.json"]
         ++ lib.optionals (enabled && (backend == "hm" || serverKind != "empty")) [".kiro/settings/mcp.json"];
-      graph =
-        if backend == "hm"
-        then config.home.activation
-        else config.tasks;
-      applyName =
-        if backend == "hm"
-        then "ai-files-apply"
-        else "ai:files-apply";
-      apply = graph.${applyName};
-      prune =
-        graph.${
-          if backend == "hm"
-          then "ai-files-prune"
-          else "ai:files-prune"
-        };
-      hasRun = lib.any (item: item.content ? run) plan;
+      usesSecretUrl = lib.elem serverKind ["helper" "private" "secret"];
     in
-      assert config.ai.kiro.legacyLedgers == legacy ".kiro";
-      assert lib.all (item: lib.elem item config.ai.legacyLedgers) (legacy ".kiro");
+      assert enabled || config.ai.kiro.legacyLedgers == legacy ".kiro";
       assert builtins.attrNames config.ai.kiro.files == lib.sort builtins.lessThan expected;
+      assert map (item: item.path) plan == lib.sort builtins.lessThan expected;
       assert lib.all (item:
         item.method
         == "ro"
@@ -112,38 +95,15 @@
           if lib.hasSuffix "/mcp.json" item.path
           then
             (
-              if lib.elem serverKind ["helper" "private" "secret"]
+              if usesSecretUrl
               then "0400"
               else "0444"
             )
           else null
         ))
       plan;
-      assert lib.elem (
-        if backend == "hm"
-        then "checkLinkTargets"
-        else "ai:link-check"
-      )
-      prune.before;
-      assert (graph ? ${applyName}) == (plan != []);
-      assert plan == [] || hasRun == lib.elem "fixture-provider" apply.after;
-      assert plan == [] || backend != "hm" || hasRun == lib.elem "sops-nix" apply.after;
-      assert plan
-      == []
-      || lib.elem (
-        if backend == "hm"
-        then "linkGeneration"
-        else "ai:files-linked"
-      )
-      apply.after;
-      assert plan
-      == []
-      || lib.elem (
-        if backend == "hm"
-        then "ai-files-ready"
-        else "ai:files-ready"
-      )
-      apply.before;
+      # The devenv activation table checks user entries, not this generated task.
+      assert backend != "devenv" || plan == [] || lib.elem "ai:files-ready" config.tasks."ai:files-apply".before;
       assert lib.all (item: item.assertion) config.assertions; {
         inherit (config.ai.kiro) legacyLedgers;
         inherit plan;

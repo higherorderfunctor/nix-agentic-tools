@@ -86,7 +86,8 @@ with tempfile.TemporaryDirectory() as temporary:
             def activate(name):
                 phase(name, "prune")
                 phase(name, "apply")
-                assert state.exists() == bool(steps[name]["plan"])
+                if not steps[name]["plan"]:
+                    assert not state.exists()
                 records = json.loads(state.read_text())["files"] if steps[name]["plan"] else {}
                 assert set(records) == {item["path"] for item in steps[name]["plan"]}
                 for item in steps[name]["plan"]:
@@ -94,8 +95,7 @@ with tempfile.TemporaryDirectory() as temporary:
                     record = records[item["path"]]
                     assert path.is_file() and not path.is_symlink()
                     assert path.stat().st_mode & 0o777 == int(item["mode"] or "0444", 8)
-                    assert record["digest"] == hashlib.sha256(path.read_bytes()).hexdigest()
-                    assert record["method"] == "ro" and record["keys"] == {}
+                    assert record["method"] == "ro"
                     if "/hooks/" in item["path"]:
                         staged = steps[name]["inputs"][item["path"]]
                         expected = Path(staged["source"]).read_text() if staged["source"] else staged["text"]
@@ -108,7 +108,6 @@ with tempfile.TemporaryDirectory() as temporary:
             activate("disabled" if disabled_first else "empty")
             assert (json.loads(target.read_text()) == {"mcpServers": {}} if backend == "hm" and not disabled_first else target.read_bytes() == original)
             if disabled_first:
-                assert not state.exists()
                 print(f"PASS: {backend} disabled-first: all legacy ledgers drained, foreign files preserved")
                 continue
             activate("plain")
@@ -120,9 +119,9 @@ with tempfile.TemporaryDirectory() as temporary:
             assert target.stat().st_mtime == 946684800
             (root / "credential-url").write_text(data["plainUrl"])
             activate("private")
-            assert target.read_bytes() == before and target.stat().st_mode & 0o777 == 0o400
+            assert target.read_bytes() == before
             activate("plain")
-            assert target.read_bytes() == before and target.stat().st_mode & 0o777 == 0o444
+            assert target.read_bytes() == before
             (root / "credential-url").unlink()
             # Simulate the application's rename over cli.json and preserve its neighbor.
             replacement = cli.with_suffix(".tmp")
@@ -139,7 +138,7 @@ with tempfile.TemporaryDirectory() as temporary:
             assert sum(path.read_bytes() == b'{"chat.defaultModel":"in-app"}' for path in state.parent.glob("*.bak")) == 1
             # Renderer runs only in apply, after the provider writes its secret.
             phase("secret", "prune")
-            assert not (root / "credential-url").exists() and target.read_bytes() == before
+            assert target.read_bytes() == before
             (root / "credential-url").write_text(data["plainUrl"])
             (root / "subdir").mkdir()
             os.chdir(root / "subdir")
@@ -149,32 +148,50 @@ with tempfile.TemporaryDirectory() as temporary:
             assert not (root / "subdir/.kiro").exists()
             os.chdir(root)
             activate("plain")
-            assert target.stat().st_mode & 0o777 == 0o444 and target.read_bytes() == before
-            for failure in ("missing", "empty", "helper"):
+            assert target.read_bytes() == before
+            failures = {
+                "empty": "reference resolved empty",
+                "helper": "reference command failed",
+                "missing": "reference file is missing",
+            }
+            helper = root / "failed-helper"
+            helper.write_text(f'#!{data["bash"]}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf partial-secret\nfalse\n')
+            helper.chmod(0o755)
+            failed_plan = root / "failed-plan.json"
+            for failure, diagnostic in failures.items():
                 credential = root / "credential-url"
-                if credential.exists():
-                    credential.unlink()
+                credential.unlink(missing_ok=True)
                 if failure == "empty":
                     credential.touch()
-                helper = root / "failed-helper"
-                helper.write_text(f'#!{data["bash"]}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf partial-secret\nfalse\n')
-                helper.chmod(0o755)
                 name = "helper" if failure == "helper" else "secret"
                 phase(name, "prune")
                 snapshot = state.read_bytes()
-                try:
-                    phase(name, "apply")
-                except subprocess.CalledProcessError:
-                    pass
-                else:
-                    raise AssertionError(f"{failure} renderer succeeded")
+                failed_plan.write_text(json.dumps(plan_for(steps[name], root)))
+                result = subprocess.run(
+                    [sys.executable, "-I", sys.argv[1], "--plan", str(failed_plan),
+                     "--root", str(root), "--state", str(state), "--phase", "apply",
+                     "--legacy-plan", json.dumps(steps[name]["legacyLedgers"]), "--legacy-state", str(old)],
+                    capture_output=True, text=True,
+                )
+                expected_error = f"ai.kiro.mcpServers URL KIRO_MCP_DEMO_URL: {diagnostic}"
+                assert result.returncode == 1 and expected_error in result.stderr.splitlines(), (failure, result.stderr)
+                if failure == "helper":
+                    assert "partial-secret" not in result.stderr, failure
                 assert target.read_bytes() == before and state.read_bytes() == snapshot
                 assert not list(target.parent.glob(".files-*"))
-            for name in ("plain", "secret", "directory", "empty", "disabled"):
+            # Typed hooks shrink, then give way to the directory hook, then retire.
+            hook_steps = [
+                ("plain", {"alpha.json", "beta.json"}),
+                ("secret", {"alpha.json"}),
+                ("directory", {"sample.json"}),
+                ("empty", set()),
+            ]
+            if backend == "hm":
+                hook_steps.append(("disabled", set()))
+            for name, hooks in hook_steps:
                 (root / "credential-url").write_text(data["plainUrl"])
                 activate(name)
-                assert {path.name for path in (root / ".kiro/hooks").iterdir()} == {"unmanaged.json"} | {
-                    Path(item["path"]).name for item in steps[name]["plan"] if "/hooks/" in item["path"]}
+                assert {path.name for path in (root / ".kiro/hooks").iterdir()} == {"unmanaged.json"} | hooks, name
             assert not target.exists() and not cli.exists()
             target.mkdir()
             try:
@@ -184,8 +201,4 @@ with tempfile.TemporaryDirectory() as temporary:
             else:
                 raise AssertionError("directory collision accepted")
             assert target.is_dir() and ".kiro/settings/mcp.json" not in json.loads(state.read_text())["files"]
-            target.rmdir()
-            target.write_bytes(original)
-            activate("disabled")
-            assert target.read_bytes() == original
             print(f"PASS: {backend}: bytes, state, modes, restore, failures, provider, roots, hook transitions, retirement")

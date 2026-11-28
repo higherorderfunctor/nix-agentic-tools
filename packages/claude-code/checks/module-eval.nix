@@ -6,19 +6,9 @@
   harness,
   ...
 }: let
-  inherit (harness) claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
+  inherit (harness) checkRows claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument rejectsChange;
+  inherit (import ./helpers.nix {inherit lib;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg claudeSettingsWarnings handlerCommands hasGuardHook;
   unpinDocument = ownedDocument "claude" ".claude.json";
-  # The old devenv rules writer's ledger is Claude's and reaches the engine's
-  # root list.
-  declaresRulesLedger = evaluated: let
-    ledger = {
-      codec = "dir";
-      ledger = "materialize/claude-rules.manifest";
-      path = ".claude/rules";
-    };
-  in
-    evaluated.config.ai.claude.legacyLedgers == [ledger] && builtins.elem ledger evaluated.config.ai.legacyLedgers;
   # A contract both backends deliver alike, stated once and evaluated on each:
   # `eval` evaluates a configuration (`evalModules` a list of modules), `files`
   # reads its symlink sink, `mcpPath` is where Claude's MCP servers land, and
@@ -29,7 +19,7 @@
       evalModules = evalDevenvModules;
       files = config: config.files;
       mcpPath = claudeMcpPath "devenv";
-      packages = config: config.packages;
+      mcpServers = claudeMcpServers "devenv";
       upstreamEnable = ["claude" "code" "enable"];
     };
     hm = {
@@ -37,7 +27,7 @@
       evalModules = evalHmModules;
       files = config: config.home.file;
       mcpPath = claudeMcpPath "hm";
-      packages = config: config.home.packages;
+      mcpServers = claudeMcpServers "hm";
       upstreamEnable = ["programs" "claude-code" "enable"];
     };
   };
@@ -51,7 +41,7 @@
   perBackend = name: test:
     lib.mapAttrs' (backend: arm:
       lib.nameValuePair "module-claude-${backend}-${name}"
-      (mkTest "claude-${backend}-${name}" (test arm)))
+      (mkTest "claude-${backend}-${name}" (test (arm // {inherit backend;}))))
     backends;
   # The settings.json document one configuration declares, on one backend.
   settingsOf = arm: config: claudeSettings (arm.eval config);
@@ -60,88 +50,69 @@
     # Both backends write ONE settings.json document the same way, so each of
     # these contracts is stated once and evaluated on each backend.
     checks = lib.mergeAttrsList [
-      # The backend's own Claude module writes the same files, so enabling it
-      # beside `ai.claude` fails evaluation and names the option to disable.
-      (perBackend "upstream-module-both-enabled-asserted" (arm:
-        claudeAssertionFails
-        "ai.claude.enable and ${lib.concatStringsSep "." arm.upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two."
-        (evalWithUpstream arm true)))
+      # Both modules would write Claude's files. Importing the upstream
+      # module alone must not trigger the conflict when its enable is off.
+      (perBackend "upstream-module-conflict" (arm:
+        checkRows "upstream Claude module conflict" {
+          "both enabled names the exact upstream option to disable" =
+            claudeAssertionFails
+            "ai.claude.enable and ${lib.concatStringsSep "." arm.upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two."
+            (evalWithUpstream arm true);
+          "upstream disabled leaves Claude assertions passing" = claudeAssertionsPass (evalWithUpstream arm false);
+        }))
 
-      # `ai.claude` alone passes, whether the upstream module is imported and
-      # off or not imported at all.
-      (perBackend "upstream-module-alone-passes" (arm:
-        claudeAssertionsPass (evalWithUpstream arm false)
-        && claudeAssertionsPass (arm.eval {ai.claude.enable = true;})))
-
-      (perBackend "package-null-skips-install-keeps-files" (arm: let
-        evaluated = arm.eval {
+      # Exercise the real typed merge with one rejected value per enum, then
+      # check that the chosen TUI renderer survives delivery on each backend.
+      (perBackend "settings-typed-enums" (arm: let
+        native = key: value: {
           ai.claude = {
             enable = true;
-            package = null;
-            native.settings.effortLevel = "medium";
+            native.settings.${key} = value;
           };
         };
-      in
-        arm.packages evaluated.config
-        == []
-        && (claudeSettings evaluated).effortLevel == "medium"
-        && !((claudeSettings evaluated).env or {} ? DISABLE_AUTOUPDATER)))
-
-      # Native settings reach the document, including nested permission leaves,
-      # and the document names its JSON schema for editors.
-      (perBackend "settings-reach-document" (arm: let
+        enum = key: valid: invalid:
+          rejectsChange (value: (arm.eval (native key value)).config.ai.claude.native.settings.${key}) {
+            inherit valid invalid;
+            expected = valid;
+          };
         settings = settingsOf arm {
-          ai.claude = {
-            enable = true;
-            native.settings = {
-              effortLevel = "medium";
-              permissions.allow = ["Read"];
-            };
-          };
-        };
-      in
-        settings.effortLevel
-        == "medium"
-        && settings.permissions.allow == ["Read"]
-        && settings."$schema" == "https://json.schemastore.org/claude-code-settings.json"))
-
-      # `env` is a freeform container and rides the same document.
-      (perBackend "settings-env-written" (arm:
-        (settingsOf arm {
-          ai.claude = {
-            enable = true;
-            native.settings.env.FOO = "bar";
-          };
-        }).env.FOO
-        == "bar"))
-
-      (perBackend "autoupdate-default-overridable" (arm:
-        (settingsOf arm {
-          ai.claude = {
-            enable = true;
-            native.settings.env.DISABLE_AUTOUPDATER = "0";
-          };
-        }).env.DISABLE_AUTOUPDATER
-        == "0"))
-
-      (perBackend "effort-level-valid-written" (arm:
-        (settingsOf arm {
-          ai.claude = {
-            enable = true;
-            native.settings.effortLevel = "xhigh";
-          };
-        }).effortLevel
-        == "xhigh"))
-
-      # Typed nullOr enum.
-      (perBackend "tui-valid-written" (arm:
-        (settingsOf arm {
           ai.claude = {
             enable = true;
             native.settings.tui = "fullscreen";
           };
-        }).tui
-        == "fullscreen"))
+        };
+      in
+        checkRows "typed Claude settings" {
+          "effortLevel rejects session-only max" = enum "effortLevel" "xhigh" "max";
+          "tui rejects the unknown renderer curses" = enum "tui" "fullscreen" "curses";
+          "tui writes the chosen fullscreen renderer" = settings.tui == "fullscreen";
+        }))
+
+      # Freeform environment keys survive delivery when the consumer also
+      # overrides the package's updater default. The HM coexistence check
+      # below pins nested permissions in the HM settings document.
+      (perBackend "settings-reach-document" (arm: let
+        checkPermissions = arm.backend == "devenv";
+        settings = settingsOf arm {
+          ai.claude = {
+            enable = true;
+            native.settings =
+              {
+                env = {
+                  DISABLE_AUTOUPDATER = "0";
+                  FOO = "bar";
+                };
+              }
+              // lib.optionalAttrs checkPermissions {permissions.allow = ["Read"];};
+          };
+        };
+      in
+        checkRows "Claude settings document" (
+          {"freeform environment entries survive merging with package defaults" = settings.env.FOO == "bar";}
+          // lib.optionalAttrs checkPermissions {
+            "nested permission leaves are not dropped" = settings.permissions.allow == ["Read"];
+          }
+        )))
 
       # Attribution: `false` coerces to "" at the type layer (disables the
       # commit trailer) and survives the null-filter (filterNulls keeps "").
@@ -174,22 +145,6 @@
           };
         } ? attribution)))
 
-      # Null typed keys are filtered out, and the `ultracode` key is
-      # never written unless ultracodeOnLaunch is set.
-      (perBackend "null-settings-filtered" (arm: let
-        settings = settingsOf arm {ai.claude.enable = true;};
-      in
-        lib.all (key: !(settings ? ${key})) ["attribution" "effortLevel" "enableWorkflows" "model" "tui" "ultracode" "workflowKeywordTriggerEnabled"]))
-
-      # Typed nullOr bool.
-      (perBackend "enable-workflows-written" (arm:
-        (settingsOf arm {
-          ai.claude = {
-            enable = true;
-            native.settings.enableWorkflows = true;
-          };
-        }).enableWorkflows))
-
       # `false` survives the null-filter (filterNulls drops null, keeps false).
       (perBackend "workflow-keyword-trigger-false-written" (arm: let
         settings = settingsOf arm {
@@ -199,7 +154,7 @@
           };
         };
       in
-        settings ? workflowKeywordTriggerEnabled && !settings.workflowKeywordTriggerEnabled))
+        !settings.workflowKeywordTriggerEnabled))
 
       # Meta option: ultracodeOnLaunch writes the `ultracode` key
       # and the `enableWorkflows` master toggle — and ONLY those: not effortLevel
@@ -229,7 +184,7 @@
           };
         };
       in
-        settings ? ultracode && !settings.ultracode))
+        !settings.ultracode))
 
       # Soft-enum model: an arbitrary (unknown) id is accepted and written.
       (perBackend "model-soft-enum-accepts-arbitrary" (arm:
@@ -242,25 +197,36 @@
         == "some-future-model"))
 
       # The typed ai.claude.hooks event map lowers into settings.json.hooks.
+      # Without guard opt-in, only the consumer hook may be delivered.
       (perBackend "hooks-lower-to-settings" (arm: let
-        block =
-          lib.head
-          (settingsOf arm {
-            ai.claude = {
-              enable = true;
-              hooks.PreToolUse = [
-                {
-                  matcher = "Bash";
-                  hooks = [{command = "validate";}];
-                }
-              ];
-            };
-          })
-        .hooks
-        .PreToolUse;
-        handler = lib.head block.hooks;
+        settings = settingsOf arm {
+          ai.claude = {
+            enable = true;
+            hooks.PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [{command = "validate";}];
+              }
+            ];
+          };
+        };
       in
-        block.matcher == "Bash" && handler.command == "validate" && handler.type == "command"))
+        map (block: {
+          inherit (block) matcher;
+          hooks = map (handler: {inherit (handler) command type;}) block.hooks;
+        })
+        settings.hooks.PreToolUse
+        == [
+          {
+            matcher = "Bash";
+            hooks = [
+              {
+                command = "validate";
+                type = "command";
+              }
+            ];
+          }
+        ]))
 
       # The legacy `native.settings.hooks` escape hatch lowers verbatim into
       # settings.json.hooks, composing with the typed event map through the
@@ -344,9 +310,9 @@
       # disabling Claude drops the link.
       (perBackend "settings-and-mcp-are-read-only-links" (
         arm: let
-          cfg = enable: {
+          off = arm.eval {
             ai.claude = {
-              inherit enable;
+              enable = false;
               mcpServers.remote = {
                 type = "http";
                 url = "https://example.invalid/mcp";
@@ -354,27 +320,93 @@
               native.settings.effortLevel = "low";
             };
           };
-          on = arm.eval (cfg true);
-          off = arm.eval (cfg false);
           paths = [".claude/settings.json" arm.mcpPath];
         in
-          lib.all (path: (arm.files on.config) ? ${path} && !((arm.files off.config) ? ${path})) paths
-          && lib.all (path: on.config.ai.files.${path}.method == "symlink") paths
+          lib.all (path: !((arm.files off.config) ? ${path})) paths
       ))
 
-      # Even with no consumer settings, the updater default owns the document.
-      # Disable the SSH workaround to isolate that default on devenv.
-      (perBackend "settings-default-only-document" (arm: let
+      # Use a real server name so renderServer's package and mode branches run.
+      # Pin the mode-specific command on both sinks;
+      # checks/mcp-timeout/module-eval.nix pins the full packaged stdio record
+      # on both backends, including env, through the same merged server renderer.
+      (perBackend "mcp-servers-rendered" (arm: let
         evaluated = arm.eval {
-          ai.claude.enable = true;
-          ai.gitSshConfigWorkaround = false;
+          ai.claude = {
+            enable = true;
+            mcpServers.context7-mcp.package = pkgs.hello;
+          };
         };
+        servers = arm.mcpServers evaluated;
+        rendered = servers.context7-mcp;
       in
-        (arm.files evaluated.config) ? ".claude/settings.json"
-        && claudeSettings evaluated
-        == {
-          "$schema" = "https://json.schemastore.org/claude-code-settings.json";
-          env.DISABLE_AUTOUPDATER = "1";
+        checkRows "Claude MCP rendering" {
+          "mode supplies the binary name under the caller's package path" = rendered.command == "${pkgs.hello}/bin/context7-mcp";
+        }))
+
+      # Opt-in places exactly one guard on Write/Edit without clobbering
+      # existing hooks. The script's path test is the other half of the filter.
+      (perBackend "memory-collision-guard" (arm: let
+        settings = withConsumer:
+          settingsOf arm {
+            ai.claude =
+              {
+                enable = true;
+                memoryCollisionGuard.enable = true;
+              }
+              // lib.optionalAttrs withConsumer {
+                hooks.PreToolUse = [
+                  {
+                    matcher = "Bash";
+                    hooks = [{command = "consumer-hook";}];
+                  }
+                ];
+              };
+          };
+        onlyGuard = (settings false).hooks.PreToolUse;
+        together = (settings true).hooks.PreToolUse;
+        isGuard = block: hasGuardHook [block];
+      in
+        checkRows "Claude memory collision guard" {
+          "opt-in alone adds exactly one guard block restricted to Write or Edit" =
+            map (block: block.matcher) onlyGuard == ["Write|Edit"] && hasGuardHook onlyGuard;
+          "opt-in beside a consumer hook keeps the guard and one copy of the consumer handler" =
+            builtins.filter isGuard together
+            == onlyGuard
+            && handlerCommands (builtins.filter (block: !(isGuard block)) together) == ["consumer-hook"];
+        }))
+
+      # A spelling diagnostic must remain advisory: Claude tolerates and
+      # ignores an unknown key, and consumers can explicitly allowlist it.
+      (perBackend "unrecognized-settings" (arm: let
+        known = arm.eval claudeKnownKeysCfg;
+        typo = arm.eval claudeNestedTypoCfg;
+        allowlisted = arm.eval (lib.recursiveUpdate claudeNestedTypoCfg {
+          ai.claude.allowUnrecognizedSettings = ["permissions.alow"];
+        });
+        staleAllowlist = arm.eval {
+          ai.claude = {
+            enable = true;
+            allowUnrecognizedSettings = ["ultracode"];
+          };
+        };
+        warnsOnce = diagnostic: evaluated: let
+          warnings = claudeSettingsWarnings evaluated;
+        in
+          claudeAssertionsPass evaluated && builtins.length warnings == 1 && diagnostic (builtins.head warnings);
+        passesQuietly = evaluated: claudeAssertionsPass evaluated && claudeSettingsWarnings evaluated == [];
+        keepsUnknownKey = evaluated: (claudeSettings evaluated).permissions.alow == ["Read"];
+      in
+        checkRows "Claude unrecognized settings" {
+          "allowlisting the exact unknown leaf suppresses its warning without dropping the setting" = passesQuietly allowlisted && keepsUnknownKey allowlisted;
+          "known keys including the open containers pass without warnings" = passesQuietly known;
+          "nested typo warns with the corrected path rather than refusing or stripping the key" =
+            warnsOnce (warning:
+              lib.hasInfix "ai.claude.native.settings.permissions.alow" warning
+              && lib.hasInfix "did you mean `ai.claude.native.settings.permissions.allow`" warning)
+            typo
+            && keepsUnknownKey typo;
+          "stale allowlist entry for a now-known key warns rather than masking typos forever" =
+            warnsOnce (lib.hasInfix "ai.claude.allowUnrecognizedSettings: stale allowlist entry `ultracode`") staleAllowlist;
         }))
 
       # An external installation keeps its own updater policy, and with
@@ -394,38 +426,18 @@
 in {
   checks =
     {
-      module-claude-default-disabled = mkTest "claude-default-disabled" (
-        !(evalHm {}).config.ai.claude.enable
-        && !(evalDevenv {}).config.ai.claude.enable
-      );
-
-      module-claude-enable-toggles = mkTest "claude-enable-toggles" (
-        let
-          ev = evalHm {ai.claude.enable = true;};
-        in
-          ev.config.ai.claude.enable
-      );
-
-      # NOTE: this test verifies that the shared ai.mcpServers pool ACCEPTS
-      # an entry when a package module (claude) is also loaded — i.e. no type
-      # conflicts between sharedOptions.nix's mcpServers declaration and the
-      # per-app one contributed by mkRuntime. It does NOT verify the claude
-      # module's internal mergedServers fanout computation. Fanout correctness
-      # is tested in checks/ai-factory/factory-eval.nix via factory-mkRuntime-fanout-*.
-      # A true end-to-end fanout test requires the rendering pipeline landed
-      # in a later milestone (writing mergedServers into home.file output).
-      module-claude-shared-mcp-pool-accepted = mkTest "claude-shared-mcp-pool-accepted" (
-        let
-          evaluated = evalHm {
-            ai.claude.enable = true;
-            ai.mcpServers.testServer = {
-              type = "stdio";
-              package = pkgs.hello;
-              command = "hello";
-            };
-          };
-        in
-          evaluated.config.ai.mcpServers ? testServer
+      # With no consumer settings, the updater default owns the document.
+      # Exact equality catches leaked null settings, default launch flags, or
+      # hooks without opt-in. Disable the SSH workaround to isolate the default.
+      module-claude-hm-settings-default-only-document = mkTest "claude-hm-settings-default-only-document" (
+        claudeSettings (evalHm {
+          ai.claude.enable = true;
+          ai.gitSshConfigWorkaround = false;
+        })
+        == {
+          "$schema" = "https://json.schemastore.org/claude-code-settings.json";
+          env.DISABLE_AUTOUPDATER = "1";
+        }
       );
 
       module-claude-shared-rule-emits-native-file = mkTest "claude-shared-rule-emits-native-file" (
@@ -441,9 +453,7 @@ in {
           };
           rule = (markdownInput evaluated ".claude/rules/search.md").text;
         in
-          fromGeneratedTree ".claude/rules/search.md" evaluated.config.home.file.".claude/rules/search.md"
-          && lib.hasInfix "Always use rg instead of grep." rule
-          && lib.hasInfix ''description: "Grep replacement"'' rule
+          lib.hasInfix ''description: "Grep replacement"'' rule
       );
 
       module-claude-no-guidance-no-file = mkTest "claude-no-guidance-no-file" (
@@ -452,23 +462,6 @@ in {
           # With no rules and no context merged, nothing enters the final file map.
         in
           !(evaluated.config.home.file ? ".claude/CLAUDE.md")
-      );
-
-      module-claude-per-app-rule-emits-native-file = mkTest "claude-per-app-rule-emits-native-file" (
-        let
-          evaluated = evalHm {
-            ai.claude = {
-              enable = true;
-              rules.claude-only = {
-                text = "Claude-specific rule.";
-                description = "Claude only";
-              };
-            };
-          };
-          rule = (markdownInput evaluated ".claude/rules/claude-only.md").text;
-        in
-          fromGeneratedTree ".claude/rules/claude-only.md" evaluated.config.home.file.".claude/rules/claude-only.md"
-          && lib.hasInfix "Claude-specific rule." rule
       );
 
       # Claude HM stages context and each keyed rule as generated files before
@@ -497,8 +490,8 @@ in {
           aggregate = (markdownInput evaluated ".claude/CLAUDE.md").text;
           ruleFile = (markdownInput evaluated ".claude/rules/named-rule.md").text;
         in
-          fromGeneratedTree ".claude/CLAUDE.md" files.".claude/CLAUDE.md"
-          && aggregate == "CONTEXT-BASELINE-TOKEN."
+          aggregate
+          == "CONTEXT-BASELINE-TOKEN."
           && fromGeneratedTree ".claude/rules/named-rule.md" files.".claude/rules/named-rule.md"
           && lib.hasInfix "NAMED-RULE-BODY-TOKEN." ruleFile
           && files ? ".claude/rules/unnamed.md"
@@ -531,6 +524,15 @@ in {
           evaluated = evalDevenv cfg;
           emptied = evalDevenv {ai.claude.enable = true;};
           disabled = evalDevenv (lib.recursiveUpdate cfg {ai.claude.enable = false;});
+          bare = evalDevenv {};
+          # The old devenv rules writer's ledger is Claude's and reaches the
+          # engine's root list even without any Claude configuration.
+          ledger = {
+            codec = "dir";
+            ledger = "materialize/claude-rules.manifest";
+            path = ".claude/rules";
+          };
+          declaresRulesLedger = result: result.config.ai.claude.legacyLedgers == [ledger];
           claimsNoRule = result: !(lib.any (lib.hasPrefix ".claude/rules/") (builtins.attrNames result.config.ai.claims.path));
           composed = (markdownInput evaluated ".claude/CLAUDE.md").text;
           # Project rules are read-only copies, not links: see mkClaude's rules
@@ -543,8 +545,7 @@ in {
             && rules.${path}.mode == null
             && rules.${path}.content.source == "${evaluated.config.ai.claude._generatedTree}/${path}";
         in
-          fromGeneratedTree ".claude/CLAUDE.md" evaluated.config.files.".claude/CLAUDE.md"
-          && lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
+          lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
           && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
           && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
           && copied ".claude/rules/named-rule.md"
@@ -554,7 +555,8 @@ in {
           && !(evaluated.config.files ? ".claude/rules/named-rule.md")
           && claimsNoRule emptied
           && claimsNoRule disabled
-          && lib.all declaresRulesLedger [disabled emptied evaluated (evalDevenv {})]
+          && lib.all declaresRulesLedger [bare disabled emptied evaluated]
+          && builtins.elem ledger bare.config.ai.legacyLedgers
       );
 
       # Both direct Claude backends deliver built Markdown. A long paragraph
@@ -583,61 +585,6 @@ in {
             echo PASS > "$out"
           '';
 
-      # Strict enum: an invalid effortLevel must throw at eval.
-      # ── Settings document ──────────────────────────────────────────
-      # Strict enum: an invalid effortLevel must throw at eval.
-      module-claude-hm-effort-level-rejects-invalid = mkTest "claude-hm-effort-level-rejects-invalid" (
-        let
-          attempt = builtins.tryEval (
-            let
-              ev = evalHm {
-                ai.claude = {
-                  enable = true;
-                  native.settings.effortLevel = "ultra";
-                };
-              };
-            in
-              builtins.deepSeq ev.config.ai.claude.native.settings.effortLevel
-              ev.config.ai.claude.native.settings.effortLevel
-          );
-        in
-          attempt.success == false
-      );
-
-      # Strict enum: an invalid tui renderer must throw at eval.
-      module-claude-hm-tui-rejects-invalid = mkTest "claude-hm-tui-rejects-invalid" (
-        let
-          attempt = builtins.tryEval (
-            let
-              ev = evalHm {
-                ai.claude = {
-                  enable = true;
-                  native.settings.tui = "curses";
-                };
-              };
-            in
-              builtins.deepSeq ev.config.ai.claude.native.settings.tui
-              ev.config.ai.claude.native.settings.tui
-          );
-        in
-          attempt.success == false
-      );
-
-      module-claude-hm-writes-rule-file = mkTest "claude-hm-writes-rule-file" (
-        let
-          result = evalHm {
-            ai.claude.enable = true;
-            ai.rules.my-rule = {
-              matcher = ["src/**"];
-              text = "Always use strict mode.";
-            };
-          };
-          ruleFile = (markdownInput result ".claude/rules/my-rule.md").text;
-        in
-          fromGeneratedTree ".claude/rules/my-rule.md" result.config.home.file.".claude/rules/my-rule.md"
-          && lib.hasInfix "Always use strict mode" ruleFile
-      );
-
       # Skills land as links under ~/.claude/skills, a directory's leaves each:
       # one recursive layer-1 entry the engine walks into per-leaf links.
       module-claude-hm-skills-land-as-files = mkTest "claude-hm-skills-land-as-files" (
@@ -647,13 +594,9 @@ in {
             ai.claude.enable = true;
             ai.skills.stack-fix = src;
           };
-          entry = result.config.ai.files.".claude/skills/stack-fix";
         in
-          (markdownInput result ".claude/skills/stack-fix").source
-          == "${src}"
-          && entry.recursive
-          && entry.method == "symlink"
-          && result.config.home.file.".claude/skills/stack-fix/SKILL.md".source == "${src}/SKILL.md"
+          result.config.home.file.".claude/skills/stack-fix/SKILL.md".source
+          == "${src}/SKILL.md"
           && !(result.config.home.file ? ".claude/skills/stack-fix")
       );
 
@@ -684,9 +627,8 @@ in {
           && !(lib.any (lib.hasPrefix ".claude/skills/stack-fix/") (builtins.attrNames config.home.file))
       );
 
-      # Every Claude surface lands as its own file: the Markdown and script
-      # surfaces, the personal plugin, and settings.json carrying settings,
-      # permissions and typed hooks.
+      # Shared typed hooks coexist with native permissions in the delivered
+      # settings.json.
       module-claude-hm-delivery-lands-surfaces-as-files = mkTest "claude-hm-delivery-lands-surfaces-as-files" (
         let
           result = evalHm {
@@ -702,18 +644,10 @@ in {
               skills.probe = ./fixtures/claude-skills/skill-a;
             };
           };
-          inherit (result) config;
           settings = claudeSettings result;
         in
-          lib.all (path: config.home.file ? ${path}) [
-            ".claude/agents/probe.md"
-            ".claude/hooks/probe"
-            ".claude/skills/home-manager/.claude-plugin/plugin.json"
-            ".claude/skills/home-manager/.mcp.json"
-            ".claude/settings.json"
-            ".claude/skills/probe/SKILL.md"
-          ]
-          && settings.permissions.allow == ["Read"]
+          settings.permissions.allow
+          == ["Read"]
           && handlerCommands settings.hooks.PreToolUse == ["true"]
       );
 
@@ -749,8 +683,6 @@ in {
           && builtins.attrNames devenv.ai.claude._generatedFiles == lib.sort lib.lessThan devenvStaged
           && linked hm.home.file (lib.remove ".claude.json" hmStaged)
           && linked devenv.files (lib.remove ".claude/rules/probe.md" devenvStaged)
-          && hm.home.file.".claude/hooks/probe".executable
-          && devenv.files.".claude/hooks/probe".executable
       );
 
       # Ported from module-delivery-normalized-agent-source-crosses-alone: the
@@ -820,98 +752,21 @@ in {
           settings.effortLevel == "low" && settings.enableWorkflows
       );
 
-      # Devenv: typed ai.claude.mcpServers entries are RENDERED into the project
-      # .mcp.json: no raw `package` key, and the derived command/args.
-      # Uses a real server name (context7-mcp) so renderServer's package branch
-      # (loadServer + mode-string args) is exercised end-to-end.
-      module-claude-devenv-mcp-servers-rendered = mkTest "claude-devenv-mcp-servers-rendered" (
-        let
-          result = evalDevenv {
-            ai.claude = {
-              enable = true;
-              mcpServers.context7-mcp.package = pkgs.hello;
-            };
-          };
-          rendered = (claudeMcpServers "devenv" result)."context7-mcp" or null;
-        in
-          rendered
-          != null
-          && !(rendered ? package)
-          && rendered.type == "stdio"
-          # The mode names the binary; the package override supplies its prefix.
-          && rendered.command == "${pkgs.hello}/bin/context7-mcp"
-          && lib.take 2 rendered.args == ["--transport" "stdio"]
-      );
-
-      # Devenv/HM parity: the SAME typed config yields the SAME rendered server
-      # attrset on both backends (the HM personal plugin's .mcp.json vs the
-      # project .mcp.json) — the render is shared (lib.ai.renderServer), so any
-      # divergence is a factory regression. `==` is decidable over
-      # context-carrying strings (store paths in command/env).
-      module-claude-devenv-mcp-servers-hm-parity = mkTest "claude-devenv-mcp-servers-hm-parity" (
-        let
-          cfg = {
-            ai.claude = {
-              enable = true;
-              mcpServers.context7-mcp.package = pkgs.hello;
-            };
-          };
-          hmServers = claudeMcpServers "hm" (evalHm cfg);
-          dvServers = claudeMcpServers "devenv" (evalDevenv cfg);
-        in
-          hmServers
-          != {}
-          && hmServers == dvServers
-      );
-
       # ── Claude launch-effort unpin reconciler ──────────────────────
 
-      # Read the engine document and the ungated legacy import declaration.
-      module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
-        let
-          result = evalHm {ai.claude.enable = true;};
-          document = unpinDocument result;
-        in
-          result.config.ai.files.".claude.json".method
-          == "rw"
-          && lib.any (entry: entry.ledger == "json-settings/claude-unpin-launch-effort.json" && entry.path == ".claude.json" && entry.codec == "json") result.config.ai.legacyLedgers
-          && document.value.unpinOpus48LaunchEffort
-      );
-
-      # An empty flag map with no installMethod delivers no files. Prune still
-      # retires the prior generation's keys; no apply pass is needed. The
-      # always-written settings document is dropped so only the flag map counts.
-      module-claude-hm-unpin-empty-emits-prune = mkTest "claude-hm-unpin-empty-emits-prune" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              native = {
-                installMethod = null;
-                settings = lib.mkForce {};
-                unpinLaunchEffort = lib.mkForce {};
-              };
-            };
-          };
-        in
-          result.config.home.activation ? ai-files-prune
-          && !(result.config.home.activation ? ai-files-apply)
-          && result.config.ai.files == {}
-          && result.config.ai.claude._generatedFiles.".claude.json".content.value == {}
-          && !(result.config.ai.files ? ".claude.json")
-      );
-
-      # installMethod defaults to "native" and stages the document alone;
-      # null drops the key and leaves the flags.
+      # Read the writable engine document: installMethod defaults to "native"
+      # with the default launch flag, stages alone, and drops out when null.
       module-claude-hm-install-method = mkTest "claude-hm-install-method" (
         let
           document = native: (unpinDocument (evalHm {ai.claude = {enable = true;} // native;})).value;
           alone = document {native.unpinLaunchEffort = lib.mkForce {};};
+          defaults = document {};
           unset = document {native.installMethod = null;};
         in
           alone
           == {installMethod = "native";}
-          && (document {}).installMethod == "native"
+          && defaults.installMethod == "native"
+          && defaults.unpinOpus48LaunchEffort
           && !(unset ? installMethod)
           && unset.unpinOpus48LaunchEffort
       );
@@ -929,38 +784,6 @@ in {
 
       # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
-      # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.
-      module-claude-hm-writes-rules-from-top-level = mkTest "claude-hm-writes-rules-from-top-level" (
-        let
-          result = evalHm {
-            ai.claude.enable = true;
-            ai.rules.code-style = {
-              matcher = ["src/**"];
-              text = "Use consistent formatting.";
-            };
-          };
-          ruleFile = (markdownInput result ".claude/rules/code-style.md").text;
-        in
-          fromGeneratedTree ".claude/rules/code-style.md" result.config.home.file.".claude/rules/code-style.md"
-          && lib.hasInfix "Use consistent formatting" ruleFile
-          && lib.hasInfix "paths:" ruleFile
-          && lib.hasInfix "src/**" ruleFile
-      );
-
-      # Rules with null paths → unconditional (no frontmatter scoping).
-      module-claude-hm-rules-null-paths-no-frontmatter = mkTest "claude-hm-rules-null-paths-no-frontmatter" (
-        let
-          result = evalHm {
-            ai.claude.enable = true;
-            ai.rules.always-on.text = "Loaded unconditionally.";
-          };
-          ruleFile = (markdownInput result ".claude/rules/always-on.md").text;
-        in
-          fromGeneratedTree ".claude/rules/always-on.md" result.config.home.file.".claude/rules/always-on.md"
-          && lib.hasInfix "Loaded unconditionally." ruleFile
-          && !(lib.hasInfix "paths:" ruleFile)
-      );
-
       # HM: each plugin lands as ONE directory link at ~/.claude/skills/<key>,
       # never as a tree of leaves: Claude's agents/ and commands/ scanners take
       # regular files only.
@@ -976,7 +799,6 @@ in {
         in
           fromGeneratedTree ".claude/skills/my-plugin" file
           && lib.hasSuffix "-claude-code-plugin-my-plugin" (markdownInput result ".claude/skills/my-plugin").source
-          && !(file.recursive or false)
       );
 
       # HM: the ATTRIBUTE NAME — not the source's base name — is the plugin's
@@ -1002,55 +824,44 @@ in {
           && !(files ? ".claude/skills/${derivedName}")
       );
 
-      # A plugin key that another ~/.claude/skills/<name> owner already uses
-      # fails evaluation instead of silently shadowing it.
-      module-claude-hm-plugins-collision-asserted = mkTest "claude-hm-plugins-collision-asserted" (
+      # Every collision would shadow a different owner of ~/.claude/skills.
+      # Pin the named owner and the remedy instead of accepting any assertion.
+      module-claude-hm-plugin-collisions = mkTest "claude-hm-plugin-collisions" (
         let
-          failing = cfg: lib.any (a: !a.assertion && lib.hasInfix "ai.claude.plugins" a.message) (evalHm cfg).config.assertions;
           src = ../../stacked-workflows/skills/stack-fix;
+          skill = ./fixtures/claude-skills/skill-a/SKILL.md;
+          evaluate = extra: evalHm {ai.claude = {enable = true;} // extra;};
+          failsWith = message: extra:
+            lib.any (a: !a.assertion && a.message == message) (evaluate extra).config.assertions;
+          personalSkill = {skills.home-manager = skill;};
+          skillConflict = "ai.skills.home-manager (or ai.claude.skills.home-manager) would land at ~/.claude/skills/home-manager, which the home-manager personal plugin already owns. Rename the skill.";
+          plugin = {plugins.probe = src;};
         in
-          failing {
-            ai.claude = {
-              enable = true;
-              plugins.home-manager = src;
-            };
+          checkRows "Claude plugin directory ownership" {
+            "a distinct plugin key leaves Claude assertions passing" = claudeAssertionsPass (evaluate plugin);
+            "a plugin cannot take the reserved personal plugin key" =
+              failsWith
+              "ai.claude.plugins home-manager would land at ~/.claude/skills/<name>, which the home-manager personal plugin already owns. Rename the plugin key."
+              {plugins.home-manager = src;};
+            # A single-file skill: a directory skill already collides with the
+            # plugin entry itself in the file map.
+            "a plugin cannot shadow a single-file skill with the same key" =
+              failsWith
+              "ai.claude.plugins probe would land at ~/.claude/skills/<name>, which an ai.skills entry already owns. Rename the plugin key."
+              (plugin // {skills.probe = skill;});
+            "a skill cannot share the directory of a populated personal plugin" =
+              failsWith skillConflict
+              (personalSkill
+                // {
+                  mcpServers.remote = {
+                    type = "http";
+                    url = "https://example.invalid/mcp";
+                  };
+                });
+            "a skill can use the personal plugin key when there is no manifest to deliver" =
+              !(failsWith skillConflict personalSkill)
+              && (evaluate personalSkill).config.home.file ? ".claude/skills/home-manager/SKILL.md";
           }
-          && failing {
-            ai.claude = {
-              enable = true;
-              plugins.probe = src;
-              # A single-file skill: a directory skill would already collide
-              # with the plugin's own entry in the file map.
-              skills.probe = ./fixtures/claude-skills/skill-a/SKILL.md;
-            };
-          }
-          && !(failing {
-            ai.claude = {
-              enable = true;
-              plugins.probe = src;
-            };
-          })
-      );
-
-      # A skill named like the personal plugin would share its directory, so it
-      # fails evaluation while the plugin has files to deliver.
-      module-claude-hm-skill-personal-plugin-collision-asserted = mkTest "claude-hm-skill-personal-plugin-collision-asserted" (
-        let
-          failing = cfg: lib.any (a: !a.assertion && lib.hasInfix "ai.skills.home-manager" a.message) (evalHm cfg).config.assertions;
-          skill = {
-            ai.claude = {
-              enable = true;
-              skills.home-manager = ./fixtures/claude-skills/skill-a/SKILL.md;
-            };
-          };
-        in
-          failing (lib.recursiveUpdate skill {
-            ai.claude.mcpServers.remote = {
-              type = "http";
-              url = "https://example.invalid/mcp";
-            };
-          })
-          && !(failing skill)
       );
 
       # HM: a top-level normalized ai.agents record fans out to
@@ -1083,262 +894,109 @@ in {
             };
           };
         in
-          fromGeneratedTree ".claude/agents/reviewer.md" result.config.home.file.".claude/agents/reviewer.md"
-          && (markdownInput result ".claude/agents/reviewer.md").text == "# Claude-specific"
+          (markdownInput result ".claude/agents/reviewer.md").text == "# Claude-specific"
       );
 
-      # ── memory-collision guard (ai.claude.memoryCollisionGuard) ───────
-      # Default-OFF is the requirement here. This hook DENIES a tool call, so
-      # shipping it on by default would block writes for every consumer who never
-      # asked for it.
-      module-claude-hm-memory-collision-guard-default-off = mkTest "claude-hm-memory-collision-guard-default-off" (
+      # A handler package enters the document as an absolute executable path;
+      # its supporting files ride in the package closure.
+      module-claude-hooks-command-package = mkTest "claude-hooks-command-package" (
         let
-          bareSettings = claudeSettings (evalHm {ai.claude.enable = true;});
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
-            };
-          };
-          settingsHooks = (claudeSettings result).hooks;
-        in
-          !(bareSettings ? hooks)
-          && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
-          && hasGuardHook settingsHooks.PreToolUse == false
-      );
-
-      # Opting in must produce a PreToolUse entry matching the write-shaped tools. The
-      # matcher is asserted because it is half the filter: the script's path test is the
-      # other half, and a matcher regression would spawn the hook on every tool call.
-      module-claude-hm-memory-collision-guard-opt-in = mkTest "claude-hm-memory-collision-guard-opt-in" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              memoryCollisionGuard.enable = true;
-            };
-          };
-          blocks = (claudeSettings result).hooks.PreToolUse or [];
-          guardBlocks = builtins.filter (b: hasGuardHook [b]) blocks;
-        in
-          builtins.length guardBlocks
-          == 1
-          && (builtins.head guardBlocks).matcher == "Write|Edit"
-      );
-
-      # Devenv parity — same hook, same default, per the repo's config-parity rule.
-      module-claude-devenv-memory-collision-guard-opt-in = mkTest "claude-devenv-memory-collision-guard-opt-in" (
-        let
-          result = evalDevenv {
-            ai.claude = {
-              enable = true;
-              memoryCollisionGuard.enable = true;
-            };
-          };
-          settingsJson = claudeSettings result;
-          offResult = evalDevenv {
-            ai.claude = {
-              enable = true;
-              hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
-            };
-          };
-          bareSettings = claudeSettings (evalDevenv {ai.claude.enable = true;});
-          offJson = claudeSettings offResult;
-        in
-          hasGuardHook (settingsJson.hooks.PreToolUse or [])
-          && !(bareSettings ? hooks)
-          && builtins.elem "consumer-control" (handlerCommands offJson.hooks.PreToolUse)
-          && hasGuardHook offJson.hooks.PreToolUse == false
-      );
-
-      # Compose-not-clobber: emitted as a DEFINITION of
-      # ai.claude.hooks rather than as that option's `default`, so a consumer who
-      # defines PreToolUse for their own reasons keeps both.
-      module-claude-memory-collision-guard-composes-with-consumer-hook = mkTest "claude-memory-collision-guard-composes-with-consumer-hook" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              memoryCollisionGuard.enable = true;
-              hooks.PreToolUse = [
-                {
-                  matcher = "Bash";
-                  hooks = [{command = "consumer-hook";}];
-                }
-              ];
-            };
-          };
-          blocks = (claudeSettings result).hooks.PreToolUse or [];
-          cmds = handlerCommands blocks;
-        in
-          builtins.elem "consumer-hook" cmds
-          && builtins.any (lib.hasInfix "claude-memory-collision-guard") cmds
-      );
-
-      # Typed ai.claude.hooks event map: accepts the settings.json-shaped
-      # per-event structure (soft-enum event key → list of matcher blocks →
-      # list of typed handlers) and carries it through. No lowering asserted
-      # here — that is Commit 3/4.
-      module-claude-hooks-typed-event-map = mkTest "claude-hooks-typed-event-map" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hooks.PreToolUse = [
-                {
-                  matcher = "Bash";
-                  hooks = [{command = "true";}];
-                }
-              ];
-            };
-          };
-          block = builtins.head (result.config.ai.claude.hooks.PreToolUse or []);
-          handler = builtins.head (block.hooks or []);
-        in
-          block.matcher == "Bash" && handler.command == "true" && handler.type == "command"
-      );
-
-      # S1: a handler `command` accepts a package and coerces to its getExe path
-      # (its supporting files ride the /nix/store closure at absolute paths).
-      module-claude-hooks-command-accepts-package = mkTest "claude-hooks-command-accepts-package" (
-        let
-          pkg = pkgs.writeShellApplication {
-            name = "demo-hook";
-            text = "exit 0";
-          };
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hooks.PostToolUse = [{hooks = [{command = pkg;}];}];
-            };
-          };
-          handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
-        in
-          builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
-      );
-
-      module-claude-hooks-command-resolves-package-pname = mkTest "claude-hooks-command-resolves-package-pname" (
-        let
-          pkg = pkgs.runCommand "demo-hook-no-main-program" {pname = "demo-hook";} ''
+          pkg = pkgs.runCommand "demo-hook-package" {pname = "demo-hook";} ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
             mkdir -p "$out/bin"
-            touch "$out/bin/demo-hook"
+            touch "$out/bin/demo-hook" "$out/bin/explicit-hook"
           '';
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hooks.PostToolUse = [{hooks = [{command = pkg;}];}];
-            };
-          };
-          handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
+          explicit = pkg.overrideAttrs {meta.mainProgram = "explicit-hook";};
+          commands = package:
+            handlerCommands
+            (settingsOf backends.hm {
+              ai.claude = {
+                enable = true;
+                hooks.PostToolUse = [{hooks = [{command = package;}];}];
+              };
+            }).hooks.PostToolUse;
         in
-          builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
+          checkRows "Claude hook package commands" {
+            "mainProgram takes precedence over pname" = commands explicit == ["${explicit}/bin/explicit-hook"];
+          }
       );
 
       # ── ai.*.skillsDir Dir helper ──────────────────────────────
       # Directory-of-directories; each immediate subdir becomes a
       # skill. See lib/ai/dir-helpers.nix:skillsFromDir.
 
-      # Path-only form fans every subdir into ai.claude.skills.
-      module-claude-skillsdir-path-form = mkTest "claude-skillsdir-path-form" (
+      module-claude-skillsdir = mkTest "claude-skillsdir" (
         let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              skillsDir = ./fixtures/claude-skills;
+          dir = ./fixtures/claude-skills;
+          evaluate = skillsDir:
+            evalHm {
+              ai.claude = {
+                enable = true;
+                inherit skillsDir;
+              };
             };
-          };
-          files = result.config.home.file;
-        in
-          files ? ".claude/skills/skill-a/SKILL.md" && files ? ".claude/skills/skill-b/SKILL.md"
-      );
-
-      # Submodule form with a filter that excludes skill-b.
-      module-claude-skillsdir-filter = mkTest "claude-skillsdir-filter" (
-        let
-          result = evalHm {
+          skillPaths = result: builtins.filter (lib.hasPrefix ".claude/skills/") (builtins.attrNames result.config.home.file);
+          skillA = ".claude/skills/skill-a/SKILL.md";
+          fromRoot = evalHm {
             ai.claude = {
               enable = true;
-              skillsDir = {
-                path = ./fixtures/claude-skills;
+              skillsDir = dir;
+            };
+            ai.skills.skill-a = dir + "/skill-b";
+          };
+        in
+          checkRows "Claude skills directory" {
+            "directory-generated per-runtime entry beats a same-key root entry" =
+              fromRoot.config.home.file.${skillA}.source
+              == "${./fixtures/claude-skills/skill-a}/SKILL.md";
+            "path form delivers both immediate skill subdirectories" = skillPaths (evaluate dir) == [skillA ".claude/skills/skill-b/SKILL.md"];
+            "submodule filter excludes skill-b without dropping skill-a" =
+              skillPaths (evaluate {
+                path = dir;
                 filter = name: name == "skill-a";
-              };
-            };
-          };
-          files = result.config.home.file;
-        in
-          files ? ".claude/skills/skill-a/SKILL.md" && !(files ? ".claude/skills/skill-b/SKILL.md")
+              })
+              == [skillA];
+          }
       );
 
-      # A per-runtime directory-generated entry replaces the same-key root entry.
-      module-claude-skillsdir-entry-replaces-root-single = mkTest "claude-skillsdir-entry-replaces-root-single" (
+      # Claude's directory of `.md` agent files expands into raw per-runtime
+      # agents. Ensure the backend sees a path source rather than text.
+      module-claude-agentsdir = mkTest "claude-agentsdir" (
         let
-          result = evalHm {
-            ai.skills.skill-a = ./fixtures/claude-skills/skill-b;
-            ai.claude = {
-              enable = true;
-              skillsDir = ./fixtures/claude-skills;
+          dir = ./fixtures/claude-agents;
+          evaluate = agentsDir: extra:
+            evalHm {
+              ai =
+                extra
+                // {
+                  claude = {
+                    enable = true;
+                    inherit agentsDir;
+                  };
+                };
             };
-          };
-        in
-          result.config.home.file.".claude/skills/skill-a/SKILL.md".source
-          == "${./fixtures/claude-skills/skill-a}/SKILL.md"
-          && (markdownInput result ".claude/skills/skill-a").source == "${./fixtures/claude-skills/skill-a}"
-      );
-
-      # ── ai.claude.agentsDir Dir helper ─────────────────────────
-      # Claude's directory of `.md` agent files, expanded into raw
-      # `ai.claude.agents` entries.
-
-      # Path-only form: `ai.claude.agentsDir = ./fixtures/claude-agents;`
-      # expands to two entries (agent-one, agent-two). Emission lands
-      # at `.claude/agents/<name>.md` via the existing per-agent file
-      # emission in mkClaude.
-      module-claude-agentsdir-path-form = mkTest "claude-agentsdir-path-form" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              agentsDir = ./fixtures/claude-agents;
-            };
-          };
-          files = result.config.home.file;
-        in
-          files ? ".claude/agents/agent-one.md" && files ? ".claude/agents/agent-two.md"
-      );
-
-      # Submodule form with filter.
-      module-claude-agentsdir-filter = mkTest "claude-agentsdir-filter" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              agentsDir = {
-                path = ./fixtures/claude-agents;
-                filter = name: name == "agent-one.md";
-              };
-            };
-          };
-          files = result.config.home.file;
-        in
-          files ? ".claude/agents/agent-one.md" && !(files ? ".claude/agents/agent-two.md")
-      );
-
-      # A per-runtime directory-generated entry replaces the same-key root entry.
-      module-claude-agentsdir-entry-replaces-root-single = mkTest "claude-agentsdir-entry-replaces-root-single" (
-        let
-          result = evalHm {
-            ai.agents.agent-one = {
+          a = ".claude/agents/agent-one.md";
+          agentPaths = result: builtins.filter (lib.hasPrefix ".claude/agents/") (builtins.attrNames result.config.home.file);
+          fromRoot = evaluate dir {
+            agents.agent-one = {
               description = "Explicit top-level agent.";
               instructions.text = "Explicit top-level agent.";
             };
-            ai.claude = {
-              enable = true;
-              agentsDir = ./fixtures/claude-agents;
-            };
           };
         in
-          fromGeneratedTree ".claude/agents/agent-one.md" result.config.home.file.".claude/agents/agent-one.md"
-          && (markdownInput result ".claude/agents/agent-one.md").source == ./fixtures/claude-agents/agent-one.md
+          checkRows "Claude agents directory" {
+            "directory-generated per-runtime agent beats a same-key root entry" =
+              fromGeneratedTree a fromRoot.config.home.file.${a}
+              && (markdownInput fromRoot a).source == ./fixtures/claude-agents/agent-one.md;
+            "path form delivers both agents without doubling the suffix" = agentPaths (evaluate dir {}) == [a ".claude/agents/agent-two.md"];
+            "submodule filter excludes agent-two without dropping agent-one" =
+              agentPaths (evaluate {
+                path = dir;
+                filter = name: name == "agent-one.md";
+              } {})
+              == [a];
+          }
       );
 
       # Devenv parity: agents land at project `.claude/agents/<name>.md` through
@@ -1375,7 +1033,6 @@ in {
         in
           toString (storeString.source or "")
           == "${./fixtures/claude-agents}/agent-one.md"
-          && !(storeString ? text)
           && fromGeneratedTree ".claude/agents/store-string.md" result.config.files.".claude/agents/store-string.md"
           && fromGeneratedTree ".claude/agents/probe.md" result.config.files.".claude/agents/probe.md"
           && lib.hasInfix "name: \"probe\"" text
@@ -1415,7 +1072,6 @@ in {
           == ./fixtures/claude-agents/agent-one.md
           && fromGeneratedTree ".claude/agents/agent-one.md" result.config.files.".claude/agents/agent-one.md"
           && toString (stringFile.source or "") == "${./fixtures/claude-agents}/agent-one.md"
-          && !(stringFile ? text)
           && !(result.config.files ? ".claude/agents/agent-two.md")
           && !(lib.any (lib.hasInfix "agentsDir") result.config.warnings)
       );
@@ -1426,129 +1082,54 @@ in {
       # filter is always-true — hook files are typically
       # extensionless shell scripts, so no `.md`-like suffix strip.
 
-      module-claude-hookscriptsdir-path-form = mkTest "claude-hookscriptsdir-path-form" (
+      module-claude-hookscriptsdir = mkTest "claude-hookscriptsdir" (
         let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hookScriptsDir = ./fixtures/claude-hooks;
-            };
+          dir = ./fixtures/claude-hooks;
+          config = extra: {
+            ai.claude =
+              {
+                enable = true;
+                hookScriptsDir = dir;
+              }
+              // extra;
           };
-          files = result.config.home.file;
-        in
-          files ? ".claude/hooks/pre-edit" && files ? ".claude/hooks/post-edit"
-      );
-
-      # Filter excludes post-edit.
-      module-claude-hookscriptsdir-filter = mkTest "claude-hookscriptsdir-filter" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hookScriptsDir = {
-                path = ./fixtures/claude-hooks;
-                filter = name: name == "pre-edit";
-              };
+          unfiltered = config {};
+          filtered = evalHm (config {
+            hookScriptsDir = {
+              path = dir;
+              filter = name: name == "pre-edit";
             };
-          };
-          files = result.config.home.file;
+          });
+          overridden = evalHm (config {hookScripts.pre-edit = "explicit override";});
+          hookPaths = files: builtins.filter (lib.hasPrefix ".claude/hooks/") (builtins.attrNames files);
+          expected = [".claude/hooks/post-edit" ".claude/hooks/pre-edit"];
         in
-          files ? ".claude/hooks/pre-edit" && !(files ? ".claude/hooks/post-edit")
-      );
-
-      # Collision: Dir-generated vs explicit `ai.claude.hookScripts.<name>`
-      # is NOT a shared-pool collision (hook scripts have no top-level pool),
-      # so the module system handles it via the `attrsOf lines` merge.
-      # The Dir expansion uses mkDefault so explicit entries win.
-      module-claude-hookscriptsdir-explicit-wins-within-layer = mkTest "claude-hookscriptsdir-explicit-wins-within-layer" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hookScripts.pre-edit = "explicit override";
-              hookScriptsDir = ./fixtures/claude-hooks;
-            };
-          };
-        in
-          deliveredMarkdown result ".claude/hooks/pre-edit" == "explicit override"
-      );
-
-      # Devenv parity — hookScriptsDir feeds the same .claude/hooks/<name> files.
-      module-claude-devenv-hookscriptsdir-path-form = mkTest "claude-devenv-hookscriptsdir-path-form" (
-        let
-          result = evalDevenv {
-            ai.claude = {
-              enable = true;
-              hookScriptsDir = ./fixtures/claude-hooks;
-            };
-          };
-          files = result.config.files or {};
-        in
-          files ? ".claude/hooks/pre-edit" && files ? ".claude/hooks/post-edit"
+          checkRows "Claude hooks directory" {
+            "devenv delivers both extensionless hook scripts" = hookPaths (evalDevenv unfiltered).config.files == expected;
+            # Hook scripts have no shared pool: within this layer the directory
+            # expansion gives its attrsOf lines defaults lower priority.
+            "inline script replaces the directory script rather than concatenating it" = deliveredMarkdown overridden ".claude/hooks/pre-edit" == "explicit override";
+            "submodule filter excludes post-edit without dropping pre-edit" = hookPaths filtered.config.home.file == [".claude/hooks/pre-edit"];
+          }
       );
 
       module-claude-hm-rule-sourcepath-rejected = mkTest "claude-hm-rule-sourcepath-rejected" (
-        let
-          attempt = builtins.tryEval (let
-            r = evalHm {
+        checkRows "per-runtime Claude rule options" {
+          "a text rule rejects the undeclared sourcePath field" = rejectsChange (rule:
+            (evalHm {
               ai.claude = {
                 enable = true;
-                rules.my-rule = {
-                  text = "body";
-                  sourcePath = "/abs/path/to/my-rule.md";
-                };
+                rules.my-rule = rule;
               };
+            }).config.ai.claude.rules.my-rule.text) {
+            valid.text = "body";
+            invalid = {
+              sourcePath = "/abs/path/to/my-rule.md";
+              text = "body";
             };
-          in
-            builtins.deepSeq r.config.ai.claude.rules.my-rule true);
-        in
-          !attempt.success
-      );
-
-      module-claude-unrecognized-settings-known-keys-accepted = mkTest "claude-unrecognized-settings-known-keys-accepted" (
-        lib.all (arm: let
-          evaluated = arm.eval claudeKnownKeysCfg;
-        in
-          claudeAssertionsPass evaluated
-          && claudeSettingsWarnings evaluated == []) (lib.attrValues backends)
-      );
-
-      module-claude-unrecognized-settings-nested-typo-warns = mkTest "claude-unrecognized-settings-nested-typo-warns" (
-        lib.all (arm: let
-          evaluated = arm.eval claudeNestedTypoCfg;
-          warnings = claudeSettingsWarnings evaluated;
-        in
-          claudeAssertionsPass evaluated
-          && builtins.length warnings == 1
-          && lib.hasInfix "ai.claude.native.settings.permissions.alow" (builtins.head warnings)
-          && lib.hasInfix "did you mean `ai.claude.native.settings.permissions.allow`" (builtins.head warnings)
-          && (claudeSettings evaluated).permissions.alow == ["Read"]) (lib.attrValues backends)
-      );
-
-      module-claude-unrecognized-settings-allowlist-suppresses-warning = mkTest "claude-unrecognized-settings-allowlist-suppresses-warning" (
-        lib.all (arm: let
-          evaluated = arm.eval (lib.recursiveUpdate claudeNestedTypoCfg {
-            ai.claude.allowUnrecognizedSettings = ["permissions.alow"];
-          });
-        in
-          claudeAssertionsPass evaluated
-          && claudeSettingsWarnings evaluated == []
-          && (claudeSettings evaluated).permissions.alow == ["Read"]) (lib.attrValues backends)
-      );
-
-      module-claude-unrecognized-settings-redundant-allowlist-warns = mkTest "claude-unrecognized-settings-redundant-allowlist-warns" (
-        lib.all (arm: let
-          evaluated = arm.eval {
-            ai.claude = {
-              enable = true;
-              allowUnrecognizedSettings = ["ultracode"];
-            };
+            expected = "body";
           };
-          warnings = claudeSettingsWarnings evaluated;
-        in
-          claudeAssertionsPass evaluated
-          && builtins.length warnings == 1
-          && lib.hasInfix "ai.claude.allowUnrecognizedSettings: stale allowlist entry `ultracode`" (builtins.head warnings)) (lib.attrValues backends)
+        }
       );
     }
     // families.checks;

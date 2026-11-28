@@ -48,23 +48,24 @@ in {
     trusted = json.dumps({"projects": {project: {"hasTrustDialogAccepted": True}}})
     # Onboarding is not trust; a check against the wrong key suppresses this notice.
     for case, contents, expected in [
-        ("corrupt state still warns", "{", notice(project)),
-        ("empty state still warns", "{}", notice(project)),
-        ("explicit rejection is not trust", json.dumps({"projects": {project: {"hasTrustDialogAccepted": False}}}), notice(project)),
-        ("onboarding is not trust", json.dumps({"projects": {project: {"hasCompletedProjectOnboarding": True}}}), notice(project)),
-        ("trust in another project does not apply", json.dumps({"projects": {"/another": {"hasTrustDialogAccepted": True}}}), notice(project)),
-        ("trusted project stays quiet", trusted, None),
+        ("corrupt trust file crashes or suppresses the warning", "{", notice(project)),
+        ("explicit rejection is treated as trust", json.dumps({"projects": {project: {"hasTrustDialogAccepted": False}}}), notice(project)),
+        ("onboarding is treated as trust", json.dumps({"projects": {project: {"hasCompletedProjectOnboarding": True}}}), notice(project)),
+        ("trust from a different project suppresses the warning", json.dumps({"projects": {"/another": {"hasTrustDialogAccepted": True}}}), notice(project)),
+        ("trusted project emits a false warning", trusted, None),
+        ("valid state without project entries suppresses the warning", "{}", notice(project)),
     ]:
         state.write_text(contents)
         check(case, payload, expected)
     state.unlink()
-    check("missing state warns and missing cwd uses process cwd", b"{}", notice(os.getcwd()))
+    check("missing trust file crashes or suppresses the warning", payload, notice(project))
+    check("missing cwd does not fall back to the process cwd", b"{}", notice(os.getcwd()))
     for case, invalid in [
-        ("empty input is not a hook event", b""),
-        ("malformed JSON is not a hook event", b"{"),
-        ("multiple JSON values are not one hook event", b"{} {}"),
-        ("non-object is not a hook event", b"[]"),
-        ("numeric cwd is not a path", b'{"cwd":1}'),
+        ("an array is treated as an event with no cwd", b"[]"),
+        ("empty input is treated as an event with no cwd", b""),
+        ("multiple JSON values are processed as one event", b"{} {}"),
+        ("numeric cwd is converted to a project path", b'{"cwd":1}'),
+        ("truncated JSON leaks a parser diagnostic", b"{"),
     ]:
         check(case, invalid, None)
     check("missing HOME stays quiet", payload, None, {key: value for key, value in environment.items() if key != "HOME"})

@@ -14,27 +14,23 @@ def main():
     with tempfile.TemporaryDirectory() as temporary:
         environment = os.environ.copy()
         environment["HOME"] = temporary
-        environment["DRY_RUN"] = "1"
-        for name in ("drain", "write"):
+        # Dry run must suppress the disabled-owner drain.
+        environment.pop("DRY_RUN", None)
+        for name, expected in (("drain", None), ("drain", "drained")):
+            dry_run = {"DRY_RUN": "1"} if expected is None else {}
             subprocess.run(
                 [bash, "-c", shim + "\n" + fixture[name]],
-                env=environment,
+                env=environment | dry_run,
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            assert not (Path(temporary) / name).exists(), name
-        del environment["DRY_RUN"]
-        for name, expected in (("drain", "drained"), ("write", "wrote")):
-            subprocess.run(
-                [bash, "-c", shim + "\n" + fixture[name]],
-                env=environment,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            assert (Path(temporary) / name).read_text() == expected
-    print("PASS: dry run left no files; enabled and disabled-drain commands executed")
+            target = Path(temporary) / name
+            if expected is None:
+                assert not target.exists(), name
+            else:
+                assert target.read_text() == expected, name
+    print("PASS: dry run suppressed the drain; normal activation executed it")
 
 
 if __name__ == "__main__":

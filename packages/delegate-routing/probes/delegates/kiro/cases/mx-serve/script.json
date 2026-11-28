@@ -9,11 +9,6 @@
       "op": "prompt",
       "text": "SECOND USER_SENTINEL_2",
       "timeout": 60
-    },
-    {
-      "op": "call",
-      "method": "session/list",
-      "params": {}
     }
   ],
   "permissionVia": "respond"

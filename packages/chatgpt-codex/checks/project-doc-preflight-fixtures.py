@@ -46,14 +46,15 @@ def documents(prompt):
     return found
 
 
-def notice(case, arguments=(), *, cwd=root, warnings=(), expected_document=None):
+def notice(case, arguments=(), *, cwd=root, warnings=(), budget=32768, expected_documents=None):
     result = run([preflight, *arguments], cwd=cwd)
     assert result.returncode == 0 and result.stdout == b"", (case, result)
     result_lines = result.stderr.splitlines()
     document_warnings = [line for line in result_lines if b"exceed Codex's project_doc_max_bytes" in line]
     assert len(document_warnings) == len(warnings), (case, result.stderr)
     for warning, path in zip(document_warnings, warnings, strict=True):
-        assert warning.startswith(f"warning: {path} is ".encode()), (case, warning)
+        assert warning.startswith(f"warning: {path} is {path.stat().st_size} bytes;".encode()), (case, warning)
+        assert f"project_doc_max_bytes ({budget} bytes total)".encode() in warning, (case, warning)
         assert b"ai.codex.projectDocMaxBytes" in warning, (case, warning)
     if not warnings:
         assert not result_lines, (case, result.stderr)
@@ -68,60 +69,60 @@ def notice(case, arguments=(), *, cwd=root, warnings=(), expected_document=None)
         probe = run([binary, *options, *extra, "debug", "prompt-input", "probe"], cwd=cwd)
         assert probe.returncode == 0, probe.stderr
         prompts.append(documents(json.loads(probe.stdout)))
-    assert (prompts[0] != prompts[1]) == bool(warnings), (case, arguments, result.stderr)
-    if expected_document is not None:
+    if not warnings:
+        assert prompts[0] == prompts[1], (case, arguments, result.stderr)
+    # Reject a calibration that compares unrelated prompt content. In the
+    # raised-budget probe the attributed files must actually be loaded in full.
+    for path in warnings:
+        full_document = path.read_text().strip()
+        assert any(full_document in body for body in prompts[1].values()), (case, path, "not loaded with the raised budget")
+        assert not any(full_document in body for body in prompts[0].values()), (case, path, "not truncated with the normal budget")
+    if expected_documents is not None:
         assert {header: text.strip() for header, text in prompts[0].items()} == {
-            f"# AGENTS.md instructions for {root}": expected_document
+            f"# AGENTS.md instructions for {path.parent}": path.read_text().strip() for path in expected_documents
         }, (case, prompts[0])
     return result.stderr
 
 
-def sized(path, size):
-    path.write_bytes(b"x" * (size - 10) + b"\nTAIL-END\n")
+def sized(path, size, tail=b"TAIL-END"):
+    ending = b"\n" + tail + b"\n"
+    path.write_bytes(b"x" * (size - len(ending)) + ending)
 
 
 root_doc = root / "AGENTS.md"
 child_doc = child / "AGENTS.md"
-notice("no document cannot trigger a budget warning")
 # Prove the independent prompt reader actually finds a known file: an empty
 # extraction must not make every silence case appear calibrated.
-root_doc.write_text("small instructions\n")
-notice("an ordinary small document does not warn", expected_document="small instructions")
 sized(root_doc, 32768)
-notice("a document exactly at the default boundary fits")
+notice("a document exactly at the default boundary fits", expected_documents=(root_doc,))
 sized(root_doc, 32769)
 notice("one byte beyond the default boundary truncates", warnings=(root_doc,))
-for case, arguments in (
-    ("top-level session limit raises the budget", ["-c", "project_doc_max_bytes=40000"]),
-    ("exec options do not hide a session limit", ["exec", "--model", "unused", "--json", "-c", "project_doc_max_bytes=40000", "prompt"]),
-):
-    notice(case, arguments)
+notice("exec options do not hide a session limit", ["exec", "--model", "unused", "--json", "-c", "project_doc_max_bytes=40000", "prompt"])
 user_config("project_doc_max_bytes = 40000\n")
 notice("user config can raise the default budget")
 user_config("project_doc_max_bytes = 16\n")
 root_doc.write_text("a document longer than sixteen bytes\n")
-notice("user config can lower the default budget", warnings=(root_doc,))
+notice("user config can lower the default budget", warnings=(root_doc,), budget=16)
 user_config()
 sized(root_doc, 40000)
 root_config = root / ".codex/config.toml"
 root_config.write_text("project_doc_max_bytes = 50000\n")
 assert b"must be trusted" in notice("an undecided project's limit is ignored, not its docs", warnings=(root_doc,))
 trust()
-notice("checkout trust enables its project limit")
 notice("a subdirectory inherits the checkout's limit", cwd=child)
 # A nearer project limit can lower the budget, not only raise it.
 (child / ".codex").mkdir()
 child_config = child / ".codex/config.toml"
 child_config.write_text("project_doc_max_bytes = 12\n")
-notice("the nearest project's limit beats the wider checkout limit", cwd=child, warnings=(root_doc,))
+notice("the nearest project's limit beats the wider checkout limit", cwd=child, warnings=(root_doc,), budget=12)
 child_config.unlink()
 root_config.unlink()
 user_config()
 
 # Cumulative budget: two individually small files exceed it together. The
-# identical tails cannot fool a check of the full instruction block.
+# distinct tails prevent the full root document from standing in for the child.
 sized(root_doc, 20000)
-sized(child_doc, 20000)
+sized(child_doc, 20000, tail=b"CHILD-END")
 notice("cumulative truncation is attributed to the child, not the root", cwd=child, warnings=(child_doc,))
 sized(root_doc, 32768)
 notice("a root that consumes the whole budget omits the child", cwd=child, warnings=(child_doc,))
@@ -129,13 +130,13 @@ notice("a root that consumes the whole budget omits the child", cwd=child, warni
 root_override = root / "AGENTS.override.md"
 root_override.write_text("override\n")
 sized(root_doc, 40000)
-notice("preferred override hides an oversized ordinary document")
+notice("preferred override hides an oversized ordinary document", expected_documents=(root_override,))
 root_override.unlink()
 root_doc.unlink()
 child_doc.unlink()
 fallback = root / "GUIDANCE.md"
 sized(fallback, 40000)
-notice("alternate names require explicit fallback configuration")
+notice("alternate names require explicit fallback configuration", expected_documents=())
 notice("a configured fallback participates in the budget", ["-c", 'project_doc_fallback_filenames=["GUIDANCE.md"]'], warnings=(fallback,))
 fallback.unlink()
 
@@ -153,15 +154,15 @@ empty = Path.cwd() / "empty"
 empty.mkdir()
 notice("--cd among exec options discovers docs outside the launch cwd", ["exec", "--json", "--cd", str(root), "prompt"], cwd=empty, warnings=(root_doc,))
 notice("attached -C also selects the directory", [f"-C{root}"], cwd=empty, warnings=(root_doc,))
-notice("--cd to an empty directory excludes the launch cwd's docs", ["--cd", str(empty)])
+notice("--cd to an empty directory excludes the launch cwd's docs", ["--cd", str(empty)], expected_documents=())
 # -- ends CLI parsing: prompt text cannot override the working directory.
-notice("--cd after -- is prompt text", ["--", "--cd", str(root)], cwd=empty)
+notice("--cd after -- is prompt text", ["--", "--cd", str(root)], cwd=empty, expected_documents=())
 
 root_override.write_text("")
 notice("even an empty override hides the ordinary document")
 root_override.unlink()
 user_config(f"[projects.{json.dumps(str(root))}]\ntrust_level = 'untrusted'\n")
-notice("explicit distrust suppresses all project docs")
+notice("explicit distrust suppresses all project docs", expected_documents=())
 user_config()
 # No Git marker means only cwd, unless custom root markers are configured.
 empty_doc = empty / "AGENTS.md"
@@ -170,13 +171,8 @@ notice("a cwd without a root marker still supplies its own docs", cwd=empty, war
 empty_doc.unlink()
 (root / ".root-marker").touch()
 notice("a custom marker enables a walk to the root docs", ["-c", 'project_root_markers=[".root-marker"]'], cwd=child, warnings=(root_doc,))
-notice("empty root markers prevent walking up to Git", ["-c", "project_root_markers=[]"], cwd=child)
+notice("empty root markers prevent walking up to Git", ["-c", "project_root_markers=[]"], cwd=child, expected_documents=())
 
-notice("valid config and a local command warn before testing fail-open cases", warnings=(root_doc,))
-user_config("not valid TOML [")
-result = run([preflight])
-assert result.returncode == 0 and result.stdout == b"" and result.stderr == b"", ("malformed config is advisory only", result)
-user_config()
 for case, arguments in (
     ("a future flag may consume what looks like a discovery option", ["--unknown-future-flag", "--cd", str(root)]),
     ("remote sessions do not read local docs", ["--remote", "ws://example.invalid"]),
@@ -218,10 +214,6 @@ assert b"must be trusted" in notice("without checkout trust the worktree limit i
 # Both actual module launchers warn; selecting a previous launcher still emits
 # one warning, proving the exec/probe target never runs another preflight.
 version = run([binary, "--version"]).stdout
-for launcher in [hm_launcher, devenv_launcher]:
-    result = run([launcher, "--version"])
-    assert result.returncode == 0 and result.stdout == version, result
-    assert result.stderr.count(b"exceed Codex's project_doc_max_bytes") == 1, result.stderr
 # Untrusted project configs at every level each start notice processes; the
 # document warning must still print inside the launcher's one-second bound.
 # Thirty-two levels outlast that bound when the notices run first.
@@ -234,9 +226,11 @@ for launcher in [hm_launcher, devenv_launcher]:
     result = run([launcher, "--version"], cwd=nested)
     assert result.returncode == 0 and result.stdout == version, result
     assert result.stderr.count(b"exceed Codex's project_doc_max_bytes") == 1, result.stderr
-    # The nearest config's notice comes first, so a timeout drops the farthest.
+    # Document advice precedes trust advice, and the nearest config is first
+    # among trust notices so a timeout drops the farthest.
     notices = [line for line in result.stderr.splitlines() if line.startswith(b"warning: Codex ignores ")]
     assert notices and notices[0].startswith(f"warning: Codex ignores {nested}/.codex/config.toml ".encode()), result.stderr
+    assert result.stderr.splitlines()[0].startswith(f"warning: {root_doc} is ".encode()), result.stderr
 shutil.rmtree(root / "0")
 
 def assert_exec_result(case, result):

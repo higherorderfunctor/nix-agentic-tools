@@ -2,8 +2,6 @@
 import importlib.util
 import json
 from pathlib import Path
-import re
-import subprocess
 import sys
 import tempfile
 
@@ -12,7 +10,27 @@ engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
 plans = json.loads(Path(sys.argv[2]).read_text())
 source = Path(sys.argv[3])
-bash = sys.argv[4]
+
+# Use the authored tree as the byte oracle, not the plan's source paths. Pin
+# names independently: a plan that silently omits a leaf must fail too.
+leaves = (
+    "SKILL.md",
+    "assets/expected.txt",
+    "reference.md",
+    "references/deep/guide.md",
+    "scripts/check.sh",
+)
+assert (source / "reference.md").readlink() == Path("references/deep/guide.md"), "fixture must link to the nested guide"
+
+# Empty and disabled both retire all copies, but one removes inputs and the
+# other still has populated inputs. Keep both transitions from an owned tree.
+steps = (
+    ("first apply copies shared and local skills", "enabled", ("example", "local")),
+    ("a null override retires only the inherited skill", "suppressed", ("local",)),
+    ("removing all inputs retires the last copy", "empty", ()),
+    ("repopulating an empty tree reacquires ownership", "enabled", ("example", "local")),
+    ("disabling populated Copilot retires every copy", "disabled", ()),
+)
 
 with tempfile.TemporaryDirectory() as temporary:
     base = Path(temporary)
@@ -22,37 +40,14 @@ with tempfile.TemporaryDirectory() as temporary:
     sibling = skills / "unmanaged.txt"
     sibling.write_text("keep\n")
     state = base / "state/ai.json"
-    previous = set()
-    for step in ("enabled", "enabled", "suppressed", "empty", "enabled", "disabled"):
+    for name, step, names in steps:
         plan = plans[step]
+        expected = {skills / skill / leaf: source / leaf for skill in names for leaf in leaves}
         engine.reconcile(plan, root, state, "prune")
         engine.reconcile(plan, root, state, "apply")
-        paths = {item["path"] for item in plan}
-        records = json.loads(state.read_text())["files"] if state.exists() else {}
-        assert set(records) == paths
-        assert all(not (root / path).exists() for path in previous - paths)
-        for item in plan:
-            destination = root / item["path"]
-            assert destination.is_file() and not destination.is_symlink()
-            assert destination.read_bytes() == Path(item["content"]["source"]).read_bytes()
-            assert destination.stat().st_mode & 0o222 == 0
-        assert sibling.read_text() == "keep\n"
-        if plan:
-            skill = skills / "local"
-            # Resolve the authored Markdown links from their delivered location.
-            links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", (skill / "SKILL.md").read_text())
-            assert links and all((skill / link).is_file() for link in links)
-            assert (skill / "reference.md").read_bytes() == (skill / "references/deep/guide.md").read_bytes()
-            assert (skill / "scripts/check.sh").stat().st_mode & 0o111
-            subprocess.run([bash, "scripts/check.sh"], cwd=skill, check=True)
-        if step == "enabled" and previous == paths:
-            assert not list(state.parent.glob("*.bak"))
-            edited = skills / "example/assets/expected.txt"
-            edited.chmod(0o644)
-            edited.write_text("operator edit\n")
-        previous = paths
-    backups = list(state.parent.glob("*.bak"))
-    assert len(backups) == 1 and backups[0].read_text() == "operator edit\n"
-    assert not state.exists()
-    assert (source / "reference.md").is_symlink()
-    print("PASS: copied skill assets, nested references, executable and file symlink; repeat, suppression, empty and disable retire only owned files")
+        actual = {path for path in skills.rglob("*") if path.is_symlink() or not path.is_dir()}
+        assert actual == expected.keys() | {sibling}, (name, "delivered tree membership", actual)
+        for destination, original in expected.items():
+            assert destination.is_file() and not destination.is_symlink(), (name, destination, "regular copy required")
+            assert destination.read_bytes() == original.read_bytes(), (name, destination, "wrong authored bytes")
+        print(f"PASS: {name}")

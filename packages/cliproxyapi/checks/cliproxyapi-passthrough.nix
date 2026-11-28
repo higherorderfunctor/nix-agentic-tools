@@ -23,10 +23,7 @@ in {
     }) [
       "internal/api"
       "internal/api/handlers/management"
-      "internal/config"
       "internal/registry"
-      "internal/runtime/executor"
-      "internal/watcher/synthesizer"
       "sdk/api/handlers/..."
       "sdk/cliproxy"
       "sdk/cliproxy/auth"

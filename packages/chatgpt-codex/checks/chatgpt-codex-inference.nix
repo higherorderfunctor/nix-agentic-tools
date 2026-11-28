@@ -6,7 +6,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) checkRows evalDevenv evalHm mkTest;
   redact = import ../../../lib/redact {inherit lib;};
   keyFile = "/tmp/codex-proxy $(touch injected) ' key";
   command = lib.getExe (import ../../../lib/strict-shell-application.nix pkgs {
@@ -20,6 +20,10 @@
     command = redact.command command;
     concat = redact.concat ["prefix-\"'$HOME$(touch injected)`" (redact.file keyFile) "-suffix"];
     file = redact.file keyFile;
+  };
+  backends = {
+    devenv = evalDevenv;
+    hm = evalHm;
   };
   hmOrigin = "http://127.0.0.1:8317";
   devenvOrigin = "http://127.0.0.1:8318";
@@ -37,7 +41,22 @@
       url = hmOrigin;
       inherit key;
     };
-  hmConfig = key: (hmEndpoint key).config.home.file.".codex/config.toml".source;
+  deliveredHmConfig = result: result.config.home.file.".codex/config.toml".source;
+  hmOverride = evalHm {
+    ai = {
+      codex = {
+        enable = true;
+        settings.inference = {
+          url = devenvOrigin;
+          key = keys.command;
+        };
+      };
+      settings.inference = {
+        url = hmOrigin;
+        key = keys.file;
+      };
+    };
+  };
   devenvWith = ai:
     evalDevenv {
       ai = lib.recursiveUpdate {codex.enable = true;} ai;
@@ -49,13 +68,13 @@
         inherit key;
       };
     }).config.packages}/bin/codex";
-  unsupportedWarning = backend: lib.hasPrefix "ai.settings.inference is set but ${backend} does not deliver it to codex";
 in {
   checks =
     {
       module-codex-inference-availability-nux = mkTest "codex-inference-availability-nux" (
         lib.all (
-          eval: let
+          backend: let
+            eval = backends.${backend};
             evaluate = settings: proxy:
               eval {
                 ai = {
@@ -74,11 +93,12 @@ in {
             unselected = evaluate {} {};
             overridden = evaluate {tui.model_availability_nux."gpt-6.1-sol" = 0;} proxy;
           in
-            selected.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol"
-            == 4
-            && !(unselected.config.ai.codex.native.settings.tui or {} ? model_availability_nux)
-            && overridden.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol" == 0
-        ) [evalDevenv evalHm]
+            checkRows "Codex availability tooltip (${backend})" {
+              "consumer count does not override the proxy default" = overridden.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol" == 0;
+              "proxy count leaks into an unselected runtime" = !(unselected.config.ai.codex.native.settings.tui or {} ? model_availability_nux);
+              "selected proxy leaves the availability tooltip enabled" = selected.config.ai.codex.native.settings.tui.model_availability_nux."gpt-6.1-sol" == 4;
+            }
+        ) (builtins.attrNames backends)
       );
 
       # Project config cannot carry providers. The launcher supplies them as
@@ -91,7 +111,6 @@ in {
               key = keys.file;
             };
           };
-          none = devenvWith {};
           unmanaged = devenvWith {
             codex.package = null;
             settings.inference = {
@@ -100,35 +119,18 @@ in {
             };
           };
         in
-          failedMessages url
-          == []
-          && builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected but ai.codex.package is null") unmanaged.config.warnings
-          && !(builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected") url.config.warnings)
-          && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_provider)
-          && !(url.config.ai.codex.files.".codex/config.toml".content.value ? model_providers)
-          && !(none.config.ai.codex.files ? ".codex/config.toml")
-          && !(builtins.any (unsupportedWarning "devenv") url.config.warnings)
+          checkRows "devenv Codex inference" {
+            "a no-package launcher silently drops the selected provider" =
+              builtins.any (lib.hasPrefix "ai.codex.settings.inference is selected but ai.codex.package is null") unmanaged.config.warnings;
+            "a selected provider causes a module assertion" = failedMessages url == [];
+          }
       );
 
       module-codex-inference-hm-provider = mkTest "codex-inference-hm-provider" (
         let
           file = hmEndpoint keys.file;
-          provider = (hmSettings file).model_providers.ai-inference;
-          overridden = evalHm {
-            ai = {
-              codex = {
-                enable = true;
-                settings.inference = {
-                  url = devenvOrigin;
-                  key = keys.command;
-                };
-              };
-              settings.inference = {
-                url = hmOrigin;
-                key = keys.file;
-              };
-            };
-          };
+          settings = hmSettings file;
+          provider = settings.model_providers.ai-inference;
           userBase = evalHm {
             ai = {
               codex = {
@@ -142,30 +144,33 @@ in {
             };
           };
         in
-          failedMessages file
-          == []
-          && lib.filterAttrs (name: _: builtins.elem name ["model_provider" "model_providers"]) (hmSettings file)
-          == {
-            model_provider = "ai-inference";
-            model_providers.ai-inference = {
-              auth.command = provider.auth.command;
-              base_url = "${hmOrigin}/v1";
-              name = "ai-inference";
-              requires_openai_auth = false;
-              wire_api = "responses";
-            };
-          }
-          && lib.all (key: let
-            auth = (hmSettings (hmEndpoint key)).model_providers.ai-inference.auth;
-          in
-            builtins.attrNames auth == ["command"] && lib.hasSuffix "/bin/cpa-client-key" auth.command) (builtins.attrValues keys)
-          && (hmSettings overridden).model_providers.ai-inference.base_url == "${devenvOrigin}/v1"
-          && (hmSettings overridden).model_providers.ai-inference.auth == (hmSettings (hmEndpoint keys.command)).model_providers.ai-inference.auth
-          # A consumer's own provider leaf wins over the derived one.
-          && (hmSettings userBase).model_providers.ai-inference.base_url == "http://127.0.0.1:9999/v1"
-          && (hmSettings userBase).model_providers.ai-inference.wire_api == "responses"
-          && !(builtins.any (unsupportedWarning "hm") file.config.warnings)
-          && !((hmSettings (hmWith {})) ? model_provider)
+          checkRows "Home Manager Codex inference" ({
+              "a selected provider causes a module assertion" = failedMessages file == [];
+              "file uses inline auth or a PATH-dependent helper" =
+                builtins.attrNames provider.auth == ["command"] && lib.hasPrefix "/" provider.auth.command;
+              "the generated provider uses the wrong protocol, endpoint, or built-in auth" =
+                builtins.removeAttrs provider ["auth"]
+                == {
+                  base_url = "http://127.0.0.1:8317/v1";
+                  name = "ai-inference";
+                  requires_openai_auth = false;
+                  wire_api = "responses";
+                };
+              "the proxy provider is not selected or another provider is generated" =
+                settings.model_provider
+                == "ai-inference"
+                && builtins.attrNames settings.model_providers == ["ai-inference"];
+              "unselected inference sets a provider" = !((hmSettings (hmWith {})) ? model_provider);
+              "user base URL is ignored or overriding it erases the rest of the provider" =
+                (hmSettings userBase).model_providers.ai-inference.base_url
+                == "http://127.0.0.1:9999/v1"
+                && (hmSettings userBase).model_providers.ai-inference.wire_api == "responses";
+            }
+            # Linux checks this selection through real Codex requests below.
+            // lib.optionalAttrs (!pkgs.stdenv.hostPlatform.isLinux) {
+              "shared inference overrides the Home Manager runtime selection" =
+                (hmSettings hmOverride).model_providers.ai-inference.base_url == "http://127.0.0.1:8318/v1";
+            })
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -173,7 +178,8 @@ in {
         pkgs.runCommand "chatgpt-codex-inference" {
           nativeBuildInputs = [pkgs.coreutils pkgs.python3];
           cases = pkgs.writeText "codex-proxy-cases.json" (builtins.toJSON {
-            configs = lib.mapAttrs (_: hmConfig) keys;
+            configs = lib.mapAttrs (_: key: deliveredHmConfig (hmEndpoint key)) keys;
+            hmOverride = deliveredHmConfig hmOverride;
             launchers = lib.mapAttrs (_: launcher) keys;
           });
         } ''

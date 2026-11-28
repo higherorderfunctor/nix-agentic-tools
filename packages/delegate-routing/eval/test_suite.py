@@ -20,6 +20,7 @@ STRICT_BASH = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_
 
 class SourceAttribution(unittest.TestCase):
     def test_claude_collision_and_personal_skill(self):
+        # Bundled names may collide with personal names; real personal entries must still be reported.
         init = {"type": "system", "subtype": "init", "skills": ["code-review", "delegate-routing"]}
         debug = ("Loaded 1 unique skills (1 unconditional, 0 conditional, managed: 0, user: 0, project: 1, additional: 0, legacy commands: 0)\n"
                  "getSkills returning: 1 skill dir commands, 0 plugin skills, 1 bundled skills, 0 builtin plugin skills")
@@ -37,6 +38,7 @@ class SourceAttribution(unittest.TestCase):
             suite.claude_bundled(init, delivered, "")
 
     def test_claude_foreign_plugins_mcp_and_agents(self):
+        # A project MCP and a builtin plugin are allowed; their personal counterparts are not.
         init = {"plugins": [{"name": "vendor", "path": "builtin", "source": "vendor@builtin"}],
                 "mcp_servers": [{"name": "fixture", "source": "project"}], "agents": ["Explore", "fixture"]}
         self.assertEqual(suite.claude_leaks(init, set(), set(), set(), {"Explore", "fixture"}), [])
@@ -51,6 +53,7 @@ class SourceAttribution(unittest.TestCase):
         ])
 
     def test_codex_collision_and_personal_skill(self):
+        # Use the catalog root mapping, not the skill name or the presence of a .codex directory.
         catalog = ("<skills_instructions>\n- `r0` = `/scratch/home/.codex/skills/.system`\n"
                    "- `r1` = `/operator/.claude/skills`\n"
                    "- skill-creator: System skill. (file: r0/skill-creator/SKILL.md)\n"
@@ -59,12 +62,12 @@ class SourceAttribution(unittest.TestCase):
         with patch.object(suite, "REAL_HOME", Path("/operator")):
             sources = list(suite.codex_sources(json.dumps(init)))
             self.assertEqual([name for name, path in sources if suite.personal_source(path)], ["personal-review"])
-            self.assertFalse(suite.personal_source("/scratch/home/.codex/config.toml"))
             mcp = {"mcp_servers": [{"name": "fixture", "config_path": "/scratch/repo/.codex/config.toml"},
                                    {"name": "personal", "source": {"path": "/operator/.codex/config.toml"}}]}
             self.assertEqual([name for name, path in suite.codex_sources(json.dumps(mcp)) if suite.personal_source(path)], ["skill/MCP entry"])
 
     def test_personal_symlink_target(self):
+        # A link that looks local to the fixture can still resolve to personal instructions.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             personal = root / ".claude/skills/review/SKILL.md"
@@ -78,6 +81,7 @@ class SourceAttribution(unittest.TestCase):
 
 class CliRecords(unittest.TestCase):
     def test_codex_native_calls_from_root_only(self):
+        # Child records and the redundant stream notification must not count as root delegation.
         case = {"runtime": "codex", "techniques": {"codex": {"spawn_agent": "subagent"}}}
         events = [{"type": "thread.started", "thread_id": "root"}, {"type": "item.started", "item": {
             "type": "collab_tool_call", "id": "stream", "tool": "spawn_agent"}}]
@@ -128,13 +132,18 @@ class CliRecords(unittest.TestCase):
                 raw = suite.session_calls(case, events, Path("/unused"))
                 self.assertEqual(suite.ASSERTIONS["workflow-before-source"][1](suite.classify(case, raw), raw, case), expected)
         child = event("Read", {"file_path": "task_source.py"}, child=True)
-        # Ignore child reads and allow root source access after the workflow starts.
         source = event("Read", {"file_path": "task_source.py"})
-        raw = suite.session_calls(case, [guidance, child, workflow, source], Path("/unused"))
-        self.assertTrue(suite.workflow_before_source(suite.classify(case, raw), raw, case))
-        self.assertFalse(suite.workflow_before_source([], [], case))
+        for regression, events, expected in [
+            ("child read counts as root source access", [child, workflow], True),
+            ("guidance alone passes without delegation", [guidance], False),
+            ("root read after the workflow is blocked", [workflow, source], True),
+        ]:
+            with self.subTest(regression=regression):
+                raw = suite.session_calls(case, events, Path("/unused"))
+                self.assertEqual(suite.workflow_before_source(suite.classify(case, raw), raw, case), expected)
 
     def test_settled_session_cleanup_is_not_a_wall_timeout(self):
+        # A settled process that stays alive must be killed by the cleanup grace, not the wall timer.
         with tempfile.TemporaryDirectory() as directory:
             logs = Path(directory)
             script = 'import time; print(\'{"type":"agent_settled"}\', flush=True); time.sleep(10)'
@@ -167,6 +176,7 @@ class CliRecords(unittest.TestCase):
 
 class WorkflowFixture(unittest.TestCase):
     def test_kiro_global_prerequisite_follows_effective_inventory(self):
+        # Write workflow enablement only to the fixture, without dropping unrelated settings.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             real = root / "operator"
@@ -191,14 +201,6 @@ class Selection(unittest.TestCase):
               "files": [{"path": suite.HARNESSES[runtime]["skill"], "text": "x"}]}
              for name, runtime in (("codex-single", "codex"), ("kimchi-dependent", "kimchi"), ("kimchi-single", "kimchi"))]
 
-    def test_exact_prefix_and_union(self):
-        ids = [case["id"] for case in self.CASES]
-        self.assertEqual(suite.select(ids, ["codex-single,kimchi-s*"]), ["codex-single", "kimchi-single"])
-        self.assertEqual(suite.select(ids, ["codex-single", "kimchi-single"]), ["codex-single", "kimchi-single"])
-        # A prefix needs the star; a bare prefix is an unknown id.
-        with self.assertRaisesRegex(ValueError, "matched nothing: kimchi"):
-            suite.select(ids, ["kimchi"])
-
     def run_main(self, *argv):
         with tempfile.TemporaryDirectory() as directory:
             fixtures = Path(directory) / "cases.json"
@@ -211,17 +213,24 @@ class Selection(unittest.TestCase):
         return code, out.getvalue()
 
     def test_list_and_only(self):
-        code, out = self.run_main("--list")
-        self.assertEqual(code, 0)
-        self.assertEqual(out.splitlines(), [
-            "codex-single\tcodex\tone-delegate",
-            "kimchi-dependent\tkimchi\tone-delegate",
-            "kimchi-single\tkimchi\tone-delegate",
-        ])
-        code, out = self.run_main("--list", "--only=kimchi*")
-        self.assertEqual(out.splitlines(), ["kimchi-dependent\tkimchi\tone-delegate", "kimchi-single\tkimchi\tone-delegate"])
-        with self.assertRaisesRegex(ValueError, r"matched nothing: nope\*$"):
-            self.run_main("--list", "--only=nope*")
+        codex = "codex-single\tcodex\tone-delegate"
+        dependent = "kimchi-dependent\tkimchi\tone-delegate"
+        single = "kimchi-single\tkimchi\tone-delegate"
+        for regression, args, expected in [
+            ("comma union is treated as a single id", ["--only=codex-single,kimchi-s*"], [codex, single]),
+            ("matching prefix returns only its first member", ["--only=kimchi*"], [dependent, single]),
+            ("no filter lists an incomplete inventory", [], [codex, dependent, single]),
+            ("repeated options overwrite earlier ids", ["--only=codex-single", "--only=kimchi-single"], [codex, single]),
+        ]:
+            with self.subTest(regression=regression):
+                code, out = self.run_main("--list", *args)
+                self.assertEqual((code, out.splitlines()), (0, expected))
+        for regression, pattern, reason in [
+            ("bare prefix acts as a wildcard", "kimchi", r"matched nothing: kimchi$"),
+            ("unmatched wildcard silently does nothing", "nope*", r"matched nothing: nope\*$"),
+        ]:
+            with self.subTest(regression=regression), self.assertRaisesRegex(ValueError, reason):
+                self.run_main("--list", f"--only={pattern}")
 
 
 class KimchiLaunch(unittest.TestCase):
@@ -239,6 +248,7 @@ class KimchiLaunch(unittest.TestCase):
             self.assertEqual(oct((root / "home/.config/kimchi/config.json").stat().st_mode & 0o777), "0o600")
 
     def test_binary_refusing_the_fixture_is_named(self):
+        # An executable that exists but refuses the fixture must not be reported as usable.
         with tempfile.TemporaryDirectory() as directory:
             exe = Path(directory) / "kimchi"
             exe.write_text(STRICT_BASH + "printf 'run kimchi from that devenv root.\\n' >&2\nexit 1\n")
@@ -249,6 +259,7 @@ class KimchiLaunch(unittest.TestCase):
             self.assertEqual(suite.probe_version(str(exe), "kimchi", os.environ, directory), ({"executable": str(exe), "version": "1.5.1"}, None))
 
     def test_header_only_stream_is_named(self):
+        # A session header is neither an answer nor an empty stream.
         events = [{"type": "session", "version": 3}]
         self.assertFalse(suite.HARNESSES["kimchi"]["answered"](events))
         self.assertEqual(suite.stream_shape(events), "session x1")

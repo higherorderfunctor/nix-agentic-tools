@@ -25,6 +25,8 @@
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     chatgpt-codex-readonly-config = pkgs.runCommand "chatgpt-codex-readonly-config" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       fail() {
         echo "FAIL: $*" >&2
         exit 1
@@ -37,14 +39,23 @@ in {
       chmod 555 "$TMPDIR/owned"
       ln -s "$TMPDIR/owned/config.toml" "$CODEX_HOME/config.toml"
 
-      if timeout 60 ${codex}/bin/codex mcp add probe -- true < /dev/null > stdout 2> stderr; then
+      add_probe() {
+        timeout 60 ${codex}/bin/codex mcp add probe -- true < /dev/null > stdout 2> stderr
+      }
+      if add_probe; then
         fail "codex mcp add saved into a Nix-owned config.toml: $(cat stdout stderr)"
       fi
       grep -qF "failed to persist config" stderr || fail "the refused save did not report why: $(cat stderr)"
-      [ -L "$CODEX_HOME/config.toml" ] || fail "the save replaced the config.toml link"
       [ "$(readlink "$CODEX_HOME/config.toml")" = "$TMPDIR/owned/config.toml" ] \
         || fail "the link now points at $(readlink "$CODEX_HOME/config.toml")"
       cmp ${delivered} "$TMPDIR/owned/config.toml" || fail "the declared config.toml changed"
+
+      # Toggle only the target permissions: the exact same save must work.
+      # A generally broken save command could otherwise mimic a refusal.
+      chmod u+w "$TMPDIR/owned" "$TMPDIR/owned/config.toml"
+      add_probe || fail "the same save fails on a writable target: $(cat stderr)"
+      timeout 60 ${codex}/bin/codex mcp get probe < /dev/null > /dev/null \
+        || fail "successful save did not register probe"
       echo "ok: codex mcp add fails against a Nix-owned config.toml and the link survives" > "$out"
     '';
   };

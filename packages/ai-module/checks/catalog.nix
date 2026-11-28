@@ -1,9 +1,10 @@
 # Synthetic catalog contracts catch lost owner merges, weak typing and policy leaking into core.
 {
+  harness,
   lib,
-  pkgs,
   ...
 }: let
+  inherit (harness) checkRows mkTest rejectsChange;
   # Evaluate only core, so owner imports cannot be needed for catalog definitions.
   evaluate = modules: (lib.evalModules {modules = [../modules/catalog.nix] ++ modules;}).config.ai.catalog;
   # Compare list-valued facts as sets, never module declaration order.
@@ -20,8 +21,6 @@
   };
   # This is the ordinary cross-owner merge with no registry or precedence assignment.
   owners = [(owner "owner-a:evidence") (owner "owner-b:different-evidence")];
-  # Force every field so malformed data cannot pass through laziness.
-  refuses = modules: !(builtins.tryEval (builtins.deepSeq (evaluate modules) true)).success;
   # Default evidence lists concatenate rather than producing scalar conflicts.
   merged = evaluate owners;
   # Normal user definitions replace defaults and can add unknown-maker finite identities.
@@ -36,62 +35,81 @@
         };
       }
     ]);
-  # Invalid values cover each field and both ambiguous and absent vendor offer kinds.
-  malformed = [
-    {
-      models.x = {
-        maker = 1;
-        source = ["fixture"];
-      };
-    }
-    {
-      models.x = {
-        aliases.vendor = ["forbidden"];
-        source = ["fixture"];
-      };
-    }
-    {models.x.source = "scalar";}
-    {models.x.source = [];}
-    {models.x.source = [""];}
-    {vendors.x.models = [1];}
-    {vendors.x.maker = 1;}
-    {vendors.x = {};}
-    {
-      vendors.x = {
-        maker = "maker";
-        models = [];
-      };
-    }
-  ];
+  # Read only the option bearing the restriction. For unknown fields, read
+  # the containing submodule so its option-name check is forced as well.
+  rejectsField = path: valid: invalid:
+    rejectsChange (value: lib.attrByPath path null (evaluate [{ai.catalog = lib.setAttrByPath path value;}])) {
+      inherit invalid valid;
+      expected = valid;
+    };
+  source = ["fixture"];
+  finiteOffer = {models = [];};
+  model = {inherit source;};
+  modelField = rejectsChange (value: (evaluate [{ai.catalog.models.x = value;}]).models.x) {
+    valid = model;
+    invalid = model // {aliases.vendor = ["forbidden"];};
+    expected = {
+      inherit source;
+      maker = null;
+    };
+  };
+  evidence = rejectsField ["models" "x" "source"] source;
+  vendorField = field:
+    rejectsChange (value: (evaluate [{ai.catalog.vendors.x = value;}]).vendors.x) {
+      valid = finiteOffer;
+      invalid = finiteOffer // {${field} = "unused";};
+      expected = finiteOffer // {maker = null;};
+    };
+  vendorKind = rejectsChange (modules: (evaluate modules).vendors.x.models);
+  finite = {ai.catalog.vendors.x.models = [];};
+  wide = {ai.catalog.vendors.x.maker = "maker";};
   # These files are the complete core catalog; owner and resolver dependencies are forbidden.
   coreText = builtins.readFile ../lib/catalog/types.nix + builtins.readFile ../modules/catalog.nix;
   # Every case names the incorrect implementation it detects.
   cases = {
     "core imports an owner, extraction or resolver" = lib.all (word: !(lib.hasInfix word coreText)) ["chatgpt-codex" "claude-code" "cliproxyapi" "delegate-routing" "extracted/" "resolve.nix"];
     "default evidence replaced instead of merged" = sorted merged.models.shared.source == ["owner-a:evidence" "owner-b:different-evidence"];
-    "default maker conflict hidden" = refuses (owners ++ [{ai.catalog.models.shared.maker = lib.mkDefault "contradiction";}]);
+    "default maker conflict hidden" = rejectsChange (modules: (evaluate modules).models.shared.maker) {
+      valid = owners;
+      invalid = owners ++ [{ai.catalog.models.shared.maker = lib.mkDefault "contradiction";}];
+      expected = "maker";
+    };
+    "empty evidence entry accepted" = evidence [""];
+    "empty evidence list accepted" = evidence [];
     "finite unknown maker rejected or ordinary overrides ignored" = overridden.models.extra.maker == null && overridden.models.shared.maker == "replacement" && overridden.vendors.vendor.models == ["extra"] && overridden.vendors.wide.maker == "replacement";
-    "invalid fields or offer kinds accepted" = lib.all (catalog: refuses [{ai.catalog = catalog;}]) malformed;
-    "non-static options accepted" = lib.all (name: refuses [{ai.catalog.${name} = {};}]) ["clientRoutes" "credentials" "pools" "resolved" "runtimeModels" "runtimes"];
-    "offer kinds combined across definitions" = refuses [{ai.catalog.vendors.x.models = [];} {ai.catalog.vendors.x.maker = "maker";}];
-    "vendor billing or Reader accepted" = lib.all (field:
-      refuses [
-        {
-          ai.catalog.vendors.x = {
-            models = [];
-            ${field} = "unused";
-          };
-        }
-      ]) ["billing" "reader"];
+    "model aliases accepted" = modelField;
+    "non-string model maker accepted" = rejectsChange (value: (evaluate [{ai.catalog.models.x = model // {maker = value;};}]).models.x.maker) {
+      valid = "maker";
+      invalid = 1;
+      expected = "maker";
+    };
+    "non-string vendor maker accepted" = rejectsField ["vendors" "x" "maker"] "maker" 1;
+    "non-string vendor model accepted" = rejectsField ["vendors" "x" "models"] ["x"] [1];
+    "offer kinds combined across definitions" = vendorKind {
+      valid = [finite];
+      invalid = [finite wide];
+      expected = [];
+    };
+    "offer without a kind accepted" = vendorKind {
+      valid = [finite];
+      invalid = [{ai.catalog.vendors.x = {};}];
+      expected = [];
+    };
+    "scalar evidence accepted" = evidence "scalar";
+    "vendor billing accepted" = vendorField "billing";
+    "vendor reader accepted" = vendorField "reader";
   };
-  # Report each violated contract at evaluation, before the trivial check derivation.
-  failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
+  nonStatic = lib.genAttrs ["clientRoutes" "credentials" "pools" "resolved" "runtimeModels" "runtimes"] (name:
+    rejectsChange (catalog: evaluate [{ai.catalog = catalog;}]) {
+      valid = {};
+      invalid = {${name} = {};};
+      expected = {
+        models = {};
+        vendors = {};
+      };
+    });
 in {
-  # Evaluate synthetic contracts before producing the check result.
-  checks.ai-module-catalog = assert lib.assertMsg (failures == []) "catalog: ${lib.concatStringsSep "; " failures}";
-    pkgs.runCommandLocal "ai-module-catalog" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      echo 'PASS: static catalog merge, override and refusal contracts' > "$out"
-    '';
+  checks.ai-module-catalog = mkTest "ai-module-catalog" (
+    checkRows "catalog" (cases // lib.mapAttrs' (name: lib.nameValuePair "non-static option ${name} accepted") nonStatic)
+  );
 }

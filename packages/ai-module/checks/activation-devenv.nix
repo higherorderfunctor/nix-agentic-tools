@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows;
   activation = import ../lib/activation.nix {inherit lib;};
   entries = hasNative: {
     apply = {
@@ -68,28 +69,18 @@
     config,
     hasNative,
   }: let
-    # No files link emits no guard, so link-check reaches the next anchor.
-    linkedFrom =
-      if hasNative
-      then "devenv:files"
-      else "ai:link-check";
-    linkTo =
-      if hasNative
-      then "devenv:files"
-      else "ai:files-linked";
     inherit (config) tasks;
   in
-    lib.optional (config.ai.activationOrder.secretNodes != []) "default secret nodes"
-    ++ lib.optional (tasks."ai:link-check".after != ["devenv:files:cleanup"] || tasks."ai:link-check".before != [linkTo]) "link check"
-    ++ lib.optional (tasks."ai:files-linked".after != [linkedFrom] || tasks."ai:files-linked".before != ["ai:files-ready"]) "files linked"
-    ++ lib.optional (tasks."ai:files-ready".after != ["ai:files-linked"] || tasks."ai:files-ready".before != ["devenv:enterShell"]) "files ready"
-    ++ lib.optional (tasks."ai:guard".after != ["ai:link-check"] || tasks."ai:guard".before != ["ai:files-linked"] ++ lib.optional hasNative "devenv:files") "guard edges"
-    ++ lib.optional (tasks."ai:prune".after != ["devenv:files:cleanup"] || tasks."ai:prune".before != ["ai:link-check"]) "prune drain"
-    ++ lib.optional (tasks."ai:preLink".after != ["devenv:files:cleanup"] || tasks."ai:preLink".before != ["ai:link-check"]) "pre-link cleanup"
-    ++ lib.optional (tasks."ai:beforeCleanup".after != [] || tasks."ai:beforeCleanup".before != ["ai:link-check" "devenv:files:cleanup"]) "before-cleanup exception"
-    ++ lib.optional (tasks."ai:apply".after != ["ai:files-linked" "ai:guard" "ai:prune"] || tasks."ai:apply".before != ["ai:files-ready"]) "apply edges"
-    ++ lib.optional (builtins.hasAttr "ai:disabled" tasks || !(builtins.hasAttr "external:success" tasks)) "enable and name"
-    ++ lib.optional (!hasNative && lib.any (task: lib.elem "devenv:files" (task.after ++ task.before)) (builtins.attrValues tasks)) "missing native task edge";
+    checkRows "devenv activation (native files=${lib.boolToString hasNative})" {
+      "apply waits for linking, guard and drain before readiness" = tasks."ai:apply".after == ["ai:files-linked" "ai:guard" "ai:prune"] && tasks."ai:apply".before == ["ai:files-ready"];
+      "beforeCleanup entry does not inherit cleanup as a predecessor" = tasks."ai:beforeCleanup".after == [] && tasks."ai:beforeCleanup".before == ["ai:link-check" "devenv:files:cleanup"];
+      "disabled task is absent" = !(tasks ? "ai:disabled");
+      "files-ready precedes shell entry" = tasks."ai:files-ready".after == ["ai:files-linked"] && tasks."ai:files-ready".before == ["devenv:enterShell"];
+      "guard waits for link check and precedes actual native linking when present" = tasks."ai:guard".after == ["ai:link-check"] && tasks."ai:guard".before == ["ai:files-linked"] ++ lib.optional hasNative "devenv:files";
+      "link check follows cleanup" = tasks."ai:link-check".after == ["devenv:files:cleanup"];
+      "no edge targets an absent native files task" = hasNative || !lib.any (task: lib.elem "devenv:files" (task.after ++ task.before)) (builtins.attrValues tasks);
+      "prune drains after cleanup but before link check" = tasks."ai:prune".after == ["devenv:files:cleanup"] && tasks."ai:prune".before == ["ai:link-check"];
+    };
   provider = evaluate false;
   withProvider =
     (lib.evalModules {
@@ -131,11 +122,14 @@
       command = "true";
     };
   };
-  failures =
-    lib.concatMap check cases
-    ++ lib.optional (invalidName != ''ai.activation.named: invalid devenv name "external-success"'') "invalid devenv name"
-    ++ lib.optional (!lib.hasInfix "cycle" cleanupCycle || !lib.hasInfix "devenv:files:cleanup" cleanupCycle) "cleanup cycle"
-    ++ lib.optional (withProvider."ai:apply".after != ["ai:files-linked" "vault:ready" "ai:guard" "ai:prune"]) "provider edge";
+  graphRows = checkRows "devenv activation graph" {
+    "configured provider precedes apply without changing the remaining edges" = withProvider."ai:apply".after == ["ai:files-linked" "vault:ready" "ai:guard" "ai:prune"];
+    "native task is linked when present and no edges point to it when absent" = lib.all check cases;
+  };
+  validationRows = checkRows "devenv activation validation" {
+    "cleanup ordering cannot create a cycle via link check" = lib.hasInfix "cycle" cleanupCycle && lib.hasInfix "devenv:files:cleanup" cleanupCycle;
+    "native task name needs a namespace" = invalidName == ''ai.activation.named: invalid devenv name "external-success"'';
+  };
   fixtureJson = builtins.toJSON {
     failure = provider.tasks."ai:failure".exec;
     prune = provider.tasks."ai:prune".exec;
@@ -143,7 +137,8 @@
   };
   fixture = pkgs.writeText "activation-devenv.json" fixtureJson;
 in {
-  checks.ai-module-activation-devenv = assert lib.assertMsg (failures == []) "activation devenv: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-activation-devenv = assert graphRows;
+  assert validationRows;
     pkgs.runCommandLocal "ai-module-activation-devenv" {
       passthru = {inherit fixtureJson;};
     } ''

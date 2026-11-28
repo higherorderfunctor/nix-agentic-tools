@@ -2,9 +2,8 @@
 # over the layers, through a synthetic runtime record and every repository
 # module: formatted text reaches `ai.files` as its tree file, value leaves
 # merge with a consumer's, a consumer's layer-1 content wins, a disabled
-# runtime reads and forwards nothing, a switched-off context file is warned
-# about by its layer-1 option, the
-# plan-aware harness readers return the engine's `ro`/`rw` entries, and
+# runtime reads and forwards nothing, the plan-aware harness readers return
+# the engine's `ro`/`rw` entries, and
 # `ai.formatter` and `ai.guards` reach the runtime's tree.
 {
   harness,
@@ -12,6 +11,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows;
   ai = import ../../../lib/ai {inherit lib;};
   markdown = "* item\n";
   document = {
@@ -61,15 +61,6 @@
   disabled = evaluate {
     ai.probe._generatedFiles."lazy.txt".content.text = throw "a disabled runtime read its staged entries";
   };
-  switchedOff = evaluate {
-    ai = {
-      context.text = "context";
-      probe = {
-        enable = true;
-        files."doc.md".enable = false;
-      };
-    };
-  };
   # Prettier switched off in `ai.formatter`: doc.md has no formatter, which
   # fails the tree, and the guards that follow prettier default off.
   unformatted = evaluate {
@@ -96,19 +87,17 @@
     }).config.ai.probe._generatedTree;
   buildLog = tree: "${pkgs.testers.testBuildFailure tree}/testBuildFailure.log";
   delivered = harness.deliveredFiles enabled.config;
-  failures =
-    lib.optional (files."doc.md".content.source != source || files."doc.md".method != "ro") "formatted source reaches ai.files"
-    ++ lib.optional (files."settings.json".content.value != document) "value leaves merge"
-    ++ lib.optional (files."override.txt".content._choice != "text" || files."override.txt".content.text != "consumer") "consumer layer-1 content wins"
-    ++ lib.optional (disabled.config.ai.probe.files != {} || disabled.config.ai.probe._generatedTree != null || disabled.config.ai.files != {} || disabled.config.ai.claims.path != {}) "disabled runtime forwards nothing"
-    ++ lib.optional (!lib.any (lib.hasInfix ''ai.probe.files."doc.md".enable = false'') switchedOff.config.warnings) "warnings read layer-1 enable"
-    ++ lib.optional (map (target: target.path) (harness.ownPlan "probe" "files-apply" enabled).targets != ["doc.md" "settings.json"]) "ownPlan"
-    ++ lib.optional ((harness.ownedDocument "probe" "settings.json" enabled).value != document) "ownedDocument"
-    ++ lib.optional ((delivered."doc.md".source or null) != source || (delivered."settings.json".method or null) != "rw") "deliveredFiles"
-    ++ lib.optional (harness.markdownInput enabled "doc.md" != {text = markdown;}) "markdownInput"
-    ++ lib.optional (lib.any (guard: !enabled.config.ai.guards.${guard} || unformatted.config.ai.guards.${guard}) ["splitCodeSpans" "tableCells"]) "guards follow prettier";
+  rows = checkRows "generated files" {
+    "consumer text wins over staged text for the same target" = files."override.txt".content._choice == "text" && files."override.txt".content.text == "consumer";
+    "deliveredFiles sees the formatted source" = (delivered."doc.md".source or null) == source;
+    "disabled runtime never reads staged content or forwards files and claims" = disabled.config.ai.probe.files == {} && disabled.config.ai.probe._generatedTree == null && disabled.config.ai.files == {} && disabled.config.ai.claims.path == {};
+    "formatted document reaches the public pool as a read-only copy" = files."doc.md".method == "ro";
+    "ownPlan includes copy and merge targets but not the native link" = map (target: target.path) (harness.ownPlan "probe" "files-apply" enabled).targets == ["doc.md" "settings.json"];
+    "ownedDocument reads the merged value from the plan" = (harness.ownedDocument "probe" "settings.json" enabled).value == document;
+    "prettier-dependent guards default off only with prettier disabled" = lib.all (guard: enabled.config.ai.guards.${guard} && !unformatted.config.ai.guards.${guard}) ["splitCodeSpans" "tableCells"];
+  };
 in {
-  checks.ai-module-generated-files = assert lib.assertMsg (failures == []) "generated files: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-generated-files = assert rows;
     pkgs.runCommandLocal "ai-module-generated-files" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

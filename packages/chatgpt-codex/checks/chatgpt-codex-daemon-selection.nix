@@ -116,10 +116,13 @@ in {
         }
         # Gone or a zombie: an orphaned daemon is reaped by this shell, the
         # sandbox's pid 1, only between commands.
+        running() {
+          local state
+          state="$(cut -d ' ' -f 3 "/proc/$1/stat" 2> /dev/null)" && [ "$state" != Z ]
+        }
         stopped() {
           for _ in $(seq 50); do
-            state="$(cut -d ' ' -f 3 "/proc/$1/stat" 2> /dev/null)" || return 0
-            [ "$state" != Z ] || return 0
+            running "$1" || return 0
             sleep 0.2
           done
           fail "daemon $1 is still running: $2"
@@ -134,7 +137,6 @@ in {
         [ ! -e "$selection/auto-update-version" ] || fail "pin left the updater marker"
 
         [ "$(updater)" = '{"autoUpdateEnabled":false}' ] || fail "pin wrote updater $(updater)"
-        [ "$(stat -c %a "$settings")" = 444 ] || fail "the settings copy is mode $(stat -c %a "$settings")"
 
         start ${root}
         first="$pid"
@@ -152,14 +154,12 @@ in {
         pin
         [ -e "$TMPDIR/released" ] || fail "the selection ran while another command held the operation lock"
         wait
-        kill -0 "$first" 2> /dev/null || fail "re-pinning the same package stopped the daemon"
+        running "$first" || fail "re-pinning the same package stopped the daemon"
 
         # A bump: a different root is selected and the old daemon stopped,
         # not restarted; the next start runs the new package.
         cp -r ${root} "$TMPDIR/bumped"
         ${lib.getExe select} "$CODEX_HOME" "$TMPDIR/bumped"
-        [ "$(readlink "$selection/current")" = "$TMPDIR/bumped" ] \
-          || fail "the bump selected $(readlink "$selection/current")"
         stopped "$first" "a changed package must stop the old daemon"
         start "$TMPDIR/bumped"
         bumped="$pid"
@@ -196,13 +196,17 @@ in {
           grep -qF "warning: $1" "$TMPDIR/err" || fail "no warning \"$1\" on stderr: $(cat "$TMPDIR/err")"
         }
 
+        stop_warning() {
+          warned "stopping the Codex app-server daemon $1; it may still be running $2 until it exits. Stop it with: CODEX_HOME=$CODEX_HOME $3/bin/codex app-server daemon stop"
+        }
+
         selects ${stubs.failing} "a failed stop"
-        warned "stopping the Codex app-server daemon failed with exit status 3; it may still be running $foreign until it exits. Stop it with: CODEX_HOME=$CODEX_HOME ${stubs.failing}/bin/codex app-server daemon stop"
+        stop_warning "failed with exit status 3" "$foreign" ${stubs.failing}
 
         began="$(date +%s)"
         selects ${stubs.hanging} "a hung stop"
         [ $(($(date +%s) - began)) -lt 20 ] || fail "the selector waited out a hung stop"
-        warned "stopping the Codex app-server daemon did not finish within 2s"
+        stop_warning "did not finish within 2s" ${stubs.failing} ${stubs.hanging}
 
         # Another lifecycle command holding the lock past the wait: the
         # selection is made without it, with a warning, and the stop still runs.

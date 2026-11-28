@@ -134,8 +134,7 @@
       inferenceInstances = config.ai.internal.inferenceInstances;
       selections = lib.genAttrs ["claude" "codex"] (runtime: config.ai.${runtime}.settings.inference);
     };
-  # A failed deep evaluation proves refusal rather than an unevaluated thunk.
-  refuses = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
+  inherit (harness) checkRows rejectsChange;
   # Each property labels the wrong implementation it rejects.
   check = projection: evaluate: let
     result = evaluate [fixture];
@@ -143,12 +142,27 @@
     catalog = config.ai.catalog;
     routes = project config;
     change = extra: (evaluate [fixture extra]).config;
-    clientRoutes = choices: project (change {ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce choices;});
-    oauth = vendor: (clientRoutes [{credential = vendor;}]).claude;
-    overlapping = clientRoutes (map (credential: {
-      inherit credential;
+    chat = credential: {
       api = "chat";
-    }) ["first" "second"]);
+      inherit credential;
+    };
+    # Extra settings must not override the client route choices.
+    clientRoutes = extra: choices:
+      project (change (lib.recursiveUpdate {
+          ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce choices;
+        }
+        extra));
+    oauth = extra: credential: (clientRoutes extra [{inherit credential;}]).claude;
+    overlapping = clientRoutes {} (map chat ["first" "second"]);
+    aliasOffers = extra:
+      map (lib.getAttrs ["id" "maker" "model"]) (clientRoutes extra [(chat "aliased")]).claude;
+    scopedAlias = [
+      {
+        id = "test-alpha-1";
+        maker = "alpha";
+        model = "short";
+      }
+    ];
     selection = import ../lib/select-families.nix {
       inherit lib;
       servedModels = config.ai.cliproxyapi.servedModels;
@@ -166,19 +180,31 @@
     };
     # routing-view takes launch data only; skill prose goes to the renderer.
     view = extra: import ../lib/routing-view.nix ({inherit lib;} // builtins.removeAttrs args ["skill"] // extra);
-    pinned = builtins.head (builtins.head (view {}).routes).techniques;
+    launchPin = extra:
+      (lib.head (lib.head (view extra).routes).techniques).model.value;
+    agentPin = id: {
+      resolvedAgentFiles.alpha = {
+        family = args.families.fixture.alpha;
+        inherit id;
+      };
+    };
+    broadFamily.families.fixture.alpha = args.families.fixture.alpha // {match = "*";};
+    pickerModels = picker:
+      map (entry: entry.model)
+      (view (broadFamily
+        // {
+          inherit picker;
+          runtime = "codex";
+        })).pickerEntries;
     manual = content.mkSkill args;
     text = builtins.readFile "${manual}/SKILL.md";
     moduleText = builtins.readFile "${config.ai.claude.skills.delegate-routing}/SKILL.md";
-    # Read the actual skill from each builder; its wrapper points to the shipped manifest.
     credentialUsage = builtins.fromJSON (builtins.readFile ./usage/config/input.json);
     registered = change {
       ai.programs.delegate-routing = {inherit credentialUsage;};
-      ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkAfter (map (credential: {
-        inherit credential;
-        api = "chat";
-      }) ["second" "second" "filtered"]);
+      ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkAfter (map chat ["second" "second" "filtered"]);
     };
+    # Read the actual skill from each builder; its wrapper points to the shipped manifest.
     delivered = runtime: let
       skill = content.mkSkill (args
         // {
@@ -191,50 +217,37 @@
     properties =
       {
         "manual builder diverges from module" = withoutHelper text == withoutHelper moduleText && lib.hasInfix "pinning `test-alpha-1`" text;
-        "module reach differs from projection" = pinned.model.value == (lib.head routes.claude).model;
-        "rendered agent and launch pins differ" = pinned.model.value == "test-alpha-1" && lib.hasInfix "model: \"test-alpha-1\"" config.ai.claude.agents.alpha;
       }
       // lib.optionalAttrs projection {
-        "API override ignored" = map (offer: offer.model) routes.codex == ["test-beta-1"];
-        "ambiguous vendor alias chooses first identity" = refuses (project (change {
-          ai.cliproxyapi.servedModels.zhipuai.test-alpha-2 = ["short"];
-          ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [
+        "ambiguous native alias launches or an unambiguous spelling changes" = rejectsChange (validate null) {
+          expected = "solo";
+          invalid = "short";
+          valid = "solo";
+        };
+        "concrete route trusts the offer maker instead of the current catalog" = rejectsChange launchPin {
+          expected = "test-alpha-1";
+          invalid.catalog = catalog // {models = catalog.models // {test-alpha-1 = catalog.models.test-alpha-1 // {maker = null;};};};
+          valid = {};
+        };
+        "explicit agent pin escapes selected client" = rejectsChange (id: launchPin (agentPin id)) {
+          expected = "test-alpha-1";
+          invalid = "test-beta-1";
+          valid = "test-alpha-1";
+        };
+        "explicit picker pin escapes selected client" = let
+          entries = model: [
             {
-              credential = "aliased";
-              api = "chat";
+              inherit model;
+              effort = "medium";
+              technique = "codex exec";
             }
           ];
-        }));
-        "client inherits other API offers" = map (offer: offer.model) routes.claude == ["test-alpha-1" "test-unknown-1"];
-        "concrete route bypasses maker validation" =
-          refuses
-          (view {
-            catalog = catalog // {models = catalog.models // {test-alpha-1 = catalog.models.test-alpha-1 // {maker = null;};};};
-          }).routes;
-        "native known identity refused" = validate null "test-alpha-1" == "test-alpha-1";
-        "native alias spelling rewritten" = let
-          aliasRoutes =
-            (view {
-              cpaRoutes = {};
-              resolvedAgentFiles.alpha = {
-                family = args.families.fixture.alpha;
-                id = "solo";
-              };
-            }).routes;
         in
-          lib.any (
-            route:
-              lib.any (technique: technique.model.value == "solo") route.techniques
-          )
-          aliasRoutes;
-        "explicit agent pin escapes selected client" =
-          refuses
-          (view {
-            resolvedAgentFiles.alpha = {
-              family = args.families.fixture.alpha;
-              id = "test-beta-1";
-            };
-          }).routes;
+          rejectsChange (model: pickerModels {entries = entries model;}) {
+            expected = ["test-beta-1"];
+            invalid = "test-alpha-1";
+            valid = "test-beta-1";
+          };
         "external URL invents CPA offers" =
           (project (change {
             ai.claude.settings.inference = {
@@ -245,70 +258,44 @@
             };
           })).claude
           == null;
-        "filtered credential regains excluded maker" =
-          map (offer: offer.model)
-          (clientRoutes [
-            {
-              credential = "filtered";
-              api = "chat";
-            }
-          ]).claude
-          == ["test-beta-1"];
-        "finite vendor list invents OAuth reach" = oauth "finite" == [];
-        "inherited picker outside client reach throws" = let
-          defaults =
-            (import ../lib/defaults.nix {
-              inherit lib;
-              claudeUsageScript = null;
-              codexUsageScript = null;
-            }).picker.codex.entries;
-          inherit (lib.head defaults) model;
-          configured = change {ai.programs.delegate-routing.families.fixture.alpha.match = lib.mkForce "*";};
-          pickerView = picker:
-            view {
-              inherit picker;
-              runtime = "codex";
-              families.fixture.alpha = args.families.fixture.alpha // {match = "*";};
-            };
-        in
-          !lib.any (offer: offer.model == model) routes.codex
-          && configured.ai.programs.delegate-routing.runtimes.codex.picker.entries == []
-          && (pickerView null).pickerEntries == []
-          && refuses (pickerView {entries = defaults;}).pickerEntries;
-        "maker-wide OAuth misses synthetic identities" = map (offer: offer.id) (oauth "wide") == ["test-alpha-1" "test-alpha-2"];
-        "missing OAuth vendor silently empties reach" = refuses (project (change {
-          ai.cliproxyapi.instances.test.credentials.finite.oauth.vendor = lib.mkForce "missing";
-          ai.cliproxyapi.instances.test.clientKeys.one.routes = lib.mkForce [{credential = "finite";}];
-        }));
-        "multiple credentials lose offers or replace family pool" =
+        "finite vendor list invents OAuth reach" = oauth {} "finite" == [];
+        "inherited picker outside client reach fails or stays selectable" =
+          (change {ai.programs.delegate-routing.families.fixture.alpha.match = lib.mkForce "*";}).ai.programs.delegate-routing.runtimes.codex.picker.entries
+          == [];
+        "maker-wide OAuth loses identities, includes another maker, or missing vendor silently passes" = rejectsChange (extra: map (offer: offer.id) (oauth extra "wide")) {
+          expected = ["test-alpha-1" "test-alpha-2"];
+          invalid.ai.cliproxyapi.instances.test.credentials.wide.oauth.vendor = lib.mkForce "missing";
+          valid = {};
+        };
+        "native alias launch bypasses the provided agent pin" = launchPin (agentPin "solo" // {cpaRoutes = {};}) == "solo";
+        "native launch skips unknown identity validation" = rejectsChange (validate null) {
+          expected = "test-alpha-1";
+          invalid = "missing";
+          valid = "test-alpha-1";
+        };
+        "overlapping credentials replace the configured family pool" =
           (lib.head
             (view {
               cpaRoutes = overlapping;
               families = lib.recursiveUpdate args.families {fixture.alpha.pools.claude = "configured";};
             }).routes).pool
-          == "configured"
-          && lib.length overlapping.claude == 3;
-        "native launch skips identity validation" = refuses (validate null "missing");
-        "null-maker concrete launch succeeds" = refuses (validate routes.claude "test-unknown-1");
-        "outside-client concrete launch succeeds" = refuses (validate routes.claude "test-beta-1");
-        "projection exposes secrets" = !(lib.hasInfix "/run/secrets" (builtins.toJSON routes));
-        "singular credential replaces family pool" = (lib.head (view {}).routes).pool == null;
-        "unknown offers disappear" = (lib.last routes.claude).maker == null;
-        "unoffered alias borrows another vendor identity" = refuses (validate (oauth "wide") "short");
-        "ambiguous native alias chooses first identity" = refuses (validate null "short");
-        "native launch drops noncanonical spelling" = validate null "solo" == "solo";
-        "vendor alias borrows another vendor" =
-          validate
-          (clientRoutes [
-            {
-              credential = "aliased";
-              api = "chat";
-            }
-          ]).claude "short"
-          == "short";
+          == "configured";
+        "projection exposes secrets" = !lib.any (secret: lib.hasInfix secret (builtins.toJSON routes)) ["/run/secrets" "synthetic-private-upstream-"];
+        "singular credential replaces an unset family pool" = (lib.head (view {}).routes).pool == null;
+        "unoffered spelling borrows its offered canonical identity" = rejectsChange (validate (oauth {} "wide")) {
+          expected = "test-alpha-1";
+          invalid = "solo";
+          valid = "test-alpha-1";
+        };
+        "vendor alias borrows another vendor identity or resolves an ambiguity" = rejectsChange aliasOffers {
+          expected = scopedAlias;
+          invalid.ai.cliproxyapi.servedModels.zhipuai.test-alpha-2 = ["short"];
+          valid = {};
+        };
+        "vendor alias is rewritten at launch" = validate (clientRoutes {} [(chat "aliased")]).claude "short" == "short";
       };
   in
-    assert lib.all (name: properties.${name} || throw "delegate-routing CPA routes: ${name}") (builtins.attrNames properties);
+    assert checkRows "delegate-routing CPA routes" properties;
       lib.concatMap delivered ["claude" "codex"];
 in
   check true backends.hm ++ check false backends.devenv

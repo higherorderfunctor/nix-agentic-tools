@@ -84,10 +84,7 @@
   hm = (harness.evalHm (lib.recursiveUpdate declaration {home.homeDirectory = homePlaceholder;})).config;
   devenv = (harness.evalDevenv (lib.recursiveUpdate declaration {devenv.root = rootPlaceholder;})).config;
   hmState = hm.ai.codex.files.".codex/config.toml".content.value.hooks.state;
-  expected = pkgs.writeText "codex-hook-trust-expected.json" (builtins.toJSON {
-    hm = hmState;
-    handlers = builtins.length (builtins.attrNames hmState);
-  });
+  expected = pkgs.writeText "codex-hook-trust-expected.json" (builtins.toJSON hmState);
   list = pkgs.writeText "codex-hooks-list.py" ''
     import json
     import os
@@ -96,6 +93,12 @@
 
     codex, cwd, source, placeholder, root = sys.argv[1:6]
     expected = json.load(open(os.environ["expected"]))
+    # A missing async field would change both hashes in step, so the hash
+    # comparison alone cannot prove this authored handler option survives.
+    with open(f"{root}/hooks.json") as fixture:
+        pre_tool_use = json.load(fixture)["hooks"]["PreToolUse"][0]["hooks"][0]
+    if pre_tool_use.get("async") is not True:
+        sys.exit(f"FAIL: {source} hooks: rendered PreToolUse handler dropped async=true")
     process = subprocess.Popen(
         [codex, "app-server"], cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
@@ -118,10 +121,29 @@
     process.terminate()
 
     hooks = [hook for entry in listing["data"] for hook in entry["hooks"] if hook["source"] == source]
-    derived = {key.replace(placeholder, root, 1): state["trusted_hash"] for key, state in expected["hm"].items()}
+    # Pin the declaration's members independently: otherwise a handler omitted
+    # from both the rendered JSON and trust state would pass.
+    scenarios = {
+        "interrupt:0:0": "Interrupt uses the short default timeout",
+        "pre_tool_use:0:0": "the matcher, async, status, explicit timeout and nondefault limit are hashed, not the Windows command",
+        "pre_tool_use:0:1": "a second handler's default context limit is omitted from its hash",
+        "session_end:0:0": "SessionEnd uses the short default timeout",
+        "session_end:0:1": "SessionEnd clamps an oversized timeout",
+        "session_start:0:0": "the unfiltered shared group keeps its own index",
+        "session_start:1:0": "the matched shared group does not overwrite group zero",
+        "stop:0:0": "Stop excludes its unused matcher and context limit from the hash",
+    }
+    derived = {key.replace(placeholder, root, 1): state["trusted_hash"] for key, state in expected.items()}
     listed = {hook["key"]: hook["currentHash"] for hook in hooks}
-    if len(hooks) != expected["handlers"] or listed != derived:
-        sys.exit(f"FAIL: {source} hooks: Codex lists {json.dumps(listed, indent=1)}, Nix derived {json.dumps(derived, indent=1)}")
+    members = {f"{root}/hooks.json:{suffix}" for suffix in scenarios}
+    if listed.keys() != members or len(hooks) != len(members):
+        sys.exit(f"FAIL: {source} hooks: expected {sorted(members)}, got {[hook['key'] for hook in hooks]}")
+    if derived.keys() != members:
+        sys.exit(f"FAIL: {source} hooks: Nix derived unexpected trust members {sorted(derived)}")
+    for suffix, scenario in scenarios.items():
+        key = f"{root}/hooks.json:{suffix}"
+        if listed[key] != derived[key]:
+            sys.exit(f"FAIL: {source} {scenario}: {key} has Codex hash {listed[key]}, Nix derived {derived[key]}")
     untrusted = [hook["key"] for hook in hooks if hook["trustStatus"] != "trusted"]
     if untrusted:
         sys.exit(f"FAIL: {source} hooks Codex does not trust: {untrusted}")
@@ -134,6 +156,8 @@ in {
         inherit expected;
         nativeBuildInputs = [pkgs.python3];
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         # Home Manager: user hooks.json and the state in user config.toml.
         export HOME="$TMPDIR/home"
         export CODEX_HOME="$HOME/.codex"

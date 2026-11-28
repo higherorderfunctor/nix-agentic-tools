@@ -6,7 +6,7 @@
   ...
 }: let
   inherit (import ../../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
-  inherit (harness) evalHm hmLib;
+  inherit (harness) checkRows evalHm hmLib rejectsChange;
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
   owner = import ../lib/extracted.nix {inherit lib;};
   mkChromeDevtools = import ../lib/mkChromeDevtools.nix;
@@ -37,182 +37,187 @@
     "--workspace=/run/examples/project"
     "--workspace=/run/examples/documents"
   ];
-  # Every row starts from independently rendered valid settings. Each addition
-  # changes one setting, covering every pair in upstream's multi-option groups.
-  conflictCases = let
-    case = valid: expected: additions: {inherit additions expected valid;};
-  in [
-    (case {
-        allowedUrlPattern = ["https://example.org/*"];
-        executablePath = "/run/examples/chrome";
-      }
-      ["--allowedUrlPattern=https://example.org/*" "--executablePath=/run/examples/chrome"]
-      [{blockedUrlPattern = ["https://example.net/*"];}])
-    (case {autoConnect = true;} ["--autoConnect=true"] [
-      {categoryPwa = true;}
-      {executablePath = "/run/examples/chrome";}
-      {isolated = true;}
-    ])
-    (case {browserUrl = "http://127.0.0.1:9222";} ["--browserUrl=http://127.0.0.1:9222"] [
-      {categoryPwa = true;}
-      {channel = "stable";}
-      {executablePath = "/run/examples/chrome";}
-      {userDataDir = "/run/examples/browser-data";}
-      {wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";}
-    ])
-    (case {executablePath = "/run/examples/chrome";} ["--executablePath=/run/examples/chrome"] [{channel = "stable";}])
-    (case {
-        executablePath = "/run/examples/chrome";
-        userDataDir = "/run/examples/browser-data";
-      }
-      ["--executablePath=/run/examples/chrome" "--userDataDir=/run/examples/browser-data"]
-      [{isolated = true;}])
-    (case {
-        executablePath = "/run/examples/chrome";
-        workspace = ["/run/examples/project"];
-      }
-      ["--executablePath=/run/examples/chrome" "--workspace=/run/examples/project"]
-      [{allowUnrestrictedPaths = true;}])
-    (case {wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";} ["--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/id"] [
-      {categoryPwa = true;}
-      {channel = "stable";}
-      {executablePath = "/run/examples/chrome";}
-      {userDataDir = "/run/examples/browser-data";}
-    ])
-  ];
+  name = "chrome-devtools-mcp";
+  argsFor = input: (factory {settings = input;}).args;
+  samples = {
+    allowUnrestrictedPaths = true;
+    allowedUrlPattern = ["https://example.org/*"];
+    autoConnect = true;
+    blockedUrlPattern = ["https://example.net/*"];
+    browserUrl = "http://127.0.0.1:9222";
+    categoryPwa = true;
+    channel = "stable";
+    inherit (settings) executablePath;
+    isolated = true;
+    inherit (settings) userDataDir;
+    workspace = ["/run/examples/project"];
+    wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";
+  };
+  # Independent argv controls: each of the four ways to select a browser
+  # must work alone before it can distinguish a forbidden pair.
+  browserArgs = {
+    autoConnect = ["--autoConnect=true"];
+    browserUrl = ["--browserUrl=http://127.0.0.1:9222"];
+    executablePath = ["--executablePath=/run/examples/chrome"];
+    wsEndpoint = ["--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/id"];
+  };
+  browserControl = option: extra: expected: {
+    valid = extra // {${option} = samples.${option};};
+    inherit expected;
+  };
+  rejectsPair = control: forbidden:
+    lib.nameValuePair "${control.label} conflicts with ${forbidden}" (rejectsChange argsFor {
+      inherit (control) expected valid;
+      invalid = control.valid // {${forbidden} = samples.${forbidden};};
+    });
   configured = factory {inherit settings;};
-  rendered = mcpLib.renderServer pkgs "chrome-devtools-mcp" configured;
-  throws = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
-  bridge = evalHm {
-    services.mcp-servers.servers.chrome-devtools-mcp = {
-      enable = true;
-      inherit settings;
-    };
+  render = mcpLib.renderServer pkgs name;
+  packageInput = mcpLib.mkStdioEntry {
+    package = pkgs.hello;
+    inherit settings;
   };
-  unchosenBridge = evalHm {
-    services.mcp-servers.servers.chrome-devtools-mcp.enable = true;
-  };
-  bridgeService = bridge.config.ai.services.mcp-chrome-devtools-mcp;
-  bridgeServer = bridge.config.services.mcp-servers.servers.chrome-devtools-mcp;
-  bridgeProxyPrefix = lib.take 7 bridgeService.command;
+  packageEntry = render packageInput;
+  bridgeFor = input:
+    (evalHm {
+      services.mcp-servers.servers.chrome-devtools-mcp = {enable = true;} // input;
+    }).config;
+  bridgeInput = {inherit settings;};
+  bridge = bridgeFor bridgeInput;
+  bridgeCommand = input: (bridgeFor input).ai.services.mcp-chrome-devtools-mcp.command;
+  bridgeExpected =
+    [
+      (lib.getExe bridge.ai.internal.packages.mcpServers.mcp-proxy)
+      "--pass-environment"
+      "--host"
+      "127.0.0.1"
+      "--port"
+      "19762"
+      "--"
+      "${bridge.services.mcp-servers.servers.chrome-devtools-mcp.package}/bin/chrome-devtools-mcp"
+    ]
+    ++ expectedArgs;
 in {
   checks = {
-    factory-chrome-devtools-mcp-conflicts = mkTest "chrome-devtools-mcp-conflicts" (
-      lib.all (test:
-        (factory {settings = test.valid;}).args
-        == test.expected
-        && lib.all (addition: throws (factory {settings = test.valid // addition;}).args) test.additions)
-      conflictCases
-      # False and null do not participate, but explicit false still renders.
-      && lib.all (test:
-        (factory {
-          settings =
-            settings
-            // {
-              autoConnect = test.value;
-              isolated = test.value;
-            };
-        }).args
-        == test.expected) [
-        {
-          expected = [
-            "--autoConnect=false"
-            "--backgroundNewPages=true"
-            "--executablePath=/run/examples/chrome"
-            "--isolated=false"
-            "--performanceCrux=false"
-            "--redactNetworkHeaders=true"
-            "--screenshotFormat=jpeg"
-            "--screenshotMaxWidth=1280"
-            "--usageStatistics=false"
-            "--userDataDir=/run/examples/browser-data"
-            "--workspace=/run/examples/project"
-            "--workspace=/run/examples/documents"
-          ];
-          value = false;
-        }
-        {
-          expected = expectedArgs;
-          value = null;
-        }
-      ]
-      && throws
-      (evalHm {
-        services.mcp-servers.servers.chrome-devtools-mcp = {
-          enable = true;
-          settings = settings // {isolated = true;};
-        };
-      }).config.ai.services.mcp-chrome-devtools-mcp.command
-    );
-
-    # The package-backed entry the README documents: the module renders the
-    # same argv and carries the stdio timeout. Without a package there is
-    # nothing to run, so a settings-only entry is refused.
-    factory-chrome-devtools-mcp-package-entry = mkTest "chrome-devtools-mcp-package-entry" (
+    factory-chrome-devtools-mcp-bridge-command = mkTest "chrome-devtools-mcp-bridge-command" (
       let
-        entry = mcpLib.renderServer pkgs "chrome-devtools-mcp" (mcpLib.mkStdioEntry {
-          package = pkgs.hello;
-          inherit settings;
-          timeout = 300000;
-        });
+        rejectsBridge = invalid:
+          rejectsChange bridgeCommand {
+            inherit invalid;
+            valid = bridgeInput;
+            # Positive control pins the loopback proxy and child argv together.
+            expected = bridgeExpected;
+          };
       in
-        entry.type
-        == "stdio"
-        && entry.command == "${pkgs.hello}/bin/chrome-devtools-mcp"
-        && entry.args == expectedArgs
-        && entry.timeout == 300000
-        && throws (mcpLib.renderServer pkgs "chrome-devtools-mcp" {inherit settings;})
+        checkRows "managed bridge" {
+          "does not bypass the conflict guard for isolated and userDataDir" = rejectsBridge {settings = settings // {isolated = true;};};
+          "does not fall back to implicit Chrome discovery" = rejectsBridge {};
+        }
     );
 
-    factory-chrome-devtools-mcp-required-argv = mkTest "chrome-devtools-mcp-required-argv" (
-      configured.type
-      == "stdio"
-      && configured.command == "chrome-devtools-mcp"
-      && configured.settings == {}
-      && configured.args == expectedArgs
-      && rendered.args == expectedArgs
+    # Pin the report categories too: an empty report must not hide new,
+    # malformed, stale or mistyped option classifications and refinements.
+    factory-chrome-devtools-mcp-classification-drift = mkTest "chrome-devtools-mcp-classification-drift" (
+      owner.report
+      == {
+        malformedClassification = [];
+        misplaced = [];
+        staleClassification = [];
+        staleExclusions = [];
+        staleRefinements = [];
+        unclassifiedOptions = [];
+        unprovenRefinements = [];
+        untyped = [];
+      }
+    );
+
+    factory-chrome-devtools-mcp-conflicts = mkTest "chrome-devtools-mcp-conflicts" (
+      let
+        pairs = label: control: forbidden: map (rejectsPair (control // {inherit label;})) forbidden;
+        browserPairs = option: forbidden:
+          pairs option (browserControl option {} browserArgs.${option}) forbidden;
+        executableWith = option: arg: forbidden:
+          pairs option (browserControl "executablePath" {${option} = samples.${option};} arg) [forbidden];
+        # A group interpreted as only its first pair would miss these rows.
+        rows =
+          executableWith "allowedUrlPattern" ["--allowedUrlPattern=https://example.org/*" "--executablePath=/run/examples/chrome"] "blockedUrlPattern"
+          ++ browserPairs "autoConnect" ["categoryPwa" "executablePath" "isolated"]
+          ++ browserPairs "browserUrl" ["categoryPwa" "channel" "executablePath" "userDataDir" "wsEndpoint"]
+          ++ browserPairs "executablePath" ["channel"]
+          ++ executableWith "userDataDir" ["--executablePath=/run/examples/chrome" "--userDataDir=/run/examples/browser-data"] "isolated"
+          ++ executableWith "workspace" ["--executablePath=/run/examples/chrome" "--workspace=/run/examples/project"] "allowUnrestrictedPaths"
+          ++ browserPairs "wsEndpoint" ["categoryPwa" "channel" "executablePath" "userDataDir"];
+      in
+        checkRows "factory conflicts" (builtins.listToAttrs rows
+          // {
+            # False does not participate in conflicts, but still renders.
+            "false neither conflicts with a chosen browser nor disappears from argv" =
+              argsFor {
+                autoConnect = false;
+                inherit (settings) executablePath;
+                isolated = false;
+              }
+              == ["--autoConnect=false" "--executablePath=/run/examples/chrome" "--isolated=false"];
+          })
+    );
+
+    # The package-backed entry the README documents renders the same argv.
+    # Without a package there is nothing to run, so a settings-only entry is refused.
+    factory-chrome-devtools-mcp-package-entry = mkTest "chrome-devtools-mcp-package-entry" (
+      checkRows "package entry" {
+        "does not lose the package executable or settings argv" =
+          packageEntry.command == "${pkgs.hello}/bin/chrome-devtools-mcp" && packageEntry.args == expectedArgs;
+        "rejects an entry without package, command or URL" = rejectsChange (input: (render input).type) {
+          valid = packageInput;
+          invalid = removeAttrs packageInput ["package"];
+          expected = "stdio";
+        };
+      }
     );
 
     factory-chrome-devtools-mcp-refuses-invalid-values = mkTest "chrome-devtools-mcp-refuses-invalid-values" (
-      # Each case changes one value of the valid settings, so the browser
-      # choice cannot be what refuses it.
-      throws (factory {settings = settings // {screenshotFormat = "avif";};})
-      && throws (factory {settings = settings // {screenshotMaxWidth = 0;};})
-      && throws (factory {settings = settings // {workspace = [];};})
-      && throws (factory {settings = settings // {workspace = [null];};})
+      let
+        # Force only the typed setting that owns the restriction, not browser
+        # choice or conflict logic in the argv renderer.
+        rejectsValue = option: valid: invalid:
+          rejectsChange (input: (mcpLib.evalSettings name input).${option}) {
+            valid.${option} = valid;
+            invalid.${option} = invalid;
+            expected = valid;
+          };
+      in
+        checkRows "typed settings" {
+          "browserUrl rejects an empty URL" = rejectsValue "browserUrl" samples.browserUrl "";
+          "executablePath rejects an empty path" = rejectsValue "executablePath" settings.executablePath "";
+          # The image format does not affect browser choice or conflicts, so
+          # this catches a factory that renders settings without validating them.
+          "factory entry refuses a value only the typed merge rejects" = rejectsChange argsFor {
+            valid = settings;
+            invalid = settings // {screenshotFormat = "avif";};
+            expected = expectedArgs;
+          };
+          "screenshotMaxWidth rejects zero" = rejectsValue "screenshotMaxWidth" 1280 0;
+          "workspace rejects a list with a null member" = rejectsValue "workspace" settings.workspace [null];
+          "workspace rejects an empty list that would render no flag" = rejectsValue "workspace" settings.workspace [];
+          "wsEndpoint rejects a non-WebSocket URL" = rejectsValue "wsEndpoint" samples.wsEndpoint "http://127.0.0.1:9222";
+        }
+    );
+
+    factory-chrome-devtools-mcp-required-argv = mkTest "chrome-devtools-mcp-required-argv" (
+      checkRows "raw command entry" {
+        "does not leak typed settings into the raw command entry" = configured.settings == {};
+        "does not switch the installed command to a different transport" = configured.type == "stdio" && configured.command == name;
+        "keeps scalar values, explicit false and both workspace arguments through rendering" = (render configured).args == expectedArgs;
+      }
     );
 
     factory-chrome-devtools-mcp-requires-browser-choice = mkTest "chrome-devtools-mcp-requires-browser-choice" (
-      throws (factory {settings = {};})
-      && throws (factory {settings.autoConnect = false;})
-      && (factory {settings.browserUrl = "http://127.0.0.1:9222";}).args == ["--browserUrl=http://127.0.0.1:9222"]
-      && (factory {settings.autoConnect = true;}).args == ["--autoConnect=true"]
-      && (factory {settings.wsEndpoint = "ws://127.0.0.1:9222/devtools/browser/id";}).args == ["--wsEndpoint=ws://127.0.0.1:9222/devtools/browser/id"]
-      # An empty or malformed choice is not a choice.
-      && throws (factory {settings.browserUrl = "";})
-      && throws (factory {settings.executablePath = "";})
-      && throws (factory {settings.wsEndpoint = "http://127.0.0.1:9222";})
-      # The managed bridge renders through the same settings.
-      && throws unchosenBridge.config.ai.services.mcp-chrome-devtools-mcp.command
-    );
-
-    factory-chrome-devtools-mcp-bridge-command = mkTest "chrome-devtools-mcp-bridge-command" (
-      bridgeProxyPrefix
-      == [
-        (lib.getExe bridge.config.ai.internal.packages.mcpServers.mcp-proxy)
-        "--pass-environment"
-        "--host"
-        "127.0.0.1"
-        "--port"
-        "19762"
-        "--"
-      ]
-      && lib.drop 7 bridgeService.command
-      == ["${bridgeServer.package}/bin/chrome-devtools-mcp"] ++ expectedArgs
-    );
-
-    factory-chrome-devtools-mcp-classification-drift = mkTest "chrome-devtools-mcp-classification-drift" (
-      lib.all (list: list == []) (builtins.attrValues owner.report)
+      let
+        autoConnect = browserControl "autoConnect" {} browserArgs.autoConnect;
+      in
+        checkRows "explicit browser choice" {
+          "false autoConnect does not select a browser" = rejectsChange argsFor (autoConnect // {invalid.autoConnect = false;});
+          "omitting all choices does not trigger implicit lookup" = rejectsChange argsFor (autoConnect // {invalid = {};});
+        }
     );
   };
 }

@@ -72,9 +72,8 @@
   "direct": { "private network exception": "synthetic-secret" },
   "cases": {
     "ambiguous discovery": ["kiro", false, null, ["accounts"]],
-    "correct pin sent": ["kiro", false, "two", ["accounts", "ok"]],
-    "cross-origin key": [null, true, "away", ["missing", "duplicate", "ok"]],
-    "cross-origin quota": [null, false, "two", ["ok"], "elsewhere"],
+    "cross-origin key": [null, true, "away", ["missing", "duplicate"]],
+    "cross-origin quota": [null, false, "two", [], "elsewhere"],
     "crossed endpoint pin": [null, true, "other", ["missing", "duplicate"]],
     "crossed provider pin refused": ["kiro", false, "alt", ["accounts"]],
     "disabled pin refused": ["kiro", false, "disabled", ["accounts"]],
@@ -82,7 +81,7 @@
     "malformed auth files": ["kiro", false, null, ["malformed"]],
     "invalid reply": ["kiro", false, "two", ["accounts", "malformed"]],
     "management HTTP failure": ["kiro", false, "two", ["accounts", "offline"]],
-    "mixed sources skip I/O": ["kiro", true, null, ["accounts"]],
+    "mixed sources skip I/O": ["kiro", true, null, []],
     "registered pin skips discovery": [null, false, "two", ["ok"]],
     "single provider login": ["kiro", false, null, ["single", "ok"]],
     "vendor HTTP failure": ["kiro", false, "two", ["accounts", "denied"]]

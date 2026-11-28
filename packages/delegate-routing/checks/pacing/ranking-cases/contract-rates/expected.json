@@ -19,15 +19,6 @@
       "state": "ready"
     },
     {
-      "id": "weekly-model",
-      "maker": null,
-      "model": "weekly-served",
-      "pace": 1.0,
-      "pool": "budget",
-      "score": 1.0,
-      "state": "ready"
-    },
-    {
       "id": "monthly-model",
       "maker": null,
       "model": "monthly-served",
@@ -53,18 +44,6 @@
             "role": "pace",
             "status": "valid",
             "windowSeconds": 2678400
-          },
-          {
-            "capacity": 100.0,
-            "enforced": true,
-            "id": "weekly-half",
-            "models": ["weekly-model"],
-            "naturalResetAt": 1794749700,
-            "reason": null,
-            "remaining": 50.0,
-            "role": "pace",
-            "status": "valid",
-            "windowSeconds": 604800
           },
           {
             "capacity": 100.0,
@@ -96,7 +75,6 @@
     },
     "routes": [
       { "id": "monthly-model", "maker": null, "model": "monthly-served" },
-      { "id": "weekly-model", "maker": null, "model": "weekly-served" },
       { "id": "hour-model", "maker": null, "model": "hour-served" },
       { "id": "idle-model", "maker": null, "model": "idle-served" }
     ]

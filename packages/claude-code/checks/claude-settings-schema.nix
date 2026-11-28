@@ -30,11 +30,13 @@
 # Eval-only: readFile plus a module-system walk. No IFD, no derivation built,
 # and no ~390 MB claude-code binary.
 {
+  harness,
   lib,
   pkgs,
   ...
 }: {
   checks = let
+    inherit (harness) checkRows rejectsChange;
     claudeFact = let
       extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
     in
@@ -60,8 +62,6 @@
     # to the freeform type. The real surface rejects it. A test that can pass for
     # a reason unrelated to the thing it names is worse than no test, so the
     # assertion lives here against the composed surface instead.
-    aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-
     evalSurface = def:
       (lib.evalModules {
         modules = [
@@ -80,104 +80,20 @@
     .config
     .native.settings;
 
-    # `deepSeq` because the module system is lazy: a bad value buried in an
-    # unforced attribute would otherwise "pass" by never being looked at.
-    verdictOf = def: let
-      attempt = builtins.tryEval (builtins.deepSeq (evalSurface def) "accepted");
-    in
-      if attempt.success
-      then attempt.value
-      else "rejected";
-
-    renderedOf = def: builtins.toJSON (aiCommon.filterNulls (evalSurface def));
-
-    behaviorCases = [
-      {
-        name = "an unset config still renders nothing";
-        actual = renderedOf {};
-        expected = "{}";
-        remedy = ''
-          Every generated option defaults to null and `filterNulls` is what keeps
-          those out of settings.json. If this renders anything, the new surface
-          MATERIALIZES keys the user never set — a behavior change for every
-          consumer on upgrade, and the single thing this whole generator is not
-          allowed to do.
-        '';
-      }
-      {
-        name = "only what was set survives, nested";
-        actual = renderedOf {permissions.defaultMode = "manual";};
-        expected = ''{"permissions":{"defaultMode":"manual"}}'';
-        remedy = ''
-          Null siblings leaked into a nested record, or `filterNulls` stopped
-          recursing / stopped dropping emptied sub-attrsets.
-        '';
-      }
-      {
-        name = "a closed value set on a HAND-AUTHORED option still rejects";
-        actual = verdictOf {tui = "nonsense";};
-        expected = "rejected";
-        remedy = ''
-          `tui` is hand-authored, so the generator stands down for it. If this
-          accepts, the hand declaration lost its enum, or its `externalPaths`
-          entry stood the generator down without anything taking over — which is
-          precisely the harness bug described above, now in the real surface.
-        '';
-      }
-      {
-        name = "a closed value set on a GENERATED option rejects";
-        actual = verdictOf {permissions.defaultMode = "bogus";};
-        expected = "rejected";
-        remedy = ''
-          A generated enum degraded to a plain string. Check whether the node
-          gained a wildcard sibling (see `mixedWildcard`) or whether the enum
-          branch stopped firing for its type.
-        '';
-      }
-      {
-        name = "a declared scalar type rejects the wrong shape";
-        actual = verdictOf {cleanupPeriodDays = "thirty";};
-        expected = "rejected";
-        remedy = "A generated scalar lost its type and fell through to freeform.";
-      }
-      {
-        name = "an alias outside the enum literal is still accepted";
-        actual = verdictOf {permissions.defaultMode = "manual";};
-        expected = "accepted";
-        remedy = ''
-          `manual` is legal input that the binary rewrites, and it is NOT in the
-          enum literal — the census widens the set by resolving the wrapper. If
-          this rejects, that widening regressed and Nix now refuses a value the
-          product accepts.
-        '';
-      }
-      {
-        name = "an unrecognized key is still settable (catch-all stays open)";
-        actual = verdictOf {someKeyUpstreamHasNotShippedYet = true;};
-        expected = "accepted";
-        remedy = ''
-          The freeform catch-all is deliberate: a brand-new upstream setting must
-          be usable the day it ships, before this pin advances. Typos are caught
-          by the unrecognized-key assertions in mkClaude.nix, not by closing this.
-        '';
-      }
-    ];
-
-    behaviorFailures =
-      lib.filter (case: case.actual != case.expected) behaviorCases;
-
-    describeBehavior = case: ''
-      composed-surface case failed: ${case.name}
-
-        expected: ${case.expected}
-        actual:   ${case.actual}
-
-      ${case.remedy}'';
-
-    renderList = xs:
-      if xs == []
-      then "    (none)"
-      else lib.concatMapStringsSep "\n" (x: "    - ${x}") xs;
+    behaviorRows = {
+      "generated cleanupPeriodDays must reject a string rather than degrade to freeform" = rejectsChange (def: (evalSurface def).cleanupPeriodDays) {
+        valid.cleanupPeriodDays = 30;
+        invalid.cleanupPeriodDays = "thirty";
+        expected = 30;
+      };
+      # `manual` is a legal input the binary rewrites; it doubles as the
+      # positive control for the generated enum.
+      "generated permissions.defaultMode must accept manual but reject an unknown enum value" = rejectsChange (def: (evalSurface def).permissions.defaultMode) {
+        valid.permissions.defaultMode = "manual";
+        invalid.permissions.defaultMode = "bogus";
+        expected = "manual";
+      };
+    };
 
     # Each entry: a field that must be empty, and what a non-empty one means.
     emptinessRules = [
@@ -230,32 +146,20 @@
       }
     ];
 
-    emptinessFailures =
-      lib.filter (rule: report.${rule.field} != []) emptinessRules;
-
-    describeEmptiness = rule: ''
-      report.${rule.field} is not empty:
-
-      ${renderList report.${rule.field}}
-
-      ${rule.remedy}'';
-
-    failures =
-      map describeEmptiness emptinessFailures
-      ++ map describeBehavior behaviorFailures;
+    reportRows = builtins.listToAttrs (map (rule: {
+        name = ''
+          report.${rule.field} is not empty: ${lib.concatStringsSep ", " report.${rule.field}}
+          ${rule.remedy}'';
+        value = report.${rule.field} == [];
+      })
+      emptinessRules);
   in {
-    claude-settings-schema =
-      if failures != []
-      then
-        throw ''
-          claude settings-schema guard: ${toString (builtins.length failures)} finding(s)
-          against packages/claude-code/extracted/ (claude-code ${claudeVersion}).
-
-          ${lib.concatStringsSep "\n\n" failures}
-        ''
-      else
-        pkgs.runCommandLocal "claude-settings-schema-check" {} ''
-          echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} native.settings options, no stale or shadowed exception-table rows, ${toString (builtins.length behaviorCases)} composed-surface cases green" > $out
-        '';
+    claude-settings-schema = assert checkRows "Claude ${claudeVersion} settings schema report" reportRows;
+    assert checkRows "Claude ${claudeVersion} composed settings" behaviorRows;
+      pkgs.runCommandLocal "claude-settings-schema-check" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} native.settings options, no stale or shadowed exception-table rows, ${toString (builtins.length (lib.attrNames behaviorRows))} composed-surface cases green" > "$out"
+      '';
   };
 }

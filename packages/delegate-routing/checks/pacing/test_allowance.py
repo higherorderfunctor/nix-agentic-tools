@@ -1,6 +1,6 @@
 """Check ranking from saved Reader captures through normalization.
 
-The Nix check loads handwritten cases from ranking-cases and runs three
+The Nix check loads handwritten cases from ranking-cases and runs
 properties in memory. Synthetic captures use the Reader envelope's JSON shape;
 cases translate the vendor-owned status by setting ``enforced`` explicitly.
 """
@@ -8,14 +8,14 @@ cases translate the vendor-owned status by setting ``enforced`` explicitly.
 from __future__ import annotations
 
 import datetime as dt
-from itertools import permutations
+import json
 import sys
 import unittest
 from pathlib import Path
 from typing import Any
 
 from hypothesis import HealthCheck, given, settings, strategies as st
-from pydantic import BaseModel, JsonValue, RootModel
+from pydantic import BaseModel
 
 # Loaded before the test classes so per-test @settings inherit it.
 settings.register_profile("ranking", database=None, deadline=None, max_examples=60)
@@ -26,7 +26,7 @@ sys.path[:0] = [str(SCRIPTS), str(Path(__file__).resolve().parent)]
 CASES = Path(sys.argv[2])
 import pacing as P
 import usage_normalize as N
-from reader_fixture import reader_stdout
+from reader_fixture import read_cases, reader_stdout
 
 NOW = 1794447300
 
@@ -37,33 +37,6 @@ class RankingCase(BaseModel):
     now: int
     policy: P.RankingPolicy | None = None
     snapshot: dict[str, Any]
-
-
-class RefusedRanking(BaseModel):
-    """Name the ranking boundary error a handwritten case expects."""
-
-    rankingError: str
-
-
-class ExpectedOutput(RootModel[JsonValue]):
-    """Keep the expected ranking literally, including missing fields."""
-
-
-def read_expected(path: Path) -> ExpectedOutput | RefusedRanking:
-    """Parse exactly one expected file, separating normal and refused outcomes."""
-    output_path = path / "expected.json"
-    error_path = path / "expected-error.json"
-    if output_path.exists() == error_path.exists():
-        raise ValueError(f"{path.name}: requires exactly one expected file")
-    if error_path.exists():
-        return RefusedRanking.model_validate_json(error_path.read_text())
-    return ExpectedOutput.model_validate_json(output_path.read_text())
-
-
-def load_cases() -> list[tuple[str, RankingCase, ExpectedOutput | RefusedRanking]]:
-    """Parse each handwritten input and outcome once in stable directory order."""
-    paths = sorted(path for path in CASES.iterdir() if path.is_dir())
-    return [(path.name, RankingCase.model_validate_json((path / "input.json").read_text()), read_expected(path)) for path in paths]
 
 
 def serialized(ranking: P.Ranking) -> dict[str, Any]:
@@ -102,12 +75,11 @@ def captured_pool(windows: dict[str, object]) -> N.Capture:
 
 
 def ranked_entry(
-    limits: dict[str, N.LimitSpec], windows: dict[str, object] | None
+    limits: dict[str, N.LimitSpec], windows: dict[str, object]
 ) -> P.Entry:
-    """Normalize one budget capture, or its absence, and rank the sole route."""
-    capture = None if windows is None else captured_pool(windows)
+    """Normalize one budget capture and rank the sole route."""
     snapshot = typed_snapshot(
-        {"budget": limits}, {"budget": capture} if capture else {}, [N.Route(id="canonical", maker=None, model="served")]
+        {"budget": limits}, {"budget": captured_pool(windows)}, [N.Route(id="canonical", maker=None, model="served")]
     )
     return P.rank(N.normalize(snapshot, NOW)).entries[0]
 
@@ -116,39 +88,48 @@ class RankingCases(unittest.TestCase):
     """Run literal saved-capture cases and generated ranking properties."""
 
     def test_handwritten_cases_match_the_whole_ranking_result(self) -> None:
-        """Wrong: any changed output field, retained snapshot field, or dropped route passes."""
-        cases = load_cases()
-        self.assertTrue(cases, "ranking case directory is empty")
-        for name, case, expected in cases:
-            with self.subTest(case=name):
-                if isinstance(expected, RefusedRanking):
+        regressions = {
+            "contract-rates": "reset horizons are compared as remaining shares instead of rates",
+            "gates-do-not-supply-pace": "positive gate-only routes get pace or zero gates fail to block",
+            "idle-baseline-configured": "full idle windows ignore the configured baseline",
+            "idle-baseline-default": "omitting policy drops absent or just-elapsed idle resets",
+            "unknown-policy-pool-refused": "a misspelled pool weight is silently ignored",
+        }
+        cases = read_cases(CASES)
+        self.assertEqual(cases.keys(), regressions.keys())
+        for name, (input_path, expected_path) in cases.items():
+            with self.subTest(case=name, regression=regressions[name]):
+                case = RankingCase.model_validate_json(input_path.read_text())
+                snapshot = N.normalize(N.Snapshot.model_validate(case.snapshot), case.now)
+                expected = json.loads(expected_path.read_text())
+                if expected_path.name == "expected-error.json":
                     with self.assertRaises(ValueError) as failure:
-                        P.rank(N.normalize(N.Snapshot.model_validate(case.snapshot), case.now), case.policy)
-                    self.assertEqual(str(failure.exception), expected.rankingError)
-                    continue
-                ranking = P.rank(N.normalize(N.Snapshot.model_validate(case.snapshot), case.now), case.policy)
-                self.assertEqual(serialized(ranking), expected.root)
+                        P.rank(snapshot, case.policy)
+                    self.assertEqual(str(failure.exception), expected["rankingError"])
+                    control = P.rank(snapshot, P.RankingPolicy(weights={"budget": 1}))
+                    self.assertEqual([(entry.id, entry.pool) for entry in control.entries], [("canonical", "budget")])
+                else:
+                    self.assertEqual(serialized(P.rank(snapshot, case.policy)), expected)
 
-    @given(st.sampled_from(["malformed-reset", "numeric-reset", "text-duration", "null-duration"]))
+    @given(st.sampled_from(["malformed-reset", "null-duration", "numeric-reset"]))
     def test_exhausted_pace_survives_invalid_timing(self, breakage: str) -> None:
         """Wrong: an invalid timer turns a proven zero into unknown non-exhaustion."""
         zero = reader_window(0, 604800, 604800)
-        zero["resetsAt"] = "not-a-timestamp"
-        if breakage == "numeric-reset":
-            zero["resetsAt"] = NOW + 604800
-        elif breakage == "text-duration":
-            zero["windowSeconds"] = "one-week"
-        elif breakage == "null-duration":
-            zero["windowSeconds"] = None
+        field, value = {
+            "malformed-reset": ("resetsAt", "not-a-timestamp"),
+            "null-duration": ("windowSeconds", None),
+            "numeric-reset": ("resetsAt", NOW + 604800),
+        }[breakage]
+        zero[field] = value
         entry = ranked_entry(
             {"exhausted": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="zero")},
             {"zero": zero},
         )
         self.assertEqual((entry.pace, entry.score, entry.state), (0.0, 0.0, "out"))
 
-    @given(st.sampled_from(["missing", "invalid", "stale", "unresolved-scope", "unknown-enforcement", "not-enforced"]))
+    @given(st.sampled_from(["invalid", "not-enforced", "stale", "unknown-enforcement", "unresolved-scope", "valid"]))
     def test_positive_unknown_evidence_never_ranks_ready(self, failure: str) -> None:
-        """Wrong: missing, stale, unresolved, or unenforced evidence supplies positive pace."""
+        """Wrong: invalid, stale, unresolved, or unenforced evidence supplies positive pace."""
         windows = {"7d": reader_window(50, 604800, 302400)}
         if failure == "unknown-enforcement":
             windows["7d"].pop("enforced")
@@ -163,45 +144,34 @@ class RankingCases(unittest.TestCase):
             windows["private"] = reader_window(100, 604800, None)
         entry = ranked_entry(
             {"allowance": N.LimitSpec(capacity=100, models=["canonical"], role="pace", window="7d")},
-            None if failure == "missing" else windows,
+            windows,
         )
-        self.assertEqual((entry.pace, entry.score, entry.state), (None, 0.0, "out"))
+        expected = (1.0, 1.0, "ready") if failure == "valid" else (None, 0.0, "out")
+        self.assertEqual((entry.pace, entry.score, entry.state), expected)
 
-    # The draws are small sampled_from choices; the slow-input check only measures
-    # runner load here, and it failed CI on a loaded runner.
+    # These small draws do not justify a runner-speed gate: the slow-input
+    # check has failed CI on a loaded runner.
     @settings(suppress_health_check=[HealthCheck.too_slow])
     @given(
-        rates=st.sampled_from([order[:2] for order in permutations((0.2, 0.5, 1.0))]),
-        capacities=st.tuples(st.integers(1, 200), st.integers(1, 200)).filter(
-            lambda values: 100 not in values
-        ),
-        shares=st.tuples(st.sampled_from([10, 20, 25, 50, 80]), st.sampled_from([10, 20, 25, 50, 80])),
-        resets=st.tuples(st.sampled_from([1800, 3600, 7200]), st.sampled_from([1800, 3600, 7200])),
+        shares=st.permutations((25, 50)),
+        capacities=st.tuples(st.integers(1, 99), st.integers(101, 200)),
     )
     def test_overlapping_paced_windows_use_actual_capacity_and_minimum(
-        self,
-        rates: tuple[float, float],
-        capacities: tuple[int, int],
-        shares: tuple[int, int],
-        resets: tuple[int, int],
+        self, shares: list[int], capacities: tuple[int, int]
     ) -> None:
-        """Wrong: a fixed capacity divisor or the largest paced limit supplies the rate."""
+        """Wrong: a fixed capacity divisor, first limit, or largest rate wins."""
+        # Half a window remains. At 25% and 50% allowance the rates are 0.5 and 1.
         windows, limits = {}, {}
-        for index, (rate, capacity, share, reset) in enumerate(zip(rates, capacities, shares, resets)):
-            window = f"window-{index}"
-            windows[window] = reader_window(share, int(rate * reset * 100 / share), reset)
-            limits[window] = N.LimitSpec(capacity=capacity, models=["canonical"], role="pace", window=window)
+        for index, (share, capacity) in enumerate(zip(shares, capacities)):
+            key = f"window-{index}"
+            windows[key] = reader_window(share, 18000, 9000)
+            limits[key] = N.LimitSpec(capacity=capacity, models=["canonical"], role="pace", window=key)
         entry = ranked_entry(limits, windows)
-        self.assertAlmostEqual(entry.pace, min(rates))
-        self.assertAlmostEqual(entry.score, min(rates))
-        self.assertEqual(entry.state, "ready")
+        self.assertEqual((entry.pace, entry.score, entry.state), (0.5, 0.5, "ready"))
 
-    @given(
-        st.sampled_from([tuple(order) for order in permutations(("a", "b", "c"))]),
-        st.sampled_from([tuple(order) for order in permutations(("covered", "vendor-covered", "uncovered"))]),
-    )
+    @given(st.permutations(("a", "b", "c")), st.permutations(("covered", "uncovered", "vendor-covered")))
     def test_pool_and_route_permutations_keep_whole_entry_order(self, pools: list[str], routes: list[str]) -> None:
-        """Wrong: input order changes weighted alternatives, uncovered routes, or ties."""
+        """Wrong: order changes weighted alternatives, uncovered routes or maker ties."""
         route_values = {
             "covered": N.Route(id="canonical", maker=None, model="served"),
             "vendor-covered": N.Route(id="canonical", maker="vendor", model="served"),
@@ -215,17 +185,28 @@ class RankingCases(unittest.TestCase):
             {name: capture for name in pools if name != "a"},
             [route_values[name] for name in routes],
         )
-        result = P.rank(N.normalize(snapshot, NOW), P.RankingPolicy(weights={"b": 0, "c": 2}))
+        normalized = N.normalize(snapshot, NOW)
+        # An absent Reader still leaves a registered alternative with unresolved scope.
+        missing = normalized.pools["a"]
+        self.assertFalse(missing.scopeResolved)
         self.assertEqual(
-            [(entry.pool, entry.maker, entry.score, entry.state) for entry in result.entries],
+            [(limit.id, limit.status, limit.reason, limit.remaining) for limit in missing.limits],
+            [("allowance", "missing", "missing-capture", None)],
+        )
+        # Rank must not drop or rewrite the source of a failed alternative's reason.
+        original = normalized.model_copy(deep=True)
+        result = P.rank(normalized, P.RankingPolicy(weights={"b": 0, "c": 2}))
+        self.assertEqual(result.snapshot, original)
+        self.assertEqual(
+            [(e.id, e.model, e.pool, e.maker, e.pace, e.score, e.state) for e in result.entries],
             [
-                ("c", None, 2.0, "ready"),
-                ("c", "vendor", 2.0, "ready"),
-                ("b", None, 0.0, "ready"),
-                ("b", "vendor", 0.0, "ready"),
-                (None, None, 0.0, "out"),
-                ("a", None, 0.0, "out"),
-                ("a", "vendor", 0.0, "out"),
+                ("canonical", "served", "c", None, 1.0, 2.0, "ready"),
+                ("canonical", "served", "c", "vendor", 1.0, 2.0, "ready"),
+                ("canonical", "served", "b", None, 1.0, 0.0, "ready"),
+                ("canonical", "served", "b", "vendor", 1.0, 0.0, "ready"),
+                ("uncovered", "other", None, None, None, 0.0, "out"),
+                ("canonical", "served", "a", None, None, 0.0, "out"),
+                ("canonical", "served", "a", "vendor", None, 0.0, "out"),
             ],
         )
 

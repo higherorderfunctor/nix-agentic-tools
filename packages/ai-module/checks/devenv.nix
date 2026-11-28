@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   evaluate = files: native:
     (lib.evalModules {
@@ -73,43 +74,69 @@
     namespace = "ai";
   };
   targets = lib.mapAttrs (_: item: "${item.file}") active.files;
-  overrideCases = lib.concatMap (method:
-    map (copyMode: {
-      inherit copyMode method;
-      result = builtins.tryEval (builtins.deepSeq
-        (evaluate {
-            "owned.txt" = {
-              content.value.owned = 1;
-              format = "json";
-              inherit method;
-            };
-          } {
-            "owned.txt" =
-              {inherit copyMode;}
-              // lib.optionalAttrs (method != "symlink") {source = ../docs/DESIGN.md;};
-          }).tasks
-        true);
-    }) ["copy" "seed"])
-  ["ro" "rw" "symlink"];
+  # Read the task boundary where native copy modes are checked. The same
+  # native definition is accepted as a symlink before testing copy or seed.
+  pruneBefore = method: copyMode:
+    (evaluate {
+        "owned.txt" = {
+          content.value.owned = 1;
+          format = "json";
+          inherit method;
+        };
+      } {
+        "owned.txt" =
+          {inherit copyMode;}
+          // lib.optionalAttrs (method != "symlink") {source = ../docs/DESIGN.md;};
+      }).tasks."ai:files-prune".before;
+  nativeOverrides = checkRows "devenv native file overrides" (builtins.listToAttrs (lib.concatMap (method:
+    map (copyMode:
+      lib.nameValuePair "${method} rejects native ${copyMode}" (rejectsChange (pruneBefore method) {
+        valid = "symlink";
+        invalid = copyMode;
+        expected = ["ai:link-check"];
+      })) ["copy" "seed"])
+  ["ro" "rw" "symlink"]));
   python = pkgs.python3.withPackages (ps: [ps.pyyaml ps.tomlkit]);
   # Every task an absent entry would have anchored must point past it.
-  check = config: expectedFiles: emitted: linkCheckTo: linkedFrom: applyAfter: let
+  check = label: config: expectedFiles: emitted: {
+    applyAfter ? null,
+    linkCheckTo ? null,
+    linkedFrom ? null,
+  }: let
     inherit (config) tasks;
   in
-    lib.optional (builtins.attrNames config.files != expectedFiles) "native files"
-    ++ lib.optional (builtins.filter (lib.hasPrefix "ai:files-") (builtins.attrNames tasks) != lib.sort builtins.lessThan (emitted ++ ["ai:files-inspect" "ai:files-linked" "ai:files-ready" "ai:files-snapshot"])) "emitted entries"
-    ++ lib.optional (tasks."ai:link-check".before != [linkCheckTo]) "link check target"
-    ++ lib.optional (tasks."ai:files-linked".after != [linkedFrom]) "files linked"
-    ++ lib.optional ((tasks."ai:files-apply".after or null) != applyAfter) "apply dependencies"
-    ++ lib.optional (tasks."ai:files-prune".before != ["ai:link-check"]) "prune edge";
-  failures =
-    check active ["links/a.txt" "tree/b/c.md"] ["ai:files-apply" "ai:files-guard" "ai:files-prune"] "ai:files-guard" "devenv:files" ["ai:files-linked" "vault:ready" "ai:files-guard" "ai:files-prune"]
-    ++ check copyOnly [] ["ai:files-apply" "ai:files-prune"] "ai:files-linked" "ai:link-check" ["ai:files-linked" "ai:files-prune"]
-    ++ check empty [] ["ai:files-prune"] "ai:files-linked" "ai:link-check" null
-    ++ check nativeOnly ["external"] ["ai:files-prune"] "devenv:files" "devenv:files" null
-    ++ lib.optional (active.tasks."ai:files-guard".after != ["ai:link-check"] || active.tasks."ai:files-guard".before != ["ai:files-linked" "devenv:files"]) "guard edges"
-    ++ lib.optional (lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.files) != {"linked/link" = "${linkedStore}/link";} || !linked.files ? "linked/a/b/c.md") "directory symlink leaf"
-    ++ lib.concatMap (case: lib.optional case.result.success "native ${case.copyMode} override for ${case.method}") overrideCases;
+    checkRows label ({
+        "native links include neither copies nor spurious recursive leaves" = builtins.attrNames config.files == expectedFiles;
+        "only tasks required by the plan are emitted" = builtins.filter (lib.hasPrefix "ai:files-") (builtins.attrNames tasks) == lib.sort builtins.lessThan (emitted ++ ["ai:files-inspect" "ai:files-linked" "ai:files-ready" "ai:files-snapshot"]);
+      }
+      // lib.optionalAttrs (applyAfter != null) {
+        "apply waits only for existing dependencies" = tasks."ai:files-apply".after == applyAfter;
+      }
+      // lib.optionalAttrs (linkedFrom != null) {
+        "files-linked waits for the right predecessor" = tasks."ai:files-linked".after == [linkedFrom];
+      }
+      // lib.optionalAttrs (linkCheckTo != null) {
+        "link check skips absent guard and native entries" = tasks."ai:link-check".before == [linkCheckTo];
+      });
+  sinkRows = checkRows "devenv files" {
+    "active copy and native links" = check "active copy and native links" active ["links/a.txt" "tree/b/c.md"] ["ai:files-apply" "ai:files-guard" "ai:files-prune"] {
+      applyAfter = ["ai:files-linked" "vault:ready" "ai:files-guard" "ai:files-prune"];
+      linkCheckTo = "ai:files-guard";
+      linkedFrom = "devenv:files";
+    };
+    "copy-only plan" = check "copy-only plan" copyOnly [] ["ai:files-apply" "ai:files-prune"] {
+      applyAfter = ["ai:files-linked" "ai:files-prune"];
+      linkCheckTo = "ai:files-linked";
+      linkedFrom = "ai:link-check";
+    };
+    "directory symlink is a native leaf rather than a traversed directory" = lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.files) == {"linked/link" = "${linkedStore}/link";} && linked.files ? "linked/a/b/c.md";
+    "empty plan" = check "empty plan" empty [] ["ai:files-prune"] {};
+    "guard runs before both native linking and files-linked" = active.tasks."ai:files-guard".before == ["ai:files-linked" "devenv:files"];
+    "unrelated native link without an AI file" = check "unrelated native link without an AI file" nativeOnly ["external"] ["ai:files-prune"] {
+      linkCheckTo = "devenv:files";
+      linkedFrom = "devenv:files";
+    };
+  };
   fixtureJson = builtins.toJSON {
     active = {
       apply = active.tasks."ai:files-apply".exec;
@@ -129,7 +156,8 @@
   };
   fixture = pkgs.writeText "ai-module-files-devenv.json" fixtureJson;
 in {
-  checks.ai-module-files-devenv = assert lib.assertMsg (failures == []) "files devenv: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-files-devenv = assert nativeOverrides;
+  assert sinkRows;
     pkgs.runCommandLocal "ai-module-files-devenv" {
       passthru = {inherit fixtureJson;};
     } ''

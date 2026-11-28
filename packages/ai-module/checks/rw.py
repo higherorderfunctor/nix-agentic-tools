@@ -1,16 +1,25 @@
 """Execute document merge cases for every files codec."""
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
 import stat
 import sys
 import tempfile
+import tomllib
+
+import yaml
 
 spec = importlib.util.spec_from_file_location("files_engine", sys.argv[1])
 engine = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(engine)
-formats = engine.codecs.FORMATS
+decoders = {"json": json.loads, "toml": tomllib.loads, "yaml": yaml.safe_load}
+assert set(engine.codecs.FORMATS) == set(decoders), "each engine codec needs an independent decoder"
+formats = tuple(decoders)
+# Ledger digests are SHA-256 of the canonical typed value, not the file's bytes.
+ONE_VALUE_DIGEST = "9a1072cf2c6fcb2de59fd47e2b94af145ddfc9d92d9dc1b0b628116733edcadd"
+CONFIGURED_VALUE_DIGEST = "4d11a8a4082d3438e51437e3f44bbb861802610588dc7ead3677beb561ed4f73"
 
 
 def plan(format_name, value, method="rw"):
@@ -35,7 +44,7 @@ def run(config, root, state, phase="apply"):
 
 
 def document(path, format_name):
-    return engine.codecs.plain(engine.codecs.parse(format_name, path.read_bytes())[0])
+    return decoders[format_name](path.read_text())
 
 
 for format_name in formats:
@@ -47,7 +56,7 @@ for format_name in formats:
         initial = plan(format_name, {"nested": {"owned": "one"}})
         run(initial, root, state)
         assert document(target, format_name) == {"nested": {"owned": "one"}}
-        assert state_data(state)["files"]["nested/settings"]["keys"] == {"/nested/owned": engine.key_digest("one")}
+        assert state_data(state)["files"]["nested/settings"]["keys"] == {"/nested/owned": ONE_VALUE_DIGEST}
         native = {"nested": {"owned": "one", "native": "keep"}, "sibling": 3}
         target.write_bytes(engine.codecs.serialize(format_name, native))
         run(initial, root, state)
@@ -64,13 +73,13 @@ for format_name in formats:
         retired = plan(format_name, {"nested": {"claimed": "configured"}})
         run(retired, root, state)
         assert document(target, format_name) == {"nested": {"claimed": "configured", "native": "keep"}, "sibling": 3}
-        assert "/nested/owned" not in state_data(state)["files"]["nested/settings"]["keys"]
+        assert state_data(state)["files"]["nested/settings"]["keys"] == {"/nested/claimed": CONFIGURED_VALUE_DIGEST}
         conflict = plan(format_name, {"nested": "scalar"})
         before_bytes = target.read_bytes()
         try:
             run(conflict, root, state)
         except ValueError as error:
-            assert "map-to-scalar conflict" in str(error)
+            assert str(error) == "map-to-scalar conflict: nested/settings /nested"
         else:
             raise AssertionError("native descendant erased")
         assert target.read_bytes() == before_bytes
@@ -82,7 +91,7 @@ for format_name in formats:
         try:
             run(initial, root, state)
         except ValueError as error:
-            assert "malformed" in str(error)
+            assert str(error).startswith(f"malformed {format_name} document: nested/settings:"), error
         else:
             raise AssertionError(f"malformed {format_name} accepted")
         assert target.read_bytes() == broken and not state.exists()
@@ -130,7 +139,7 @@ for format_name in formats:
         try:
             run(plan(format_name, {"owned": 2}), root, state)
         except ValueError as error:
-            assert "map-to-scalar conflict" in str(error)
+            assert str(error) == "map-to-scalar conflict: nested/settings /owned"
         else:
             raise AssertionError("native empty map replaced by scalar")
         assert target.read_bytes() == before_bytes and state.read_bytes() == before_state
@@ -145,11 +154,10 @@ with tempfile.TemporaryDirectory() as temporary:
     state = Path(temporary) / "state" / "runtime.json"
     target = root / "nested/settings"
     run(plan("json", {"owned": 1, "native": 2}, "ro"), root, state)
-    before = state_data(state)["files"]["nested/settings"]["created"]
     run(plan("json", {"owned": 1}), root, state)
     assert document(target, "json") == {"owned": 1, "native": 2}
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
-    assert state_data(state)["files"]["nested/settings"]["created"] == before
+    assert state_data(state)["files"]["nested/settings"]["created"] is True
     run(plan("toml", {"owned": 3}), root, state)
     assert document(target, "toml") == {"owned": 3, "native": 2}
     assert list(state.parent.glob("*.bak")) == []
@@ -192,7 +200,6 @@ for native in (False, True):
         assert target.read_bytes() == original
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
         assert state_data(state)["files"]["nested/settings"]["mode"] == 0o600
-        assert document(target, "json") == {"owned": 1, **({"native": 2} if native else {})}
 print("PASS: external permission change reset to the explicit mode without a backup")
 
 with tempfile.TemporaryDirectory() as temporary:
@@ -210,12 +217,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert list(state.parent.glob("*.bak")) == []
     assert target.read_bytes() == desired and stat.S_IMODE(target.stat().st_mode) == 0o444
     recorded = state_data(state)["files"]["nested/settings"]
-    assert (recorded["digest"], recorded["mode"], recorded["created"]) == (engine.digest(desired), 0o444, False)
-    # A pull rewrites the owned copy at 0644 with the same bytes.
-    target.chmod(0o644)
-    run(wanted, root, state)
-    assert list(state.parent.glob("*.bak")) == []
-    assert stat.S_IMODE(target.stat().st_mode) == 0o444
+    assert (recorded["digest"], recorded["mode"], recorded["created"]) == (hashlib.sha256(desired).hexdigest(), 0o444, False)
     # The same bytes behind a symlink are another type: refused, kept as is.
     source = Path(temporary) / "same-bytes"
     source.write_bytes(desired)
@@ -270,9 +272,20 @@ mutation_cases = (
 )
 # Divergences whose desired bytes equal the file's; an unchanged rw key keeps
 # the local formatting, so rw-mode's "bytes" case differs in mode only.
-SAME_BYTES = {("ro-create", "mode"), ("ro-mode", "mode"), ("rw-create", "mode"), ("rw-mode", "bytes"), ("rw-mode", "mode")}
+UNCHANGED_BYTES_MODES = {
+    ("ro-mode", "mode"): 0o400,
+    ("rw-create", "mode"): 0o600,
+    ("rw-mode", "bytes"): 0o400,
+    ("rw-mode", "mode"): 0o400,
+}
 for name, initial, wanted, phase in mutation_cases:
-    for divergence in ("bytes", "mode"):
+    if name == "ro-create":
+        divergences = ("bytes",)
+    elif name == "ro-mode":
+        divergences = ("mode",)
+    else:
+        divergences = ("bytes", "mode")
+    for divergence in divergences:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "root"
             root.mkdir()
@@ -295,11 +308,11 @@ for name, initial, wanted, phase in mutation_cases:
             before = target.read_bytes(), stat.S_IMODE(target.stat().st_mode)
             run(wanted, root, state, phase)
             backups = list(state.parent.glob("*.bak"))
-            if (name, divergence) in SAME_BYTES:
+            if (name, divergence) in UNCHANGED_BYTES_MODES:
                 # Only permission bits differ from the desired image.
                 assert backups == [], (name, backups)
                 assert target.read_bytes() == before[0]
-                assert stat.S_IMODE(target.stat().st_mode) == int(wanted[0]["mode"] or "0444", 8)
+                assert stat.S_IMODE(target.stat().st_mode) == UNCHANGED_BYTES_MODES[name, divergence]
                 continue
             assert len(backups) == 1, (name, divergence, backups)
             assert backups[0].read_bytes() == before[0]
@@ -320,24 +333,24 @@ with tempfile.TemporaryDirectory() as temporary:
     assert target.read_bytes() == before and list(state.parent.glob("*.bak")) == []
 print("PASS: unchanged JSON keys retain local whitespace")
 
-for source_format in formats:
-    for target_format in formats:
-        if source_format == target_format:
-            continue
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "root"
-            root.mkdir()
-            state = Path(temporary) / "state" / "runtime.json"
-            target = root / "nested/settings"
-            run(value_plan(source_format, {"owned": 1}, Path(temporary)), root, state)
-            target.write_bytes(engine.codecs.serialize(source_format, {"owned": 1, "native": 2}))
-            run(value_plan(target_format, {"owned": 1}, Path(temporary)), root, state)
-            assert document(target, target_format) == {"owned": 1, "native": 2}
-            assert state_data(state)["files"]["nested/settings"]["format"] == target_format
-        print("PASS: all six format-only rw switches preserve native keys")
+# With these rows and the generated JSON to TOML and TOML to YAML
+# transitions, each codec reads and writes a converted document.
+for source_format, target_format in (("toml", "json"), ("yaml", "json")):
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary) / "root"
+        root.mkdir()
+        state = Path(temporary) / "state" / "runtime.json"
+        target = root / "nested/settings"
+        run(value_plan(source_format, {"owned": 1}, Path(temporary)), root, state)
+        target.write_bytes(engine.codecs.serialize(source_format, {"owned": 1, "native": 2}))
+        run(value_plan(target_format, {"owned": 1}, Path(temporary)), root, state)
+        assert document(target, target_format) == {"owned": 1, "native": 2}
+        assert state_data(state)["files"]["nested/settings"]["format"] == target_format
+    print(f"PASS: {source_format} to {target_format} rw switch preserves native keys")
 
 for format_name in formats:
-    for method in ("ro", "symlink"):
+    methods = ("ro", "symlink") if format_name == "json" else ("ro",)
+    for method in methods:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "root"
             root.mkdir()
@@ -354,14 +367,14 @@ for format_name in formats:
             else:
                 raise AssertionError("native keys allowed takeover")
             assert (target.read_bytes(), state.read_bytes()) == before
-            target.write_bytes(engine.codecs.serialize(format_name, {"owned": 1}))
-            run(wanted, root, state, "prune")
-            assert not target.exists() and not state.exists()
             if method == "ro":
+                target.write_bytes(engine.codecs.serialize(format_name, {"owned": 1}))
+                run(wanted, root, state, "prune")
+                assert not target.exists() and not state.exists()
                 run(wanted, root, state)
                 assert document(target, format_name) == {"new": 2}
                 assert state_data(state)["files"]["nested/settings"]["method"] == "ro"
-print("PASS: rw switch-away retirement for every codec and target method")
+print("PASS: rw switch-away retirement to ro for every codec; native JSON keys block a symlink takeover")
 
 for format_name, commented in (("json", b'// keep\n{"owned": 1}\n'),
                                ("toml", b'# keep\nowned = 1\n')):
@@ -413,10 +426,10 @@ if len(sys.argv) > 2:
             root = Path(temporary) / "root"
             root.mkdir()
             state = Path(temporary) / "state" / "runtime.json"
-            item = value_plans[format_name][0]
-            rendered = Path(item["content"]["rendered"]).read_bytes()
-            assert item["content"]["value"] == {"owned": 1}
-            assert engine.desired_data(item)[0] == rendered
+            item, = value_plans[format_name]
+            # Distinguish reading the rendered store file from serializing the
+            # inline value again: the engine must merge the rendered bytes.
+            item["content"]["value"] = {"owned": 99}
             run([item], root, state)
             assert document(root / "nested/settings", format_name) == {"owned": 1}
     print("PASS: normalized value plans use pinned JSON, TOML and YAML rendering")

@@ -13,8 +13,9 @@
   go = facts.get (facts.load {dir = ../../cliproxyapi/extracted;}).aggregate "opencodeGo";
   # Select an override target from current input so release changes need no fixture edits.
   chosen = lib.head ids;
-  # Lists merge without promising order.
-  sorted = values: lib.sort builtins.lessThan (lib.unique values);
+  # Lists merge without promising order; attribute names are already sorted.
+  expectedIds = lib.sort builtins.lessThan ids;
+  overlaps = lib.filter (id: (go.models.${id}.type or null) == "chat") ids;
   # An isolated evaluation detects extra or discarded ids without other owners masking them.
   isolated =
     (lib.evalModules {
@@ -26,45 +27,44 @@
     hm = harness.evalHmModules;
   };
   # Ordinary definitions must override defaults at individual leaves.
-  configured.ai.catalog = {
-    models = {
-      ${chosen} = {
-        maker = "configured-maker";
-        source = ["configured evidence"];
-      };
-      catalog-test-added = {
-        maker = "anthropic";
-        source = ["configured addition"];
-      };
-    };
+  configured.ai.catalog.models.${chosen} = {
+    maker = "configured-maker";
+    source = ["configured evidence"];
   };
+  hasVendorOffer = catalog: catalog.vendors.claude.maker == "anthropic" && catalog.vendors.claude.models == null;
   # Test enabled and disabled production option shapes with the same identity expectations.
-  checks = lib.mapAttrs (backend: evaluate:
+  backendChecks = lib.mapAttrs (backend: evaluate:
     harness.mkTest "claude-code-catalog-${backend}" (let
       catalogs = map (enable: (evaluate [{ai.claude.enable = enable;}]).config.ai.catalog) [false true];
       changed = (evaluate [configured]).config.ai.catalog;
       vendorOverride = (evaluate [{ai.catalog.vendors.claude.maker = "configured-maker";}]).config.ai.catalog;
-      cases = {
-        "aggregate set misread or owner ids discarded" = builtins.isList ids && sorted (builtins.attrNames isolated.models) == sorted ids;
+    in
+      harness.checkRows "${backend} Claude catalog" {
         "missing backend import or enable-gated facts" = lib.all (catalog:
           lib.all (id: catalog.models ? ${id} && catalog.models.${id}.maker == "anthropic" && lib.elem "claude-code:models" catalog.models.${id}.source) ids)
         catalogs;
-        "shared CPA identity or evidence overwritten" = lib.all (catalog:
-          lib.all (id: let
-            identity = catalog.models.${id};
-          in
-            lib.elem "cliproxyapi:opencodeGo.models.${id}" identity.source)
-          (lib.filter (id: (go.models.${id}.type or null) == "chat") ids))
-        catalogs;
-        "user addition lost or maker-wide offer narrowed" = changed.models.catalog-test-added.maker == "anthropic" && changed.models.catalog-test-added.source == ["configured addition"] && changed.vendors.claude.maker == "anthropic" && changed.vendors.claude.models == null;
+        "shared CPA identity or evidence overwritten" =
+          overlaps
+          != []
+          && lib.all (catalog:
+            lib.all (id:
+              lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
+            overlaps)
+          catalogs;
         "user leaf override blocked by owner priority" = changed.models.${chosen}.maker == "configured-maker" && changed.models.${chosen}.source == ["configured evidence"];
         "vendor leaf override blocked by owner priority" = vendorOverride.vendors.claude.maker == "configured-maker";
-        "vendor offer is finite or runtime-gated" = lib.all (catalog: catalog.vendors.claude.maker == "anthropic" && catalog.vendors.claude.models == null) catalogs;
-      };
-      failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
-    in
-      lib.assertMsg (failures == []) "${backend}: ${lib.concatStringsSep "; " failures}"))
+        "vendor offer is finite or runtime-gated" = lib.all hasVendorOffer catalogs;
+      }))
   backends;
+  checks =
+    backendChecks
+    // {
+      isolated = harness.mkTest "claude-code-catalog-isolated" (
+        harness.checkRows "isolated Claude catalog" {
+          "aggregate set misread or owner ids discarded" = builtins.attrNames isolated.models == expectedIds;
+        }
+      );
+    };
 in {
   # A single owner property check covers both backends without rotating model literals.
   checks.claude-code-catalog = pkgs.linkFarm "claude-code-catalog" (lib.mapAttrsToList (name: path: {inherit name path;}) checks);

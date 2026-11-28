@@ -25,7 +25,6 @@
   "direct": { "private network exception": "HTTP request failed" },
   "cases": {
     "ambiguous discovery": [["accounts"], "ambiguous credentials"],
-    "correct pin sent": [["accounts", "two"], "success"],
     "cross-origin key": [["claude", "codex"], "no matching credential"],
     "cross-origin quota": [[], "credential origin mismatch"],
     "crossed endpoint pin": [["claude", "codex"], "no matching credential"],

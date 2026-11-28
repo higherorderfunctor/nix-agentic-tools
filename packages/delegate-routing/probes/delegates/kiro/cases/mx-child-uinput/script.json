@@ -1,11 +1,9 @@
 {
-  "permission": "allow",
   "steps": [
     {
       "op": "prompt",
       "text": "MAIN_KICKOFF USER_SENTINEL_1",
-      "async": true,
-      "tag": "p"
+      "async": true
     },
     {
       "op": "sleep",
