@@ -1,5 +1,8 @@
-# Drift and annotation reconciliation for the measured config.json and
-# environment shape.
+# Compare a fresh measurement against the committed config.json and environment
+# facts: a new native key or variable can be missing from the generated settings
+# even while the old sample still loads. Reconciliation also catches a newly
+# measured credential-shaped name with no annotation; drift alone would pass
+# once the snapshot was refreshed.
 {
   extractedLib,
   lib,

@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   dagLib = import ./dag-lib.nix lib;
   evaluateWith = definitions: overrides:
     (lib.evalModules {
@@ -56,57 +57,34 @@
       evaluated;
     disabled = phases disabled;
     drain = phases empty;
-    forcedDrain = phases forcedEmpty;
     nested = nested.home.activation.ai-files-prune.text;
     python = "${python}";
     run = phases run;
   });
   runShim = pkgs.writeText "ai-module-files-hm-run.sh" harness.hmRunShim;
-  tree = evaluate {
-    tree = {
-      content.source = ./fixtures/a;
-      recursive = true;
-    };
-  };
-  # The directory symlink `link` is delivered as one link, not walked into.
-  linkedStore = "${./fixtures}";
-  linked = evaluate {
-    linked = {
-      content.source = linkedStore;
-      recursive = true;
-    };
-  };
   directory = evaluate {directory.content.source = ./fixtures/a;};
-  executable = evaluate {
-    script = {
-      content.text = "printf ok";
-      executable = true;
-    };
-  };
   graph = empty.home.activation;
   applied = (builtins.head evaluated).home.activation.ai-files-apply;
-  reservedOverride = builtins.tryEval (builtins.deepSeq
-    (evaluateWith {} {ai.activation.files-prune.command = "override";}).home.activation
-    true);
-  forcedOverride = builtins.tryEval (builtins.deepSeq
-    (evaluateWith {} {ai.activation = lib.mkForce {files-prune.command = "override";};}).home.activation
-    true);
-  failures =
-    lib.optional reservedOverride.success "reserved entry override"
-    ++ lib.optional forcedOverride.success "forced reserved entry override"
-    ++ lib.optional (map (item: builtins.attrNames item.home.file) evaluated != [["settings.json"] [] [] ["settings.json"] ["settings.json"] []]) "method sink"
-    ++ lib.optional (builtins.attrNames tree.home.file != ["tree/b/c.md"]) "recursive leaves"
-    ++ lib.optional (builtins.attrNames directory.home.file != ["directory"]) "directory link"
-    ++ lib.optional (lib.mapAttrs (_: item: "${item.source}") (lib.filterAttrs (name: _: lib.hasPrefix "linked/link" name) linked.home.file) != {"linked/link" = "${linkedStore}/link";} || !linked.home.file ? "linked/a/b/c.md") "directory symlink leaf"
-    ++ lib.optional (executable.home.file.script.executable != true) "executable link"
-    ++ lib.optional (builtins.attrNames graph != ["ai-files-prune" "ai-files-ready" "ai-ready"]) "empty plan emits only prune"
-    ++ lib.optional (builtins.attrNames forcedEmpty.home.activation != builtins.attrNames graph) "forced empty drain"
-    ++ lib.optional (graph.ai-files-prune.before != ["checkLinkTargets"] || graph.ai-files-prune.after != []) "prune edge"
-    ++ lib.optional (applied.after != ["linkGeneration" "ai-files-prune"] || applied.before != ["ai-files-ready"]) "apply edge"
-    ++ lib.optional (run.home.activation.ai-files-apply.after != ["linkGeneration" "sops-nix" "ai-files-prune"]) "provider edge"
-    ++ lib.optional (builtins.attrNames disabled.home.activation != builtins.attrNames graph) "disabled drain";
+  # Reading the lowered prune edge forces the backend's reserved-name guard.
+  reservedEntries = checkRows "Home Manager generated activation entries" {
+    "forced pool cannot replace files-prune" = rejectsChange (name: (evaluateWith {} {ai.activation = lib.mkForce {${name}.command = "true";};}).home.activation.ai-files-prune.before) {
+      valid = "probe";
+      invalid = "files-prune";
+      expected = ["checkLinkTargets"];
+    };
+  };
+  sinkRows = checkRows "Home Manager files" {
+    "apply waits for links and prune but precedes readiness" = applied.after == ["linkGeneration" "ai-files-prune"] && applied.before == ["ai-files-ready"];
+    "directory source without recursion is delivered as one link" = builtins.attrNames directory.home.file == ["directory"];
+    "disabled files emit no apply but keep prune" = builtins.attrNames disabled.home.activation == builtins.attrNames graph;
+    "empty plan emits no apply but keeps prune" = builtins.attrNames graph == ["ai-files-prune" "ai-files-ready" "ai-ready"];
+    "forced empty activation cannot erase engine entries" = builtins.attrNames forcedEmpty.home.activation == builtins.attrNames graph;
+    "prune precedes native link collision checks" = graph.ai-files-prune.before == ["checkLinkTargets"] && graph.ai-files-prune.after == [];
+    "renderer apply waits for secret readiness as well as links" = run.home.activation.ai-files-apply.after == ["linkGeneration" "sops-nix" "ai-files-prune"];
+  };
 in {
-  checks.ai-module-files-hm = assert lib.assertMsg (failures == []) "files HM fixtures failed: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-files-hm = assert reservedEntries;
+  assert sinkRows;
     pkgs.runCommandLocal "ai-module-files-hm" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

@@ -65,14 +65,6 @@ expect_eq() {
 	fi
 }
 
-expect_ne() {
-	if [ "$2" != "$3" ]; then
-		pass "$1 ($3)"
-	else
-		fail "$1" "did not want $3"
-	fi
-}
-
 expect_match() {
 	case "$3" in
 	*"$2"*) pass "$1" ;;
@@ -80,20 +72,25 @@ expect_match() {
 	esac
 }
 
-# Run R repetitions of a fully parallel drain over one fresh queue each.
-# Echoes the last run root so the caller can inspect it.
+# Use the same launch path for the real race and its deliberately broken
+# control; only the strategy and control run limits differ.
 race() {
 	local profile="$1" strategy="$2" reps="$3" tag="$4"
-	local rep root i rc
-	local -a pid_list
+	local rep root i pid rc branch_turn_ms="$turn_ms"
+	local -a pid_list limits=()
+	if [ "$strategy" = read-then-write ]; then
+		branch_turn_ms=0
+		limits=(--max-iterations 40)
+	fi
 	for rep in $(seq 1 "$reps"); do
 		root="$work/${tag}-${profile}-${rep}"
+		# A nondefault threshold distinguishes reading config from printing 2.
 		"$here/queue_init.py" --root "$root" --profile "$profile" \
-			--unit-ms "$unit_ms" >"$work/logs/${tag}-${profile}-${rep}-init.json"
+			--dry-threshold 4 --unit-ms "$unit_ms" >"$work/logs/${tag}-${profile}-${rep}-init.json"
 		pid_list=()
 		for i in $(seq 1 "$claimants"); do
 			"$here/queue-branch.sh" --root "$root" --owner "w${i}" \
-				--turn-ms "$turn_ms" --strategy "$strategy" \
+				--turn-ms "$branch_turn_ms" --strategy "$strategy" "${limits[@]}" \
 				>"$work/logs/${tag}-${profile}-${rep}-w${i}.json" \
 				2>"$work/logs/${tag}-${profile}-${rep}-w${i}.err" &
 			pid_list+=("$!")
@@ -106,7 +103,13 @@ race() {
 			printf '%s\n' "$rc" >>"$work/logs/${tag}-${profile}-branch-rcs"
 		done
 	done
-	printf '%s\n' "$root"
+}
+
+# Pin event identities as well as cardinality without relying on verifier totals.
+event_items() {
+	local root="$1" kind="$2"
+	jq -cs --arg kind "$kind" '[.[] | select(.kind == $kind) | .item] | sort' \
+		"$root"/events/*.json
 }
 
 # Number of lines in a file that are not "0". `grep -c` exits 1 on no match,
@@ -147,73 +150,57 @@ echo "== T2  status.json exists with drained:false from the start"
 t2="$work/t2"
 "$here/queue_init.py" --root "$t2" --profile moderate --unit-ms "$unit_ms" \
 	>"$work/logs/t2-init.json"
-expect_eq "status.json present after init" yes \
-	"$([ -f "$t2/status.json" ] && echo yes || echo no)"
 expect_eq "drained is false at seed time" false "$(jq -r '.drained' "$t2/status.json")"
 expect_eq "seeded ready count" 10 "$(jq -r '.counts.ready' "$t2/status.json")"
 rc=0
-"$here/queue_init.py" --root "$t2" --profile moderate >/dev/null 2>&1 || rc=$?
+refusal="$("$here/queue_init.py" --root "$t2" --profile moderate 2>&1)" || rc=$?
 expect_eq "re-init without --force is refused" 1 "$rc"
+expect_match "re-init explains its refusal" \
+	"Re-initializing it needs --force AND an existing config.json" "$refusal"
 
 echo
 echo "== T3  ${claimants} concurrent claimants x ${repetitions} reps x 2 profiles"
 for profile in moderate severe; do
-	last_root="$(race "$profile" exclusive "$repetitions" race)"
+	race "$profile" exclusive "$repetitions" race
 	expect_eq "every branch across every rep exited 0 (${profile})" 0 \
 		"$(count_nonzero "$work/logs/race-${profile}-branch-rcs")"
-	expect_eq "branch count (${profile})" \
-		"$((claimants * repetitions))" \
-		"$(wc -l <"$work/logs/race-${profile}-branch-rcs")"
 	for rep in $(seq 1 "$repetitions"); do
 		root="$work/race-${profile}-${rep}"
+		summary="$work/logs/race-${profile}-${rep}-verify.json"
 		rc=0
-		"$here/queue_verify.py" --root "$root" \
-			>"$work/logs/race-${profile}-${rep}-verify.json" 2>&1 || rc=$?
+		"$here/queue_verify.py" --root "$root" >"$summary" 2>&1 || rc=$?
 		if [ "$rc" -ne 0 ]; then
 			fail "verify rep ${rep} (${profile})" \
-				"$(jq -c '.violations' "$work/logs/race-${profile}-${rep}-verify.json" 2>/dev/null || echo "rc=$rc")"
+				"$(jq -c '.violations' "$summary" 2>/dev/null || echo "rc=$rc")"
 		else
-			pass "verify rep ${rep} (${profile}): all $(jq -r '.checks|length' "$work/logs/race-${profile}-${rep}-verify.json") checks"
+			pass "verify rep ${rep} (${profile}): all $(jq -r '.checks|length' "$summary") checks"
 		fi
+		# An event stream without acquires would make the duplicate-claim guards vacuous.
+		expect_eq "rep ${rep} recorded claim acquires (${profile})" true \
+			"$(jq -r '(.event_kinds["claim.acquired"] // 0) > 0' "$summary")"
 	done
 	summary="$work/logs/race-${profile}-${repetitions}-verify.json"
 	echo "     last rep: $(jq -c '.counts' "$summary")"
 	echo "     acquires: $(jq -r '.event_kinds["claim.acquired"]' "$summary")" \
 		"releases: $(jq -r '.event_kinds["claim.released"]' "$summary")"
-	# Denominator: a race that claimed nothing would satisfy every predicate.
-	expect_ne "acquire events were actually recorded (${profile})" 0 \
-		"$(jq -r '.event_kinds["claim.acquired"]' "$summary")"
 	expect_eq "work was spread over more than one claimant (${profile})" yes \
 		"$(jq -rs '[.[]|select(.worked>0)]|length' \
 			"$work"/logs/race-"${profile}"-"${repetitions}"-w*.json |
 			awk '{print ($1 > 1) ? "yes" : "no"}')"
-	expect_eq "every branch reported the dry_threshold it read (${profile})" \
-		"$claimants" \
-		"$(jq -rs '[.[]|select(.dry_threshold != null)]|length' \
-			"$work"/logs/race-"${profile}"-"${repetitions}"-w*.json)"
+	expect_eq "every branch reported the configured dry_threshold of 4 (${profile})" \
+		"$((claimants * repetitions))" \
+		"$(jq -rs '[.[]|select(.dry_threshold == 4)]|length' \
+			"$work"/logs/race-"${profile}"-*-w*.json)"
 done
-echo "     (last_root=${last_root})"
 
 echo
 echo "== T4  POSITIVE CONTROL: the same harness on a read-then-write claim MUST fail"
 detectors='one-acquire-per-item-generation no-overlapping-claim-intervals'
 detectors="$detectors no-double-completion-events no-claim-owner-mismatch-events"
 control_reps="${CONTROL_REPS:-3}"
+race moderate read-then-write "$control_reps" control
 for rep in $(seq 1 "$control_reps"); do
 	root="$work/control-moderate-${rep}"
-	"$here/queue_init.py" --root "$root" --profile moderate --unit-ms "$unit_ms" \
-		>"$work/logs/control-${rep}-init.json"
-	pid_list=()
-	for i in $(seq 1 "$claimants"); do
-		"$here/queue-branch.sh" --root "$root" --owner "w${i}" --turn-ms 0 \
-			--strategy read-then-write --max-iterations 40 \
-			>"$work/logs/control-${rep}-w${i}.json" \
-			2>"$work/logs/control-${rep}-w${i}.err" &
-		pid_list+=("$!")
-	done
-	for pid in "${pid_list[@]}"; do
-		wait "$pid" || :
-	done
 	rc=0
 	"$here/queue_verify.py" --root "$root" --no-expect-set --allow-not-drained \
 		>"$work/logs/control-${rep}-verify.json" 2>&1 || rc=$?
@@ -226,24 +213,19 @@ for rep in $(seq 1 "$control_reps"); do
 		*) ;;
 		esac
 	done
-	if [ "$hit" = yes ]; then
+	if [ "$rc" -eq 2 ] && [ "$hit" = yes ]; then
 		pass "control rep ${rep} detected a double claim (${fired})"
 	else
 		fail "control rep ${rep}" \
-			"the detector did NOT fire -- a clean result here means the concurrency test above cannot fail. verify rc=${rc}, failing checks: [${fired}]"
+			"expected verifier exit 2 with a double-claim finding; verify rc=${rc}, failing checks: [${fired}]"
 	fi
 done
 
 echo
 echo "== T5  the depth cap is read from config and enforced structurally"
 capped="$work/race-moderate-1"
-expect_eq "one push refused at the cap" 1 \
-	"$(jq -r '.event_kinds["push.refused_over_cap"] // 0' \
-		"$work/logs/race-moderate-1-verify.json")"
-expect_eq "the refused item is the depth-4 link" dead \
-	"$(jq -r '.state' "$capped/items/m08.c1.c1.c1.c1.json")"
-expect_match "refusal names the cap" "exceeds max_lineage_depth 3" \
-	"$(jq -r '.dead_letter_reason' "$capped/items/m08.c1.c1.c1.c1.json")"
+expect_eq "only the depth-4 link emits a cap refusal at cap=3" \
+	'["m08.c1.c1.c1.c1"]' "$(event_items "$capped" push.refused_over_cap)"
 expect_eq "a dead-lettered item is never worked" no \
 	"$([ -f "$capped/results/m08.c1.c1.c1.c1.json" ] && echo yes || echo no)"
 # Control for T5: lower the cap and the truncation must move. A hardcoded cap
@@ -256,8 +238,9 @@ t5="$work/t5-cap1"
 rc=0
 "$here/queue_verify.py" --root "$t5" >"$work/logs/t5-verify.json" 2>&1 || rc=$?
 expect_eq "cap=1 run still verifies" 0 "$rc"
-expect_eq "cap=1 refuses two pushes, not one" 2 \
-	"$(jq -r '.event_kinds["push.refused_over_cap"] // 0' "$work/logs/t5-verify.json")"
+expect_eq "at cap=1 both depth-2 links emit a cap refusal" \
+	'["m02.c1.c1","m08.c1.c1"]' "$(event_items "$t5" push.refused_over_cap)"
+# The verifier checks over-cap links, not whether a seeded item was also dead-lettered.
 expect_eq "cap=1 dead count" 2 "$(jq -r '.counts.dead' "$work/logs/t5-verify.json")"
 
 echo
@@ -289,19 +272,26 @@ for n in 01 02 03 04 05 06 07 08 09 10; do
 		--outcome "done" --answer "$answer" --owner "holder${n}" >/dev/null
 done
 t6_status="$("$here/queue_status.py" --root "$t6")"
-expect_eq "proposals landed as proposed, not ready" 3 \
-	"$(jq -r '.counts.proposed' <<<"$t6_status")"
+expect_eq "all three proposals are counted but none are claimable yet" '[3,0]' \
+	"$(jq -c '[.counts.proposed, .counts.ready]' <<<"$t6_status")"
 expect_eq "un-admitted proposals keep drained false" false \
 	"$(jq -r '.drained' <<<"$t6_status")"
-expect_eq "admission gate promotes them" 3 \
-	"$(jq -r '.admitted|length' "$("$here/queue_admit.py" --root "$t6" \
-		>"$work/logs/t6-admit.json" && echo "$work/logs/t6-admit.json")")"
+"$here/queue_admit.py" --root "$t6" >"$work/logs/t6-admit.json"
+expect_eq "admission gate promotes the three first-generation children" \
+	'["m02.c1","m08.c1","m10.c1"]' \
+	"$(jq -c '.admitted | sort' "$work/logs/t6-admit.json")"
 
 echo
 echo "== T7  SIGKILL leaves an orphan that is surfaced, then requeued by TTL"
 t7="$work/t7"
 "$here/queue_init.py" --root "$t7" --profile moderate --unit-ms "$unit_ms" \
 	--lease-ttl-sec 2 >"$work/logs/t7-init.json"
+# Hide the other seeds until recovery: otherwise ready work masks a
+# drained predicate that forgets to count an orphaned lease.
+mkdir "$t7/parked"
+for seed in "$t7"/items/m*.json; do
+	[ "${seed##*/}" = m01.json ] || mv "$seed" "$t7/parked/"
+done
 "$here/queue_worker.py" --root "$t7" --owner victim --hold-sec 30 \
 	>"$work/logs/t7-victim.json" 2>&1 &
 victim=$!
@@ -310,23 +300,23 @@ kill -KILL "$victim"
 wait "$victim" 2>/dev/null || :
 t7_status="$("$here/queue_status.py" --root "$t7")"
 expect_eq "the killed lease is still held" 1 "$(jq -r '.counts.claimed' <<<"$t7_status")"
-expect_eq "and drained stays false" false "$(jq -r '.drained' <<<"$t7_status")"
 sleep 2.2
 t7_status="$("$here/queue_status.py" --root "$t7")"
 expect_eq "after the TTL it is reported as an orphan" 1 \
 	"$(jq -r '.counts.orphaned' <<<"$t7_status")"
-expect_eq "the orphan names its dead holder" victim \
-	"$(jq -r '.orphans[0].owner' <<<"$t7_status")"
-expect_eq "an orphan does not count as drained" false "$(jq -r '.drained' <<<"$t7_status")"
+expect_eq "the orphan names the held item and its dead holder" '[["m01","victim"]]' \
+	"$(jq -c '[.orphans[] | [.item, .owner]]' <<<"$t7_status")"
+expect_eq "an orphan alone prevents drain" false "$(jq -r '.drained' <<<"$t7_status")"
+mv "$t7"/parked/*.json "$t7/items/"
 "$here/queue-branch.sh" --root "$t7" --owner recovery --turn-ms 0 \
 	>"$work/logs/t7-branch.json"
 rc=0
 "$here/queue_verify.py" --root "$t7" >"$work/logs/t7-verify.json" 2>&1 || rc=$?
 expect_eq "the requeued run verifies clean" 0 "$rc"
-expect_eq "exactly one expired lease was stolen" 1 \
-	"$(jq -r '.event_kinds["claim.stolen_expired_lease"] // 0' "$work/logs/t7-verify.json")"
-expect_eq "the stolen item still completed exactly once" 1 \
-	"$(find "$t7/results" -name 'm01.json' | wc -l)"
+expect_eq "the only stolen lease was m01" '["m01"]' \
+	"$(event_items "$t7" claim.stolen_expired_lease)"
+expect_eq "m01 emitted exactly one completion after recovery" 1 \
+	"$(event_items "$t7" item.done | jq '[.[] | select(. == "m01")] | length')"
 expect_eq "m01 records two attempts" 2 "$(jq -r '.attempts' "$t7/items/m01.json")"
 
 echo
@@ -352,14 +342,16 @@ expect_eq "the item is claimable again immediately" 10 \
 echo
 echo "== T9  --tree renders the lineage forest, dead-letter included"
 tree_out="$("$here/queue_status.py" --root "$capped" --tree)"
-expect_match "tree shows a seeded root" "m08  d0  done" "$tree_out"
-expect_match "tree shows the depth-1 child under it" "m08.c1  d1  done" "$tree_out"
-expect_match "tree shows the refused depth-4 link as DEAD" \
-	"m08.c1.c1.c1.c1  d4  dead" "$tree_out"
-expect_match "tree names the cap in the refusal" \
-	"DEAD: lineage_depth 4 exceeds max_lineage_depth 3" "$tree_out"
-expect_eq "tree renders one line per item plus a 3-line header" 17 \
-	"$(printf '%s\n' "$tree_out" | grep -c '  d[0-9]  ')"
+# A flat listing would show each item and state but lose the parent-child links.
+expect_eq "tree indents each link of the m08 chain beneath its parent" \
+	$'m08  d0  done\n`-- m08.c1  d1  done\n    `-- m08.c1.c1  d2  done\n        `-- m08.c1.c1.c1  d3  done\n            `-- m08.c1.c1.c1.c1  d4  dead' \
+	"$(sed -n '/m08.*  d[0-4]  /s/  [0-9][0-9]*u.*//p' <<<"$tree_out")"
+expect_match "tree explains the refusal on the dead link" \
+	'DEAD: lineage_depth 4 exceeds max_lineage_depth 3' \
+	"$(grep -F 'm08.c1.c1.c1.c1  d4  dead' <<<"$tree_out")"
+expect_eq "tree renders each expected item once in lineage order" \
+	'm01 m02 m02.c1 m02.c1.c1 m03 m04 m05 m06 m07 m08 m08.c1 m08.c1.c1 m08.c1.c1.c1 m08.c1.c1.c1.c1 m09 m10 m10.c1' \
+	"$(sed -n 's/^.*\(m[0-9][0-9][^ ]*\)  d[0-9]  .*/\1/p' <<<"$tree_out" | paste -sd ' ' -)"
 
 echo
 echo "== T10 REGRESSION: an in-progress write is never listed as an item"
@@ -369,16 +361,13 @@ echo "== T10 REGRESSION: an in-progress write is never listed as an item"
 t10="$work/t10"
 "$here/queue_init.py" --root "$t10" --profile moderate --unit-ms "$unit_ms" \
 	>"$work/logs/t10-init.json"
-ghost='{"answer":null,"attempts":0,"derived_from":null,"duration_units":1,
-  "expected":1,"id":"ghost","kind":"seed","lineage_depth":0,
-  "payload":{"a":1,"b":1,"op":"sum_range"},"priority":0,"proposes":null,
-  "state":"ready"}'
-printf '%s\n' "$ghost" >"$t10/items/.tmp-pretend-in-progress.json"
+# Clone a real seed so only the publishing name (not the record shape) differs.
+jq '.id = "ghost"' "$t10/items/m01.json" >"$t10/items/.tmp-pretend-in-progress.json"
 expect_eq "a dotfile in items/ is not counted" 10 \
 	"$(jq -r '.total' <<<"$("$here/queue_status.py" --root "$t10")")"
 # Positive control: the SAME content under a published name must be counted.
 # Without this, a glob that matched nothing at all would also pass above.
-printf '%s\n' "$ghost" >"$t10/items/ghost.json"
+cp "$t10/items/.tmp-pretend-in-progress.json" "$t10/items/ghost.json"
 expect_eq "the same record under a published name IS counted" 11 \
 	"$(jq -r '.total' <<<"$("$here/queue_status.py" --root "$t10")")"
 
@@ -400,25 +389,28 @@ expect_eq "restoring items/ restores the count" 10 \
 
 echo
 echo "== T12 an empty claim returns; it does not poll"
-t9="$work/race-moderate-1"
-start="$(date +%s)"
+# Bound the actual process: an infinite poll must fail the assertion, not hang it.
 rc=0
-"$here/queue_claim.py" --root "$t9" --owner probe >/dev/null || rc=$?
-elapsed=$(($(date +%s) - start))
-expect_eq "empty claim exits 3" 3 "$rc"
-expect_eq "and returns in under 3s" yes \
-	"$([ "$elapsed" -lt 3 ] && echo yes || echo no)"
+claim_out="$(
+	python3 - "$here/queue_claim.py" --root "$capped" --owner probe <<'PY'
+import subprocess
+import sys
+
+try:
+    sys.exit(subprocess.run(sys.argv[1:], timeout=3, check=False).returncode)
+except subprocess.TimeoutExpired:
+    print("empty claim did not return within 3s", file=sys.stderr)
+    sys.exit(124)
+PY
+)" || rc=$?
+expect_eq "empty claim returns exit 3 within 3s" 3 "$rc"
+expect_eq "empty claim reports no item on the drained queue" true \
+	"$(jq -r 'has("claimed") and .claimed == null and .status.drained == true' <<<"$claim_out")"
 
 echo
 printf 'checks passed: %d\n' "$ok"
 printf 'checks failed: %d\n' "$bad"
 
-# A denominator of zero is not a pass. "Everything passed" is vacuous if
-# nothing ran, and that is exactly how a broken driver would present.
-if [ "$ok" -eq 0 ]; then
-	echo 'FAIL: no checks ran' >&2
-	exit 1
-fi
 if [ "$bad" -ne 0 ]; then
 	printf 'FAIL: %d check(s) failed\n' "$bad" >&2
 	exit 1

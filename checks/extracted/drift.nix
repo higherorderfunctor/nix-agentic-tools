@@ -9,7 +9,7 @@
   ...
 }: let
   inherit (import ../../lib/extracted {inherit pkgs;}) mkDriftCheck;
-  runner = import ./runner.nix {inherit lib;};
+  runner = (import ./runner.nix {inherit lib pkgs;}).shell;
   host = pkgs.stdenv.hostPlatform.system;
   # A system this host cannot build for: a host-run extractor's derivation.
   other = lib.findFirst (system: system != host) null (import ../../config/systems.nix);
@@ -28,6 +28,10 @@
     drifted = raw "fresh-drifted" {a = 2;};
     matching = raw "fresh-matching" {a = 1;};
   };
+  staticRaws = {
+    ${host} = fresh.matching;
+    ${other} = fresh.drifted;
+  };
   cases = {
     # A fork is compared through the host's projection, not the stored tree.
     forked-match = {
@@ -40,8 +44,8 @@
         };
         extracted.${host} = fresh.matching;
       };
-      regenerate.names = [fresh.matching];
     };
+    # An absent extractor must not stop the one present from reporting drift.
     per-system-drift = {
       args = {
         committed = committed {a = 1;};
@@ -50,6 +54,7 @@
       fails = [host];
       omits = [other];
     };
+    # The foreign derivation is deliberately unbuildable, unlike a missing raw.
     per-system-skips-foreign = {
       args = {
         committed = committed {a = 1;};
@@ -67,10 +72,7 @@
     static-names-both = {
       args = {
         committed = committed {a = 0;};
-        extracted = {
-          ${host} = fresh.matching;
-          ${other} = fresh.drifted;
-        };
+        extracted = staticRaws;
       };
       fails = [host other];
     };
@@ -79,10 +81,7 @@
     static-names-drifted = {
       args = {
         committed = committed {a = 1;};
-        extracted = {
-          ${host} = fresh.matching;
-          ${other} = fresh.drifted;
-        };
+        extracted = staticRaws;
       };
       fails = [other];
       omits = [host];
@@ -106,7 +105,7 @@
     runner {
       inherit label;
       command = ''(mkdir "$TMPDIR/${label}" && cd "$TMPDIR/${label}" && out="$TMPDIR/${label}/out" bash ${pkgs.writeText "${label}.sh" (script case)})'';
-      names = map named case.fails or [];
+      names = map (system: "${named system} is out of sync with its extraction sources") case.fails or [];
       omits = map named case.omits or [];
     };
 in {

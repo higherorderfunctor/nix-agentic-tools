@@ -1,5 +1,9 @@
 # Exercise recipe and sidecar Rust channel writes from a nested crate root.
-{pkgs, ...}: {
+{
+  harness,
+  pkgs,
+  ...
+}: {
   checks.rust-toolchain-fixer = let
     vu = import ../../lib/packaging.nix;
     source = pkgs.writeTextDir "crate/rust-toolchain.toml" ''
@@ -14,46 +18,37 @@
       printf '%s\n' ${source}
     '';
     helperPkgs = pkgs // {nix = fakeNix;};
-    recipeFixer = vu.mkRustToolchainFix {
-      attr = "fixture";
-      pkgs = helperPkgs;
-      pname = "recipe-fixture";
-      recipeFile = "./package.nix";
-      sourceRoot = "crate";
-    };
-    sidecarFixer = vu.mkRustToolchainFix {
-      attr = "fixture";
-      pkgs = helperPkgs;
-      pname = "sidecar-fixture";
-      sourceRoot = "crate";
-      sourcesFile = "./sources.json";
-    };
-    missingDestination =
-      builtins.tryEval
-      (vu.mkRustToolchainFix {
-        attr = "fixture";
-        pkgs = helperPkgs;
-        pname = "missing-destination";
-      }).drvPath;
-    duplicateDestination =
-      builtins.tryEval
-      (vu.mkRustToolchainFix {
-        attr = "fixture";
-        pkgs = helperPkgs;
-        pname = "duplicate-destination";
-        recipeFile = "./package.nix";
-        sourcesFile = "./sources.json";
-      }).drvPath;
+    inherit (harness) checkRows rejectsChange;
+    mkFixer = overrides:
+      vu.mkRustToolchainFix ({
+          attr = "fixture";
+          pkgs = helperPkgs;
+          pname = "fixture";
+          sourceRoot = "crate";
+        }
+        // overrides);
+    recipe = {recipeFile = "./package.nix";};
+    sidecar = {sourcesFile = "./sources.json";};
+    recipeFixer = mkFixer recipe;
+    sidecarFixer = mkFixer sidecar;
+    destination = args: let
+      fixer = mkFixer args;
+    in
+      builtins.seq fixer.drvPath fixer.rustToolchainDestination;
+    rejectsDestination = invalid:
+      rejectsChange destination {
+        inherit invalid;
+        valid = recipe;
+        expected = "recipe";
+      };
     cases = {
-      "recipe destination reports its writer" = recipeFixer.rustToolchainDestination == "recipe";
-      "recipe destination tryEval forces a valid derivation" = (builtins.tryEval recipeFixer.drvPath).success;
-      "rejects both recipeFile and sourcesFile" = !duplicateDestination.success;
-      "rejects omitted recipeFile and sourcesFile" = !missingDestination.success;
-      "sidecar destination reports its writer" = sidecarFixer.rustToolchainDestination == "sidecar";
-      "sidecar destination tryEval forces a valid derivation" = (builtins.tryEval sidecarFixer.drvPath).success;
+      "recipe destination reports its writer" = destination recipe == "recipe";
+      "rejects both recipeFile and sourcesFile" = rejectsDestination (recipe // sidecar);
+      "rejects omitted recipeFile and sourcesFile" = rejectsDestination {};
+      "sidecar destination reports its writer" = destination sidecar == "sidecar";
     };
   in
-    assert pkgs.lib.all (passed: passed) (builtins.attrValues cases);
+    assert checkRows "rust-toolchain-fixer" cases;
       pkgs.runCommand "rust-toolchain-fixer-check" {
         nativeBuildInputs = [pkgs.jq];
         passthru = {inherit cases;};

@@ -11,33 +11,38 @@ with tempfile.TemporaryDirectory() as directory:
     profile, global_bin = root / "profile", root / "global/bin"
     (profile / "bin").mkdir(parents=True)
     global_bin.mkdir(parents=True)
-    for name in ("claude", "codex", "kimchi", "kiro-cli"):
-        for binary in (profile / "bin" / name, global_bin / name):
+    alias = root / "alias"
+    alias.mkdir()
+    absent = root / "absent"
+    for name, script in zip(sys.argv[1::2], sys.argv[2::2], strict=True):
+        expected_bin = profile / "bin" / name
+        shadowing_bin = global_bin / name
+        for binary in (expected_bin, shadowing_bin):
             binary.write_text("runtime fixture\n")
             binary.chmod(0o755)
+        (alias / name).symlink_to(expected_bin)
 
-    for script, name in zip(sys.argv[1:], ("claude", "codex", "kimchi", "kiro-cli"), strict=True):
-        def probe(path, selected_profile, warning=False):
-            env = dict(os.environ, PATH=str(path), DEVENV_PROFILE=str(selected_profile))
-            result = subprocess.run([script], env=env, capture_output=True, text=True, check=True)
-            assert result.stdout == "", result
-            if warning:
-                assert f"warning: {name} on PATH is {global_bin / name}" in result.stderr
-                assert str(profile / "bin" / name) in result.stderr
+        def probe(case, paths, *, profile_is_set=True, warns=False):
+            env = dict(os.environ, PATH=os.pathsep.join(map(str, paths)))
+            env.pop("DEVENV_PROFILE", None)
+            if profile_is_set:
+                env["DEVENV_PROFILE"] = str(profile)
+            result = subprocess.run([script], env=env, capture_output=True, text=True)
+            label = f"{name}: {case}"
+            assert result.returncode == 0, (label, result)
+            assert result.stdout == "", (label, result.stdout)
+            if warns:
+                lines = result.stderr.splitlines()
+                prefix = f"warning: {name} on PATH is {shadowing_bin}, not the devenv profile copy {expected_bin}."
+                assert len(lines) == 1 and lines[0].startswith(prefix), (label, result.stderr)
             else:
-                assert result.stderr == "", result.stderr
+                assert result.stderr == "", (label, result.stderr)
 
-        probe(global_bin, profile, True)
-        probe(profile / "bin", profile)
-        # Different spellings of the same binary must stay silent.
-        alias = root / "alias"
-        alias.mkdir(exist_ok=True)
-        (alias / name).symlink_to(profile / "bin" / name)
-        probe(alias, profile)
-        # Every missing-input test has a shadowed-path positive control.
-        for path, selected_profile in ((global_bin, ""), (root / "absent", profile), (global_bin, root / "absent")):
-            probe(global_bin, profile, True)
-            probe(path, selected_profile)
-        probe(global_bin, profile, True)
-        (profile / "bin" / name).unlink()
-        probe(global_bin, profile)
+        # Both binaries are visible in the precedence cases; only order changes.
+        probe("global binary first warns exactly once", (global_bin, profile / "bin"), warns=True)
+        probe("no PATH match stays silent and exits zero", (absent,))
+        probe("profile binary first is not shadowed", (profile / "bin", global_bin))
+        probe("symlink to the profile binary is not shadowing", (alias, global_bin))
+        probe("unset profile does not abort the strict-mode caller", (global_bin,), profile_is_set=False)
+        expected_bin.unlink()
+        probe("existing profile without this binary is not shadowed", (global_bin,))

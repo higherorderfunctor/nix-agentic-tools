@@ -231,27 +231,6 @@ def read_rows(path: Path, stats: ReadStats):
             yield payload
 
 
-def count_rows_by_splitlines(path: Path) -> tuple:
-    """The naive reader, kept as a CONTROL rather than as a comment.
-
-    Returns (parsed, failed). Its disagreement with `read_rows` is the whole
-    evidence that the streaming reader is doing something; a comment claiming
-    so would rot.
-    """
-    parsed = failed = 0
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            json.loads(line)
-        except ValueError:
-            failed += 1
-        else:
-            parsed += 1
-    return parsed, failed
-
-
 # --------------------------------------------------------------------------
 # Reconstruction
 # --------------------------------------------------------------------------
@@ -1238,6 +1217,8 @@ def build_synthetic_sessions(root: Path) -> Path:
         {EXEC[label]: [EXEC[k] for k in TREE.get(label, ())] for label in EXEC},
         hazard_in=EXEC[HAZARD_LABEL],
     )
+    # A valid but idle session must contribute only to the scanned denominator.
+    _write_session(root / BUCKET, "sess_33333333-3333-4333-8333-333333333333", [], {})
     # A `cli` sibling bucket holding v2 files, so the enumeration rule that
     # excludes it is exercised rather than assumed.
     v2 = root / V2_BUCKET
@@ -1481,93 +1462,69 @@ def _single_run_history(run):
     run["notifications"] = {"runsObserved": 1, "runsWithNotification": 1, "thisRun": 1}
 
 
-# id -> (mutator, {check id: expected verdict}, {check id: required reason}).
-#
-# The third element is what stops a case from passing for the wrong reason: two
-# distinct bugs can both land on P4, so the verdict alone does not prove the
-# fixture exercised the bug it is named after. Every case that shares a check
-# with another case carries a reason.
+# id -> (mutator, (check id, expected verdict, required detail), ...).
+# Each negative names its diagnostic so a different defect in the same
+# predicate cannot pass the case. PASS rows protect legal residual work
+# from being mistaken for dropped work when another predicate fails.
 CASES = {
     "claim-after-terminal": (
         _claim_after_terminal,
-        {"P4": FAIL},
-        {"P4": "occurs AFTER the item reached a terminal state"},
+        ("P4", FAIL, "occurs AFTER the item reached a terminal state"),
     ),
-    "cross-flattened": (
-        _cross_flattened,
-        {"X1": FAIL},
-        {"X1": "a worker ran untracked"},
-    ),
+    "cross-flattened": (_cross_flattened, ("X1", FAIL, "a worker ran untracked")),
     "cross-missing-worker": (
         _cross_missing_worker,
-        {"X1": FAIL},
-        {"X1": "worker count disagrees"},
+        ("X1", FAIL, "worker count disagrees"),
     ),
     "cross-phantom-worker": (
         _cross_phantom_worker,
-        {"X1": FAIL},
-        {"X1": "no dispatch row records"},
+        ("X1", FAIL, "no dispatch row records"),
     ),
     "double-claimed": (
         _double_claimed,
-        {"P4": FAIL},
-        {"P4": "still holds the claim -- the claim is not atomic"},
+        ("P4", FAIL, "still holds the claim -- the claim is not atomic"),
     ),
-    "double-worked": (
-        _double_worked,
-        {"P4": FAIL},
-        {"P4": "inside one claim interval"},
-    ),
+    "double-worked": (_double_worked, ("P4", FAIL, "inside one claim interval")),
     "dropped-item": (
         _drop_item,
-        {"P1": FAIL},
-        {"P1": "never reached a terminal state and not carried forward"},
+        ("P1", FAIL, "never reached a terminal state and not carried forward"),
     ),
     "four-attempts-no-progress": (
         _four_attempts,
-        {"F1": FAIL, "P1": PASS},
-        {"F1": "still no terminal state"},
+        ("F1", FAIL, "still no terminal state"),
+        ("P1", PASS, None),
     ),
     "late-never-worked": (
         _late_never_worked,
-        {"P1": PASS, "P2": FAIL},
-        {"P2": "a late arrival was starved"},
+        ("P1", PASS, None),
+        ("P2", FAIL, "a late arrival was starved"),
     ),
     "no-carried-forward-key": (
         _drop_carried_forward_key,
-        {"F3": FAIL},
-        {"F3": "cannot resume from it"},
+        ("F3", FAIL, "missing ['carriedForward'] -- cannot resume from it"),
     ),
-    "no-late-items": (_no_late_items, {"P2": INCONCLUSIVE}, {"P2": "untested"}),
+    "no-late-items": (_no_late_items, ("P2", INCONCLUSIVE, "untested")),
     "notify-every-run": (
         _notify_every_run,
-        {"F4": FAIL},
-        {"F4": "notification carries no signal"},
+        ("F4", FAIL, "notification carries no signal"),
     ),
     "operator-intervened": (
         _operator_intervened,
-        {"P3": FAIL},
-        {"P3": "did not end on its own"},
+        ("P3", FAIL, "did not end on its own"),
     ),
     "single-run-history": (
         _single_run_history,
-        {"F4": INCONCLUSIVE},
-        {"F4": "not yet measurable"},
+        ("F4", INCONCLUSIVE, "not yet measurable"),
     ),
     "stranded-claim": (
         _dangling_claim,
-        {"P1": PASS, "P3": FAIL},
-        {"P3": "never released and never terminal"},
+        ("P1", PASS, None),
+        ("P3", FAIL, "never released and never terminal"),
     ),
-    "terminal-twice": (
-        _terminal_twice,
-        {"P1": FAIL},
-        {"P1": "2 terminal events"},
-    ),
+    "terminal-twice": (_terminal_twice, ("P1", FAIL, "2 terminal events")),
     "verify-in-implementer-session": (
         _verify_in_same_session,
-        {"F2": FAIL},
-        {"F2": "verified in the implementing session"},
+        ("F2", FAIL, "verified in the implementing session"),
     ),
 }
 
@@ -1642,27 +1599,34 @@ def cmd_self_test(args) -> int:
             failures.append(label)
         return ok
 
-    def expect_verdict(label, check, want):
+    def expect_verdict(label, check, want, reason=None):
         got = check.verdict if check else "MISSING"
-        ok = expect(label, check is not None and check.verdict == want, f"{got} (want {want})")
+        detail = " | ".join(check.detail) if check else ""
+        note = f"{got} (want {want})"
+        if reason is not None:
+            note += f"; want {reason!r} in {detail!r}"
+        ok = expect(label, got == want and (reason is None or reason in detail), note)
         if check is not None and (not ok or (want == FAIL and args.verbose)):
             print(check.render())
 
+    def expect_check_ids(label, checks, ids):
+        actual = sorted(c.id for c in checks)
+        expect(f"{label}.check-ids", actual == ids, f"got {actual}, want {ids}")
+
     try:
-        # --- the write guard, in both directions ---------------------------
-        # An untested guard is a comment. The negative half matters as much as
-        # the positive one: a guard that refuses everything also "passes".
-        for label, target, should_refuse in (
-            ("guard.refuses-real-store", Path.home() / ".kiro" / "sessions" / "x" / "y", True),
-            ("guard.allows-temp-dir", tmp / "sessions" / "x" / "y", False),
-        ):
-            try:
-                refuse_if_under_real_kiro(target)
-            except SystemExit as exc:
-                refused, note = True, str(exc)
-            else:
-                refused, note = False, "allowed"
-            expect(label, refused == should_refuse, note)
+        # Fixture creation below exercises the allowed direction on every write.
+        target = Path.home() / ".kiro" / "sessions" / "x" / "y"
+        try:
+            refuse_if_under_real_kiro(target)
+        except SystemExit as exc:
+            refusal = str(exc)
+        else:
+            refusal = f"allowed writes at {target}"
+        expect(
+            "guard.refuses-real-store",
+            refusal.startswith("refusing to write fixtures at"),
+            refusal,
+        )
 
         session_dir = build_synthetic_sessions(tmp / "sessions")
 
@@ -1670,133 +1634,110 @@ def cmd_self_test(args) -> int:
         corpus = scan_corpus(tmp / "sessions")
         rep = corpus_report(corpus)
         expected = {
-            "depth_histogram": {1: 2, 2: 2},
-            "dispatch_edges": {"from-a-sub": 2, "from-root": 2},
-            "naive_depth_histogram": {1: 4},
-            "sessions_dispatching": 1,
-            "sessions_scanned": 1,
-            "skipped_buckets": [f"{V2_BUCKET} (legacy v2 store)"],
-            "sub_agent_start_rows": 4,
-            "transcripts_on_disk": 4,
+            "depth_histogram": {1: 2, 2: 2},  # Depth must start at one, not zero.
+            "dispatch_edges": {"from-a-sub": 2, "from-root": 2},  # Do not assign nested edges to root.
+            "naive_depth_histogram": {1: 4},  # The naive control must still use the root turn ID.
+            "sessions_dispatching": 1,  # Do not lose the denominator for dispatch-only measurements.
+            "sessions_scanned": 2,  # Include the idle session in the corpus-wide denominator.
+            "skipped_buckets": ["cli (legacy v2 store)"],  # Report the excluded store by name.
+            "sub_agent_start_rows": 4,  # Count dispatch rows, not all parsed payloads.
+            "transcripts_on_disk": 4,  # Count worker transcripts, not the root messages file.
         }
-        for key, want in sorted(expected.items()):
+        for key, want in expected.items():
             expect(f"reconstruct.{key}", rep[key] == want, f"got {rep[key]}, want {want}")
-        for c in check_corpus(rep):
-            expect_verdict(f"reconstruct.{c.id}", c, PASS)
+        checks = check_corpus(rep)
+        ids = ["C0", "C1", "C2", "C3", "C4", "C5"]
+        expect_check_ids("reconstruct", checks, ids)
+        by_id = {c.id: c for c in checks}
+        for cid in ids:
+            expect_verdict(f"reconstruct.{cid}", by_id.get(cid), PASS)
 
-        # --- the splitlines control ----------------------------------------
-        # The fixture plants one row containing raw U+0085, the shape found
-        # twice in the real corpus. The streaming reader must recover it AND
-        # the naive splitlines reader must lose it -- if the naive reader
-        # coped, this control would be proving nothing.
+        # The raw U+0085 row must survive; the splitlines-reader mutant must
+        # trip payloads-recovered. Count the hazard once across the corpus,
+        # and count the full rows and payloads in the affected transcript.
         hazard = session_dir / "sub-executions" / f"{EXEC[HAZARD_LABEL]}.jsonl"
         hazard_stats = ReadStats()
-        recovered = len(list(read_rows(hazard, hazard_stats)))
-        naive_parsed, naive_failed = count_rows_by_splitlines(hazard)
-        expect(
-            "splitlines.streaming-recovers-both-rows",
-            hazard_stats.rows == 2 and recovered == 2,
-            f"rows={hazard_stats.rows} payloads={recovered}, want 2/2",
-        )
-        expect(
-            "splitlines.hazard-is-counted",
-            hazard_stats.rows_splitlines_hazard == 1,
-            f"{hazard_stats.rows_splitlines_hazard} of {hazard_stats.rows} row(s) flagged, want 1",
-        )
-        expect(
-            "splitlines.no-phantom-failures",
-            hazard_stats.rows_unparseable == 0,
-            f"{hazard_stats.rows_unparseable} unparseable, want 0",
-        )
-        expect(
-            "splitlines.naive-reader-collapses",
-            naive_parsed < hazard_stats.rows and naive_failed > 0,
-            f"naive parsed={naive_parsed} failed={naive_failed} vs streaming rows={hazard_stats.rows}",
-        )
-        expect(
-            "splitlines.corpus-level-count",
-            rep["read"]["rows_splitlines_hazard"] == 1,
-            f"{rep['read']['rows_splitlines_hazard']} of {rep['read']['rows']} row(s), want 1",
-        )
+        payload_types = [payload.get("type") for payload in read_rows(hazard, hazard_stats)]
+        for label, actual, want in (
+            ("corpus-level-count", rep["read"]["rows_splitlines_hazard"], 1),
+            ("payloads-recovered", payload_types, ["tool_call", "tool_result"]),
+            ("rows-counted", hazard_stats.rows, 2),
+        ):
+            expect(f"splitlines.{label}", actual == want, f"got {actual}, want {want}")
 
         # --- the pathological corpus: C2/C3/C4 must actually be able to fail
         build_broken_sessions(tmp / "broken")
         broken_report = corpus_report(scan_corpus(tmp / "broken"))
-        for key, want in sorted(
-            {
-                "missing_transcripts": 1,
-                "multi_parent_children": 1,
-                "orphan_transcripts": 1,
-                "unreachable_from_root": 2,
-            }.items()
-        ):
-            expect(
-                f"broken-corpus.{key}",
-                len(broken_report[key]) == want,
-                f"{len(broken_report[key])} found ({broken_report[key]}), want {want}",
-            )
         broken_checks = {c.id: c for c in check_corpus(broken_report)}
-        for cid in ("C2", "C3", "C4"):
-            expect_verdict(f"broken-corpus.{cid}", broken_checks.get(cid), FAIL)
 
-        # --- the happy path MUST pass, or every failure below is vacuous ---
+        def member(session, execution):
+            return f"{BROKEN_BUCKET}/{BROKEN_SESSIONS[session]}:{BROKEN_EXEC[execution]}"
+
+        for key, cid, members in (
+            ("missing_transcripts", None, [member("missing", "never-wrote")]),
+            ("multi_parent_children", "C3", [member("multi-parent", "multi-z")]),
+            ("orphan_transcripts", "C2", [member("orphan", "orphan-file")]),
+            ("unreachable_from_root", "C4", [member("cycle", "cycle-p"), member("cycle", "cycle-q")]),
+        ):
+            actual = broken_report[key]
+            expect(f"broken-corpus.{key}", actual == members, f"got {actual}, want {members}")
+            if cid is not None:
+                # The predicate itself must reject the anomaly, not merely list it in the census.
+                expect_verdict(f"broken-corpus.{cid}", broken_checks.get(cid), FAIL, members[0])
+
+        # Pin which predicates run; the CLI below requires all of them to pass.
         base = good_run(session_dir)
         run_path = tmp / "run-good.json"
         run_path.write_text(json.dumps(base, indent=2, sort_keys=True), encoding="utf-8")
-        for cid, c in sorted({c.id: c for c in evaluate(run_path)}.items()):
-            expect_verdict(f"good-run.{cid}", c, PASS)
+        expect_check_ids(
+            "good-run", evaluate(run_path), ["F1", "F2", "F3", "F4", "P1", "P2", "P3", "P4", "X1"]
+        )
+        run_paths = {"good": run_path}
 
         # --- and each broken run must fail on the RIGHT predicate ----------
         # ... FOR THE RIGHT REASON. The verdict alone is not enough: several
         # distinct bugs land on P4, so a fixture can trip the check it names
         # while exercising a different defect entirely.
-        for name, (mutate, expected_verdicts, reasons) in sorted(CASES.items()):
+        for name, (mutate, *expected_checks) in CASES.items():
             run = json.loads(json.dumps(base))
             mutate(run)
             path = tmp / f"run-{name}.json"
             path.write_text(json.dumps(run, indent=2, sort_keys=True), encoding="utf-8")
+            run_paths[name] = path
             got = {c.id: c for c in evaluate(path)}
-            for cid, want in sorted(expected_verdicts.items()):
-                expect_verdict(f"{name}.{cid}", got.get(cid), want)
-            for cid, needle in sorted(reasons.items()):
-                have = got.get(cid)
-                joined = " | ".join(have.detail) if have else ""
-                expect(
-                    f"{name}.{cid}.reason",
-                    needle in joined,
-                    f"{needle!r} in detail" if needle in joined else f"{needle!r} NOT in {joined!r}",
-                )
+            for cid, want, reason in expected_checks:
+                expect_verdict(f"{name}.{cid}", got.get(cid), want, reason)
 
         # --- a missing state file is its own case (no mutator can express it)
         got = {c.id: c for c in evaluate(tmp / "does-not-exist.json")}
-        expect_verdict("missing-state-file.F3", got.get("F3"), FAIL)
+        expect_verdict("missing-state-file.F3", got.get("F3"), FAIL, "no state file at")
 
         # --- the CLI path --------------------------------------------------
         # Everything above calls evaluate() directly, which leaves `check`'s
         # argument parsing and its exit-code mapping unexercised. A harness
         # that always exits 0 satisfies every gate it is ever wired into, so
         # all three codes are asserted through a real subprocess.
-        for label, mutate, want_exit in (
-            ("cli-fail", _drop_item, EXIT[FAIL]),
-            ("cli-inconclusive", _no_late_items, EXIT[INCONCLUSIVE]),
-            ("cli-pass", None, EXIT[PASS]),
+        for name, want_exit, want_verdict in (
+            ("dropped-item", 1, "FAIL"),
+            ("good", 0, "PASS"),
+            ("no-late-items", 2, "INCONCLUSIVE"),
         ):
-            run = json.loads(json.dumps(base))
-            if mutate is not None:
-                mutate(run)
-            path = tmp / f"{label}.json"
-            path.write_text(json.dumps(run, indent=2, sort_keys=True), encoding="utf-8")
+            path = run_paths[name]
             proc = subprocess.run(
                 [sys.executable, __file__, "check", str(path)],
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            expect(
-                f"{label}.exit-code",
-                proc.returncode == want_exit,
-                f"exit={proc.returncode}, want {want_exit}",
+            ok = expect(
+                f"cli.{name}",
+                proc.returncode == want_exit
+                and proc.stdout.endswith(f"\nrun verdict: {want_verdict}\n"),
+                f"exit={proc.returncode}, want {want_exit} with run verdict {want_verdict}",
             )
+            if not ok:
+                print(proc.stdout, end="")
+                print(proc.stderr, end="")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1805,7 +1746,7 @@ def cmd_self_test(args) -> int:
         print(f"FAIL: {len(failures)} of {asserted} assertion(s) did not hold: {failures}")
         return 1
     print(f"PASS: all {asserted} assertion(s) held -- the good run passed every predicate,")
-    print("      and each broken run failed on exactly the predicate that should trip it")
+    print("      and each broken run produced the expected verdicts and reasons")
     return 0
 
 
@@ -1815,54 +1756,87 @@ def cmd_self_test(args) -> int:
 #
 # A self-test that cannot fail is decoration. Each entry below breaks ONE piece
 # of predicate logic; `verify.py mutants` applies it to a copy of this file and
-# demands that `self-test` then exits non-zero. A SURVIVING mutant means that
-# logic is unverified -- which is not hypothetical: the first run of this table
-# found C2's orphan detection and one arm of the X1 edge diff both deletable
+# demands that `self-test` exits with an assertion failure at the named check.
+# A SURVIVING mutant means that logic is unverified. The first run of this
+# table found C2's orphan detection and one arm of the X1 edge diff deletable
 # with the self-test still green, and both gained a fixture as a result.
 #
 # The table is excluded from its own uniqueness check by the marker comments
 # below, because every needle is a verbatim quote of the code it targets and
 # would otherwise match itself.
 
+# Entries name the expected failing assertion before the source replacement.
 # MUTANT-TABLE-BEGIN
 MUTANTS = {
     "attempt-cap": (
+        "four-attempts-no-progress.F1",
         "if tl.attempts[i] > MAX_ATTEMPTS and tl.terminals[i] == 0",
         "if False",
     ),
     "cross-check-missing-arm": (
+        "cross-phantom-worker.X1",
         "    only_declared = sorted(declared_edges - disk_edges)",
         "    only_declared = []",
     ),
     "cross-check-untracked-arm": (
+        "cross-flattened.X1",
         "    only_disk = sorted(disk_edges - declared_edges)",
         "    only_disk = []",
     ),
     "dangling-claim": (
+        "stranded-claim.P3",
         """        if holder is not None:
             tl.dangling.append(f"{item}: claim by {holder} never released and never terminal")""",
         """        if False:
             pass""",
     ),
-    "double-implement": ("                if implemented_in_interval > 1:", "                if False:"),
+    "double-implement": (
+        "double-worked.P4",
+        "                if implemented_in_interval > 1:",
+        "                if False:",
+    ),
     "drop-detection": (
+        "dropped-item.P1",
         'dropped.append(f"{item_id}: never reached a terminal state and not carried forward")',
         "pass",
     ),
-    "edge-rule": ("absorb(payload, child_id)", "absorb(payload, ROOT)"),
+    "edge-rule": (
+        "reconstruct.dispatch_edges",
+        "absorb(payload, child_id)",
+        "absorb(payload, ROOT)",
+    ),
     "fixture-write-guard": (
+        "guard.refuses-real-store",
         "    if resolved == real or real in resolved.parents or resolved in real.parents:",
         "    if False:",
     ),
-    "missing-transcripts": ("return self.children - self.transcripts", "return set()"),
+    "missing-transcripts": (
+        "broken-corpus.missing_transcripts",
+        "return self.children - self.transcripts",
+        "return set()",
+    ),
     "multi-parent-detection": (
+        "broken-corpus.C3",
         "return {c: p for c, p in by_child.items() if len(p) > 1}",
         "return {}",
     ),
-    "notification-denominator": ("    if observed < 2:", "    if False:"),
-    "operator-intervention": ("    if intervened:", "    if False:"),
-    "orphan-detection": ("return self.transcripts - self.children", "return set()"),
+    "notification-denominator": (
+        "single-run-history.F4",
+        "    if observed < 2:",
+        "    if False:",
+    ),
+    "operator-intervention": (
+        "operator-intervened.P3",
+        "    if intervened:",
+        "    if False:",
+    ),
+    "orphan-detection": (
+        "broken-corpus.C2",
+        "return self.transcripts - self.children",
+        "return set()",
+    ),
     "overlapping-claim": (
+        "double-claimed.P4",
         """                if holder is not None:
                     tl.atomicity.append(
                         f"{item}: claimed at seq {ev['seq']} by {ev['execution']} while "
@@ -1872,10 +1846,12 @@ MUTANTS = {
                     pass""",
     ),
     "schema-required-keys": (
+        "no-carried-forward-key.F3",
         "    missing = [k for k in REQUIRED_RUN_KEYS if k not in run]",
         "    missing = []",
     ),
     "splitlines-reader": (
+        "splitlines.payloads-recovered",
         "            row, j = _DECODER.raw_decode(text, i)",
         """            _lim = min(
                 (p for p in (text.find(c, i) for c in ("\\n",) + tuple(SPLITLINES_ONLY))
@@ -1884,11 +1860,31 @@ MUTANTS = {
             )
             row, j = _DECODER.raw_decode(text[:_lim], i)""",
     ),
-    "starvation-detection": ("        if not claimed and kept_working:", "        if False:"),
-    "terminal-twice": ("        if n > 1:", "        if n > 99:"),
-    "unreachable-detection": ("return depths, all_nodes - set(depths)", "return depths, set()"),
-    "v2-bucket-exclusion": ("if not BUCKET_RE.match(bucket.name):", "if False:"),
-    "verifier-separation": ("        shared = impl & ver", "        shared = set()"),
+    "starvation-detection": (
+        "late-never-worked.P2",
+        "        if not claimed and kept_working:",
+        "        if False:",
+    ),
+    "terminal-twice": (
+        "terminal-twice.P1",
+        "        if n > 1:",
+        "        if n > 99:",
+    ),
+    "unreachable-detection": (
+        "broken-corpus.C4",
+        "return depths, all_nodes - set(depths)",
+        "return depths, set()",
+    ),
+    "v2-bucket-exclusion": (
+        "reconstruct.skipped_buckets",
+        "if not BUCKET_RE.match(bucket.name):",
+        "if False:",
+    ),
+    "verifier-separation": (
+        "verify-in-implementer-session.F2",
+        "        shared = impl & ver",
+        "        shared = set()",
+    ),
 }
 # MUTANT-TABLE-END
 
@@ -1917,10 +1913,10 @@ def cmd_mutants(args) -> int:
     tmp = Path(tempfile.mkdtemp(prefix="kiro-mode-f-mutants-"))
     survived, killed, broken = [], [], []
     try:
-        for name, (old, new) in sorted(MUTANTS.items()):
+        for name, (expected_failure, old, new) in MUTANTS.items():
             mutated, occurrences = apply_mutation(source, old, new)
             if occurrences != 1:
-                broken.append(f"{name} ({occurrences} match(es), want exactly 1)")
+                broken.append(name)
                 print(f"[BROKEN     ] {name}: needle matched {occurrences} time(s), not 1")
                 continue
             path = tmp / f"mutant-{name}.py"
@@ -1931,17 +1927,28 @@ def cmd_mutants(args) -> int:
                 text=True,
                 check=False,
             )
-            tripped = [ln for ln in proc.stdout.splitlines() if ln.startswith("[FAIL]")]
+            lines = proc.stdout.splitlines()
+            tripped = [line for line in lines if line.startswith("[FAIL]")]
             if proc.returncode == 0:
                 survived.append(name)
                 print(f"[SURVIVED   ] {name}: self-test still passed -- this logic is UNVERIFIED")
-            else:
-                killed.append(name)
-                first = tripped[0] if tripped else "(crashed rather than asserting)"
-                print(f"[killed     ] {name}: {first}")
-                if args.verbose:
-                    for ln in tripped:
-                        print(f"{'':14}{ln}")
+                continue
+            intended = next((ln for ln in tripped if ln.startswith(f"[FAIL] {expected_failure}: ")), None)
+            finished = bool(lines) and lines[-1].startswith("FAIL: ")
+            if proc.returncode != 1 or intended is None or not finished:
+                broken.append(name)
+                print(f"[BROKEN     ] {name}: expected {expected_failure} to fail, got exit {proc.returncode}")
+                for line in tripped:
+                    print(f"{'':14}{line}")
+                if proc.stderr:
+                    print(proc.stderr, end="")
+                continue
+            killed.append(name)
+            print(f"[killed     ] {name}: {intended}")
+            if args.verbose:
+                for line in tripped:
+                    if line != intended:
+                        print(f"{'':14}{line}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1952,7 +1959,7 @@ def cmd_mutants(args) -> int:
         print("FAIL: the mutant table is empty -- nothing was proven")
         return 1
     if broken:
-        print(f"FAIL: {len(broken)} needle(s) no longer match the code: {broken}")
+        print(f"FAIL: {len(broken)} mutant(s) did not exercise the intended assertion: {broken}")
         return 1
     if survived:
         print(f"FAIL: {len(survived)} mutant(s) survived: {survived}")

@@ -264,5 +264,5 @@
       null negation can operate normally.
     '';
 in {
-  inherit forwardedOptions forwardingHelper normalizedPoolNames packageOwnerOf packagePoolClaims packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations runtimePoolProbeConfig withEnabledProgramProbes;
+  inherit forwardingHelper normalizedPoolNames packageOwnerOf packagePoolClaims packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations runtimePoolProbeConfig withEnabledProgramProbes;
 }

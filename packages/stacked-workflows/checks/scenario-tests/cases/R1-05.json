@@ -10,7 +10,7 @@
   "block_roles": ["selection", "selection"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "The own-stack selector retains the unpublished upstream commit and the two feature commits",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-05",

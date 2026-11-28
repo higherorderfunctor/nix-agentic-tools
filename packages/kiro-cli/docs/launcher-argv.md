@@ -568,9 +568,9 @@ from one source, so Darwin has no host-run job for them.
 - `packages/kiro-cli/checks/module-eval.nix` — the generated bash shape, the
   removed `ai.kiro.cli.v3` option, and the Home Manager `permissions.yaml`
   (`module-kiro-hm-permissions-trusted-tools`).
-- `checks/ai-warnings/default.nix` (`ai-warnings-kiro-tool-trust`) — the trust
-  and permissions options exist on Home Manager only, and devenv warns on MCP
-  `toolPolicy`.
+- `checks/ai-warnings/default.nix` — `ai-warnings-kiro-tool-trust` checks that
+  the trust and permissions options exist on Home Manager only;
+  `ai-warnings-delivery` checks that devenv warns on MCP `toolPolicy`.
 
 ## Do not break the exec line
 

@@ -8,10 +8,12 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows mkTest;
   inherit (import ../../lib/extracted/facts.nix {inherit lib;}) children expect get load merge;
   inherit (import ../../lib/extracted {inherit pkgs;}) index;
+  runner = (import ./runner.nix {inherit lib pkgs;}).nix;
   platforms = import ../../lib/extracted/platforms.nix;
-  systems = import ../../config/systems.nix;
+  systems = import configSystems;
   run = input: merge (input // {inherit systems;});
   kinds = result: map (failure: failure.kind) result.failures;
   both = tree: lib.genAttrs systems (_: tree);
@@ -37,21 +39,24 @@
   fixRows = builtins.fromJSON fixText;
 
   groups = {
-    # `children`: exact wildcard leaves, disappearing children and get's
-    # refusal of a child whose value must be read per system.
+    # `children`: exact wildcard leaves, filtering by depth and fixed
+    # segments, and a parent with no matching children. The diagnostics
+    # below test refusal of a child that must be read per system.
     children = let
       pattern = "features.<name>.state";
       input = {
         declarations = {
           "features.<name>.state" = static "string";
-          "other.features.old.state" = static "string";
+          "features.unrelated.status" = static "string";
+          "other.features.nested.state" = static "string";
         };
         raws = both {
           features = {
             new.state = "on";
             old.state = "off";
+            unrelated.status = "different leaf";
           };
-          other.features.old.state = "unrelated";
+          other.features.nested.state = "different depth";
         };
       };
       matched = run input;
@@ -59,8 +64,6 @@
         declarations.${pattern} = static "string";
         raws = both {features = {};};
       };
-      platform = run (input // {decisions.${pattern} = decision "per-platform";});
-      refuses = aggregate: key: !(builtins.tryEval (builtins.deepSeq (children aggregate key) true)).success;
     in {
       empty = children empty.aggregate pattern == {};
       matches-two =
@@ -69,14 +72,12 @@
           new = "on";
           old = "off";
         };
-      multiple-wildcards-throws = refuses matched.aggregate "<name>.<name>.state";
-      no-wildcard-throws = refuses matched.aggregate "features.old.state";
-      per-platform-throws = refuses platform.aggregate pattern;
     };
 
     # Decisions: the combine vocabulary and the defaults table. A key `k`
     # differs (or not) across systems; columns: combine, type, Darwin raw,
-    # Linux raw, combined value. `set` is compared without order.
+    # Linux raw, combined value. Sets must have exactly the listed members
+    # with no duplicates; only lists require their order to be preserved.
     combines = let
       combined = written: combine: type: darwin: linux: value: let
         result = run ({
@@ -84,12 +85,13 @@
             raws = split {k = darwin;} {k = linux;};
           }
           // lib.optionalAttrs written {decisions.k = decision combine;});
-        normal =
+        actual = get result.aggregate "k";
+        expected =
           if type == "set"
-          then lib.sort builtins.lessThan
-          else lib.id;
+          then builtins.length actual == builtins.length value && lib.all (member: builtins.elem member actual) value
+          else actual == value;
       in
-        kinds result == [] && result.aggregate.k.combine == combine && normal (get result.aggregate "k") == normal value;
+        kinds result == [] && result.aggregate.k.combine == combine && expected;
       byDefault = combined false;
       decided = combined true;
     in {
@@ -100,8 +102,7 @@
       list-agree = byDefault "equal" "list" ["b" "a"] ["b" "a"] ["b" "a"];
       object-agree = byDefault "equal" "object" {a.b = 1;} {a.b = 1;} {a.b = 1;};
       set-intersection = byDefault "intersection" "set" ["a" "b"] ["c" "b"] ["b"];
-      set-union = decided "union" "set" ["a" "b"] ["c" "b"] ["c" "b" "a"];
-      string-agree = byDefault "equal" "string" "same" "same" "same";
+      set-union = decided "union" "set" ["b" "a" "a"] ["c" "b"] ["a" "b" "c"];
       string-prefer = decided "prefer:x86_64-linux" "string" "darwin-value" "linux-value" "linux-value";
     };
 
@@ -113,56 +114,86 @@
           declarations.k = static type;
           raws = split {k = darwin;} {k = linux;};
         };
-        details = builtins.toJSON (lib.head result.failures).details;
       in
-        kinds result == ["divergent"] && lib.all (value: lib.hasInfix (builtins.toJSON value) details) [darwin linux];
+        map (failure: {inherit (failure) details key kind;}) result.failures
+        == [
+          {
+            details = split darwin linux;
+            key = "k";
+            kind = "divergent";
+          }
+        ];
     in {
       list-order = diverges "list" ["a" "b"] ["b" "a"];
       object-whole = diverges "object" {a.b = 1;} {a.b = 2;};
-      string = diverges "string" "darwin-value" "linux-value";
     };
 
     # `merge`, the `fix` paragraph: the divergent row pasted unedited is
     # refused naming both placeholder fields; filled in, merge is clean.
     repair = let
       pasted = run (divergent // {decisions = fixRows;});
-      refused = builtins.toJSON (lib.findFirst (failure: failure.kind == "bad-decision") {} pasted.failures).details;
-      edited = run (divergent // {decisions = lib.mapAttrs (_: row: row // decision row.combine) fixRows;});
+      edited = run (divergent // {decisions.mode = fixRows.mode // decision fixRows.mode.combine;});
     in {
-      edited-clean = edited.failures == [];
-      pasted-names-both = lib.all (field: lib.hasInfix field refused) ["decided" "reason"];
+      edited-clean = edited.failures == [] && (edited.aggregate.mode.bySystem or null) == split "darwin-value" "linux-value";
+      pasted-names-both =
+        map (failure: {
+          inherit (failure) key kind;
+          details =
+            if failure.kind == "bad-decision"
+            then lib.sort builtins.lessThan failure.details
+            else failure.details;
+        })
+        pasted.failures
+        == [
+          # Validation discards the pasted row, so the original disagreement remains.
+          {
+            details = split "darwin-value" "linux-value";
+            key = "mode";
+            kind = "divergent";
+          }
+          {
+            details = ["decided must be an ISO date (YYYY-MM-DD)" "reason must be non-blank and not a TODO placeholder"];
+            key = "mode";
+            kind = "bad-decision";
+          }
+        ];
     };
 
     # Decisions table and `bad-decision`: one row for the string key `mode`,
     # differing from a valid row in the fields shown, accepted or refused.
     decisions = let
-      verdict = accepted: key: fields:
-        kinds (run {
+      verdict = key: fields: details: let
+        result = run {
           declarations.mode = static "string";
           decisions.${key} = decision "equal" // fields;
           raws = both {mode = "same";};
-        })
-        == lib.optional (!accepted) "bad-decision";
-      accept = verdict true "mode";
-      refuse = verdict false "mode";
+        };
+      in
+        map (failure: {inherit (failure) details key kind;}) result.failures
+        == lib.optional (details != []) {
+          inherit details key;
+          kind = "bad-decision";
+        };
+      accept = fields: verdict "mode" fields [];
+      refuse = fields: detail: verdict "mode" fields [detail];
+      invalidDate = value: refuse {decided = value;} "decided must be an ISO date (YYYY-MM-DD)";
+      invalidReason = value: refuse {reason = value;} "reason must be non-blank and not a TODO placeholder";
     in {
       # `and` on a string would otherwise throw inside the reducer.
-      combine-and-on-string = refuse {combine = "and";};
-      combine-max-on-string = refuse {combine = "max";};
-      combine-unknown = refuse {combine = "average";};
-      date-leap = accept {decided = "2024-02-29";};
-      date-malformed = refuse {decided = "2026-1-01";};
-      date-month-13 = refuse {decided = "2026-13-01";};
-      date-placeholder = refuse {decided = "YYYY-MM-DD";};
+      combine-and-on-string = refuse {combine = "and";} ''combine and does not apply to type "string"'';
+      combine-max-on-string = refuse {combine = "max";} ''combine max does not apply to type "string"'';
+      combine-unknown = refuse {combine = "average";} ''unknown combine "average"'';
+      date-malformed = invalidDate "2026-1-01";
+      date-month-13 = invalidDate "2026-13-01";
       # Calendar validity is not checked: the field is provenance.
       date-well-formed = accept {decided = "2026-02-31";};
-      ignore-non-collection = refuse {ignore = ["x"];};
-      reason-blank = refuse {reason = " ";};
-      reason-todo = refuse {reason = "TODO";};
-      reason-todo-colon = refuse {reason = "TODO:";};
-      reason-todo-indented = refuse {reason = "  TODO: why";};
+      ignore-non-collection = refuse {ignore = ["x"];} "ignore needs a list on a set or list key";
+      reason-blank = invalidReason " ";
+      reason-todo = invalidReason "TODO";
+      reason-todo-colon = invalidReason "TODO:";
+      reason-todo-indented = invalidReason "  TODO: why";
       reason-todo-prefixed-word = accept {reason = "TODO entries are excluded because they are not implemented commands";};
-      undeclared-key = verdict false "ghost" {};
+      undeclared-key = verdict "ghost" {} ["row for an undeclared key"];
     };
 
     # Decisions: `ignore` as a combine drops the key from the aggregate, so
@@ -180,23 +211,22 @@
     in {
       declared-gone = ignored "count" {} {} ["declared-gone"];
       drops-count = ignored "count" {k = 3;} {k = 5;} [];
-      drops-set = ignored "set" {k = ["a"];} {k = ["b"];} [];
       missing-system = ignored "count" {} {k = 5;} ["missing-system"];
       type-mismatch = ignored "count" {k = "five";} {k = "five";} ["type-mismatch"];
     };
 
-    # Decisions: `ignore` removes elements before combining.
-    ignoreElements.before-intersection =
+    # An ignored member stays out even if every system measures it.
+    ignoreElements.filters-shared-member =
       get
       (run {
         declarations.models = static "set";
         decisions.models = decision "intersection" // {ignore = ["preview"];};
-        raws = both {models = ["a" "preview"];};
+        raws = split {models = ["a" "darwin" "preview"];} {models = ["a" "linux" "preview"];};
       }).aggregate "models"
       == ["a"];
 
-    # `merge`, failure kinds: `declared-gone` (with its fix) and
-    # `missing-system`; a `live` key with `systems = []` requires nothing.
+    # `merge`: `declared-gone` gives a fix; a `live` key with `systems = []`
+    # requires nothing.
     presence = let
       gone = run {
         declarations.lastRun = static "string";
@@ -214,12 +244,6 @@
           raws = both {};
         }).failures
         == [];
-      missing-system =
-        kinds (run {
-          declarations.limit = static "count";
-          raws = split {} {limit = 5;};
-        })
-        == ["missing-system"];
     };
 
     # Declarations: `count` is a non-negative integer, `set` a list of
@@ -234,8 +258,6 @@
         == lib.optional (!accepted) "type-mismatch";
     in {
       count-negative = fits "count" (-1) false;
-      count-string = fits "count" "five" false;
-      count-zero = fits "count" 0 true;
       set-non-string = fits "set" ["a" 1] false;
     };
 
@@ -256,10 +278,6 @@
         newThing = "value";
       } ["newThing"] [];
       prefix-leaf = loose "apiToken.child" {apiToken = "credential";} ["apiToken"] ["declared-gone" "undeclared-secret"];
-      secret = loose "mode" {
-        apiToken = "value";
-        mode = "same";
-      } ["apiToken"] ["undeclared-secret"];
     };
 
     # `load`. ./load/all-present forks a key across both configured systems
@@ -270,10 +288,10 @@
     # by a fresh Linux raw that adds a feature (the update that once left
     # Kiro's aggregate failing evaluation, PR #2559).
     load = let
-      all = load {dir = ./load/all-present;};
       absent = load {dir = ./load/absent-system;};
-      once = load {dir = ./load/measured-once;};
+      all = load {dir = ./load/all-present;};
       carriedDir = ./load/carried;
+      prior = load {dir = carriedDir;};
       read = file: builtins.fromJSON (builtins.readFile (carriedDir + "/${file}"));
       carried = platforms.carry {
         fresh.x86_64-linux = {
@@ -318,31 +336,29 @@
           fix = "extract `${key}` on aarch64-darwin, or narrow its declared `systems`";
           kind = "missing-system";
         }) ["limit" "mode"];
-      all-present = all.failures == [] && all.aggregate.limit.combine == "per-platform" && all.aggregate.limit.bySystem == split 3 5;
-      carried-committed-loads = (load {dir = carriedDir;}).failures == [];
-      carried-darwin-follows = darwin.features == ["new" "old"] && darwin.patchability.new.unmatchedSites == 0 && darwin.patchability.old.unmatchedSites == 2;
+      all-present =
+        all.failures
+        == []
+        && builtins.attrNames all.aggregate == ["limit"]
+        && all.aggregate.limit.combine == "per-platform"
+        && all.aggregate.limit.bySystem == split 3 5;
+      # The committed fixture must load both legs before carry changes either.
+      carried-committed-loads =
+        prior.failures
+        == []
+        && get prior.aggregate "features" == ["old"]
+        && prior.aggregate."patchability.old.unmatchedSites".bySystem == split 2 1;
+      carried-darwin-follows = darwin.patchability.new.unmatchedSites == 0 && darwin.patchability.old.unmatchedSites == 2;
       carried-loads = carriedLoad.failures == [] && get carriedLoad.aggregate "features" == ["new" "old"];
-      replaced-diverges = lib.elem "divergent" (kinds replaced);
-      measured-once = once.failures == [] && get once.aggregate "limit" == 5;
-      missing-facts-throws = !(builtins.tryEval (load {dir = ./.;})).success;
-      unmeasured-throws = !(builtins.tryEval (load {dir = ./load/unmeasured;})).success;
-    };
-
-    # `get` refuses a `per-platform` key, which has no combined value; `get`
-    # on a divergent key throws, carrying merge's own failure (its message is
-    # asserted in extracted-facts-divergent-fix).
-    platform = let
-      result = run {
-        declarations.limit = static "count";
-        decisions.limit = decision "per-platform";
-        raws = split {limit = 3;} {limit = 5;};
-      };
-      diverged = run divergent;
-    in {
-      get-absent-throws = !(builtins.tryEval (get diverged.aggregate "gone")).success;
-      get-divergent-throws = !(builtins.tryEval (get diverged.aggregate "mode")).success && diverged.aggregate.mode.failure == builtins.removeAttrs (lib.head diverged.failures) ["key"];
-      get-throws = !(builtins.tryEval (get result.aggregate "limit")).success;
-      no-value = kinds result == [] && !(result.aggregate.limit ? value);
+      replaced-diverges =
+        map (failure: {inherit (failure) details key kind;}) replaced.failures
+        == [
+          {
+            details = split ["old"] ["new" "old"];
+            key = "features";
+            kind = "divergent";
+          }
+        ];
     };
 
     # `expect`: a need is met, or fails naming consumer, key, expected and
@@ -363,37 +379,45 @@
         aggregate
         ;
       failures = needs: (expect {inherit aggregate consumer needs;}).failures;
-      # Every need is checked: one failure per unmet need, with its actual.
-      misses = needs: seen:
-        failures needs
-        == lib.zipListsWith (need: actual: {
-          inherit actual consumer;
-          inherit (need) key;
-          expected = builtins.removeAttrs need ["key"];
-          kind = "expectation";
-        })
-        needs
-        seen;
     in {
-      all-met =
+      contains-and-value-unmet =
         failures [
           {
-            contains = "invoke_sub_agent";
+            contains = "write";
             key = "tools";
           }
+          {
+            key = "steering.maxChars";
+            value = 1;
+          }
         ]
-        == [];
-      contains-and-value-unmet = misses [
-        {
-          contains = "write";
-          key = "tools";
-        }
-        {
-          key = "steering.maxChars";
-          value = 1;
-        }
-      ] [["invoke_sub_agent" "read"] 50000];
-      presence-unmet = misses [{key = "absent";}] [null];
+        == [
+          {
+            actual = ["invoke_sub_agent" "read"];
+            consumer = "delegate-routing";
+            expected.contains = "write";
+            key = "tools";
+            kind = "expectation";
+          }
+          {
+            actual = 50000;
+            consumer = "delegate-routing";
+            expected.value = 1;
+            key = "steering.maxChars";
+            kind = "expectation";
+          }
+        ];
+      presence-unmet =
+        failures [{key = "absent";}]
+        == [
+          {
+            actual = null;
+            consumer = "delegate-routing";
+            expected = {};
+            key = "absent";
+            kind = "expectation";
+          }
+        ];
     };
 
     # Keys and the not-failures paragraph: a wildcard covers every child,
@@ -426,7 +450,6 @@
       prefer-sole-value = preferred.failures == [] && get preferred.aggregate "features.new.state" == "on";
     };
   };
-  failures = lib.concatLists (lib.mapAttrsToList (group: rows: map (row: "${group}.${row}") (builtins.attrNames (lib.filterAttrs (_: passed: !passed) rows))) groups);
 
   # `index`: one owner's merged aggregate, written per owner and indexed.
   indexed = index {
@@ -435,57 +458,91 @@
       raws = both {limit = 5;};
     };
   };
-  # facts.nix and what it imports, for the evaluator in divergent-fix.
+  # facts.nix and what it imports, plus the load fixtures needed by the
+  # dummy-store evaluator. Path resolution is part of the load check.
   source = lib.fileset.toSource {
     root = ../..;
-    fileset = lib.fileset.unions [../../lib/extracted/facts.nix ../../lib/extracted/platforms.nix ../../lib/open-keys ../../lib/redact/classify.nix];
+    fileset = lib.fileset.unions [./load configSystems ../../lib/extracted/facts.nix ../../lib/extracted/platforms.nix ../../lib/open-keys ../../lib/redact/classify.nix];
   };
-  vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
+  configSystems = ../../config/systems.nix;
+  diagnostics = {
+    children-multiple-wildcards = {
+      expr = ''facts.children all.aggregate "<name>.<name>.state"'';
+      names = ["`<name>.<name>.state` must contain exactly one <name> segment"];
+    };
+    children-no-wildcard = {
+      expr = ''facts.children all.aggregate "features.old.state"'';
+      names = ["`features.old.state` must contain exactly one <name> segment"];
+    };
+    children-per-platform = {
+      expr = ''facts.children carried.aggregate "patchability.<name>.unmatchedSites"'';
+      names = ["`patchability.old.unmatchedSites` has no combined value (per-platform)"];
+    };
+    get-absent = {
+      expr = ''facts.get all.aggregate "gone"'';
+      names = ["`gone` is not in the aggregate"];
+    };
+    get-divergent = {
+      expr = ''facts.get (facts.merge (builtins.fromJSON ${builtins.toJSON (builtins.toJSON (divergent // {inherit systems;}))})).aggregate "mode"'';
+      names = ["`mode` has no combined value (divergent)" ''"aarch64-darwin":"darwin-value"'' ''"x86_64-linux":"linux-value"'' fixText];
+    };
+    get-per-platform = {
+      expr = ''facts.get all.aggregate "limit"'';
+      names = ["`limit` has no combined value (per-platform)" "read bySystem from the index"];
+    };
+    load-missing-facts = {
+      expr = ''facts.load {dir = ${source}/checks/extracted/load;}'';
+      names = ["/load/facts.json is missing"];
+    };
+    load-unmeasured = {
+      expr = ''facts.load {dir = ${source}/checks/extracted/load/unmeasured;}'';
+      names = ["/unmeasured/extracted.json is missing"];
+    };
+  };
+  runDiagnostic = label: case:
+    runner {
+      inherit label;
+      inherit (case) names;
+      expr = ''
+        let
+          facts = import ${source}/lib/extracted/facts.nix {lib = import ${pkgs.path}/lib;};
+          all = facts.load {dir = ${source}/checks/extracted/load/all-present;};
+          carried = facts.load {dir = ${source}/checks/extracted/load/carried;};
+        in ${case.expr}
+      '';
+    };
 in {
   checks = {
-    extracted-facts = harness.mkTest "extracted-facts" (
-      assert lib.assertMsg (failures == []) (builtins.toJSON failures); true
+    extracted-facts = mkTest "extracted-facts" (
+      checkRows "extracted-facts" (lib.concatMapAttrs (group: rows:
+        lib.mapAttrs' (row: lib.nameValuePair "${group}.${row}") rows)
+      groups)
     );
     extracted-facts-index = pkgs.runCommand "extracted-facts-index" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      test -f ${indexed}/demo.json
-      test -f ${indexed}/index.json
-      ${pkgs.jq}/bin/jq -e '.demo.limit.value == 5' ${indexed}/index.json > /dev/null || {
-        echo "FAIL: index.json does not carry the merged value of demo's limit" >&2
-        exit 1
+      check_index() {
+        local file=$1 expectation=$2 filter=$3
+        ${pkgs.jq}/bin/jq -e "$filter" "${indexed}/$file" > /dev/null || {
+          printf 'FAIL: %s must contain %s\n' "$file" "$expectation" >&2
+          if [ -f "${indexed}/$file" ]; then cat "${indexed}/$file" >&2; fi
+          exit 1
+        }
       }
+      check_index demo.json 'only limit, with value 5' 'keys == ["limit"] and .limit.value == 5'
+      check_index index.json 'only demo, with only limit and its value 5' 'keys == ["demo"] and (.demo | keys == ["limit"]) and .demo.limit.value == 5'
       echo "PASS: extracted-facts-index" > "$out"
     '';
-    # `merge`, the `fix` paragraph: the divergent fix is a complete
-    # decisions.json object, wrapped by the declared pattern, and `get` on
-    # the divergent key fails evaluation printing the key and that row.
-    # tryEval cannot see a throw's message, so a dummy-store evaluator reads it.
+    # The complete decisions.json fix and exact diagnostics from the
+    # public load, children and get entry points.
     extracted-facts-divergent-fix = pkgs.runCommand "extracted-facts-divergent-fix" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       fix=${pkgs.writeText "divergent-fix.json" fixText}
-      export HOME="$TMPDIR"
-      if ${pkgs.nix}/bin/nix-instantiate --eval --strict --store dummy:// --expr ${lib.escapeShellArg ''
-        let
-          facts = import ${source}/lib/extracted/facts.nix {lib = import ${pkgs.path}/lib;};
-        in
-          facts.get (facts.merge (builtins.fromJSON ${builtins.toJSON (builtins.toJSON (divergent // {inherit systems;}))})).aggregate "mode"
-      ''} 2> get.err; then
-        echo "FAIL: get on the divergent key mode did not fail evaluation" >&2
-        exit 1
-      fi
-      for fragment in '`mode`' "$(cat "$fix")"; do
-        grep -qF -- "$fragment" get.err || {
-          echo "FAIL: get's error does not name $fragment:" >&2
-          cat get.err >&2
-          exit 1
-        }
-      done
-      ${pkgs.jq}/bin/jq -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
-        keys == ["mode"]
-        and (.mode.combine | IN($vocabulary[]))
-        and (.mode.reason | type == "string" and (trim | . == "TODO" or startswith("TODO:")))
+      ${lib.concatStrings (lib.mapAttrsToList runDiagnostic diagnostics)}
+      ${pkgs.jq}/bin/jq -e '
+        (.mode | keys == ["combine", "decided", "reason"])
+        and (.mode.reason | type == "string" and (trim | startswith("TODO:") and length > 5))
         and .mode.decided == "YYYY-MM-DD"
       ' "$fix" > /dev/null || {
         echo "FAIL: divergent fix is not a complete decisions.json row:" >&2

@@ -1,95 +1,118 @@
+# cspell:ignore undescribed
 # lib/git-tool-settings/rules.nix: the git tools' reconciliation rules.
 # checks/extracted/reconcile.nix covers the shared rules.
-# Each case is one sidecar fact and its row, and the failures it must give.
+# Each case names its facts and hand rows, and the entries and failures they produce.
 {
   harness,
   lib,
   ...
 }: let
+  inherit (harness) checkRows mkTest;
+
   setting = {
     description = "Probe.";
     reads."probe.rs#read" = ["repository"];
     type = "bool";
   };
-  cases = {
-    computed-default-described = {
-      settings.fact = setting // {defaultExpr = "probe()";};
-      settings.row = {defaultDescription = "what probe() returns";};
-      kinds = [];
-    };
-    computed-default-without-prose = {
-      settings.fact = setting // {defaultExpr = "probe()";};
-      settings.row = null;
-      kinds = [];
-    };
-    # A dead key read again is a setting, and its reason row goes stale.
-    dead-key-read-again = {
-      deadKeys.fact = null;
-      deadKeys.row = {reason = "declared, never read";};
-      settings.fact = setting;
-      settings.row = {};
-      kinds = ["removed"];
-    };
-    dead-key-reasoned = {
-      deadKeys.fact = {const = "PROBE";};
-      deadKeys.row = {reason = "declared, never read";};
-      kinds = [];
-    };
-    dead-key-without-reason = {
-      deadKeys.fact = {const = "PROBE";};
-      deadKeys.row = null;
-      kinds = [];
-    };
-    new-setting-accepted = {
-      settings.fact = setting;
-      settings.row = null;
-      kinds = [];
-    };
-    read-setting-needs-type = {
-      settings.fact = builtins.removeAttrs setting ["type"];
-      settings.row = null;
-      kinds = ["needs-human"];
-    };
-    read-setting-without-description = {
-      settings.fact = builtins.removeAttrs setting ["description"];
-      settings.row = null;
-      kinds = [];
-    };
-    # An ignored row would drop the option and skip its needs, unreported.
-    settings-row-cannot-ignore = {
-      settings.fact = setting;
-      settings.row = {ignored = "probe";};
-      kinds = ["bad-row"];
-    };
-    # A write-only key becomes no option, so it needs no type.
-    write-only-setting-accepted = {
-      settings.fact = {
-        reads = {};
-        writes."probe.rs#write" = ["repository"];
-      };
-      settings.row = null;
-      kinds = [];
-    };
+  computed = setting // {defaultExpr = "probe()";};
+  dead = {const = "PROBE";};
+  reason = {reason = "declared, never read";};
+  failure = surface: kind: details: {
+    inherit details kind surface;
+    name = "probe.key";
   };
   # `null` leaves the name out of facts or rows.
-  section = surface: case: field:
-    lib.optionalAttrs ((case.${surface}.${field} or null) != null) {"probe.key" = case.${surface}.${field};};
-  run = case: let
-    of = field: lib.genAttrs ["deadKeys" "settings"] (surface: section surface case field);
+  run = {
+    deadFact ? null,
+    deadRow ? null,
+    expectedDead ? {},
+    expectedDeadFailures ? [],
+    expectedSettings ? {},
+    expectedSettingsFailures ? [],
+    settingFact ? null,
+    settingRow ? null,
+  }: let
+    entry = value: lib.optionalAttrs (value != null) {"probe.key" = value;};
     inherit
       (import ../../lib/git-tool-settings/rules.nix {
         inherit lib;
-        extracted = of "fact";
-        rows = of "row";
+        extracted = {
+          deadKeys = entry deadFact;
+          settings = entry settingFact;
+        };
+        rows = {
+          deadKeys = entry deadRow;
+          settings = entry settingRow;
+        };
       })
       results
       ;
   in
-    map (failure: failure.kind) (results.deadKeys.failures ++ results.settings.failures)
-    == case.kinds;
-  failed = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
+    results.deadKeys.entries
+    == expectedDead
+    && results.settings.entries == expectedSettings
+    && results.deadKeys.failures == expectedDeadFailures
+    && results.settings.failures == expectedSettingsFailures;
+  cases = {
+    "a computed default keeps its expression alongside hand prose" = {
+      expectedSettings."probe.key" = computed // {defaultDescription = "what probe() returns";};
+      settingFact = computed;
+      settingRow.defaultDescription = "what probe() returns";
+    };
+    "a computed default without hand prose still reconciles" = {
+      expectedSettings."probe.key" = computed;
+      settingFact = computed;
+    };
+    "a dead key keeps its hand reason without losing its constant" = {
+      deadFact = dead;
+      deadRow = reason;
+      expectedDead."probe.key" = dead // reason;
+    };
+    "a dead key without a hand reason remains in the dead-key facts" = {
+      deadFact = dead;
+      expectedDead."probe.key" = dead;
+    };
+    "a dead key read again is a setting and its old reason is stale" = {
+      deadRow = reason;
+      expectedDeadFailures = [(failure "deadKeys" "removed" "delete the stale row")];
+      expectedSettings."probe.key" = setting;
+      settingFact = setting;
+      settingRow = {};
+    };
+    "a read key without a type reports the missing type" = let
+      untyped = builtins.removeAttrs setting ["type"];
+    in {
+      expectedSettings."probe.key" = untyped;
+      expectedSettingsFailures = [(failure "settings" "needs-human" ["type"])];
+      settingFact = untyped;
+    };
+    "a typed read key needs neither a hand row nor a description" = let
+      undescribed = builtins.removeAttrs setting ["description"];
+    in {
+      expectedSettings."probe.key" = undescribed;
+      settingFact = undescribed;
+    };
+    # An ignored row would drop the option and skip its needs, unreported.
+    "an ignored settings row reports the forbidden bypass of exclusions" = {
+      expectedSettingsFailures = [
+        (failure "settings" "bad-row" ["a settings row cannot be ignored; give the key no option in the owner's `exclusions`"])
+      ];
+      settingFact = setting;
+      settingRow.ignored = "probe";
+    };
+    # A write-only key becomes no option, so it needs no type.
+    "an untyped write-only key reconciles without a missing-type failure" = let
+      written = {
+        reads = {};
+        writes."probe.rs#write" = ["repository"];
+      };
+    in {
+      expectedSettings."probe.key" = written;
+      settingFact = written;
+    };
+  };
 in {
-  checks.git-tool-settings-rules = harness.mkTest "git-tool-settings-rules" (
-    lib.assertMsg (failed == []) "git-tool-settings-rules: FAILED ${lib.concatStringsSep ", " failed}"
+  checks.git-tool-settings-rules = mkTest "git-tool-settings-rules" (
+    checkRows "git-tool-settings reconciliation" (lib.mapAttrs (_: run) cases)
   );
 }

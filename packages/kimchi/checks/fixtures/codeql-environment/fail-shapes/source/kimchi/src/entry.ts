@@ -1,14 +1,14 @@
 const k = String(Date.now());
-process.env[k] = "1";
+
 destructuredHelper(process.env);
 const whole = process.env;
 void whole;
 dynamicKey(process.env);
 {
-  process.env[k] = "1";
+
 }
 if (Math.random()) {
-  process.env[k] = "1";
+  process.env[k] = "1"; // A two-arm branch must not hide the write.
 } else {
 }
 export function destructuredHelper({

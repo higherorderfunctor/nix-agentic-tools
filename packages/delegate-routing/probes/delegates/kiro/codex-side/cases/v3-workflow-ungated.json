@@ -3,8 +3,7 @@
   "acp": true,
   "permission": "allow",
   "initSettings": {
-    "workflows": "on",
-    "inlineAgents": "on"
+    "workflows": "on"
   },
   "agents": [
     {
@@ -59,17 +58,7 @@
       }
     },
     {
-      "event": "workflow/run_started",
-      "seconds": 3
-    },
-    {
-      "sleep": 1
-    },
-    {
-      "method": "_kiro/workflow/inspect",
-      "params": {
-        "workflowId": "$WF"
-      }
+      "sleep": 4
     },
     {
       "method": "_kiro/workflow/pause",
@@ -79,12 +68,6 @@
     },
     {
       "method": "_kiro/workflow/cancel",
-      "params": {
-        "workflowId": "$WF"
-      }
-    },
-    {
-      "method": "_kiro/workflow/load",
       "params": {
         "workflowId": "$WF"
       }

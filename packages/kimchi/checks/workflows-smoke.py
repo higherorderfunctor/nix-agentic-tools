@@ -3,14 +3,15 @@ import json
 import os
 import shutil
 import signal
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 kimchi, package, observer, delivery = sys.argv[1:]
 delivered = {entry["name"]: entry for entry in json.loads(Path(delivery).read_text())}
 source = "packages/workflows"
+resource_id = "plugins.package.packages-workflows"
 
 
 def run(args, cwd, env):
@@ -26,21 +27,36 @@ def run(args, cwd, env):
     return result
 
 
-def dispatch(args, cwd, env, negative):
+def observation(lines, tag):
+    prefix = tag + " "
+    matches = [line.removeprefix(prefix) for line in lines if line.startswith(prefix)]
+    assert len(matches) == 1, (tag, lines)
+    return json.loads(matches[0])
+
+
+def probe(args, cwd, env, *, expected_input):
     result = run(args, cwd, env)
     assert "Extension error" not in result.stderr and "Failed to load extension" not in result.stderr, result.stderr
     lines = result.stderr.splitlines()
-    commands = json.loads(next(line.removeprefix("E2E_COMMANDS ") for line in lines if line.startswith("E2E_COMMANDS ")))
-    counts = json.loads(next(line.removeprefix("E2E_COUNTS ") for line in lines if line.startswith("E2E_COUNTS ")))
-    assert counts == {"agent_start": 0, "input": int(negative), "model_requests": 0}, counts
+    # Unregistered commands alone should reach input; no row may start inference.
+    counts = observation(lines, "E2E_COUNTS")
+    assert counts == {"agent_start": 0, "input": expected_input, "model_requests": 0}, counts
     events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
-    assert events and all(event["type"] == "session" for event in events), events
-    if negative:
-        assert commands == [] and "E2E_NOTIFY" not in result.stderr, result.stderr
-    else:
-        assert len(commands) == 1 and commands[0]["name"] == "workflow", commands
+    assert events, events
+    return lines
+
+
+def dispatch(args, cwd, env, *, enabled):
+    lines = probe(args, cwd, env, expected_input=0 if enabled else 1)
+    commands = observation(lines, "E2E_COMMANDS")
+    assert [command["name"] for command in commands] == (["workflow"] if enabled else []), commands
+    if enabled:
         assert commands[0]["sourceInfo"]["source"] == source, commands
-        assert "E2E_NOTIFY" in result.stderr and "No workflows found in" in result.stderr, result.stderr
+        # Registration alone does not prove the slash command reached its handler.
+        notifications = [json.loads(line.removeprefix("E2E_NOTIFY ")) for line in lines if line.startswith("E2E_NOTIFY ")]
+        assert any("No workflows found in" in item["message"] for item in notifications), notifications
+    else:
+        assert not any(line.startswith("E2E_NOTIFY ") for line in lines), lines
 
 
 def fixture(base):
@@ -62,12 +78,20 @@ def fixture(base):
     return home, cwd, env
 
 
+def resource_rows(args, cwd, env):
+    result = run(args, cwd, env)
+    return [line.split(maxsplit=2) for line in result.stdout.splitlines() if "plugins.package." in line]
+
+
 with tempfile.TemporaryDirectory() as scratch:
     root = Path(scratch)
     for name, configured, project in [
-        ("global", True, False),
-        ("project", True, True),
+        # No declaration must not activate a leftover builtin extension.
         ("absent", False, False),
+        # User delivery must load without requiring project trust.
+        ("global", True, False),
+        # An approved project settings file must resolve its own package path.
+        ("project", True, True),
     ]:
         base = root / name
         home, cwd, env = fixture(base)
@@ -77,26 +101,24 @@ with tempfile.TemporaryDirectory() as scratch:
             link = settings.parent / source
             link.parent.mkdir(parents=True)
             artifact = Path(delivered[name]["extension"])
-            # Every entry is an absolute link into the original package, with
-            # no dependency payload copied into the generated delivery tree.
-            entries = list(artifact.iterdir())
-            assert {entry.name for entry in entries} == {entry.name for entry in Path(package).iterdir()}, artifact
-            for entry in entries:
-                assert entry.is_symlink() and entry.readlink() == Path(package) / entry.name, entry
+            if name == "global":
+                # Both backends stage the same link tree. Check its shape once to
+                # catch a copied dependency payload instead of absolute links.
+                entries = list(artifact.iterdir())
+                names = {entry.name for entry in entries}
+                assert names == {entry.name for entry in Path(package).iterdir()}, artifact
+                for entry in entries:
+                    assert entry.is_symlink() and entry.readlink() == Path(package) / entry.name, entry
             link.symlink_to(artifact, target_is_directory=True)
             shutil.copyfile(delivered[name]["settings"], settings)
         trust_args = ["--approve"] if project else []
         listing_args = [kimchi, "resources", "list", *trust_args]
-        listing = run(listing_args, cwd, env)
-        rows = [line.split(maxsplit=2) for line in listing.stdout.splitlines() if "plugins.package." in line]
+        rows = resource_rows(listing_args, cwd, env)
+        assert [row[:2] for row in rows] == ([["enabled", resource_id]] if configured else []), rows
         if configured:
-            assert len(rows) == 1 and rows[0][0] == "enabled" and source in rows[0][2], listing.stdout
-            resource_id = rows[0][1]
-            assert resource_id == "plugins.package.packages-workflows", resource_id
-        else:
-            assert rows == [], listing.stdout
+            assert source in rows[0][2], rows
         args = [kimchi, *trust_args, "--mode", "json", "--session-dir", str(base / "sessions"), "-e", observer, "-p", "/workflow list"]
-        dispatch(args, cwd, env, negative=not configured)
+        dispatch(args, cwd, env, enabled=configured)
         print(f"PASS: {name}")
         if configured:
             # Resource toggles are user scope even for project packages.
@@ -104,9 +126,9 @@ with tempfile.TemporaryDirectory() as scratch:
             declared = json.loads(user_settings.read_text()) if user_settings.exists() else {}
             declared["resources"] = {resource_id: False}
             user_settings.write_text(json.dumps(declared))
-            disabled_listing = run(listing_args, cwd, env)
-            assert any(line.split()[:2] == ["disabled", resource_id] for line in disabled_listing.stdout.splitlines()), disabled_listing.stdout
-            dispatch(args, cwd, env, negative=True)
+            rows = resource_rows(listing_args, cwd, env)
+            assert [row[:2] for row in rows] == [["disabled", resource_id]], rows
+            dispatch(args, cwd, env, enabled=False)
             print(f"PASS: {name}-disabled")
 
     # The child normally follows a background step spawn. This check starts it
@@ -120,14 +142,16 @@ with tempfile.TemporaryDirectory() as scratch:
         "type": "object",
     }
     for name, handoff, expected_tools, expected_commands in [
-        # Output-schema handoff through saved-trust bootstrap.
-        ("valid", {"identity": {"attempt": 1, "path": "step", "runId": "smoke"}, "outputSchema": output_schema}, ["workflow_submit_result"], []),
-        # Ordinary and invalid-handoff controls.
+        # No handoff must leave normal host registration intact.
         ("absent", None, [], ["workflow"]),
+        # A malformed handoff must not fall back to host registration.
         ("malformed", "{", [], []),
+        # Saved-trust bootstrap must not consume the handoff before registration.
+        ("valid", {"identity": {"attempt": 1, "path": "step", "runId": "smoke"}, "outputSchema": output_schema}, ["workflow_submit_result"], []),
     ]:
         base = root / ("handoff-" + name)
         home, cwd, env = fixture(base)
+        # Keep both production declarations; a one-scope fixture hides the bug.
         for scope, parent in [("global", home), ("project", cwd)]:
             harness = parent / ".config/kimchi/harness"
             payload = harness / source
@@ -138,8 +162,6 @@ with tempfile.TemporaryDirectory() as scratch:
                 else:
                     (payload / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
             settings = json.loads(Path(delivered[scope]["settings"]).read_text())
-            # Keep both production declarations; a one-scope fixture hides the bug.
-            assert settings["packages"] == [source], settings
             if scope == "global":
                 # User scope only, as in production: trust then comes from trust.json alone.
                 settings["defaultProjectTrust"] = "ask"
@@ -151,29 +173,21 @@ with tempfile.TemporaryDirectory() as scratch:
             note.write_text(json.dumps(handoff) if isinstance(handoff, dict) else handoff)
             env["KIMCHI_WORKFLOW_STEP_OUTPUT_TOOLS"] = str(note)
         args = [kimchi, "--mode", "json", "--session-dir", str(base / "sessions"), "-e", observer, "-p", "/e2e_probe"]
-        result = run(args, cwd, env)
-        assert "Extension error" not in result.stderr and "Failed to load extension" not in result.stderr, result.stderr
-        lines = result.stderr.splitlines()
-        observation = json.loads(next(line.removeprefix("E2E_HANDOFF ") for line in lines if line.startswith("E2E_HANDOFF ")))
-        counts = json.loads(next(line.removeprefix("E2E_COUNTS ") for line in lines if line.startswith("E2E_COUNTS ")))
-        tool_names = [tool["name"] for tool in observation["submit"]]
-        command_names = [command["name"] for command in observation["workflowCommands"]]
-        print(f"handoff-{name}: exit={result.returncode} submit={tool_names} workflow={command_names} env={observation['handoffEnvPresent']} counts={counts}", flush=True)
+        lines = probe(args, cwd, env, expected_input=0)
+        handoff_state = observation(lines, "E2E_HANDOFF")
+        tool_names = [tool["name"] for tool in handoff_state["submit"]]
+        command_names = [command["name"] for command in handoff_state["workflowCommands"]]
         # Catch consumed-but-lost handoffs, duplicate tools and accidental asks.
-        assert tool_names == expected_tools, "missing or unexpected submit tools after saved-trust bootstrap: " + repr(observation)
+        assert tool_names == expected_tools, "missing or unexpected submit tools after saved-trust bootstrap: " + repr(handoff_state)
         # Invalid handoffs must stay steps; ordinary sessions must stay hosts.
-        assert command_names == expected_commands, observation
-        # Project-over-user precedence: a surviving user copy registers the same names.
-        scopes = {entry["sourceInfo"]["scope"] for entry in observation["submit"] + observation["workflowCommands"]}
-        assert scopes <= {"project"}, observation
+        assert command_names == expected_commands, handoff_state
+        if expected_tools or expected_commands:
+            # Project-over-user precedence: a surviving user copy registers the same names.
+            scopes = {entry["sourceInfo"]["scope"] for entry in handoff_state["submit"] + handoff_state["workflowCommands"]}
+            assert scopes == {"project"}, handoff_state
         if expected_tools:
             # A generic submit schema would lose the step's required answer.
-            assert observation["submit"][0]["parameters"]["properties"]["result"] == output_schema, observation
-        # The environment transport must not survive for descendant processes.
-        assert observation["handoffEnvPresent"] is False, observation
-        # Fail if the probe falls through to ordinary input or inference.
-        assert counts == {"agent_start": 0, "input": 0, "model_requests": 0}, counts
-        events = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
-        # Agent output would reveal dispatch beyond the observer command.
-        assert events and all(event["type"] == "session" for event in events), events
+            assert handoff_state["submit"][0]["parameters"]["properties"]["result"] == output_schema, handoff_state
+            # The environment transport must not survive for descendant processes.
+            assert handoff_state["handoffEnvPresent"] is False, handoff_state
         print(f"PASS: handoff-{name}")

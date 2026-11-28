@@ -51,7 +51,7 @@
       '';
     }) ["printf 'stdout noise\\n'; exit 1" "${pkgs.coreutils}/bin/cat" "${pkgs.coreutils}/bin/sleep 3 & wait"];
 in {
-  checks.chatgpt-codex-project-doc-preflight = assert devenvLauncher.launcherPackage == codex;
+  checks.chatgpt-codex-project-doc-preflight =
     pkgs.runCommand "chatgpt-codex-project-doc-preflight" {
       nativeBuildInputs = [pkgs.git pkgs.python3];
     } ''

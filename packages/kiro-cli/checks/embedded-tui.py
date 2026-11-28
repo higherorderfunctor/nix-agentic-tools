@@ -21,7 +21,8 @@ def load(name, path):
 
 
 tui, frames = load("embedded_tui", tui_source), load("embedded_kas", kas_source)
-SCRIPT = tui.SHEBANG + b"var fixture = 1;\n" * 8000
+BUN_HEADER = b"#!/usr/bin/env bun\n// @bun\n"
+SCRIPT = BUN_HEADER + b"var fixture = 1;\n" * 8000
 
 
 def compressed(data):
@@ -50,27 +51,32 @@ class ExtractionTests(unittest.TestCase):
             return destination.read_bytes()
 
     def test_unrelated_frames_and_valid_tui(self):
-        self.assertEqual(self.run_extract(elf(resource(b"\x7fELF bun") + resource(SCRIPT))), SCRIPT)
+        # Reject a non-script with a valid checksum even when large enough,
+        # and keep scanning until the real TUI is found.
+        unrelated = b"\x7fELF bun" + b"x" * len(SCRIPT)
+        self.assertEqual(self.run_extract(elf(resource(unrelated) + resource(SCRIPT))), SCRIPT)
 
-    def test_checksum_must_follow_the_frame(self):
-        detached = compressed(SCRIPT) + b"x" + hashlib.sha256(SCRIPT).hexdigest().encode()
-        with self.assertRaisesRegex(ValueError, "found 0"):
-            self.run_extract(elf(detached))
-
-    def test_two_candidates_refuse(self):
-        with self.assertRaisesRegex(ValueError, "found 2"):
-            self.run_extract(elf(resource(SCRIPT) + resource(SCRIPT + b"//\n")))
-
-    def test_small_tui_refuses(self):
-        with self.assertRaisesRegex(ValueError, "small"):
-            self.run_extract(elf(resource(tui.SHEBANG + b"var fixture = 1;\n")))
+    def test_refuses_invalid_tui(self):
+        digest = hashlib.sha256(SCRIPT).hexdigest().encode()
+        cases = (
+            ("checksum elsewhere in the binary cannot authenticate this frame",
+             compressed(SCRIPT) + b"x" + digest, "expected one checksum-adjacent TUI frame, found 0"),
+            ("duplicate scripts cannot be resolved by picking one",
+             resource(SCRIPT) + resource(SCRIPT + b"//\n"), "expected one checksum-adjacent TUI frame, found 2"),
+            ("truncated script cannot pass just because its checksum matches",
+             resource(BUN_HEADER + b"var fixture = 1;\n"), "embedded TUI is unexpectedly small"),
+        )
+        for regression, payload, diagnostic in cases:
+            with self.subTest(regression=regression), self.assertRaisesRegex(ValueError, diagnostic):
+                self.run_extract(elf(payload))
 
     def test_fat_binary_reads_target_architecture(self):
+        # Both slices have valid but different scripts; return only ARM bytes.
         x86, arm = resource(SCRIPT + b"// x86\n"), resource(SCRIPT)
         header_size = 48
         header = struct.pack(">II", 0xCAFEBABE, 2)
-        header += struct.pack(">IIIII", frames.CPUS["x86_64"], 3, header_size, len(x86), 0)
-        header += struct.pack(">IIIII", frames.CPUS["aarch64"], 0, header_size + len(x86), len(arm), 0)
+        header += struct.pack(">IIIII", 0x01000007, 3, header_size, len(x86), 0)
+        header += struct.pack(">IIIII", 0x0100000C, 0, header_size + len(x86), len(arm), 0)
         self.assertEqual(self.run_extract(header + x86 + arm, "aarch64"), SCRIPT)
 
 

@@ -4,6 +4,12 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
+  rowsFrom = name: test: cases: let
+    rows = lib.listToAttrs (map (case: lib.nameValuePair (name case) (test case)) cases);
+  in
+    assert lib.assertMsg (builtins.length (builtins.attrNames rows) == builtins.length cases)
+    "warning case names must distinguish all inputs"; rows;
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   reasonsFor = import ../../lib/ai/app/supportReasons.nix;
   settingsProbes = import ../../lib/testing/normalized-settings-probes.nix {inherit lib;};
@@ -59,48 +65,34 @@
     shell = pkgs.bash;
     skills.probe = ../../packages/claude-code/checks/fixtures/claude-skills/skill-a;
   };
-  inherit (settingsProbes) requestFields resolvedSettingSample settingSample settingsFields;
-  # Every absent or inert primary row gets a populated request and an empty
-  # control through the actual factory. Unsupported runtime options use root.
-  gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
-  rowCase = row: let
-    enabled = harness.setEnable row.ecosystem true;
-    empty = evaluate row.mode enabled;
-    warns = field: path: let
-      warningPath = path ++ lib.optional (row.surface == "settings") field;
-      value =
-        if row.surface == "settings"
-        then settingSample field
-        else sample.${row.surface};
-      messages = evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath warningPath value));
-      needle = "${lib.showOption warningPath} is set but ${row.mode} does not deliver it to ${row.ecosystem} (reason: ${row.deliveryGap or row.reason})";
-    in
-      builtins.elem needle messages
-      && !(builtins.elem needle empty);
-    # Policy rows probe normalized settings at the portable root.
-    path =
-      if row.surface == "settings"
-      then ["ai" "settings"]
-      else if row.surface == "permissions"
-      then ["ai" row.ecosystem "permissions"]
-      else ["ai" row.surface];
-  in
-    # No permissions option or translation exists for these runtimes (nor for
-    # Kiro on devenv, whose permissions option is Home Manager only), so there
-    # is nothing to probe. Assert the EMPTY input list rather than skipping the
-    # row: a row that later grows an input option then stops passing by
-    # default instead of staying silently unexercised.
-    if row.surface == "permissions" && (row.ecosystem != "kiro" || row.mode == "devenv")
-    then row.inputOptions == []
-    else lib.all (field: warns field path) (requestFields row.surface);
+  inherit (settingsProbes) requestFields resolvedSettingSample settingSample;
+  # Permissions are policy-only, with no portable root input. An absence
+  # gaining an input must get a real probe rather than silently passing.
+  policyOnlyCases = lib.filter (row:
+    row.surface == "permissions" && (row.primitive == "notApplicable" || row ? deliveryGap))
+  policy.rows;
+  policyOnlyRows =
+    rowsFrom
+    (row: "absent ${policy.key row} cannot advertise an input with no declared permissions option")
+    (row: row.inputOptions == [])
+    policyOnlyCases;
+  agentToolReasons = {
+    codex = "Codex agents have no equivalent tool allowlist field.";
+    kimchi = "Kimchi matches its own lowercase builtins, so the agent gets every tool. Set ai.kimchi.agents.probe to native Kimchi Markdown with its own `tools:` line to apply the guardrail there.";
+    kiro = "Kiro takes capability tags, not Claude/Copilot tool names. Set ai.kiro.native.agents.probe.tools (capability tags) and permissions to apply the guardrail there.";
+  };
   # Conditional record gaps keep focused requests that trigger their predicates.
   requestedCases =
+    # Every agent adapter must identify the tools constraint it cannot honor.
+    # With no adapter enabled, the root request is identical across runtimes.
     map (runtime: {
       inherit runtime;
+      checkDisabled = runtime == "codex";
       surface = "agents";
       gapPath = ["tools"];
       path = ["ai" "agents" "probe"];
       value = sample.agents.probe // {tools = ["Read"];};
+      reason = agentToolReasons.${runtime};
     }) ["codex" "kimchi" "kiro"]
     ++ lib.concatMap (http:
       map (field: {
@@ -122,18 +114,28 @@
                 field
               };
           };
-        suffix = ".${field}";
+        suffix = [field];
+        scenario =
+          if http
+          then "HTTP cannot carry ${field}"
+          else "a raw stdio command bypasses ${field}";
+        reason =
+          if http
+          then mcpReasons.http
+          else "An explicit MCP command bypasses typed package settings.";
       }) (
         if http
         then ["args" "package" "settings"]
         else ["settings"]
       )) [false true]
-    # Exercise every runtime's unrepresentable stdio timeout on both backends.
+    # Keep timeout gap witnesses here; checks/mcp-timeout/module-eval.nix
+    # checks the enabled warning and accepted bound on both backends.
     ++ map (case: {
       inherit (case) runtime;
-      surface = "mcpServers";
+      coverageOnly = true;
       gapPath = ["timeout"];
       path = ["ai" "mcpServers" "probe"];
+      surface = "mcpServers";
       value = {
         command = "probe";
         inherit (case) timeout;
@@ -152,26 +154,29 @@
         timeout = 600001;
       }
     ]
-    # A tool policy value with no surface on the runtime or backend. Kiro
-    # delivers it as Home Manager permissions.yaml rules, so its Home Manager
-    # case asserts silence instead.
-    ++ map (runtime: {
-      inherit runtime;
-      surface = "mcpServers";
-      gapPath = ["toolPolicy"];
-      path = ["ai" "mcpServers" "probe"];
-      value = {
-        command = "probe";
-        toolPolicy.probe = "disabled";
-      };
-    }) ["kimchi"]
+    # A tool policy value with no surface on the runtime or backend.
+    ++ [
+      {
+        gapPath = ["toolPolicy"];
+        path = ["ai" "mcpServers" "probe"];
+        runtime = "kimchi";
+        surface = "mcpServers";
+        value = {
+          command = "probe";
+          toolPolicy.probe = "disabled";
+        };
+      }
+    ]
+    # Keep the HM gap witness; checks/mcp-tool-policy/module-eval.nix checks
+    # that HM delivers it through permissions.yaml without a warning.
     ++ map (mode: {
       inherit mode;
-      runtime = "kiro";
-      silent = mode == "hm";
-      surface = "mcpServers";
+      coverageOnly = mode == "hm";
       gapPath = ["toolPolicy"];
       path = ["ai" "mcpServers" "probe"];
+      reason = "Kiro reads tool policy only from permission rules under ~/.kiro (settings/permissions.yaml or workspace-roots/<hash>/), outside the devenv root, which neither writes there nor defines a new root, so only Home Manager delivers it and these tools keep Kiro's default: probe.";
+      runtime = "kiro";
+      surface = "mcpServers";
       value = {
         command = "probe";
         toolPolicy.probe = "disabled";
@@ -182,6 +187,7 @@
       {
         runtime = "claude";
         path = ["ai" "claude" "plugins"];
+        reason = "The devenv backend has no writer for this Claude surface.";
         value.probe = pkgs.emptyDirectory;
       }
       {
@@ -194,66 +200,19 @@
         surface = "rules";
         gapPath = ["inclusion"];
       }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "rules" "probe"];
-        value = {
-          text = "probe";
-          inclusion = "manual";
-        };
-        surface = "rules";
-        gapPath = ["inclusion"];
-      }
       # A consumer key may contain a dot of its own: `foo.bar.md` lands at key
       # `foo.bar`. The rendered path has to quote it, or the message names an
       # option that does not exist and cannot be pasted back.
       {
         runtime = "kiro";
         path = ["ai" "kiro" "rules" "foo.bar"];
+        renderedPath = ''ai.kiro.rules."foo.bar".inclusion'';
         value = {
           text = "probe";
           inclusion = "manual";
         };
         surface = "rules";
         gapPath = ["inclusion"];
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            type = "agent";
-            prompt = {text = "probe";};
-          };
-          timeout = 1;
-        };
-        suffix = ".timeout";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            type = "agent";
-            prompt = {text = "probe";};
-            command = "true";
-          };
-        };
-        suffix = ".action.command";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "hooks" "probe"];
-        value = {
-          trigger = "UserPromptSubmit";
-          action = {
-            command = "true";
-            prompt = {text = "probe";};
-          };
-        };
-        suffix = ".action.prompt";
       }
     ];
   cases = lib.concatMap (case:
@@ -303,21 +262,24 @@
       (requestFields cell.surface))
     (surfacePaths cell.runtime cell.surface))
   surfaceCells;
-  absenceReason = case:
-    case.support.reason or (let
-      writers = lib.concatMap policy.writersOf (lib.filter (row:
-        row.ecosystem == case.runtime && row.surface == case.surface && row.mode == case.mode)
-      policy.rows);
-      absent = lib.filter (writer:
-        (writer.primitive == "notApplicable" || writer ? deliveryGap)
-        # A plain option tree lists declared leaves under this root request;
-        # inputsDeclared still checks each complete leaf path exactly.
-        && lib.any (lib.lists.hasPrefix ["ai" case.surface]) (writer.inputOptions or []))
-      writers;
-    in
-      if builtins.length absent == 1
-      then (builtins.head absent).deliveryGap or (builtins.head absent).reason
-      else throw "expected one policy absence writer for ${case.runtime}/${case.mode}/${case.surface}");
+  absenceReason = case: let
+    primary =
+      policy.definitions.${case.surface}.${case.runtime}.${case.mode}
+      // {
+        inherit (case) mode surface;
+        ecosystem = case.runtime;
+      };
+    recordReason = case.support.reason or (reasonsFor case.runtime).surface;
+    absences = lib.filter (writer:
+      (writer.primitive == "notApplicable" || writer ? deliveryGap)
+      # Plain option trees list declared leaves under the root request;
+      # inputsDeclared still checks each complete leaf path exactly.
+      && lib.any (lib.lists.hasPrefix ["ai" case.surface]) (writer.inputOptions or []))
+    (policy.writersOf primary);
+  in
+    # Each omitted root input must have exactly one absence writer.
+    assert lib.assertMsg (builtins.length absences == 1)
+    "expected one shared surface absence writer: ${case.runtime}/${case.mode}/${case.surface}"; recordReason;
   deliveredCase = case:
     delivered case && (case.field == null || builtins.elem case.field (case.support.fields or []));
   unavailableCases = lib.filter (case: !(deliveredCase case)) surfaceCases;
@@ -329,15 +291,39 @@
           if delivered case
           then (reasonsFor case.runtime).settingsField
           else absenceReason case;
-        count = 1;
+        onlyWarning = true;
       })
     (let
       runtimeCases = lib.filter (case: builtins.elemAt case.path 1 == case.runtime) unavailableCases;
+      # Kimchi's module check pins the root-only and both-set HM hook warnings.
+      rootOnlyHook = case: case.runtime == "kimchi" && case.mode == "hm" && case.path == ["ai" "hooks"];
+      # Owner module checks cover both-set Kimchi hooks and Copilot context
+      # and skills; the factory settings-fields check covers per-field precedence.
+      coveredPrecedence = case:
+        (case.runtime == "copilot" && case.mode == "hm" && builtins.elem case.surface ["context" "skills"])
+        || (case.runtime == "kimchi" && case.mode == "hm" && case.surface == "hooks")
+        || (case.runtime == "kimchi" && case.surface == "settings" && case.field == "inference");
+      standalone =
+        lib.partition (case: lib.take 2 case.path == ["ai" case.surface])
+        (lib.filter (case: !rootOnlyHook case) unavailableCases);
+      # The root sample depends only on the path. With no runtime enabled,
+      # one check per backend and root path catches a warning from any runtime.
+      rootByInput = lib.groupBy (case: builtins.toJSON [case.mode case.path]) standalone.right;
     in
-      unavailableCases
+      standalone.wrong
+      ++ lib.concatMap (lib.imap0 (index: case: case // {checkDisabled = index == 0;})) (builtins.attrValues rootByInput)
       # Root and runtime pool both set still warn once, naming the runtime pool.
-      ++ map (case: case // {extra = lib.setAttrByPath (["ai" case.surface] ++ lib.optional (case.field != null) case.field) case.value;}) runtimeCases
-      # A value set only on the public normalized option warns too.
+      # The standalone pool case already checks for the same warning when empty.
+      ++ map (case:
+        case
+        // {
+          checkEmpty = false;
+          extra = lib.setAttrByPath (["ai" case.surface] ++ lib.optional (case.field != null) case.field) case.value;
+          scenario = "root and runtime pool both set: only the runtime pool should warn";
+        })
+      (lib.filter (case: !coveredPrecedence case) runtimeCases)
+      # A value set only on the public normalized option warns too. Its
+      # warning names a different path, so the empty pool check cannot catch it.
       ++ map (case:
         case
         // {
@@ -353,12 +339,16 @@
     map (gap:
       cell
       // {
-        count = 1;
+        onlyWarning = true;
         path = ["ai" cell.surface] ++ gap.path;
         inherit (gap) reason;
         value = sampleAt cell.surface gap.path;
       })
-    (lib.filter (gap: !(conditional gap)) (cell.support.gaps or [])))
+    (lib.filter (gap:
+      !(conditional gap)
+      # Kimchi's module check pins the warning for PermissionRequest alone.
+      && !(cell.runtime == "kimchi" && cell.mode == "devenv" && cell.surface == "hooks" && gap.path == ["PermissionRequest"]))
+    (cell.support.gaps or [])))
   (lib.filter delivered surfaceCells);
   gapCases = missingCases ++ staticCases;
   conditionalGaps = lib.concatMap (cell:
@@ -377,93 +367,62 @@
       (lib.filter conditional (records.${runtime}.surfaceSupport.${surface}.gaps or [])))
     (builtins.attrNames records.${runtime}.surfaceSupport))
   (builtins.attrNames records);
-  # Every declaration needs a reachable witness, even before activation filters.
+  # Every declaration needs a reachable backend; conditionalCovered checks
+  # the explicit witness for every such backend.
   declarationsCovered = lib.all (declared:
     assert lib.assertMsg (lib.any (recorded:
       recorded.runtime
       == declared.runtime
       && recorded.surface == declared.surface
-      && recorded.gap.path == declared.gap.path
-      && lib.any (case: matchesGap case recorded) cases)
+      && recorded.gap.path == declared.gap.path)
     conditionalGaps)
-    "conditional warning declaration has no reachable case: ${declared.runtime}/${declared.surface}/${lib.showOption declared.gap.path}"; true)
+    "conditional warning declaration has no reachable backend: ${declared.runtime}/${declared.surface}/${lib.showOption declared.gap.path}"; true)
   conditionalDeclarations;
   # Each active backend also needs its own explicit request.
   conditionalCovered = lib.all (recorded:
     assert lib.assertMsg (lib.any (case: matchesGap case recorded) cases)
     "conditional warning gap has no case: ${recorded.runtime}/${recorded.mode}/${recorded.surface}/${lib.showOption recorded.gap.path}"; true)
   conditionalGaps;
-  supportedCases = lib.filter deliveredCase surfaceCases;
-  consumedRootsQuiet = lib.all (case: let
-    messages = evaluate case.mode (lib.recursiveUpdate
-      (harness.setEnable case.runtime true)
-      (lib.setAttrByPath case.path case.value));
-    allowed = map expectedMessage (lib.filter (gap:
-      gap.runtime == case.runtime && gap.mode == case.mode && gap.path == case.path)
-    staticCases);
+  # A supported input must remain quiet. Pin consumers so that removing a
+  # settings declaration cannot turn a required quiet row into a warning row.
+  expectedConsumers = {
+    inference = ["claude" "codex"];
+    reasoningEffort = ["claude" "codex" "kimchi"];
+  };
+  quietCases = lib.filter (case:
+    deliveredCase case || (case.field != null && builtins.elem case.runtime (expectedConsumers.${case.field} or [])))
+  surfaceCases;
+  quietCase = case: let
+    enabled = harness.setEnable case.runtime true;
+    messages = evaluate case.mode (lib.recursiveUpdate enabled (lib.setAttrByPath case.path case.value));
+    # A nested gap starts with a longer option path, not this warning prefix.
     prefix = "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason:";
   in
-    lib.assertMsg (lib.all (message:
-      !(lib.hasPrefix prefix message)
-      || builtins.elem message allowed)
-    messages)
-    "supported surface warned: ${case.runtime}/${case.mode}/${lib.showOption case.path}")
-  supportedCases;
-  expectedMessage = case: "${lib.showOption case.path} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
+    if case.field != null
+    then deliveredCase case && messages == evaluate case.mode enabled
+    else !(lib.any (lib.hasPrefix prefix) messages);
+  expectedMessage = case: "${case.renderedPath or (lib.showOption case.path)} is set but ${case.mode} does not deliver it to ${case.runtime} (reason: ${case.reason})";
   portableEventSilent = lib.all (mode:
     evaluate mode (lib.recursiveUpdate (harness.setEnable "claude" true)
       (lib.setAttrByPath ["ai" "hooks" "PermissionRequest"] gapSamples.hooks.PermissionRequest))
     == [])
   policy.modes;
-  # Pin support before evaluating writers that require their settings fields.
-  settingsFieldsSilent = let
-    # Pin existing delivery independently of the declaration being tested.
-    expectedConsumers = {
-      inference = ["claude" "codex"];
-      reasoningEffort = ["claude" "codex" "kimchi"];
-    };
+  # Kimchi accepts effort but not inference. The inventory must show the
+  # omitted normalized input as one additional writer, not the whole surface.
+  settingsPolicyChildren = rowsFrom (row: "${policy.key row} lists the exact omitted normalized fields") (row: let
+    children = lib.filter (writer:
+      lib.any (path: builtins.length path == 3 && lib.take 2 path == ["ai" "settings"])
+      (writer.inputOptions or [])) (row.additionalWriters or []);
   in
-    lib.all (case: let
-      enabled = harness.setEnable case.runtime true;
-    in
-      deliveredCase case
-      && evaluate case.mode (lib.recursiveUpdate enabled (lib.setAttrByPath case.path case.value))
-      == evaluate case.mode enabled)
-    (lib.filter (case:
-      case.field
-      != null
-      && (deliveredCase case || builtins.elem case.runtime (expectedConsumers.${case.field} or [])))
-    surfaceCases);
-  settingsPolicyChildren =
-    # Real delivered records consume every field; this fixture must have a gap.
-    policy.settingsGaps "testapp" {
-      backends = ["hm"];
-      fields = builtins.tail settingsFields;
-    }
-    == [
-      {
-        inputOptions = [["ai" "settings" (builtins.head settingsFields)]];
-        primitive = "notApplicable";
-        reason = "testapp's surfaceSupport.settings.fields does not consume this normalized setting.";
-      }
-    ]
-    && lib.all (row: let
-      support = supportFor row.ecosystem "settings";
-      expected = lib.subtractLists (support.fields or []) settingsFields;
-      children = lib.filter (writer:
-        lib.any (path: builtins.length path == 3 && lib.take 2 path == ["ai" "settings"])
-        (writer.inputOptions or [])) (row.additionalWriters or []);
-      reason = (reasonsFor row.ecosystem).settingsField;
-    in
-      map (writer: builtins.elemAt (builtins.head writer.inputOptions) 2) children
-      == expected
-      && lib.all (writer: writer.primitive == "notApplicable" && writer.reason == reason) children)
-    (lib.filter (row:
-      row.surface
-      == "settings"
-      && builtins.elem row.mode ((supportFor row.ecosystem "settings").backends or []))
-    policy.rows);
+    children
+    == lib.optional (row.ecosystem == "kimchi") {
+      inputOptions = [["ai" "settings" "inference"]];
+      primitive = "notApplicable";
+      reason = "kimchi's surfaceSupport.settings.fields does not consume this normalized setting.";
+    }) (lib.filter (row: row.surface == "settings") policy.rows);
   caseMode = case: case.mode or "devenv";
+  warningPath = case: case.path ++ (case.gapPath or case.suffix or []);
+  caseName = outcome: case: "${case.runtime}/${caseMode case}/${lib.showOption (warningPath case)}: ${case.scenario or outcome}";
   # Memoize identical enabled-empty controls across both case collections.
   emptyCaseWarnings = lib.mapAttrs (mode: modeCases:
     lib.genAttrs (map (case: case.runtime) modeCases)
@@ -480,76 +439,45 @@
         then (builtins.head recorded).gap
         else throw "conditional warning case must match one record gap: ${case.runtime}/${mode}/${lib.showOption case.path}"
       else null;
-    warningPath =
-      case.warningPath or (
-        if gap != null && (gap.each or false)
-        then case.path ++ case.gapPath
-        else case.path
-      );
-    recordedReason =
-      if gap == null
-      then case.reason or null
-      else gap.reason;
-    reason =
-      if builtins.isFunction recordedReason
-      then
-        recordedReason {
-          backend = mode;
-          cfg = evaluation.ai.${case.runtime};
-          name = lib.last case.path;
-          inherit (case) path value;
-        }
-      else recordedReason;
-    needle =
-      if reason != null
-      then
-        expectedMessage (case
-          // {
-            inherit mode reason;
-            path = warningPath;
-          })
-      else lib.showOption case.path + (case.suffix or "");
-    present =
-      if reason != null
-      then builtins.elem needle
-      else contains needle;
+    # Dynamic reasons pin the expected message for the fixture rather than
+    # calling the same formatter used by the warning producer.
+    reason = case.reason or gap.reason;
+    needle = expectedMessage (case
+      // {
+        inherit mode reason;
+        path = warningPath case;
+      });
+    present = builtins.elem needle;
     enabled = harness.setEnable case.runtime true;
     evaluation = evalConfig mode (lib.recursiveUpdate enabled input);
     messages = evaluation.warnings;
   in
-    if case.silent or false
-    then !(lib.any (lib.hasInfix (lib.showOption warningPath)) messages)
-    else
-      present messages
-      && (!(case ? count) || builtins.length messages == case.count)
-      && !present emptyCaseWarnings.${mode}.${case.runtime}
-      && evaluate mode input == [];
-  kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
-    {
-      ai = {
-        kiro.cli.enable = true;
-        rules.probe = {
-          inclusion = ["always" "manual"];
-          text = "root";
-        };
+    builtins.seq gap (
+      (
+        if case.onlyWarning or false
+        then messages == [needle]
+        else present messages
+      )
+      && (!(case.checkEmpty or true) || !present emptyCaseWarnings.${mode}.${case.runtime})
+      && (!(case.checkDisabled or true) || evaluate mode input == [])
+    );
+  kiroManualPriorityRows = mode: let
+    enabled = harness.setEnable "kiro" true;
+    check = ai: evaluate mode (lib.recursiveUpdate enabled {inherit ai;}) == [];
+    root = inclusion: {
+      inherit inclusion;
+      text = "root";
+    };
+  in {
+    "always wins over manual in the shared inclusion list" = check {rules.probe = root ["always" "manual"];};
+    "native always replaces the manual shared rule of the same name" = check {
+      kiro.rules.probe = {
+        inclusion = "always";
+        text = "native";
       };
-    }
-    {
-      ai = {
-        kiro = {
-          cli.enable = true;
-          rules.probe = {
-            inclusion = "always";
-            text = "native";
-          };
-        };
-        rules.probe = {
-          inclusion = ["manual"];
-          text = "root";
-        };
-      };
-    }
-  ];
+      rules.probe = root ["manual"];
+    };
+  };
   # config/ai-delivery-facts.nix is pure `{lib}` data, so it lists the
   # runtimes with a native agent layer by name. The record is the source of
   # truth: `native.agents` must be an agents row's input exactly when the
@@ -559,197 +487,155 @@
     == (records.${row.ecosystem} ? agentNativeType))
   (lib.filter (row: row.surface == "agents") policy.rows);
   deliveryWarnings = import ../../lib/ai/delivery-warnings.nix {inherit lib;};
-  mcp = import ../../lib/mcp.nix {inherit lib;};
-  # These three input combinations exercise the warning interface directly;
-  # args, package, and settings retain their module-backed cases above.
-  mcpFieldCases = [
-    {
-      field = "command";
-      fixture = {
-        command = "probe";
-        url = "https://example.invalid";
-      };
-    }
-    {
-      field = "env";
-      fixture = {
-        env.PROBE = "";
-        url = "https://example.invalid";
-      };
-    }
-    {
-      field = "headers";
-      fixture = {
-        command = "probe";
-        headers.Authorization = "";
-      };
-    }
-  ];
-  # The hand-built config carries the module-derived shared-surface list, so
-  # the decomposition reads real surfaces (all absent here) instead of none.
-  mcpFieldWarnings = enable: fixture:
-    deliveryWarnings {
-      appRecord = records.claude;
-      backend = "devenv";
-      config.ai = {
-        claude = {
-          inherit enable;
-          mcpServers.probe = fixture;
+  mcpReasons = {
+    http = "HTTP MCP entries use url; this stdio field is not rendered.";
+    stdio = "This HTTP MCP field is not rendered for stdio.";
+  };
+  # The merged MCP type does not admit these transport/payload combinations.
+  # Call the real warning reader with its module-derived shared surfaces and
+  # only the conflicting payload populated (including empty map values).
+  mcpFieldRows = let
+    http.url = "https://example.invalid";
+    stdio.command = "probe";
+    warnings = enable: fixture:
+      deliveryWarnings {
+        appRecord = records.claude;
+        backend = "devenv";
+        config.ai = {
+          claude = {
+            inherit enable;
+            mcpServers.probe = fixture;
+          };
+          internal = {inherit sharedSurfaces;};
         };
-        internal = {inherit sharedSurfaces;};
       };
-    };
-  mcpFieldCasesPass =
-    lib.all (case: let
-      messages = mcpFieldWarnings true case.fixture;
+    warns = reason: field: fixture:
+      warnings true fixture
+      == [
+        (expectedMessage {
+          inherit reason;
+          mode = "devenv";
+          path = ["ai" "claude" "mcpServers" "probe" field];
+          runtime = "claude";
+        })
+      ];
+  in {
+    "HTTP identifies the ignored command only when enabled" = let
+      fixture = http // stdio;
     in
-      builtins.length messages
-      == 1
-      && lib.hasPrefix "ai.claude.mcpServers.probe.${case.field} is set but devenv does not deliver it to claude (reason:" (builtins.head messages)
-      && mcpFieldWarnings false case.fixture == [])
-    mcpFieldCases
-    && lib.all (fixture: mcpFieldWarnings true fixture == []) [
-      {url = "https://example.invalid";}
-      {command = "probe";}
-    ];
+      warns mcpReasons.http "command" fixture && warnings false fixture == [];
+    "HTTP warns about env even when the variable value is empty" = warns mcpReasons.http "env" (http // {env.PROBE = "";});
+    "stdio is quiet without a conflicting HTTP payload" = warnings true stdio == [];
+    "stdio warns about headers even when the header value is empty" = warns mcpReasons.stdio "headers" (stdio // {headers.Authorization = "";});
+  };
   # Kiro reads tool policy only from permission rules under ~/.kiro, which a
   # devenv shell neither writes nor reaches through a root of its own. Home
   # Manager declares the options that feed those rules; devenv declares none
   # of them and warns on the shared surface through `surfaceSupport`.
-  kiroHmOnlyOptions = [["ai" "kiro" "cli" "trustedMcpTools"] ["ai" "kiro" "permissions"]];
-  kiroPolicyRequest = {
-    ai.mcpServers.probe = {
-      command = "probe";
-      toolPolicy.probe = "disabled";
+  kiroTrustChecks = let
+    enable = harness.setEnable "kiro" true;
+    devenv = input: harness.evalDevenv (lib.recursiveUpdate enable input);
+    readWarnings = input: (devenv input).config.warnings;
+    rejectsUnknown = path: value:
+      !lib.hasAttrByPath path (devenv {}).options
+      && rejectsChange readWarnings {
+        valid = {};
+        invalid = lib.setAttrByPath path value;
+        expected = [];
+      };
+  in
+    checkRows "Kiro tool trust" {
+      # An option declared but ignored on devenv leaves a setting that looks
+      # configured. Prove each option is absent and rejected as an unknown input.
+      "devenv rejects ai.kiro.cli.trustedMcpTools as unknown" = rejectsUnknown ["ai" "kiro" "cli" "trustedMcpTools"] ["@probe"];
+      "devenv rejects ai.kiro.permissions as unknown" = rejectsUnknown ["ai" "kiro" "permissions"] sample.permissions;
+      # The Kiro owner checks the rendered permissions.yaml; check silence here.
+      "hm does not warn about trustedMcpTools" = let
+        result = evalConfig "hm" (lib.recursiveUpdate enable {ai.kiro.cli.trustedMcpTools = ["@probe"];});
+      in
+        !contains "does not deliver" result.warnings;
     };
-  };
-  kiroPolicyWarnings = mode: evaluate mode (lib.recursiveUpdate (harness.setEnable "kiro" true) kiroPolicyRequest);
-  kiroPolicyNeedle = "ai.mcpServers.probe.toolPolicy is set but devenv does not deliver it to kiro (reason:";
-  evaluates = mode: config: (builtins.tryEval (evalConfig mode (lib.recursiveUpdate (harness.setEnable "kiro" true) config)).warnings).success;
-  kiroTrustChecks = {
-    # Home Manager keeps the options and renders permissions.yaml, silently.
-    hmDelivers = let
-      result = evalConfig "hm" (lib.recursiveUpdate (harness.setEnable "kiro" true) {ai.kiro.cli.trustedMcpTools = ["@probe"];});
-    in
-      lib.assertMsg (lib.all (path: lib.hasAttrByPath path (harness.evalHm {}).options) kiroHmOnlyOptions)
-      "Home Manager must declare ai.kiro.cli.trustedMcpTools and ai.kiro.permissions"
-      && lib.assertMsg (result.home.file ? ".kiro/settings/permissions.yaml")
-      "Home Manager must render ~/.kiro/settings/permissions.yaml from trustedMcpTools"
-      && lib.assertMsg (!contains "does not deliver" result.warnings)
-      "Home Manager must stay silent on trustedMcpTools"
-      && lib.assertMsg (kiroPolicyWarnings "hm" == [])
-      "Home Manager delivers MCP toolPolicy as permission rules and must stay silent";
-    # An option that is declared on devenv and ignored there, or only warned
-    # about, leaves a setting that looks configured and is not. The option
-    # must be absent, so setting it fails evaluation.
-    devenvOptionsAbsent =
-      lib.assertMsg (lib.all (path: !lib.hasAttrByPath path (harness.evalDevenv {}).options) kiroHmOnlyOptions)
-      "devenv must not declare ai.kiro.cli.trustedMcpTools or ai.kiro.permissions"
-      && lib.assertMsg (evaluates "devenv" {})
-      "control: devenv Kiro with neither option set must evaluate"
-      && lib.assertMsg (!evaluates "devenv" {ai.kiro.cli.trustedMcpTools = ["@probe"];})
-      "devenv must reject ai.kiro.cli.trustedMcpTools as an unknown option, not accept or warn"
-      && lib.assertMsg (!evaluates "devenv" {
-        ai.kiro.permissions = [
-          {
-            capability = "shell";
-            effect = "allow";
-          }
-        ];
-      })
-      "devenv must reject ai.kiro.permissions as an unknown option, not accept or warn";
-    # A shared request that silently succeeds on devenv, or that defines the
-    # Home Manager options there (an unknown-option error), is the wrong
-    # implementation: surfaceSupport must warn instead.
-    devenvWarnsOnSharedPolicy = let
-      messages = kiroPolicyWarnings "devenv";
-    in
-      lib.assertMsg (lib.any (lib.hasPrefix kiroPolicyNeedle) messages)
-      "devenv must warn through surfaceSupport on ai.mcpServers.<name>.toolPolicy for Kiro: ${builtins.toJSON messages}";
-  };
 in {
   imports = [./runtime.nix];
   checks = {
-    ai-warnings-kiro-tool-trust = harness.mkTest "ai-warnings-kiro-tool-trust" (lib.all lib.id (lib.attrValues kiroTrustChecks));
+    ai-warnings-kiro-tool-trust = harness.mkTest "ai-warnings-kiro-tool-trust" kiroTrustChecks;
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
-      lib.assertMsg settingsFieldsSilent "existing and declared normalized settings consumers must stay supported and quiet"
-      && lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
-      && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
-      && lib.all (case: assert lib.assertMsg (casePass case) "warning gap ${case.runtime}/${case.mode}/${lib.showOption case.path}"; true) gapCases
-      && declarationsCovered
-      && conditionalCovered
+      checkRows "delivery warnings" {
+        "conditional declarations reach at least one backend" = declarationsCovered;
+        "conditional gaps have a witness on each active backend" = conditionalCovered;
+        "native agents are inventoried exactly where an agentNativeType is declared" = nativeAgentsListed;
+      }
+      && checkRows "policy-only absences" policyOnlyRows
+      && checkRows "supported inputs" (rowsFrom
+        (caseName "delivery must not warn about the supported request")
+        quietCase
+        quietCases)
+      && checkRows "shared warning coverage" (rowsFrom
+        (caseName "a populated unsupported input should name the dropped option, but empty or disabled should not warn")
+        casePass
+        gapCases)
+      && checkRows "conditional and native warnings" (rowsFrom
+        (caseName "only a populated, enabled request should warn with the specific loss reason")
+        casePass
+        (lib.filter (case: !(case.coverageOnly or false)) cases))
+      && checkRows "policy settings inventory" settingsPolicyChildren
+      && checkRows "Claude MCP transport warnings" mcpFieldRows
+      && checkRows "devenv Kiro rule warnings" (kiroManualPriorityRows "devenv")
       && lib.assertMsg portableEventSilent "Claude delivers the portable PermissionRequest event"
-      && lib.assertMsg consumedRootsQuiet "consumed shared surfaces must not warn"
-      && lib.assertMsg mcpFieldCasesPass "Claude MCP field warnings match their paths, backend, runtime, count, and disabled/absent controls"
-      && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
-      && lib.assertMsg settingsPolicyChildren "policy must list every undeclared normalized settings field"
-      && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
     ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
     ai-warnings-kiro-hook-prompts = harness.mkTest "ai-warnings-kiro-hook-prompts" (
       lib.all (mode: let
-        warningsFor = extra:
+        warningsFor = enabled: hook:
           evaluate mode {
             ai.kiro = {
-              cli.enable = true;
-              hooks.probe =
-                lib.recursiveUpdate {
-                  trigger = "UserPromptSubmit";
-                  action.command = "true";
-                }
-                extra;
+              cli.enable = enabled;
+              hooks.probe = hook // {trigger = "UserPromptSubmit";};
             };
           };
-        unset = warningsFor {};
-        withPrompt = warningsFor {action.prompt.text = "probe";};
+        agent.action = {
+          prompt.text = "probe";
+          type = "agent";
+        };
+        command.action.command = "true";
+        withActionField = hook: extra: lib.recursiveUpdate hook {action = extra;};
+        warns = field: reason: hook:
+          warningsFor true hook
+          == ["ai.kiro.hooks.probe.${field} is set but ${mode} does not deliver it to kiro (reason: ${reason})"];
+        ignoredPayload = "The selected action.type uses the other action payload.";
       in
-        assert lib.assertMsg (unset == []) "${mode}: command hook with no prompt warned: ${builtins.toJSON unset}";
-          contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
+        checkRows "${mode} Kiro hook warnings" {
+          "agent action alone is quiet" = warningsFor true agent == [];
+          "agent action ignores a command only when enabled" = let
+            hook = withActionField agent {command = "true";};
+          in
+            warns "action.command" ignoredPayload hook && warningsFor false hook == [];
+          "agent action ignores a timeout" = warns "timeout" "Agent hook actions have no subprocess timeout." (agent // {timeout = 1;});
+          "command action alone is quiet" = warningsFor true command == [];
+          "command action ignores a prompt" = warns "action.prompt" ignoredPayload (withActionField command {prompt.text = "probe";});
+        })
       ["devenv" "hm"]
     );
     ai-warnings-kiro-proxy-instance-package-null = harness.mkTest "ai-warnings-kiro-proxy-instance-package-null" (
       lib.all (mode: let
-        messages = evaluate mode {
-          ai = {
-            airlock.instances.main = {};
-            kiro.cli = {
-              enable = true;
-              package = null;
+        warnings = proxy:
+          evaluate mode {
+            ai = {
+              airlock.instances.main = {};
+              kiro.cli = {
+                enable = true;
+                package = null;
+              };
+              inherit proxy;
             };
-            proxy.instance = "main";
           };
-        };
+        warning = "ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.proxy / ai.kiro.proxy. Unset them or set ai.kiro.cli.package.";
       in
-        lib.any (message:
-          lib.hasPrefix "ai.kiro.cli.package is null" message
-          && lib.hasInfix "ai.proxy / ai.kiro.proxy" message)
-        messages)
-      ["devenv" "hm"]
-    );
-    ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
-      let
-        valid = mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = true;
-              message = "positive control";
-            }
-          ];
-        };
-        invalid = builtins.tryEval (mcp.evalSettings "gitlab-mcp" {
-          assertions = [
-            {
-              assertion = false;
-              message = "first settings failure";
-            }
-            {
-              assertion = false;
-              message = "second settings failure";
-            }
-          ];
-        });
-      in
-        valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
+        checkRows "${mode} Kiro proxy without a managed wrapper" {
+          "an instance-only request names the ignored proxy option" = builtins.elem warning (warnings {instance = "main";});
+          "no proxy request does not claim the wrapper ignored it" = !(contains "ai.proxy / ai.kiro.proxy" (warnings {}));
+        })
+      policy.modes
     );
     # A context or rule unit whose file is switched off (`enable =
     # false`) or replaced with the consumer's own bytes warns, naming the
@@ -758,224 +644,139 @@ in {
     # having nothing to carry is quiet.
     ai-warnings-switched-off-files = harness.mkTest "ai-warnings-switched-off-files" (
       let
-        offMessage = messages: unit: file: remedy:
-          lib.any (message:
-            lib.hasInfix "${unit} is set but" message
-            # A layer-1 (`files`) entry has `enable` of its own.
-            && lib.hasInfix "${file}${lib.optionalString (!lib.hasInfix ".files." file) ".content"}.enable = false switches off" message
-            && lib.hasInfix remedy message)
-          messages;
-        # Shared context and rules warn when another runtime overrides the
-        # final AGENTS.md entry.
-        sharedRuntimes = ["codex" "kimchi" "kiro"];
-        sharedWarnings = extra:
-          evaluate "devenv" (lib.foldl' lib.recursiveUpdate {
-              ai = {
-                context.text = "CTX";
-                copilot.enable = true;
-                rules.probe.text = "RULE";
-              };
+        enabled = runtimes: lib.foldl' lib.recursiveUpdate {} (map (runtime: harness.setEnable runtime true) runtimes);
+        warnings = mode: runtimes: ai: evaluate mode (lib.recursiveUpdate (enabled runtimes) {inherit ai;});
+        override = mode: runtimes: ai: owner: file: entry:
+          warnings mode runtimes (lib.recursiveUpdate ai (lib.setAttrByPath [owner "files" file] entry));
+        document = {
+          context.text = "CTX";
+          rules.probe.text = "RULE";
+        };
+        scoped = {
+          matcher = ["src/**"];
+          text = "SCOPED";
+        };
+        off.enable = false;
+        replacement.content.text = "MINE";
+
+        # An override can come from any participant in the shared AGENTS.md;
+        # every participant whose content was lost must get its own remedy.
+        agents = owner: entry: override "devenv" ["codex" "copilot" "kimchi" "kiro"] document owner "AGENTS.md" entry;
+        sharedCodexOff = agents "codex" off;
+        sharedOff = agents "kiro" off;
+        sharedReplaced = agents "kiro" replacement;
+        shared =
+          rowsFrom (case: "shared AGENTS.md warns about lost context and rules for ${case.runtime}") (case: let
+            ruleRemedy = "${case.rules}.probe.enable = false";
+            contextRemedy = "${case.normalizedContext} = lib.mkForce null";
+            reports = messages: file: cause:
+              drop messages "ai.context" file cause contextRemedy
+              && drop messages "ai.rules.probe" file cause ruleRemedy;
+          in
+            reports sharedCodexOff ''ai.codex.files."AGENTS.md"'' switchedOff
+            && reports sharedOff ''ai.kiro.files."AGENTS.md"'' switchedOff
+            && reports sharedReplaced ''ai.kiro.files."AGENTS.md"'' replaced)
+          [
+            {
+              normalizedContext = "ai.codex.normalized.context";
+              rules = "ai.codex.rules";
+              runtime = "codex";
             }
-            (map (runtime: harness.setEnable runtime true) sharedRuntimes ++ [extra]));
-        sharedCodexOff = sharedWarnings {ai.codex.files."AGENTS.md".enable = false;};
-        sharedOff = sharedWarnings {ai.kiro.files."AGENTS.md".enable = false;};
-        sharedReplaced = sharedWarnings {ai.kiro.files."AGENTS.md".content.text = "MINE";};
-        # Copilot carries shared and runtime context in its own file. Dropping
-        # that file warns for both inputs, while its named rules remain intact.
-        copilotWarnings = entry:
-          evaluate "devenv" {
-            ai = {
-              context.text = "CTX";
-              copilot = {
-                enable = true;
-                files.".github/copilot-instructions.md" = entry;
-                github.context.text = "COPILOT-CTX";
-              };
-              rules.probe.text = "RULE";
-            };
-          };
-        copilotOff = copilotWarnings {enable = false;};
-        copilotReplaced = copilotWarnings {content.text = "MINE";};
+            {
+              normalizedContext = "ai.kimchi.normalized.context";
+              rules = "ai.kimchi.rules";
+              runtime = "kimchi";
+            }
+            {
+              normalizedContext = "ai.kiro.normalized.context";
+              rules = "ai.kiro.rules";
+              runtime = "kiro";
+            }
+          ];
+
+        # Copilot carries both context inputs in one file; its rules are separate.
+        copilot = override "devenv" ["copilot"] (document // {copilot.github.context.text = "COPILOT-CTX";}) "copilot" ".github/copilot-instructions.md";
+        copilotOff = copilot off;
+        copilotReplaced = copilot replacement;
         copilotContextFile = ''ai.copilot.files.".github/copilot-instructions.md"'';
         copilotContextRemedy = "ai.copilot.github.normalized.context = lib.mkForce null";
-        # Codex's user AGENTS.md on Home Manager.
-        hmCodexOff = evaluate "hm" {
-          ai = {
+        copilotRows = rowsFrom (unit: "Copilot names ${unit} when its instructions file drops it") (unit:
+          drop copilotOff unit copilotContextFile switchedOff copilotContextRemedy
+          && drop copilotReplaced unit copilotContextFile replaced copilotContextRemedy)
+        ["ai.context" "ai.copilot.github.context"];
+
+        codexHome = ai: override "hm" ["codex"] ai "codex" ".codex/AGENTS.md";
+        codexHomeFile = ''ai.codex.files.".codex/AGENTS.md"'';
+        codexHomeOff =
+          codexHome {
+            inherit (document) rules;
+            codex.rules.local.text = "LOCAL";
+          }
+          off;
+        codexProject = ai: override "devenv" ["codex"] ai "codex" "AGENTS.md";
+        codexProjectFile = ''ai.codex.files."AGENTS.md"'';
+        codexProjectReplaced = codexProject document replacement;
+        codexRuleRemedy = "ai.codex.rules.probe.enable = false";
+        claudeRule = mode: override mode ["claude"] {inherit (document) rules;} "claude" ".claude/rules/probe.md";
+        claudeRuleFile = ''ai.claude.files.".claude/rules/probe.md"'';
+        claudeRuleRemedy = "ai.claude.rules.probe.enable = false";
+        steeringOff = override "devenv" ["kiro"] {kiro.rules = {inherit scoped;};} "kiro" ".kiro/steering/scoped.md" off;
+        withheld = codexProject (document
+          // {
             codex = {
-              enable = true;
-              files.".codex/AGENTS.md".enable = false;
-              rules.local.text = "LOCAL";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # One scoped Kiro steering file on devenv; Claude rule file on HM.
-        steeringOff = evaluate "devenv" {
-          ai.kiro = {
-            cli.enable = true;
-            files.".kiro/steering/scoped.md".enable = false;
-            rules.scoped = {
-              matcher = ["src/**"];
-              text = "SCOPED";
-            };
-          };
-        };
-        claudeOff = evaluate "hm" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".enable = false;
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Quiet controls.
-        withheld = evaluate "devenv" {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".enable = false;
               normalized.context = lib.mkForce null;
               rules.probe.enable = false;
             };
-            context.text = "CTX";
-            rules.probe.text = "RULE";
-          };
-        };
-        # A whole-file replacement drops the units the generated file carried,
-        # on the shared devenv AGENTS.md and on each backend's own files.
-        replacedMessage = messages: unit: file: remedy:
+          })
+        off;
+        ordinary = mode: warnings mode ["claude" "codex" "copilot" "kimchi" "kiro"] (lib.recursiveUpdate document {rules = {inherit scoped;};});
+        switchedOff = ".enable = false switches off";
+        replaced = ".content replaces";
+        drop = messages: unit: file: cause: remedy:
           lib.any (message:
             lib.hasInfix "${unit} is set but" message
-            && lib.hasInfix "${file}.content replaces" message
+            && lib.hasInfix "${file}${cause}" message
             && lib.hasInfix remedy message)
           messages;
-        replaced = evaluate "devenv" {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".content.text = "MINE";
-            };
-            context.text = "CTX";
-            rules.probe.text = "RULE";
-          };
-        };
-        hmCodexReplaced = evaluate "hm" {
-          ai = {
-            codex = {
-              enable = true;
-              files.".codex/AGENTS.md".content.text = "MINE";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        claudeReplaced = evaluate "devenv" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Changing how a generated file lands keeps its bytes: quiet.
-        symlinked = evaluate "hm" {
-          ai = {
-            claude = {
-              enable = true;
-              files.".claude/rules/probe.md".method = "symlink";
-            };
-            rules.probe.text = "RULE";
-          };
-        };
-        # Ordinary generated entries never warn about replacement when no
-        # final content override was declared.
-        ordinary = mode:
-          evaluate mode {
-            ai = {
-              claude.enable = true;
-              codex.enable = true;
-              context.text = "CTX";
-              copilot.enable = true;
-              kimchi.enable = true;
-              kiro.cli.enable = true;
-              rules = {
-                probe.text = "RULE";
-                scoped = {
-                  matcher = ["src/**"];
-                  text = "SCOPED";
-                };
-              };
-            };
-          };
-        nothing = evaluate "devenv" {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".enable = false;
-          };
-        };
-        nothingReplaced = evaluate "devenv" {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".content.text = "MINE";
-          };
-        };
+        noDrop = messages: !(contains "the file that carries it" messages);
       in
-        lib.all (runtime: let
-          contextRemedy = "${lib.showOption (lib.init (optionPaths.pool runtime "context") ++ ["normalized" "context"])} = lib.mkForce null";
-          rulesRemedy = "${lib.showOption (optionPaths.pool runtime "rules" ++ ["probe" "enable"])} = false";
-        in
-          offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
-          && offMessage sharedCodexOff "ai.context" ''ai.codex.files."AGENTS.md"'' contextRemedy
-          && replacedMessage sharedReplaced "ai.context" ''ai.kiro.files."AGENTS.md"'' contextRemedy
-          && offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy
-          && offMessage sharedCodexOff "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' rulesRemedy
-          && replacedMessage sharedReplaced "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' rulesRemedy)
-        sharedRuntimes
-        && lib.all (unit:
-          offMessage copilotOff unit copilotContextFile copilotContextRemedy
-          && replacedMessage copilotReplaced unit copilotContextFile copilotContextRemedy)
-        ["ai.context" "ai.copilot.github.context"]
-        && !(contains "does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced))
-        && !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (copilotOff ++ copilotReplaced))
-        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
-        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
-        && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
-        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
-        && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && !(contains "switches off" replaced)
-        && !(contains "the file that carries it" withheld)
-        && !(contains "the file that carries it" symlinked)
-        && !(contains "the file that carries it" nothing)
-        && !(contains "the file that carries it" (ordinary "hm"))
-        && !(contains "the file that carries it" (ordinary "devenv"))
-        && !(contains "the file that carries it" nothingReplaced)
+        checkRows "file-drop warnings" (shared
+          // copilotRows
+          // {
+            "Claude Home Manager names the disabled rule file and its remedy" = drop (claudeRule "hm" off) "ai.rules.probe" claudeRuleFile switchedOff claudeRuleRemedy;
+            "Claude Home Manager symlink changes delivery method, not the rule body" = noDrop (claudeRule "hm" {method = "symlink";});
+            "Claude devenv source override replaces rather than retaining the rule body" = drop (claudeRule "devenv" {content.source = pkgs.writeText "mine" "MINE";}) "ai.rules.probe" claudeRuleFile replaced claudeRuleRemedy;
+            "Codex Home Manager names a disabled runtime rule at the runtime input" = drop codexHomeOff "ai.codex.rules.local" codexHomeFile switchedOff "ai.codex.rules.local.enable = false";
+            "Codex Home Manager names a disabled shared rule at the shared input" = drop codexHomeOff "ai.rules.probe" codexHomeFile switchedOff codexRuleRemedy;
+            "Codex Home Manager warns when its own AGENTS.md is replaced" = drop (codexHome {inherit (document) rules;} replacement) "ai.rules.probe" codexHomeFile replaced codexRuleRemedy;
+            "Codex devenv disabling an unused file is quiet" = noDrop (codexProject {} off);
+            "Codex devenv replacing an unused file is quiet" = noDrop (codexProject {} replacement);
+            "Codex devenv replacing the only shared AGENTS.md warns about both inputs without claiming it was switched off" =
+              drop codexProjectReplaced "ai.context" codexProjectFile replaced "ai.codex.normalized.context = lib.mkForce null"
+              && drop codexProjectReplaced "ai.rules.probe" codexProjectFile replaced codexRuleRemedy
+              && !(contains "switches off" codexProjectReplaced);
+            "Codex devenv withholding the units is quiet even if their file is disabled" = noDrop withheld;
+            "Copilot context file overrides leave the separate rule file alone" = !(contains "ai.rules.probe is set but devenv does not deliver it to copilot" (copilotOff ++ copilotReplaced));
+            "Copilot is unaffected by another runtime's AGENTS.md override" = !(contains "does not deliver it to copilot" (sharedOff ++ sharedCodexOff ++ sharedReplaced));
+            "Kiro devenv names the scoped steering file and per-rule remedy" = drop steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' switchedOff "ai.kiro.rules.scoped.enable = false";
+            "devenv generated content is not mistaken for a final override" = noDrop (ordinary "devenv");
+            "hm generated content is not mistaken for a final override" = noDrop (ordinary "hm");
+          })
     );
 
     ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
-      evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          github.rules.probe.enable = false;
-        };
-        ai.rules.probe.text = "probe";
-      }
-      == []
-      && evaluate "hm" {
-        ai.kimchi.enable = true;
-        ai.rules.probe.enable = false;
-      }
-      == []
-      && evaluate "hm" {
-        ai.copilot = {
-          enable = true;
-          github.context.text = "";
-        };
-      }
-      == []
+      let
+        quiet = runtime: ai:
+          evaluate "hm" (lib.recursiveUpdate (harness.setEnable runtime true) {inherit ai;}) == [];
+      in
+        checkRows "withheld inputs do not warn" {
+          "Copilot's runtime tombstone suppresses the unsupported shared rule of that name" = quiet "copilot" {
+            copilot.github.rules.probe.enable = false;
+            rules.probe.text = "probe";
+          };
+          "Copilot's unsupported context is quiet when explicitly empty" = quiet "copilot" {copilot.github.context.text = "";};
+          "Kimchi is quiet for a shared rule already disabled at the root" = quiet "kimchi" {rules.probe.enable = false;};
+        }
     );
   };
 }

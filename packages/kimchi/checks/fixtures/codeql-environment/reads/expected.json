@@ -14,13 +14,6 @@
       ],
       "type": "string"
     },
-    "BUILDKITE": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
     "CI": {
       "consumerOverridable": true,
       "readBy": [
@@ -49,28 +42,7 @@
       ],
       "type": "string"
     },
-    "GITLAB_CI": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
-    "GIT_COMMON_DIR": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
     "GIT_DIR": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
-    "GIT_INDEX_FILE": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -98,13 +70,6 @@
       ],
       "type": "string"
     },
-    "HELPER_LITERAL": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
     "ITERATED_ONE": {
       "consumerOverridable": true,
       "readBy": [
@@ -120,13 +85,6 @@
       "type": "string"
     },
     "ITERATED_TWO": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
-    "JENKINS_URL": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -154,13 +112,6 @@
       ],
       "type": "string"
     },
-    "KIMCHI_MANAGES_MCP_PROJECT_TRUST": {
-      "consumerOverridable": true,
-      "readBy": [
-        "pi"
-      ],
-      "type": "string"
-    },
     "REGION_CLIENT_ID_EAST": {
       "consumerOverridable": true,
       "readBy": [
@@ -176,13 +127,6 @@
       "type": "string"
     },
     "S15_PROCESS_BRACKET_ENV": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
-    "S17_GLOBAL_THIS_BRACKET": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"
@@ -218,13 +162,6 @@
       "type": "string"
     },
     "S32_PROCESS_ALIAS": {
-      "consumerOverridable": true,
-      "readBy": [
-        "kimchi"
-      ],
-      "type": "string"
-    },
-    "TEAMCITY_VERSION": {
       "consumerOverridable": true,
       "readBy": [
         "kimchi"

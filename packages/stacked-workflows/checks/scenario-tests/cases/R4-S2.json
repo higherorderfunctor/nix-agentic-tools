@@ -1,16 +1,9 @@
 {
-  "args": {
-    "hash": "fixture branch a-1",
-    "inline_command": "git hide -r <hash>",
-    "scenario": "hide",
-    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
-  },
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Submit must not reintroduce recursive hide as squash cleanup: it can hide still-live descendants"
   },
   "id": "R4-S2",
   "kind": "static",

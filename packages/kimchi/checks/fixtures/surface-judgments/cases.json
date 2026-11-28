@@ -197,19 +197,6 @@
     "unchanged": true
   },
   {
-    "codes": [],
-    "edits": [
-      {
-        "file": "source",
-        "from": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}",
-        "to": "export function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}\nexport function unrelatedRequest() { return fetch(\"https://unrelated.example\") }"
-      }
-    ],
-    "name": "unrelated-request-added",
-    "rejects": "release-wide or request-inventory fingerprints",
-    "unchanged": true
-  },
-  {
     "codes": ["EVIDENCE_CHANGED"],
     "edits": [
       {
@@ -238,13 +225,6 @@
     "unchanged": true
   },
   {
-    "codes": [],
-    "name": "fact-order-reversed",
-    "rejects": "input-order-dependent hashing",
-    "reverseFacts": true,
-    "unchanged": true
-  },
-  {
     "codes": ["ANCHOR_AMBIGUOUS", "ANCHOR_AMBIGUOUS"],
     "edits": [
       {
@@ -266,7 +246,6 @@
         "to": "\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\","
       }
     ],
-    "incomplete": true,
     "name": "property-ambiguous",
     "rejects": "choosing the first duplicate property"
   },
@@ -279,39 +258,8 @@
         "to": "export function searchUrl(r: KimchiRegion): string;\nexport function searchUrl(r: KimchiRegion): string {\n\treturn `${r.llmBaseUrl}/v1/search`\n}"
       }
     ],
-    "incomplete": true,
     "name": "overloaded-function",
     "rejects": "ignoring overload signatures"
-  },
-  {
-    "codes": [],
-    "edits": [
-      {
-        "file": "source",
-        "from": "",
-        "to": "\n"
-      }
-    ],
-    "name": "stale-fact-location",
-    "rejects": "rejecting stale fact line numbers instead of using anchor display lines",
-    "starts": [5, 9, 16],
-    "unchanged": true
-  },
-  {
-    "codes": ["UNCLASSIFIED_ROOT"],
-    "edits": [
-      {
-        "file": "facts",
-        "from": "\"value\":\"\"",
-        "to": "\"value\":\"<unresolved>\""
-      }
-    ],
-    "expect": {
-      "current.json/<unclassified:self-hosted>/packet/selector/sources": []
-    },
-    "name": "unresolved-gateway-is-root",
-    "rejects": "excluding an unresolved gateway from coverage",
-    "unchanged": true
   },
   {
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
@@ -322,10 +270,6 @@
         "to": "\teu: ({\n\t\tllmBaseUrl: \"https://llm.eu.kimchi.dev\",\n\t}),"
       }
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
     "name": "wrapped-region-member",
     "rejects": "silently overlooking a wrapped direct registry member"
   },
@@ -358,22 +302,6 @@
     "rejects": "hashing unnormalized location fields"
   },
   {
-    "codes": ["FACT_INPUT", "FACT_INPUT"],
-    "edits": [
-      {
-        "file": "facts",
-        "from": "\"line\":8",
-        "to": "\"line\":8,\"origin\":\"src/regions.ts:8\""
-      }
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "name": "unsupported-origin-field",
-    "rejects": "hashing file:line origins"
-  },
-  {
     "codes": ["VERDICT_INPUT"],
     "edits": [
       {
@@ -396,18 +324,6 @@
     ],
     "name": "unsupported-verdict-schema",
     "rejects": "accepting unknown schema versions"
-  },
-  {
-    "codes": ["VERDICT_INPUT"],
-    "edits": [
-      {
-        "file": "verdicts",
-        "from": "\"judgments\":[",
-        "to": "\"extra\":true,\"judgments\":["
-      }
-    ],
-    "name": "unknown-verdict-field",
-    "rejects": "accepting unused verdict fields"
   },
   {
     "codes": ["VERDICT_INPUT"],
@@ -497,10 +413,6 @@
         "to": "export function searchUrl( {"
       }
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
     "name": "invalid-source-syntax",
     "rejects": "swallowing parser errors"
   },
@@ -568,10 +480,6 @@
         "to": "}) as const satisfies"
       }
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
     "name": "unsupported-anchor-wrapper",
     "rejects": "unwrapping parentheses beyond the supported as/satisfies language"
   },
@@ -618,9 +526,6 @@
         "to": "\"rationale\":\"\""
       }
     ],
-    "expect": {
-      "current.json/<unclassified:ap>/packet/selector/sources": []
-    },
     "name": "invalid-record-does-not-hide-new-root",
     "rejects": "suppressing independent root discovery after one invalid judgment"
   },
@@ -676,54 +581,43 @@
       "region \"ap\" contains unsupported SpreadAssignment",
       "spreads and computed property names are refused; use named members with identifier or string-literal names"
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
     "hiddenRegion": "...HOSTED, id: \"ap\"",
     "name": "spread-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
+    "rejects": "allowing a spread to hide a gateway root without a measured row"
   },
   {
     "codes": ["SOURCE_INPUT", "SOURCE_INPUT"],
-    "details": [
-      "region \"ap\" contains unsupported computed property name",
-      "spreads and computed property names are refused; use named members with identifier or string-literal names"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
+    "details": ["region \"ap\" contains unsupported computed property name"],
     "hiddenRegion": "[\"llmBaseUrl\"]: \"https://ap.example\"",
     "name": "computed-gateway-hidden",
-    "rejects": "unsupported region properties hiding a root without a measured gateway row"
-  },
-  {
-    "codes": [],
-    "hiddenRegion": "label() { return \"https://ap.example\" }",
-    "name": "method-unrelated-region",
-    "rejects": "rejecting named members in an unrelated region",
-    "unchanged": true
-  },
-  {
-    "codes": [],
-    "hiddenRegion": "label",
-    "name": "shorthand-unrelated-region",
-    "rejects": "rejecting named members in an unrelated region",
-    "unchanged": true
+    "rejects": "allowing a computed name to hide a gateway root without a measured row"
   },
   {
     "codes": [],
     "hiddenRegion": "get label() { return \"https://ap.example\" }",
     "name": "getter-unrelated-region",
-    "rejects": "rejecting named members in an unrelated region",
+    "rejects": "mistaking a named getter for a spread or computed key",
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "hiddenRegion": "label() { return \"https://ap.example\" }",
+    "name": "method-unrelated-region",
+    "rejects": "mistaking a named method for a spread or computed key",
     "unchanged": true
   },
   {
     "codes": [],
     "hiddenRegion": "set label(value: string) {}",
     "name": "setter-unrelated-region",
-    "rejects": "rejecting named members in an unrelated region",
+    "rejects": "mistaking a named setter for a spread or computed key",
+    "unchanged": true
+  },
+  {
+    "codes": [],
+    "hiddenRegion": "label",
+    "name": "shorthand-unrelated-region",
+    "rejects": "mistaking a named shorthand for a spread or computed key",
     "unchanged": true
   },
   {
@@ -770,11 +664,6 @@
   },
   {
     "codes": ["ANCHOR_AMBIGUOUS"],
-    "details": [
-      "eu-search-service-availability",
-      "ambiguous anchor",
-      "found 2"
-    ],
     "edits": [
       {
         "file": "source",

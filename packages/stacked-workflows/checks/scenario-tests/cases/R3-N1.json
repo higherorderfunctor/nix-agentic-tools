@@ -11,7 +11,7 @@
   "block_roles": ["selection", "guard", "guard"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Dry-run previews the push without replacing deliberately different feature branch tracking",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R3-N1",

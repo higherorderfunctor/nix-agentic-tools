@@ -1,32 +1,28 @@
-# End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
-  pkgs,
   harness,
+  pkgs,
   ...
 }: let
-  inherit (harness) hmLib mkTest;
+  inherit (harness) checkRows hmLib mkTest;
 in {
   checks = {
-    # Keeps the aihubmix factory from shipping dormant. Asserts more than its
-    # context7 sibling below: that the defaults reach the result AND that a
-    # consumer override merges on top — `env` is the live surface for
-    # AIHUBMIX_API_KEY, since the server has no other config knobs.
+    # The server reads its credential from env, not settings.
     module-aihubmix-factory-call = mkTest "aihubmix-factory-call" (
       let
         mkAihubmix = import ../lib/mkAihubmix.nix;
         result =
           mkAihubmix {
             lib = hmLib;
-            pkgs = pkgs // {ai = pkgs.ai or {};};
+            inherit pkgs;
           } {
             env.AIHUBMIX_API_KEY = "sentinel";
           };
       in
-        result.type
-        == "stdio"
-        && result.command == "aihubmix-mcp"
-        && result.env.AIHUBMIX_API_KEY == "sentinel"
+        checkRows "AIHubMix factory" {
+          "consumer API key survives in the server environment" = (result.env.AIHUBMIX_API_KEY or null) == "sentinel";
+          "default command names the installed executable" = result.command == "aihubmix-mcp";
+          "default transport is stdio rather than inferred" = result.type == "stdio";
+        }
     );
   };
 }

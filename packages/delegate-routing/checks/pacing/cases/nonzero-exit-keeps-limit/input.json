@@ -18,7 +18,7 @@
       "budget": {
         "exit": 7,
         "stderr": "private failure detail",
-        "stdout": "private unread payload"
+        "stdout": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"reader\",\"windows\":{\"7d\":{\"enforced\":true,\"remainingPercent\":75.0,\"resetsAt\":\"2026-11-19T01:35:00Z\",\"status\":\"ok\",\"usedPercent\":25.0,\"windowSeconds\":604800}}}"
       }
     },
     "routes": [

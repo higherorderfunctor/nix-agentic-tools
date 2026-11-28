@@ -10,9 +10,10 @@
     rootModules = discover ./discovery-fixtures;
   };
 in {
-  checks.facet-check-discovery = assert builtins.attrNames world.checks == ["discovered"];
+  checks.facet-check-discovery = assert lib.assertMsg (builtins.attrNames world.checks == ["discovered"]) "facet discovery must register only the immediate active/default.nix module";
     pkgs.runCommandLocal "facet-check-discovery" {} ''
-      test -e ${world.checks.discovered}
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       touch "$out"
     '';
 }

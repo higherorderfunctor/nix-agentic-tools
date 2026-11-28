@@ -1,7 +1,6 @@
 [
   {
     "match": "MAIN_KICKOFF",
-    "not": ["<response_requirement>"],
     "events": [
       {
         "toolUseId": "tu_s",
@@ -19,19 +18,5 @@
     "delay": 9,
     "events": ["CHILD_LATE"]
   },
-  {
-    "match": "MAIN_KICKOFF",
-    "not": ["<response_requirement>"],
-    "events": ["MAIN_DONE"]
-  },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] }
+  { "events": ["FALLBACK_TEXT"], "match": null, "reuse": true }
 ]

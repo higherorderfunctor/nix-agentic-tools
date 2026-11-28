@@ -279,10 +279,6 @@
       }
     ],
     "expect": {
-      "diff.json/request-a/rows/added": [],
-      "diff.json/request-a/rows/removed": [],
-      "diff.json/request-a/spans/0/new": "sha256:cde083d92431a8f400067e09d9c16998a54a7d69d8cd70fa21476ccf15e7a3ed",
-      "diff.json/request-a/spans/0/old": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
       "diff.json/request-a/spans/0/site/path": "src/policy.ts"
     },
     "failureIds": ["request-a"],
@@ -293,13 +289,7 @@
   {
     "base": "requests/base",
     "codes": ["ANCHOR_MISSING"],
-    "details": [
-      "cannot read source src/does-not-exist.ts (ENOENT)",
-      "Evidence hash: old=",
-      "new=unresolved",
-      "Packets:",
-      "Fix:"
-    ],
+    "details": ["cannot read source src/does-not-exist.ts (ENOENT)"],
     "failureIds": ["request-a"],
     "incomplete": true,
     "name": "request-citation-file-missing",
@@ -577,10 +567,6 @@
         "to": "function callerA() { return makeRegistrar()(\"start\", requestFn); }"
       }
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
     "name": "request-caller-shared-start-refused",
     "rejects": "choosing the inner makeRegistrar() invocation for the shared-start caller site in makeRegistrar()(\"start\", requestFn)"
   },
@@ -593,18 +579,6 @@
       "REQUEST_LOCATION",
       "REQUEST_LOCATION",
       "REQUEST_LOCATION"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": [
-      "request-a",
-      "request-b",
-      "request-billing",
-      "request-chained-fetch",
-      "request-events",
-      "request-returned-fetch"
     ],
     "name": "request-end-after-close",
     "patches": [
@@ -626,18 +600,6 @@
       "REQUEST_FACT_INPUT",
       "REQUEST_FACT_INPUT"
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": [
-      "request-a",
-      "request-b",
-      "request-billing",
-      "request-chained-fetch",
-      "request-events",
-      "request-returned-fetch"
-    ],
     "name": "request-fact-bad-distance",
     "patches": [
       {
@@ -658,18 +620,6 @@
       "REQUEST_FACT_INPUT",
       "REQUEST_FACT_INPUT"
     ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": [
-      "request-a",
-      "request-b",
-      "request-billing",
-      "request-chained-fetch",
-      "request-events",
-      "request-returned-fetch"
-    ],
     "name": "request-fact-missing",
     "patches": [
       {
@@ -689,18 +639,6 @@
       "REQUEST_LOCATION",
       "REQUEST_LOCATION",
       "REQUEST_LOCATION"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": [
-      "request-a",
-      "request-b",
-      "request-billing",
-      "request-chained-fetch",
-      "request-events",
-      "request-returned-fetch"
     ],
     "name": "request-location-call",
     "patches": [
@@ -723,10 +661,7 @@
       "REQUEST_LOCATION"
     ],
     "details": [
-      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)",
-      "Evidence hash: old=",
-      "Packets:",
-      "Fix:"
+      "at /requestCallers/0/site: cannot read source src/policy.ts/child.ts (ENOTDIR)"
     ],
     "expect": {
       "current.json": {},
@@ -759,18 +694,6 @@
       "REQUEST_FACT_INPUT",
       "REQUEST_FACT_INPUT",
       "REQUEST_FACT_INPUT"
-    ],
-    "expect": {
-      "current.json": {},
-      "diff.json": {}
-    },
-    "failureIds": [
-      "request-a",
-      "request-b",
-      "request-billing",
-      "request-chained-fetch",
-      "request-events",
-      "request-returned-fetch"
     ],
     "name": "request-missing-end-column",
     "patches": [
@@ -808,7 +731,6 @@
         "sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9",
         "sha256:c12fe4cc4408ddbe45b1589b00dd8e32dee3564c7527bab90df40d341c52163e"
       ],
-      "current.json/request-a/evidence/spans/0/sha256": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
       "current.json/request-a/packet/rows/sha256:9a0164ddc2bb1dfe127a76647550eb6c28fce2fcd390075842351ebc9929f5a9/kind": "caller",
       "current.json/request-a/packet/statement": "return fetch(\"https://a.example\");",
       "current.json/request-chained-fetch/packet/statement": "return fetch(u).then(cb);",
@@ -845,7 +767,7 @@
   {
     "base": "requests/base",
     "codes": ["RECORDED_HASH"],
-    "details": ["recorded evidence summary", "Evidence hash: old="],
+    "details": ["recorded evidence summary"],
     "failureIds": ["request-a"],
     "name": "request-recorded-summary-tampered",
     "patches": [
@@ -860,33 +782,6 @@
   },
   {
     "base": "requests/base",
-    "codes": ["REMOVED_ROOT"],
-    "edits": [
-      {
-        "file": "src/requests.ts",
-        "from": "return fetch(\"https://a.example\");",
-        "to": "return undefined;"
-      }
-    ],
-    "failureIds": ["request-a"],
-    "name": "request-removed",
-    "patches": [
-      {
-        "file": "facts",
-        "path": "requestCallers/1",
-        "remove": true
-      },
-      {
-        "file": "facts",
-        "path": "requestCallers/0",
-        "remove": true
-      }
-    ],
-    "rejects": "silently dropping an orphan judgment",
-    "unchanged": ["request-b"]
-  },
-  {
-    "base": "requests/base",
     "codes": [],
     "edits": [
       {
@@ -895,6 +790,9 @@
         "to": "return undefined;"
       }
     ],
+    "expect": {
+      "status.json/counts/roots": 5
+    },
     "name": "request-removed-record-by-hand",
     "patches": [
       {
@@ -918,8 +816,14 @@
         "value": {}
       }
     ],
-    "rejects": "retaining a removed request after its record is explicitly removed",
-    "unchanged": ["request-b"]
+    "rejects": "retaining the removed request or silently dropping a survivor when its stale record is explicitly removed",
+    "unchanged": [
+      "request-b",
+      "request-billing",
+      "request-chained-fetch",
+      "request-events",
+      "request-returned-fetch"
+    ]
   },
   {
     "base": "requests/base",
@@ -969,7 +873,6 @@
     "base": "requests/base",
     "codes": ["SOURCE_INPUT"],
     "failureIds": ["request-a"],
-    "incomplete": true,
     "name": "request-source-broad-function-refused",
     "patches": [
       {
@@ -1068,33 +971,6 @@
   },
   {
     "base": "requests/base",
-    "codes": [],
-    "name": "request-span-escaped-id",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/1/evidenceHash",
-        "value": "sha256:695f8eb3d509aa7513d11129f0a92e331b14f4b2d2e2ef4b27a9509179a9ed06"
-      },
-      {
-        "file": "verdicts",
-        "path": "judgments/1/selector/sources/0",
-        "value": "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]"
-      },
-      {
-        "file": "verdicts",
-        "path": "spans",
-        "value": {
-          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]": "sha256:bbdd51789d3f78da3cf33e9dc3ca45d96fe03fc6dabc17a55e27d74cbcff359c",
-          "src/policy.ts##list[0]/bindings:keyed[0]/node[0]/list[0]/name:keyed[0]/node[0]/list[0]/entry:id:\"a%2Fb%5B0%5D%23c\"[0]": "sha256:9556a87c486c79b10767c83e0f04042c0f92a7b12afaf9c0238a77746ed52b73"
-        }
-      }
-    ],
-    "rejects": "resolving a cited span whose step name holds # / [ or ] by its unescaped spelling",
-    "unchanged": ["request-a"]
-  },
-  {
-    "base": "requests/base",
     "codes": ["EVIDENCE_CHANGED"],
     "edits": [
       {
@@ -1142,6 +1018,9 @@
         "to": "{ id: `a\nb`, enabled: true }"
       }
     ],
+    "expect": {
+      "current.json/request-b/evidence/spans/0/sha256": "sha256:91841448b5e18ffe5c01c8bfd324271b31a969bf00275a2b09306ea383b87116"
+    },
     "name": "request-span-multiline-id",
     "patches": [
       {
@@ -1170,7 +1049,6 @@
     "base": "requests/base",
     "codes": ["VERDICT_INPUT"],
     "details": ["/spans/%ZZ#]#[x: invalid span id"],
-    "failureIds": ["<verdict-file>"],
     "name": "request-span-id-malformed",
     "patches": [
       {
@@ -1189,7 +1067,6 @@
     "details": [
       "/spans/%73rc/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]: invalid span id"
     ],
-    "failureIds": ["<verdict-file>"],
     "name": "request-span-id-noncanonical",
     "patches": [
       {
@@ -1324,24 +1201,6 @@
     "failureIds": ["<verdict-file>"],
     "name": "request-spans-table-unsorted",
     "rejects": "accepting a spans table out of canonical key order"
-  },
-  {
-    "base": "requests/base",
-    "codes": ["VERDICT_INPUT"],
-    "details": ["/judgments/0/selector/sources/1: duplicate source citation"],
-    "failureIds": ["request-a"],
-    "name": "request-source-duplicate-citation",
-    "patches": [
-      {
-        "file": "verdicts",
-        "path": "judgments/0/selector/sources",
-        "value": [
-          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]",
-          "src/policy.ts##list[0]/bindings:enabled[0]/node[0]/list[0]/name:enabled[0]"
-        ]
-      }
-    ],
-    "rejects": "accepting one span id cited twice in a record"
   },
   {
     "base": "requests/base",

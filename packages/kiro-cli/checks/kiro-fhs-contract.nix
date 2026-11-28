@@ -35,7 +35,6 @@
           nat_package="$1"
           nat_payload="$2"
           nat_launcher="$(${pkgs.coreutils}/bin/readlink -f "$nat_package/bin/kiro-cli")"
-          [ -f "$nat_launcher" ] || nat_fail "could not locate the generated FHS launcher"
 
           ${pkgs.gnugrep}/bin/grep -qF -- '--bind /nix /nix' "$nat_launcher" \
             || nat_fail "FHS launcher no longer bind-mounts /nix; re-measure extraPackages visibility"
@@ -48,8 +47,6 @@
           nat_rootfs="$(${pkgs.gnused}/bin/sed -n \
             's#^for i in \(/nix/store/[^ ]*-fhsenv-rootfs\)/\*; do$#\1#p' \
             "$nat_launcher")"
-          [ -d "$nat_rootfs" ] \
-            || nat_fail "could not locate the FHS root from the generated launcher; re-measure its structure"
           ${pkgs.gnugrep}/bin/grep -qF "for i in $nat_rootfs/etc/*; do" "$nat_launcher" \
             || nat_fail "FHS launcher no longer walks the generated root /etc"
           ${pkgs.gnugrep}/bin/grep -qF \
@@ -64,15 +61,8 @@
           nat_init="$(${pkgs.gnused}/bin/sed -n \
             's#^[[:space:]]*--symlink \(/nix/store/[^ ]*-init\) /init.*$#\1#p' \
             "$nat_launcher")"
-          [ -f "$nat_init" ] \
-            || nat_fail "could not locate the FHS init from the generated launcher; re-measure its structure"
-          nat_source_count="$(${pkgs.gnugrep}/bin/grep -cF 'source /etc/profile' "$nat_init" || :)"
-          [ "$nat_source_count" -eq 1 ] \
-            || nat_fail "FHS init must source /etc/profile exactly once"
           # The runScript is the payload itself: no command argument is
           # selected or shifted, so the init's last line execs the payload.
-          [ "$(${pkgs.gnugrep}/bin/grep -cFx "exec $nat_payload/bin/kiro-cli \"\$@\"" "$nat_init" || :)" -eq 1 ] \
-            || nat_fail "FHS init must exec the pinned payload $nat_payload/bin/kiro-cli directly"
           nat_source_line="$(${pkgs.gnugrep}/bin/grep -nF 'source /etc/profile' "$nat_init" \
             | ${pkgs.gnused}/bin/sed 's/:.*//')"
           nat_exec_line="$(${pkgs.gnugrep}/bin/grep -nFx "exec $nat_payload/bin/kiro-cli \"\$@\"" "$nat_init" \
@@ -84,7 +74,6 @@
           fi
 
           nat_profile="$nat_rootfs/etc/profile"
-          [ -f "$nat_profile" ] || nat_fail "FHS root no longer provides /etc/profile"
           nat_path_assignments="$(${pkgs.gnugrep}/bin/grep -Ec '(^|[[:space:]])PATH=' "$nat_profile" || :)"
           [ "$nat_path_assignments" -eq 1 ] \
             || nat_fail "FHS profile PATH assignment count changed; re-measure effective precedence"

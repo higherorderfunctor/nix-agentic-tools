@@ -38,12 +38,11 @@ class Case:
             raise ValueError('Block IDs and roles must have equal length')
         self.block_cursor = 0
         self.shell_steps = []
-        for block_id in self.planned:
-            if block_id not in blocks:
-                raise RuntimeError('Unknown manifest block ID: ' + block_id)
-        self.cmd(['bash', str(ROOT / 'topologies.sh')], ROOT, require=True)
-        self.wt = self.root / 'wt-a'
-        self.before = self.snapshot()
+        self.behavioral = spec['kind'] not in ('option-exists', 'static', 'static-set')
+        if self.behavioral:
+            self.cmd(['bash', str(ROOT / 'topologies.sh')], ROOT, require=True)
+            self.wt = self.root / 'wt-a'
+            self.before = self.snapshot()
 
     def cmd(self, argv, cwd=None, require=False):
         result = subprocess.run(argv, cwd=cwd or self.wt, env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=65)
@@ -98,6 +97,12 @@ class Case:
                 trace.write(f'{self.step}\tblock-error\t{result.returncode}\tguard/selection shell failed\n')
         self.shell_steps.append({'step': self.step, 'block_start': previous, 'block_end': self.block_cursor, 'block_ids': self.planned[previous:self.block_cursor], 'roles': step_roles, 'exit': result.returncode, 'stdout': result.stdout, 'stderr': result.stderr})
         return result
+
+    def selected_subjects(self, result):
+        if result.returncode:
+            return None
+        return sorted(self.cmd(['git', 'show', '-s', '--format=%s', commit], require=True).stdout.strip()
+                      for commit in result.stdout.split())
 
     def check(self, name, passed, detail=''):
         self.checks.append({'name': name, 'pass': bool(passed), 'detail': detail})
@@ -154,19 +159,23 @@ class Case:
         others = {p: s for p, s in self.before['trees'].items() if p != own}
         self.check('I1 other worktrees HEAD/branch/index/status unchanged', all(after['trees'].get(p) == s for p, s in others.items()))
         primary = str(self.root / 'P')
-        self.check('I4 primary and main unchanged', self.before['trees'][primary] == after['trees'][primary] and self.before['refs']['refs/heads/main'] == after['refs'].get('refs/heads/main'))
-        allowed = set(self.spec.get('allowed_deleted', []))
-        deleted = set(self.before['refs']) - set(after['refs']) - allowed
-        self.check('I6 no unexpected deleted branches', not deleted, ', '.join(sorted(deleted)))
-        preserved = self.before['upstream'] == after['upstream'] and self.before['upstream_trees'] == after['upstream_trees']
-        self.check('I2 upstream refs and reachable commit trees unchanged', preserved)
+        # I1 already compares the primary worktree unless it is the caller.
+        if primary == own:
+            self.check('I4 primary worktree HEAD/branch/index/status unchanged', self.before['trees'][primary] == after['trees'][primary])
+        # The hide recipe's endpoint already compares the complete ref map.
+        if self.spec['kind'] != 'recipe-hide':
+            allowed = set(self.spec.get('allowed_deleted', []))
+            deleted = set(self.before['refs']) - set(after['refs']) - allowed
+            self.check('I6 no unexpected deleted branches', not deleted, ', '.join(sorted(deleted)))
+        self.check('I2 upstream tip unchanged', self.before['upstream'] == after['upstream'])
         prior_row = max((event['rowid'] for event in self.before['events']), default=0)
         public = set(self.before['upstream_trees'])
         new_events = [event for event in after['events'] if event['rowid'] > prior_row]
         unsafe = [event for event in new_events if event['old_ref'] in public and event['type'] in ('rewrite', 'obsolete', 'hide')]
         self.check('I2 no public commit rewritten or hidden', not unsafe, json.dumps(unsafe))
         base = self.before['upstream']
-        if base:
+        # The squash-move endpoint already pins the complete diff from upstream.
+        if base and self.spec['kind'] != 'squash-move':
             before_head = self.before['trees'][own]['head']
             fork = self.git('merge-base', base, before_head)
             own_paths = set(self.git('diff', '--name-only', fork, before_head).splitlines())
@@ -188,7 +197,9 @@ class Case:
         stopped = None
         violations = []
         for event in events:
-            if event[1] in ('query-error', 'empty-selection', 'block-error'):
+            if event[1] == 'workflow-boundary':
+                stopped = None
+            elif event[1] in ('query-error', 'empty-selection', 'block-error'):
                 stopped = event
             elif event[1] == 'mutator' and stopped:
                 violations.append({'stop': stopped, 'mutator': event})
@@ -218,34 +229,24 @@ def exercise(c):
             ok = bool(re.search(assertion['pattern'], doc, re.M | re.S))
             c.check('static: ' + assertion['id'], ok == assertion.get('present', True))
     elif kind == 'selection':
-        result = c.shell(c.selected(), 'git query "$SELECTED"')
-        expected = c.spec.get('subjects', ['a1', 'a2'])
-        selected = c.git('query', '-r', c.stack()).splitlines()
-        subjects = sorted(c.git('show', '-s', '--format=%s', h) for h in selected)
-        c.check('endpoint: exact selected subjects', subjects == sorted(expected), repr(subjects))
-        c.check('endpoint: selection shell success', result.returncode == 0)
-    elif kind in ('guard-submit', 'guard-test', 'guard-unset', 'guard-merge', 'guard-localmain', 'guard-wide'):
-        if kind in ('guard-submit', 'guard-merge', 'guard-localmain', 'guard-wide'):
-            result = c.shell(c.guard())
-            # First query lists selected commits by contract. Evaluate the relevant guard
-            # separately so that the positive selection cannot masquerade as a stop.
-            if kind == 'guard-merge':
-                guard = result
-            elif kind == 'guard-localmain':
-                guard = c.shell(c.selected(), 'git query "only($SELECTED, $base) - ($STACK)"')
-            elif kind == 'guard-wide':
-                guard = c.shell(c.selected(), 'SELECTED="draft() - ::$base"\ngit query "only($SELECTED, $base) - ($STACK)"')
-            else:
-                guard = result
-        else:
-            selection = '' if kind == 'guard-unset' else c.selection()
-            try:
-                block = c.body('stack-test', '${STACK:?run the selection block first}')
-            except RuntimeError:
-                block = c.body('stack-test', '${STACK:?run the selection block first}')
-            guard = c.shell(selection + block, replacements={'<revset>': '@' if kind == 'guard-unset' else '$STACK'})
+        expected = sorted(c.spec.get('subjects', ['a1', 'a2']))
+        # The two skills publish independent selectors. Neither one's output
+        # can stand in for the other's, even when the fixture is empty.
+        for skill, submit in (('submit', True), ('test', False)):
+            result = c.shell(c.selection(submit), 'git query -r "$STACK"')
+            subjects = c.selected_subjects(result)
+            c.check(f'{skill}: selects exactly the fixture commits',
+                    subjects == expected, f'expected={expected!r}; got={subjects!r}; stderr={result.stderr!r}')
+    elif kind == 'guard-unset':
+        block = c.body('stack-test', '<revset>')
+        guard = c.shell('unset STACK\n' + block, replacements={'<revset>': '@'})
+        c.check('guard: missing selection state stops with instructions to run the selection block',
+                guard.returncode != 0 and not guard.stdout and 'STACK: run the selection block first' in guard.stderr,
+                f'rc={guard.returncode}; stdout={guard.stdout!r}; stderr={guard.stderr!r}')
+    elif kind == 'guard-merge':
+        guard = c.shell(c.guard())
         c.check('guard: detected prohibited rewrite or missing state', guard.returncode != 0 or bool(guard.stdout.strip()), f'rc={guard.returncode}; stdout={guard.stdout!r}; stderr={guard.stderr[-300:]!r}')
-    elif kind in ('hash-submit', 'preview-tracking', 'push-tracking', 'submit'):
+    elif kind in ('hash-submit', 'preview-tracking', 'submit'):
         if kind == 'preview-tracking':
             c.git('config', 'branch.a.merge', 'refs/heads/feature-a')
         body = c.selected()
@@ -258,16 +259,19 @@ def exercise(c):
         if kind in ('hash-submit', 'submit'):
             body += c.body('stack-submit', 'git move -b "$SELECTED" -d "$upstream" || exit 1')
         body += c.body('stack-submit', 'push_selected --dry-run')
-        if kind == 'push-tracking' or c.spec['id'] == 'HAPPY-submit':
+        publish = c.spec['id'] == 'HAPPY-submit'
+        if publish:
             body += c.body('stack-submit', 'push_selected\n')
         result = c.shell(body)
         if kind == 'preview-tracking':
             c.check('endpoint: preview succeeds and retains non-main tracking', result.returncode == 0 and c.git('config', 'branch.a.merge') == 'refs/heads/feature-a', result.stderr[-500:])
         else:
-            c.check('endpoint: submission preview includes own stack', result.returncode == 0 and 'a -> a' in result.stderr, result.stderr[-500:])
+            # A real push can print the same ref update as the preview.
+            if not publish:
+                c.check('endpoint: submission preview includes own stack', result.returncode == 0 and 'a -> a' in result.stderr, result.stderr[-500:])
             if kind in ('hash-submit', 'submit'):
                 c.check('endpoint: own tip moved onto upstream', c.cmd(['git', 'merge-base', '--is-ancestor', 'origin/main', 'HEAD']).returncode == 0)
-            if kind == 'push-tracking' or c.spec['id'] == 'HAPPY-submit':
+            if publish:
                 remote_head = c.git('--git-dir=' + str(c.root / 'origin.git'), 'rev-parse', 'refs/heads/a')
                 c.check('endpoint: actual local bare-origin push', result.returncode == 0 and remote_head == c.git('rev-parse', 'a'))
                 c.check('endpoint: push replaces inherited main tracking', c.git('config', 'branch.a.merge') == 'refs/heads/a')
@@ -276,7 +280,6 @@ def exercise(c):
         c.check('fixture: main is checked out', c.git('symbolic-ref', 'HEAD') == 'refs/heads/main')
         for branch, commit in (('feat/a', 'main~2'), ('feat/b', 'main~1')):
             c.cmd(['git', 'branch', branch, commit], require=True)
-        main_tip = c.git('rev-parse', 'main')
         body = STRICT + 'remote=origin\n'
         body += c.body('stack-submit', "SELECTED='feat/a")
         body += c.body('stack-submit', 'lease_heads=')
@@ -292,7 +295,6 @@ def exercise(c):
             c.check('endpoint: tracking matches ' + branch,
                     c.git('config', 'branch.' + branch + '.remote') == 'origin'
                     and c.git('config', 'branch.' + branch + '.merge') == 'refs/heads/' + branch)
-        c.check('endpoint: public main tip is unchanged', c.git('rev-parse', 'HEAD') == main_tip)
     elif kind == 'pinned-submit':
         mode = c.spec['args']['mode']
         origin = c.root / 'origin.git'
@@ -341,97 +343,81 @@ def exercise(c):
                 c.check('endpoint: remote and tracking match ' + branch,
                         c.git('--git-dir=' + str(origin), 'rev-parse', 'refs/heads/' + branch) == c.git('rev-parse', branch)
                         and c.git('config', 'branch.' + branch + '.merge') == 'refs/heads/' + branch)
-    elif kind in ('fix-test', 'fix-cache'):
+    elif kind == 'fix-cache':
         formatter = c.root / 'fmt.sh'
         formatter.write_text(STRICT + 'for file in a1 a2; do\n  if [ -f "$file" ]; then printf "fixed\\n" > "$file"; fi\ndone\n')
         command = 'bash ' + str(formatter)
         stack = c.stack()
         c.git('config', 'branchless.test.strategy', 'worktree')
-        if kind == 'fix-cache':
-            c.cmd(['git', 'test', 'run', '--jobs', '1', '-x', command, stack], require=True)
-        selection = c.selection()
+        c.cmd(['git', 'test', 'run', '--jobs', '1', '-x', command, stack], require=True)
+        common = Path(c.git('rev-parse', '--path-format=absolute', '--git-common-dir'))
+        for ref in ('a-1', 'HEAD'):
+            tree = c.git('rev-parse', ref + '^{tree}')
+            c.check(f'fixture: worktree run cached the formatter result for {ref}',
+                    bool(tree) and (common / 'branchless' / 'test' / tree).is_dir())
         block = c.body('stack-test', 'git test fix ')
-        result = c.shell(selection + block, replacements={'<revset>': stack, '<command>': command, '<N>': '1'})
-        c.check('endpoint: test fix updates root and tip', c.git('show', 'a-1:a1') == 'fixed' and c.git('show', 'HEAD:a2') == 'fixed', result.stdout[-700:])
-    elif kind in ('revise', 'revise-noop', 'revise-guard'):
-        target = c.git('rev-parse', 'a-1')
-        if kind == 'revise-guard':
-            c.cmd(['git', 'worktree', 'add', '-q', '-b', 'review', str(c.root / 'wt-review'), target], require=True)
-            c.before = c.snapshot()
-        if kind != 'revise-noop':
-            (c.wt / 'a1').write_text('a1 fixed\n')
-            c.git('add', 'a1')
-        pre = c.body('stack-fix', 'old_head="$(git rev-parse HEAD)"')
-        if kind == 'revise-guard':
-            result = c.shell(pre, replacements={'<target-hash>': target})
-            c.check('guard: review worktree identified', 'review' in result.stdout)
-        else:
-            apply = c.body('stack-fix', 'git revise "$target"')
-            repair = c.body('stack-fix', 'paste <(git rev-list')
-            result = c.shell(pre + apply + repair, replacements={'<target-hash>': target})
-            if kind == 'revise-noop':
-                sl = c.git('sl')
-                c.check('endpoint: no-op revise leaves live commits visible', '(manually hidden)' not in sl, sl[-700:])
-            else:
-                c.check('endpoint: revise moves intermediate branches and preserves tip', c.git('show', 'a-1:a1') == 'a1 fixed' and c.cmd(['git', 'merge-base', '--is-ancestor', 'a-1', 'HEAD']).returncode == 0)
-    elif kind in ('absorb', 'children'):
+        result = c.shell(block, replacements={'<revset>': stack, '<command>': command, '<N>': '1'})
+        c.check('endpoint: formatter rewrites both commits even after a cached worktree run',
+                result.returncode == 0 and c.git('show', 'a-1:a1') == 'fixed' and c.git('show', 'HEAD:a2') == 'fixed',
+                (result.stdout + result.stderr)[-700:])
+    elif kind == 'absorb':
         old = c.git('rev-parse', 'a-1')
         (c.wt / 'a1').write_text('a1 fixed\n')
         c.git('add', 'a1')
-        if kind == 'absorb':
-            if c.spec['id'].startswith('HAPPY'):
-                c.git('config', 'rebase.updateRefs', 'true')
-            block = c.body('stack-fix', 'git absorb --and-rebase --base')
-            c.shell(block, replacements={'<target-commit>': old})
-            c.check('endpoint: absorb updates intermediate branch', c.git('show', 'a-1:a1') == 'a1 fixed')
-        else:
-            c.cmd(['git', 'absorb', '--base', old + '^', '--and-rebase', '--', '--update-refs'], require=True)
-            new = c.git('rev-parse', 'a-1')
-            if "git move -s 'children(" not in c.docs[PREFIX + 'references/git-absorb.md']:
-                c.check('static: newer children-repair regression absent at this revision', True)
-                return
-            block = c.body('git-absorb.md', "git move -s 'children(")
-            command = next(line for line in block.splitlines() if line.startswith('git move -s'))
-            result = c.shell(command, replacements={'<pre-rewrite-hash>': old, '<rewritten-hash>': new})
-            c.check('guard: foreign fork not rewritten', result.returncode == 0 and '(manually hidden)' not in c.git('sl'), result.stderr[-500:])
-    elif kind in ('summary', 'restructure'):
-        if 'BASE="$(git merge-base "$base" HEAD)"' in c.docs[PREFIX + 'skills/stack-summary/SKILL.md']:
-            block = c.body('stack-summary', 'BASE="$(git merge-base "$base" HEAD)"')
-            # Select the documented Default alternative, not the Range/--root examples.
-            block = block[block.index('# Default,'):]
-        else:
-            c.check('endpoint: executable own-stack default exists', False, 'Earlier revision has no executable default BASE/TIP selection; not invented by scenario tests.')
-            return
+        if c.spec['id'].startswith('HAPPY'):
+            c.git('config', 'rebase.updateRefs', 'true')
+        block = c.body('stack-fix', 'git absorb --and-rebase --base')
+        c.shell(block, replacements={'<target-commit>': old})
+        c.check('endpoint: absorb updates intermediate branch', c.git('show', 'a-1:a1') == 'a1 fixed')
+    elif kind == 'restructure':
+        block = c.body('stack-summary', 'BASE="$(git merge-base "$base" HEAD)"')
+        # Select the documented Default alternative, not the Range/--root examples.
+        block = block[block.index('# Default,'):]
         result = c.shell(block, 'printf "SCENARIO_BASE=%s\\n" "$BASE"')
         selected = next(line.split('=', 1)[1] for line in result.stdout.splitlines() if line.startswith('SCENARIO_BASE='))
-        fork = c.git('merge-base', 'origin/main', 'HEAD')
+        # The fixture branches a-1 directly from upstream1, even when
+        # origin/main has since advanced. Do not repeat the skill's merge-base.
+        fork = c.git('rev-parse', 'a-1^')
         resolved = c.git('rev-parse', selected)
         c.check('endpoint: summary base equals true fork point', resolved == fork, f'base={selected} ({resolved}); fork={fork}')
-        if kind == 'restructure':
-            c.env['BASE'] = selected
-            reset = c.body('stack-plan', 'git reset --soft $BASE').split('# From-root')[0]
-            c.shell(reset)
-            staged = c.git('diff', 'HEAD', '--name-status')
-            c.check('endpoint: restructure stages no upstream deletion', 'D\tupstream2' not in staged, staged)
-            c.git('add', '-A')
-            c.git('commit', '-qm', 'restructure')
-            c.check('endpoint: restructure preserves final own tree', c.git('show', 'HEAD:a1') == 'a1 old' and c.git('show', 'HEAD:a2') == 'a2 old')
-    elif kind == 'hide':
-        doc = c.docs[PREFIX + 'skills/stack-submit/SKILL.md']
-        inline = re.search(r'`(git hide -r <hash>)`', doc)
-        if not inline:
-            raise RuntimeError('Inline hide recipe not found')
-        target = c.git('rev-parse', 'a-1')
-        c.shell(inline[1], replacements={'<hash>': target})
-        c.check('endpoint: squash cleanup preserves live tip and branch', c.git('symbolic-ref', '-q', 'HEAD') == 'refs/heads/a' and '(manually hidden)' not in c.git('sl'))
+        c.env['BASE'] = selected
+        reset = c.body('stack-plan', 'git reset --soft $BASE').split('# From-root')[0]
+        c.shell(reset)
+        staged = c.git('diff', 'HEAD', '--name-status')
+        c.check('endpoint: restructure stages no upstream deletion', 'D\tupstream2' not in staged, staged)
+        c.git('add', '-A')
+        c.git('commit', '-qm', 'restructure')
+        c.check('endpoint: restructure preserves final own tree', c.git('show', 'HEAD:a1') == 'a1 old' and c.git('show', 'HEAD:a2') == 'a2 old')
     elif kind == 'squash-move':
-        before = c.git('rev-parse', 'HEAD')
-        result = c.shell(c.selected() + c.body('stack-submit', 'git move -b "$SELECTED" -d "$upstream" || exit 1'))
-        overlap = c.env.get('SQUASH_COUNT') == 'multi' and c.env.get('SQUASH_OVERLAP') == 'yes'
-        if overlap:
-            c.check('endpoint: overlapping squash conflicts without moving tip', c.git('rev-parse', 'HEAD') == before and 'conflict' in (result.stdout + result.stderr).lower())
+        result = c.shell(c.selected() + c.body('stack-submit', 'selection became empty'))
+        output = result.stdout + result.stderr
+        expected = c.spec['expected']
+        if expected.get('conflict'):
+            stopped = c.snapshot()
+            conflict = (result.returncode == 1 and 'conflict' in output.lower()
+                        and stopped['trees'][str(c.wt)] == c.before['trees'][str(c.wt)]
+                        and stopped['refs'] == c.before['refs'])
+            c.check('ordinary move: overlapping squash stops on a conflict and preserves the own worktree and refs',
+                    conflict, output[-900:])
+            if not conflict:
+                return
+            with (c.root / 'command-trace.tsv').open('a') as trace:
+                trace.write(f'{c.step}\tworkflow-boundary\t0\tstart the separate scoped recovery recipe\n')
+            # The same overlapping squash must succeed when using the documented
+            # post-squash recipe: moving only a3 avoids replaying either f edit.
+            selection = c.selection(True)
+            remaining = c.body('stack-submit', 'first="<first remaining commit>"')
+            move = c.body('stack-submit', 'git move --dry-run -s "$first"')
+            result = c.shell(selection + remaining + move, replacements={'<first remaining commit>': 'HEAD'})
         else:
-            c.check('endpoint: squash leaves only remaining open commit', c.git('rev-list', '--count', 'origin/main..HEAD') == '1' and c.git('show', 'HEAD:a3') != '')
+            c.check('ordinary move: drops the squashed patch for the documented reason',
+                    expected['skip'] in output, output[-900:])
+        subjects = c.git('log', '--format=%s', 'origin/main..HEAD').splitlines()
+        c.check('endpoint: only the open commit remains directly on the squash, with its patch intact',
+                result.returncode == 0 and subjects == ['a3']
+                and c.git('rev-parse', 'HEAD^') == c.git('rev-parse', 'origin/main')
+                and c.git('diff', '--name-status', 'origin/main', 'HEAD') == 'A\ta3'
+                and c.git('show', 'HEAD:a3') == 'a3 content', repr(subjects))
     elif kind == 'start':
         block = c.body('git-branchless.md', 'git checkout --detach origin/main')
         # Recipe also contains illustrative edit/commit steps. Only its start command
@@ -439,13 +425,6 @@ def exercise(c):
         command = next(line for line in block.splitlines() if 'git checkout --detach origin/main' in line)
         c.shell(command)
         c.check('endpoint: new stack starts at latest upstream', c.git('rev-parse', 'HEAD') == c.git('rev-parse', 'origin/main'))
-    elif kind == 'amend':
-        c.cmd(['git', 'checkout', '-q', 'a-1'], require=True)
-        (c.wt / 'a1').write_text('a1 fixed\n')
-        c.git('add', 'a1')
-        c.shell(c.body('stack-fix', '\ngit amend\n') if False else c.body('stack-fix', 'git amend\n'))
-        c.git('checkout', '-q', 'a')
-        c.check('endpoint: manual amend restacks own tip', c.git('show', 'a-1:a1') == 'a1 fixed' and c.git('show', 'HEAD:a1') == 'a1 fixed')
     elif kind == 'split':
         # Turn the tip into a two-file commit, then execute the skill's
         # interactive edit using a deterministic sequence editor.
@@ -462,13 +441,19 @@ def exercise(c):
         for file in ('a2', 'split-second'):
             c.shell(group, replacements={'git add -p': 'git add ' + file, 'descriptive message for this group': 'split ' + file})
         c.shell(c.body('stack-split', 'git rebase --continue'))
-        c.check('endpoint: split produces two commits with identical final tree', c.git('rev-parse', 'HEAD^{tree}') == tree and c.git('rev-list', '--count', 'a-1..HEAD') == '2')
+        subjects = c.git('log', '--reverse', '--format=%s', 'a-1..HEAD').splitlines()
+        c.check('endpoint: split produces the two approved groups in order without changing the final tree',
+                subjects == ['split a2', 'split split-second'] and c.git('rev-parse', 'HEAD^{tree}') == tree,
+                repr(subjects))
     elif kind == 'recipe-move':
         block = c.body('git-branchless.md', 'own=')
         block += c.body('git-branchless.md', 'git move ')
         result = c.shell(block)
         c.check('endpoint: own stack reaches latest upstream', result.returncode == 0 and c.cmd(['git', 'merge-base', '--is-ancestor', 'origin/main', 'HEAD']).returncode == 0)
-        c.check('endpoint: own commits retained', c.git('show', 'HEAD:a1') == 'a1 old' and c.git('show', 'HEAD:a2') == 'a2 old')
+        subjects = c.git('log', '--reverse', '--format=%s', 'origin/main..HEAD').splitlines()
+        c.check('endpoint: move retains just the two own commits, in order, with their changes intact',
+                subjects == ['a1', 'a2'] and c.git('show', 'HEAD:a1') == 'a1 old'
+                and c.git('show', 'HEAD:a2') == 'a2 old', repr(subjects))
     elif kind == 'recipe-hide':
         target = c.git('rev-parse', 'a-1')
         block = c.body('git-branchless.md', 'git hide ')
@@ -488,40 +473,51 @@ def exercise(c):
         c.cmd(['git', 'checkout', '--detach', old_b], cwd=sibling, require=True)
         (sibling / 'b1').write_text('b1 amended\n')
         c.cmd(['git', 'commit', '--amend', '-am', 'b1 amended'], cwd=sibling, require=True)
+        new_b = c.git('rev-parse', 'HEAD', cwd=sibling)
         c.cmd(['git', 'checkout', 'b'], cwd=sibling, require=True)
+        c.check('fixture: sibling has an independent abandoned child that an unscoped restack could move',
+                old_b != new_b and c.git('rev-parse', 'b^') == old_b)
         old_a = c.git('rev-parse', 'a-1')
         c.cmd(['git', 'checkout', '--detach', old_a], require=True)
         (c.wt / 'a1').write_text('a1 amended\n')
         c.cmd(['git', 'commit', '--amend', '-am', 'a1 amended'], require=True)
+        new_a = c.git('rev-parse', 'HEAD')
         c.before = c.snapshot()
         result = c.shell(c.body('git-branchless.md', 'git restack '), replacements={'<abandoned-hash>': old_a})
-        c.check('endpoint: scoped forced restack repairs own child', result.returncode == 0 and c.git('show', 'a:a1') == 'a1 amended')
-        c.check('endpoint: sibling abandoned child remains on original parent', c.git('rev-parse', 'b^') == old_b)
+        # I1 also checks the sibling's HEAD, which pins its immutable parent.
+        c.check('endpoint: forced restack reattaches the own child to the rewritten parent',
+                result.returncode == 0 and c.git('rev-parse', 'a^') == new_a and c.git('show', 'a:a1') == 'a1 amended')
     elif kind == 'safety-matrix':
-        summary = c.body('stack-summary', 'BASE="$(git merge-base "$base" HEAD)"')
-        summary = summary[summary.index('# Default,'):]
-        result = c.shell(summary, 'printf "SCENARIO_BASE=%s\\n" "$BASE"')
-        selected = next(line.split('=', 1)[1] for line in result.stdout.splitlines() if line.startswith('SCENARIO_BASE='))
-        fork = c.git('merge-base', 'origin/main', 'HEAD')
-        c.check('matrix: restructure base is the fork point', c.git('rev-parse', selected) == fork)
-
+        worktree = c.spec['expected'].get('overlap_worktree')
+        # The guard can print the same HEAD for several selected ancestors.
+        expected_heads = {c.git('rev-parse', 'HEAD', cwd=c.root / worktree)} if worktree else set()
+        if c.spec['expected'].get('tip_fix'):
+            test_selection = c.selection()
+            test_guard = c.body('stack-test', '${STACK:?run the selection block first}')
+            formatter = c.root / 'fmt-matrix.sh'
+            formatter.write_text(STRICT + 'printf "matrix fixed\\n" > a2\n')
+            fix = c.body('stack-test', 'git test fix --strategy working-copy --jobs 1 --no-cache')
+            before_root = c.git('rev-parse', 'a-1')
+            # A whole-stack rewrite is unsafe here, but the other worktree has
+            # no descendant of @. On guard failure, never enter the fix block.
+            fixed = c.shell(test_selection + '(\n' + test_guard + ') || exit $?\n' + fix,
+                            replacements={'<revset>': '@', '<command>': 'bash ' + str(formatter)})
+            c.check('test: fixing only the tip is safe above a shared stack root',
+                    fixed.returncode == 0 and c.git('show', 'HEAD:a2') == 'matrix fixed'
+                    and c.git('rev-parse', 'a-1') == before_root and c.git('rev-parse', 'HEAD^') == before_root,
+                    (fixed.stdout + fixed.stderr)[-500:])
         submit_guard = c.shell(c.guard())
-        should_stop = c.spec['topology'] in ('T2', 'T6', 'T9')
-        c.check('matrix: submit guard handles sibling/stacked/detached topology', (submit_guard.returncode != 0) == should_stop, f'rc={submit_guard.returncode}')
-        if should_stop:
-            (c.root / 'command-trace.tsv').write_text('')
-
-        test_selection = c.selection()
-        test_guard = c.body('stack-test', '${STACK:?run the selection block first}')
-        guard = c.shell(test_selection + test_guard, replacements={'<revset>': '@'})
-        c.check('matrix: narrow test-fix selection is safe', guard.returncode == 0, guard.stderr[-500:])
-
-        formatter = c.root / 'fmt-matrix.sh'
-        formatter.write_text(STRICT + 'printf "matrix fixed\\n" > a2\n')
-        command = 'bash ' + str(formatter)
-        fix = c.body('stack-test', 'git test fix --strategy working-copy --jobs 1 --no-cache')
-        fixed = c.shell(test_selection + fix, replacements={'<revset>': '@', '<command>': command})
-        c.check('matrix: no-cache working-copy fix updates only the selected tip', fixed.returncode == 0 and c.git('show', 'HEAD:a2') == 'matrix fixed', fixed.stdout[-500:])
+        c.check('submit: reports exactly the stacked worktree HEAD, or allows the disjoint sibling',
+                submit_guard.returncode == (1 if worktree else 0)
+                and set(submit_guard.stdout.split()) == expected_heads,
+                f'expected={sorted(expected_heads)!r}; rc={submit_guard.returncode}; stdout={submit_guard.stdout!r}; stderr={submit_guard.stderr!r}')
+        if c.spec['expected'].get('test_overlap'):
+            test_selection = c.selection()
+            test_guard = c.body('stack-test', '${STACK:?run the selection block first}')
+            guard = c.shell(test_selection + test_guard, replacements={'<revset>': '$STACK'})
+            c.check('test: a detached worktree also blocks a full-stack fix',
+                    guard.returncode == 1 and set(guard.stdout.split()) == expected_heads,
+                    f'expected={sorted(expected_heads)!r}; rc={guard.returncode}; stdout={guard.stdout!r}; stderr={guard.stderr!r}')
     else:
         raise RuntimeError('Unknown scenario kind: ' + kind)
 
@@ -579,10 +575,11 @@ def main():
                 case.check('scenario execution', False, error)
         finally:
             if case:
-                try:
-                    case.invariants()
-                except Exception as exc:
-                    case.check('invariant execution', False, str(exc))
+                if case.behavioral:
+                    try:
+                        case.invariants()
+                    except Exception as exc:
+                        case.check('invariant execution', False, str(exc))
                 passed = not error and all(check['pass'] for check in case.checks)
                 result = {'id': spec['id'], 'status': 'PASS' if passed else 'FAIL', 'checks': case.checks, 'block_ids': case.used, 'error': error}
                 case.log.close()

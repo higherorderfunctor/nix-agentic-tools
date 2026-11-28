@@ -1,5 +1,4 @@
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
   lib,
   pkgs,
@@ -8,8 +7,11 @@
 }: let
   redact = import ../../lib/redact {inherit lib;};
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm launchdAgentRunsLauncher mcpLib mkTest;
+  inherit (harness) checkRows claudeMcpPath claudeMcpServers evalDevenv evalHm launchdAgentRunsLauncher mcpLib mkTest rejectsChange;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  sampleCaddyfile = mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer);
+  proxyServices = services: lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) services;
+  failedAssertions = result: map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions);
   webexResult = backend: clients: assignServers:
     (
       if backend == "hm"
@@ -50,120 +52,133 @@
   webexShared = backend: let
     result = webexResult backend true true;
     cfg = result.config;
-    clients = [
-      (claudeMcpServers backend result)
-      (hmCodexSettings result).mcp_servers
-    ];
     accounts = cfg.ai.mcp-oauth.accounts;
-    proxyServices = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) cfg.ai.services;
+    clients = {
+      Claude = claudeMcpServers backend result;
+      Codex = (hmCodexSettings result).mcp_servers;
+    };
   in
-    builtins.attrNames accounts
-    == ["webex-mcp-personal" "webex-mcp-work"]
-    && builtins.attrNames cfg.ai.mcpServers == webexServers
-    && builtins.attrNames proxyServices
-    == [
-      "mcp-proxy-webex-mcp-personal-meeting"
-      "mcp-proxy-webex-mcp-personal-messaging"
-      "mcp-proxy-webex-mcp-work-meeting"
-      "mcp-proxy-webex-mcp-work-messaging"
-    ]
-    && builtins.attrNames cfg.ai.mcp-oauth.services
-    == [
-      "mcp-oauth-webex-mcp-personal"
-      "mcp-oauth-webex-mcp-work"
-    ]
-    && lib.all (client:
-      map (name: client.${name}.url) webexServers
-      == [
-        "http://127.0.0.1:19592/"
-        "http://127.0.0.1:19593/"
-        "http://127.0.0.1:19594/"
-        "http://127.0.0.1:19595/"
-      ])
-    clients
-    && map (name: cfg.ai.mcpServers.${name}.proxy.oauthAccount) webexServers
-    == [
-      "webex-mcp-personal"
-      "webex-mcp-personal"
-      "webex-mcp-work"
-      "webex-mcp-work"
-    ]
-    && map (name: cfg.ai.mcpServers.${name}.url) webexServers
-    == [
-      "https://mcp.webexapis.com/mcp/webex-meeting"
-      "https://mcp.webexapis.com/mcp/webex-messaging"
-      "https://mcp.webexapis.com/mcp/webex-meeting"
-      "https://mcp.webexapis.com/mcp/webex-messaging"
-    ]
-    && lib.all (instance: let
-      account = accounts."webex-mcp-${instance}";
-    in
-      account.clientId
-      == redact.file "/run/secrets/${instance}-id"
-      && account.clientSecret == redact.file "/run/secrets/${instance}-secret"
-      && account.login
-      == {
-        inherit instance;
-        owner = "webex-mcp";
-        profile = "webex";
-      }
-      && account.provider
-      == {
-        authorizeUrl = "https://webexapis.com/v1/authorize";
-        extraScopes = ["spark:kms"];
-        loginLifetimeDays = 90;
-        tokenUrl = "https://webexapis.com/v1/access_token";
-      }
-      && account.scopes
-      == [
-        "meeting:participants_read"
-        "meeting:schedules_read"
-        "meeting:summaries_read"
-        "meeting:transcripts_read"
-        "spark:mcp"
-        "spark:memberships_read"
-        "spark:messages_read"
-        "spark:people_read"
-        "spark:rooms_read"
-      ]) ["personal" "work"]
-    && lib.all (port: builtins.hasAttr port cfg.ai.claims.port) ["19592" "19593" "19594" "19595"]
-    && lib.all (entry: entry.assertion) cfg.assertions;
+    {
+      "account names exclude the disabled instance" =
+        builtins.attrNames accounts == ["webex-mcp-personal" "webex-mcp-work"];
+      "enabling both clients does not create a conflicting claim" = failedAssertions result == [];
+      "one daemon and port per endpoint, one OAuth service per account" =
+        builtins.attrNames (proxyServices cfg.ai.services)
+        == [
+          "mcp-proxy-webex-mcp-personal-meeting"
+          "mcp-proxy-webex-mcp-personal-messaging"
+          "mcp-proxy-webex-mcp-work-meeting"
+          "mcp-proxy-webex-mcp-work-messaging"
+        ]
+        && builtins.attrNames cfg.ai.mcp-oauth.services
+        == [
+          "mcp-oauth-webex-mcp-personal"
+          "mcp-oauth-webex-mcp-work"
+        ]
+        && lib.all (port: builtins.hasAttr port cfg.ai.claims.port) ["19592" "19593" "19594" "19595"];
+      "root endpoint names exclude the disabled instance" = builtins.attrNames cfg.ai.mcpServers == webexServers;
+    }
+    # Both backends import the same Webex declarations and OAuth mount.
+    // lib.optionalAttrs (backend == "hm") {
+      "account mapping does not cross instances" =
+        map (name: cfg.ai.mcpServers.${name}.proxy.oauthAccount) webexServers
+        == [
+          "webex-mcp-personal"
+          "webex-mcp-personal"
+          "webex-mcp-work"
+          "webex-mcp-work"
+        ];
+      "each OAuth account has its own login, files, provider and scopes" = lib.all (instance: let
+        account = accounts."webex-mcp-${instance}" or null;
+      in
+        account
+        != null
+        && account.clientId == redact.file "/run/secrets/${instance}-id"
+        && account.clientSecret == redact.file "/run/secrets/${instance}-secret"
+        && account.login
+        == {
+          inherit instance;
+          owner = "webex-mcp";
+          profile = "webex";
+        }
+        && account.provider
+        == {
+          authorizeUrl = "https://webexapis.com/v1/authorize";
+          extraScopes = ["spark:kms"];
+          loginLifetimeDays = 90;
+          tokenUrl = "https://webexapis.com/v1/access_token";
+        }
+        && account.scopes
+        == [
+          "meeting:participants_read"
+          "meeting:schedules_read"
+          "meeting:summaries_read"
+          "meeting:transcripts_read"
+          "spark:mcp"
+          "spark:memberships_read"
+          "spark:messages_read"
+          "spark:people_read"
+          "spark:rooms_read"
+        ]) ["personal" "work"];
+      "root declarations target the right Webex endpoint, not a client URL" =
+        map (name: cfg.ai.mcpServers.${name}.url or null) webexServers
+        == [
+          "https://mcp.webexapis.com/mcp/webex-meeting"
+          "https://mcp.webexapis.com/mcp/webex-messaging"
+          "https://mcp.webexapis.com/mcp/webex-meeting"
+          "https://mcp.webexapis.com/mcp/webex-messaging"
+        ];
+    }
+    // lib.mapAttrs' (name: client:
+      lib.nameValuePair "${name} receives each endpoint's loopback URL" (
+        builtins.attrNames client
+        == webexServers
+        && map (server: client.${server}.url) webexServers
+        == [
+          "http://127.0.0.1:19592/"
+          "http://127.0.0.1:19593/"
+          "http://127.0.0.1:19594/"
+          "http://127.0.0.1:19595/"
+        ]
+      ))
+    clients;
   webexUnused = backend: let
-    cfg = (webexResult backend false true).config;
     ownerOnly = (webexResult backend true false).config;
     evaluate =
       if backend == "hm"
       then evalHm
       else evalDevenv;
-    disabled = evaluate {ai.webex-mcp.instances.disabled.enable = false;};
-    empty = evaluate {};
+    noOAuth = result: let
+      packages =
+        if backend == "hm"
+        then result.config.home.packages
+        else result.config.packages;
+    in
+      result.config.ai.mcpServers
+      == {}
+      && result.config.ai.webex-mcp.mcpServers == {}
+      && result.config.ai.mcp-oauth.accounts == {}
+      && result.config.ai.mcp-oauth.services == {}
+      && !(lib.any (package: builtins.elem package.name ["mcp-oauth" "mcp-oauth-logins"]) packages);
   in
-    # Enabled owner instances must not populate the consumer's root pool.
-    ownerOnly.ai.mcpServers
-    == {}
-    && builtins.attrNames ownerOnly.ai.webex-mcp.mcpServers == webexServers
-    && lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) cfg.ai.services == {}
-    && lib.all (
-      result: let
-        packages =
-          if backend == "hm"
-          then result.config.home.packages
-          else result.config.packages;
-      in
-        result.config.ai.mcpServers
-        == {}
-        && result.config.ai.webex-mcp.mcpServers == {}
-        && result.config.ai.mcp-oauth.accounts == {}
-        && result.config.ai.mcp-oauth.services == {}
-        && !(lib.any (package: builtins.elem package.name ["mcp-oauth" "mcp-oauth-logins"]) packages)
-    ) [empty disabled];
+    {
+      "an absent declaration does not eagerly allocate OAuth resources" = noOAuth (evaluate {});
+      # Enabled owner instances must not populate the consumer's root pool.
+      "owner declarations stay local until the consumer assigns them" =
+        ownerOnly.ai.mcpServers == {} && builtins.attrNames ownerOnly.ai.webex-mcp.mcpServers == webexServers;
+    }
+    // lib.optionalAttrs (backend == "devenv") {
+      "declarations without enabled clients do not start a proxy" =
+        proxyServices (webexResult backend false true).config.ai.services == {};
+    };
 in {
   checks =
     {
       # The guard is the point of the change, so exercise it as SHELL rather
       # than as a grep: run a generated snippet against a genuinely empty file
       # and against a populated one. A grep proves the line was emitted; only
-      # running it proves the line works.
+      # running it proves the line works. A nonempty prefix and suffix must
+      # not hide the failure of a file nested in the concatenation.
       module-credential-empty-guard-aborts = let
         # `redact.assign` bakes the path in at generation time and the test
         # needs two different files, so the path is a placeholder substituted
@@ -196,73 +211,57 @@ in {
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          empty=$(mktemp) && : > "$empty"
-          full=$(mktemp) && printf 'a-real-token' > "$full"
-          sed "s|/run/redact-test-secret|$full|"  ${runner} > full.sh
-          sed "s|/run/redact-test-secret|$empty|" ${runner} > empty.sh
+          : > empty
+          printf 'a-real-token' > full
 
-          # Positive control. Without it, a guard that rejected EVERYTHING would
-          # still pass the negative case below and look correct.
-          got=$(${pkgs.bash}/bin/bash full.sh 2>&1)
+          run_case() {
+            sed "s|/run/redact-test-secret|$PWD/$1|" ${runner} > case.sh
+            ${pkgs.bash}/bin/bash case.sh
+          }
+
+          # Positive control: rejecting every path must not pass.
+          got=$(run_case full 2>&1)
           [ "$got" = "REACHED-PROGRAM" ] || {
             echo "FAIL: populated secret was rejected (got: $got)" >&2
             exit 1
           }
 
-          # A DIRECTORY must abort with the guard's own message. `-r` alone is
-          # true for a readable directory, so without the `-d` branch this
-          # sails past and dies on `cat: …: Is a directory`, losing the
-          # variable name and the path the guard exists to report.
-          mkdir -p secret-dir
-          sed "s|/run/redact-test-secret|$PWD/secret-dir|" ${runner} > dir.sh
-          if got=$(${pkgs.bash}/bin/bash dir.sh 2>&1); then
-            echo "FAIL: a directory as the secret path did not abort (got: $got)" >&2
-            exit 1
-          fi
-          case "$got" in
-            *"reference is a directory"*) : ;;
-            *)
-              echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
-              exit 1 ;;
-          esac
-
-          # The real case: an empty file must abort, non-zero, before the
-          # program is reached.
-          if got=$(${pkgs.bash}/bin/bash empty.sh 2>&1); then
+          if got=$(run_case empty 2>&1); then
             echo "FAIL: empty secret did not abort the wrapper (got: $got)" >&2
             exit 1
           fi
-          case "$got" in
-            *REACHED-PROGRAM*)
-              echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
-            *"TEST_TOKEN: reference resolved empty"*) : ;;
-            *)
-              echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
-          esac
+          if [ "$got" != "TEST_TOKEN: reference resolved empty" ]; then
+            echo "FAIL: empty secret did not abort via the expected guard (got: $got)" >&2
+            exit 1
+          fi
 
           echo PASS > "$out"
         '';
 
-      # A credential-valued http header reaching the shared renderServer via a
-      # non-Kiro path throws — non-Kiro ecosystems do not inject secret
-      # headers (rather than serialize the raw file path). Forced via toJSON.
-      module-mcp-credential-header-non-kiro-throws =
-        mkTest "mcp-credential-header-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
-          type = "http";
-          url = "u";
-          headers.H = redact.file "/f";
-        })))
-    .success);
-
-      # A credential-valued http URL reaching the shared renderServer via a
-      # non-Kiro path throws (mirrors the header guard) — only Kiro assembles
-      # a private mcp.json for a secret url.
-      module-mcp-credential-url-non-kiro-throws =
-        mkTest "mcp-credential-url-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
-          type = "http";
-          url = redact.file "/f";
-        })))
-    .success);
+      # Kiro preprocesses credential-valued URLs and headers before the shared
+      # renderer. Other runtimes must not serialize an unresolved reference.
+      module-mcp-credential-non-kiro = mkTest "mcp-credential-non-kiro" (
+        let
+          literal = {
+            type = "http";
+            url = "https://example.invalid/";
+            headers.H = "public";
+          };
+          render = mcpLib.renderServer pkgs "example";
+        in
+          checkRows "shared HTTP renderer rejects unresolved credentials" {
+            "credential header is rejected instead of serialized" = rejectsChange (server: (render server).headers.H) {
+              valid = literal;
+              invalid = literal // {headers.H = redact.file "/run/secrets/header";};
+              expected = "public";
+            };
+            "credential URL is rejected instead of serialized" = rejectsChange (server: (render server).url) {
+              valid = literal;
+              invalid = literal // {url = redact.file "/run/secrets/url";};
+              expected = "https://example.invalid/";
+            };
+          }
+      );
 
       # `admin off` does not disable Caddy's config autosave. Exercise the
       # packaged binary against isolated dummy XDG homes: the historical variant
@@ -270,21 +269,21 @@ in {
       # generated Caddyfile must not create autosave.json at all. The vulnerable
       # control proves this check fails for the pre-fix rendering.
       module-mcp-proxy-caddy-autosave-disabled = let
-        fixedCaddyfile = mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer);
         vulnerableCaddyfile = pkgs.writeText "mcp-proxy-example-vulnerable-Caddyfile" (
-          lib.replaceStrings ["persist_config off"] [""] (builtins.readFile fixedCaddyfile)
+          lib.replaceStrings ["persist_config off"] [""] (builtins.readFile sampleCaddyfile)
         );
       in
         pkgs.runCommand "module-test-mcp-proxy-caddy-autosave-disabled" {
           nativeBuildInputs = [pkgs.caddy pkgs.coreutils pkgs.jq];
         } ''
-          caddy fmt --diff ${fixedCaddyfile}
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
 
           run_caddy() {
             local config="$1"
             local xdg_root="$2"
             mkdir -p "$xdg_root/config" "$xdg_root/data"
-            set +e
+            local status=0
             env \
               MCP_PROXY_EXAMPLE_ORIGIN=https://example.invalid \
               MCP_PROXY_EXAMPLE_PATH=/mcp \
@@ -293,21 +292,22 @@ in {
               XDG_CONFIG_HOME="$xdg_root/config" \
               XDG_DATA_HOME="$xdg_root/data" \
               timeout 2 caddy run --config "$config" --adapter caddyfile \
-                >"$xdg_root/caddy.log" 2>&1
-            local status=$?
-            set -e
-            test "$status" -eq 124
+                >"$xdg_root/caddy.log" 2>&1 || status=$?
+            if [[ $status != 124 ]]; then
+              printf 'FAIL: Caddy exited %s before timeout: %s\n' "$status" "$config" >&2
+              cat "$xdg_root/caddy.log" >&2
+              return 1
+            fi
           }
 
           run_caddy ${vulnerableCaddyfile} "$TMPDIR/vulnerable"
           vulnerable_autosave="$TMPDIR/vulnerable/config/caddy/autosave.json"
-          test -f "$vulnerable_autosave"
           jq -e \
             '.. | strings | select(contains("DUMMY-CREDENTIAL-autosave-check"))' \
             "$vulnerable_autosave" >/dev/null
           echo "vulnerable variant: autosave PRESENT with dummy credential"
 
-          run_caddy ${fixedCaddyfile} "$TMPDIR/fixed"
+          run_caddy ${sampleCaddyfile} "$TMPDIR/fixed"
           test ! -e "$TMPDIR/fixed/config/caddy/autosave.json"
           echo "fixed rendering: autosave ABSENT"
 
@@ -316,70 +316,53 @@ in {
 
       # An empty delete list renders an unfiltered global log, which writes
       # every request header to the journal, so the shared helper throws.
-      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (!(builtins.tryEval ((import ../../lib/ai/caddy.nix {inherit lib pkgs;}).globalBlock {logDeletes = [];})).success);
-
-      # The proxy renders its Caddyfile from the shared lib/ai/caddy.nix
-      # helpers. This pins the whole rendering to a copy taken before they
-      # were extracted, so a helper change made for another caller cannot
-      # alter the proxy's config unnoticed.
-      module-mcp-proxy-caddyfile-golden = mkTest "mcp-proxy-caddyfile-golden" (
-        (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer)).text
-        == builtins.readFile ./example.Caddyfile
+      module-mcp-proxy-caddy-empty-log-deletes-throws = mkTest "mcp-proxy-caddy-empty-log-deletes-throws" (
+        let
+          inherit (import ../../lib/ai/caddy.nix {inherit lib pkgs;}) globalBlock;
+        in
+          checkRows "Caddy request log redaction" {
+            "empty delete list cannot render an unfiltered log" =
+              rejectsChange
+              (logDeletes: lib.hasInfix "request>headers delete" (globalBlock {inherit logDeletes;})) {
+                valid = ["request>headers"];
+                invalid = [];
+                expected = true;
+              };
+          }
       );
 
-      # The Caddyfile lands in the WORLD-READABLE Nix store, so it may carry
-      # only `{$VAR}` tokens. This also pins the escaping trap: Nix's `$${`
-      # is an escape for a literal `${`, so a regression here silently emits
-      # an unexpanded `{${VAR}}` that Caddy would forward verbatim.
+      # Caddy's site address is only a Host-header matcher: it does NOT
+      # replace `bind`. The golden pins the actual loopback bind, runtime
+      # placeholders (not credentials), deletion and transport directives.
+      module-mcp-proxy-caddyfile-golden = mkTest "mcp-proxy-caddyfile-golden" (
+        sampleCaddyfile.text == builtins.readFile ./example.Caddyfile
+      );
+
+      # The golden uses both credential headers and explicit edits. With only
+      # a credential URL, defaults still must not rewrite client identity.
+      # Whole-map redaction must apply even without startup credentials: a
+      # per-field denylist would miss customer headers, and Caddy's built-in
+      # redaction only covers certain standard names.
       module-mcp-proxy-caddyfile-has-no-secrets = mkTest "mcp-proxy-caddyfile-has-no-secrets" (
         let
-          cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer));
+          server = proxySampleServer // {proxy = proxySampleServer.proxy // {headers = {};};};
+          render = source: (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" source)).text;
+          cf = render server;
+          literalCaddyfile = render (server // {url = "https://example.invalid/mcp";});
         in
-          # `bind <host>` is the ONLY thing that restricts the listener to an
-          # interface, and it is the assertion that matters most here: the
-          # endpoint is unauthenticated, so a wildcard listener publishes use
-          # of the upstream credential to the whole network.
-          #
-          # Do NOT weaken this to a site-address check like
-          # `hasInfix "127.0.0.1:9501 {"`. That string is satisfied by a
-          # config that still listens on every interface — in Caddy a site
-          # address host is a Host-HEADER matcher, not a bind — so such a
-          # test goes green on the insecure config. Measured.
-          lib.hasInfix "bind 127.0.0.1" cf
-          && lib.hasInfix "persist_config off" cf
-          && lib.hasInfix "{$MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN}" cf
-          && lib.hasInfix "{$MCP_PROXY_EXAMPLE_HEADER_X_API_KEY}" cf
-          && lib.hasInfix "{$MCP_PROXY_EXAMPLE_ORIGIN}" cf
-          && lib.hasInfix "{$MCP_PROXY_EXAMPLE_PATH}" cf
-          # Plain-string headers are not secrets and stay literal.
-          && lib.hasInfix ''header_up X-Route "primary"'' cf
-          # Streaming: without this, SSE responses buffer to the end.
-          && lib.hasInfix "flush_interval -1" cf
-          # Caddy adds these four on its own and they must be deleted, not
-          # merely overwritten. Measured — the `Via` header is NOT covered by
-          # dropping the X-Forwarded-* trio.
-          && lib.hasInfix "header_up -Via" cf
-          && lib.hasInfix "header_up -X-Forwarded-For" cf
-          && lib.hasInfix "header_up -X-Forwarded-Host" cf
-          && lib.hasInfix "header_up -X-Forwarded-Proto" cf
-          # A null `proxy.headers` value is a DELETION, not an injection.
-          && lib.hasInfix "header_up -X-Drop-Me" cf
-          && !(lib.hasInfix ''header_up X-Drop-Me "'' cf)
-          # The proxy must NOT touch the client's identity. These were added
-          # 2026-08-12 and removed 2026-08-13 after measurement: the headers
-          # are undici defaults identifying Node, not a harness, and stripping
-          # them made the request MORE distinctive. Asserted negatively so a
-          # reintroduction has to argue with this comment first.
-          && !(lib.hasInfix "header_up User-Agent" cf)
-          && !(lib.hasInfix "header_up -Accept-Language" cf)
-          && !(lib.hasInfix "header_up -Sec-Fetch-Mode" cf)
-          # Go's transport adds `Accept-Encoding: gzip` below the header
-          # layer, so no `header_up -` can reach it; only turning transport
-          # compression off keeps the request identical to the client's.
-          && lib.hasInfix "compression off" cf
-          && !(lib.hasInfix "/run/secrets" cf)
-          # The escape regression: an unexpanded Nix interpolation token.
-          && !(lib.hasInfix "{\${" cf)
+          checkRows "proxy with no header declarations" {
+            "credential URL is not written into the Caddyfile" =
+              lib.hasInfix "reverse_proxy {$MCP_PROXY_EXAMPLE_ORIGIN}" cf
+              && lib.hasInfix "rewrite * {$MCP_PROXY_EXAMPLE_PATH}" cf
+              && !(lib.hasInfix "/run/secrets" cf);
+            # These are client defaults; stripping them makes requests more distinctive.
+            "no default rewrite or deletion of client identity headers" =
+              !(lib.any (line: builtins.match ".*header_up [-+?]?(user-agent|accept-language|sec-fetch-mode)([[:space:]].*)?" (lib.toLower line) != null) (lib.splitString "\n" cf));
+            "no startup credentials still delete the whole request-header map" =
+              lib.hasInfix "format filter" literalCaddyfile
+              && lib.hasInfix "request>headers delete" literalCaddyfile
+              && !(lib.hasInfix "request>headers>" literalCaddyfile);
+          }
       );
 
       # An IPv6 loopback bind must still hand clients a parseable URL: the
@@ -393,96 +376,64 @@ in {
           && lib.hasInfix "bind ::1\n" (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" server)).text
       );
 
-      # The property under test is NEGATIVE and easy to regress silently: a
-      # proxied server must hand the client NOTHING secret. Assert the
-      # loopback url is there AND that no header, no secret path, and no
-      # placeholder survives into the entry.
-      module-mcp-proxy-client-entry-drops-credentials = mkTest "mcp-proxy-client-entry-drops-credentials" (
+      # Exact client records pin both halves of the split: daemon fields
+      # must never escape, and literal client headers must remain usable.
+      module-mcp-proxy-client-entry = mkTest "mcp-proxy-client-entry" (
         let
-          entry = mcpProxyLib.clientEntry "example" proxySampleServer;
-          json = builtins.toJSON entry;
+          render = mcpProxyLib.clientEntry "example";
+          clientHeaders."X-Client-Sent" = "yes";
+          expected = {
+            timeout = 300000;
+            type = "http";
+            url = "http://127.0.0.1:9501/";
+          };
         in
-          entry.url
-          == "http://127.0.0.1:9501/"
-          && entry.type == "http"
-          # `timeout` is client behavior, not a credential — it must survive.
-          && entry.timeout == 300000
-          # The fixture declares its credentials under `proxy.headers`, which
-          # the daemon injects and the client never sees. Nothing from there
-          # may appear in the entry.
-          && !(entry ? headers)
-          && !(lib.hasInfix "/run/secrets" json)
-          && !(lib.hasInfix "Bearer" json)
-          && !(lib.hasInfix "env:" json)
-          && !(lib.hasInfix "X-Api-Key" json)
-          && !(lib.hasInfix "X-Service-Token" json)
+          checkRows "proxy client entry" {
+            "adding a client header does not expose daemon headers" =
+              render (proxySampleServer // {headers = clientHeaders;}) == (expected // {headers = clientHeaders;});
+            "credential URL and daemon fields are replaced without losing the client timeout" =
+              render proxySampleServer == expected;
+          }
       );
 
-      # Top-level `headers` on a proxied server are the CLIENT's and DO reach
-      # it — that is the half of the split which makes the two keys mean
-      # different things instead of one key meaning two. Dropping them here
-      # would be a silent no-op on config the operator wrote.
-      #
-      # Safe only because `mkBackendTransform` asserts they carry no
-      # credential; that assertion is tested separately below.
-      module-mcp-proxy-client-entry-keeps-client-headers = mkTest "mcp-proxy-client-entry-keeps-client-headers" (
+      # Top-level headers belong to the client, not the proxy. Moving the
+      # credential to proxy.headers must clear the assertion without banning
+      # ordinary client headers. evalHm returns the assertions without enforcing
+      # them, so an eval throw is not evidence of the expected rejection.
+      module-mcp-proxy-client-header-restrictions = mkTest "mcp-proxy-client-header-restrictions" (
         let
-          entry = mcpProxyLib.clientEntry "example" (proxySampleServer
-            // {
-              headers."X-Client-Sent" = "yes";
-            });
-        in
-          entry.headers."X-Client-Sent"
-          == "yes"
-          # ... and still nothing the daemon injects.
-          && !(lib.hasInfix "X-Api-Key" (builtins.toJSON entry))
-      );
-
-      # A credential in a PROXIED server's top-level `headers` must be a hard
-      # error, not an absorption. Those headers go to the client, so absorbing
-      # them silently (the pre-2026-08-13 behavior) made one key mean two
-      # things, and passing them through would hand the client the credential
-      # the proxy exists to withhold. The assertion is also the migration
-      # message for config written against the old shape.
-      module-mcp-proxy-credential-in-client-headers-throws =
-        mkTest "mcp-proxy-credential-in-client-headers-throws" (
-          let
-            result =
-              builtins.tryEval
-              (evalHm {
-                ai.kiro = {
-                  cli.enable = true;
-                  mcpServers.jira = {
-                    type = "http";
-                    url = redact.file "/run/secrets/jira-url";
-                    # WRONG on purpose: belongs under proxy.headers.
+          failed = header:
+            failedAssertions (evalHm {
+              ai.kiro = {
+                cli.enable = true;
+                mcpServers.jira = {
+                  type = "http";
+                  url = redact.file "/run/secrets/jira-url";
+                  headers."X-Client-Sent" = header;
+                  proxy = {
+                    enable = true;
+                    port = 9501;
                     headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
-                    proxy = {
-                      enable = true;
-                      port = 9501;
-                    };
                   };
                 };
-              })
-      .config.assertions;
-            failed =
-              if result.success
-              then builtins.filter (a: !a.assertion) result.value
-              else [];
-          in
-            # Require the eval to SUCCEED and the failing assertion to be OURS.
-            #
-            # Accepting a throw here instead (`!result.success || …`) is what
-            # this originally did, and it was wrong: `evalHm` returns
-            # `config.assertions` WITHOUT checking them, so a failed assertion
-            # never throws — the throw branch could only ever be reached by an
-            # unrelated evaluation error, which it would then silently convert
-            # into a pass. `tryEval` stays only so such an error surfaces as a
-            # test failure rather than as an eval crash.
-            result.success
-            && builtins.any (a: lib.hasInfix "proxy.headers" a.message) failed
-        );
+              };
+            });
+        in
+          checkRows "proxied Kiro client headers" {
+            "credential header names its migration destination" = let
+              failures = failed (redact.file "/run/secrets/client-token");
+              message = builtins.head failures;
+            in
+              builtins.length failures
+              == 1
+              && lib.hasInfix "put a CREDENTIAL in the server's top-level `headers`" message
+              && lib.hasInfix "Move them to `proxy.headers`" message;
+            "literal client header and separate proxy credential pass" = failed "yes" == [];
+          }
+      );
 
+      # A root-owned proxy must emit a runnable devenv process, not just a
+      # client entry pointing at a local port that nothing listens on.
       module-mcp-proxy-devenv-emits-process = mkTest "mcp-proxy-devenv-emits-process" (
         let
           result = evalDevenv {
@@ -494,240 +445,197 @@ in {
         in
           lib.all (assertion: assertion.assertion) result.config.assertions
           && lib.hasSuffix "/bin/ai-service-mcp-proxy-shared" result.config.processes.mcp-proxy-shared.exec
-          && (claudeMcpServers "devenv" result).shared.url == "http://127.0.0.1:9501/"
       );
 
-      module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (!(builtins.tryEval (builtins.deepSeq (mcpProxyLib.specFor "example" {
-          url = "https://example.com/mcp";
-          proxy = {
-            host = "127.0.0.1";
-            port = 9501;
-            headers = {
-              "X-Key" = redact.file "/run/secrets/one";
-              "X_Key" = redact.file "/run/secrets/two";
-            };
-          };
-        })
-        true)).success);
-
-      # `proxy.host` takes a bare address: the client url brackets IPv6 itself,
-      # so a pre-bracketed host would render `[[::1]]`, and a `%` zone suffix is
-      # neither a valid url authority nor a usable `bind`. `::1` is the control.
-      module-mcp-proxy-host-refuses-brackets-and-zones = mkTest "mcp-proxy-host-refuses-brackets-and-zones" (
+      module-mcp-proxy-header-variable-collision = mkTest "mcp-proxy-header-variable-collision" (
         let
-          hostAccepted = host:
-            (builtins.tryEval (builtins.deepSeq
-              (evalHm {
-                ai.mcpServers.example = lib.recursiveUpdate proxySampleServer {proxy.host = host;};
-              })
-              .config
-              .ai
-              .mcpServers
-              .example
-              .proxy
-              .host
-              null))
-            .success;
-        in
-          hostAccepted "::1"
-          && hostAccepted "127.0.0.1"
-          && !(hostAccepted "[::1]")
-          && !(hostAccepted "fe80::1%eth0")
-          && !(hostAccepted "")
-      );
-
-      # A plain-string header on a proxied server is NOT a credential and must
-      # keep working — the guard above has to reject secrets without rejecting
-      # ordinary client config.
-      module-mcp-proxy-literal-client-headers-allowed = mkTest "mcp-proxy-literal-client-headers-allowed" (
-        let
-          result = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              mcpServers.jira = {
-                type = "http";
-                url = redact.file "/run/secrets/jira-url";
-                headers."X-Client-Sent" = "yes";
-                proxy = {
-                  enable = true;
-                  port = 9501;
-                  headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
+          one = redact.file "/run/secrets/one";
+          two = redact.file "/run/secrets/two";
+          readSecrets = second:
+            (mcpProxyLib.specFor "example" {
+              url = "https://example.invalid/mcp";
+              proxy = {
+                host = "127.0.0.1";
+                port = 9501;
+                headers = {
+                  "X-Key" = one;
+                  "${second}" = two;
                 };
               };
-            };
-          };
-          failed = builtins.filter (a: !a.assertion) result.config.assertions;
+            }).headerSecrets;
         in
-          builtins.all (a: !(lib.hasInfix "proxy.headers" a.message)) failed
-      );
-
-      # Unconditional: a proxy injecting no credential still drops headers. A
-      # conditional filter would make the safe posture depend on the server's
-      # shape, so ADDING a credential later would silently flip logging from
-      # safe to leaky — the failure mode being designed out.
-      module-mcp-proxy-log-drop-is-unconditional = mkTest "mcp-proxy-log-drop-is-unconditional" (
-        let
-          cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" {
-            type = "http";
-            url = "https://example.invalid/mcp";
-            proxy = {
-              enable = true;
-              host = "127.0.0.1";
-              port = 9501;
-            };
-          }));
-        in
-          lib.hasInfix "request>headers delete" cf
-          && !(lib.hasInfix "format console" cf)
-      );
-
-      # Caddy's reverse_proxy ERROR logs embed the whole request header map,
-      # and its built-in `log_credentials` covers only Authorization/Cookie —
-      # never the custom auth headers this proxy injects. Measured 2026-08-12:
-      # 35 journal lines carrying a live gateway API key.
-      #
-      # The fix drops the WHOLE MAP rather than naming secret fields. Asserted
-      # that way on purpose: a per-field list is a denylist that fails OPEN on
-      # any header nobody enumerated, so a test pinning field names would bless
-      # exactly the shape being avoided.
-      module-mcp-proxy-log-drops-whole-header-map = mkTest "mcp-proxy-log-drops-whole-header-map" (
-        let
-          cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer));
-        in
-          lib.hasInfix "format filter" cf
-          && lib.hasInfix "request>headers delete" cf
-          # No per-field redaction anywhere — that is the regression.
-          && !(lib.hasInfix "request>headers>" cf)
-      );
-
-      # Each proxy declaration is a service of the layer that owns it, so two
-      # scopes with one key collide in the claims registry, identical records
-      # included, on the service key and on the port it carries.
-      module-mcp-proxy-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-reused-owner-key-fails-explicitly" (
-        let
-          result = evalHm {
-            ai = {
-              claude = {
-                enable = true;
-                mcpServers.shared = proxySampleServer;
-              };
-              kiro = {
-                cli.enable = true;
-                mcpServers.shared = proxySampleServer;
+          checkRows "proxy startup credential variables" {
+            "different headers cannot map to the same variable" = rejectsChange readSecrets {
+              valid = "X-Other";
+              invalid = "X_Key";
+              expected = {
+                MCP_PROXY_EXAMPLE_HEADER_X_KEY = one;
+                MCP_PROXY_EXAMPLE_HEADER_X_OTHER = two;
               };
             };
-          };
-        in
-          map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions)
-          == [
-            "ai.claims.port.9501: claimed by claude:mcp-proxy-shared.ports.main and kiro:mcp-proxy-shared.ports.main"
-            "ai.claims.service.mcp-proxy-shared: claimed by claude and kiro"
-          ]
+          }
       );
 
-      module-mcp-proxy-root-runtime-reused-owner-key-fails-explicitly = mkTest "mcp-proxy-root-runtime-reused-owner-key-fails-explicitly" (
+      # `proxy.host` takes a bare address: the client URL brackets IPv6 itself,
+      # so a pre-bracketed host would render `[[::1]]`, and a `%` zone suffix is
+      # neither a valid URL authority nor a usable `bind`.
+      module-mcp-proxy-host-refuses-brackets-and-zones = mkTest "mcp-proxy-host-refuses-brackets-and-zones" (
         let
-          result = evalHm {
-            ai = {
-              claude = {
-                enable = true;
-                mcpServers.shared = proxySampleServer;
-              };
-              codex.enable = true;
-              mcpServers.shared = proxySampleServer;
+          readHost = host:
+            (evalHm {
+              ai.mcpServers.example = lib.recursiveUpdate proxySampleServer {proxy.host = host;};
+            }).config.ai.mcpServers.example.proxy.host;
+          rejectHost = invalid:
+            rejectsChange readHost {
+              inherit invalid;
+              valid = "::1";
+              expected = "::1";
             };
-          };
         in
-          map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions)
-          == [
-            "ai.claims.port.9501: claimed by claude:mcp-proxy-shared.ports.main and internal:mcp-proxy-shared.ports.main"
-            "ai.claims.service.mcp-proxy-shared: claimed by claude and internal"
-          ]
+          checkRows "proxy host merge" {
+            "rejects a bracketed IPv6 address" = rejectHost "[::1]";
+            "rejects a scoped IPv6 address" = rejectHost "fe80::1%eth0";
+            "rejects an empty address" = rejectHost "";
+            # Keeping the bracket and zone restrictions alone still allows an
+            # address to split into multiple arguments to Caddy's bind.
+            "rejects whitespace inside an address" = rejectHost "bad host";
+          }
+      );
+
+      # Claims, not incidental Nix merge errors, reject two owners of the
+      # same proxy. Identical declarations must still count as two owners.
+      module-mcp-proxy-owner-key-collisions = mkTest "mcp-proxy-owner-key-collisions" (
+        let
+          failures = ai:
+            failedAssertions (evalHm {
+              ai =
+                ai
+                // {
+                  claude = {
+                    enable = true;
+                    mcpServers.shared = proxySampleServer;
+                  };
+                };
+            });
+          expected = other: [
+            "ai.claims.port.9501: claimed by claude:mcp-proxy-shared.ports.main and ${other}:mcp-proxy-shared.ports.main"
+            "ai.claims.service.mcp-proxy-shared: claimed by claude and ${other}"
+          ];
+        in
+          checkRows "proxy service and port claims" {
+            "root and runtime owners cannot share a service key or port" =
+              failures {
+                codex.enable = true;
+                mcpServers.shared = proxySampleServer;
+              }
+              == expected "internal";
+            "two runtime owners cannot share a service key or port" =
+              failures {
+                kiro = {
+                  cli.enable = true;
+                  mcpServers.shared = proxySampleServer;
+                };
+              }
+              == expected "kiro";
+          }
       );
 
       # The launcher resolves the upstream url (a secret or a literal), then
       # the proxy's run script splits it into the origin and path Caddy needs,
-      # points Caddy's state at a per-proxy runtime directory and execs it. A
-      # failed secret read aborts before anything starts.
+      # points Caddy's state at a per-proxy runtime directory and execs it. An
+      # empty startup token must abort before execution. The stand-in Caddy
+      # observes argv and environment separately: only the latter may contain
+      # a startup credential, and a second launch must reread its file.
       module-mcp-proxy-run-script-splits-url-and-isolates-state = let
         services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
         strictShellApplication = import ../../lib/strict-shell-application.nix;
         urlReader = strictShellApplication pkgs {
           name = "mcp-proxy-test-url";
           text = ''
-            test -z "''${PROXY_READER_FAIL:-}"
             printf 'https://upstream.example.test/path'
           '';
         };
         caddy = strictShellApplication pkgs {
           name = "caddy";
           text = ''
-            env | ${pkgs.gnugrep}/bin/grep -E '^MCP_PROXY_[A-Z]+_(ORIGIN|PATH)=' | ${pkgs.coreutils}/bin/sort
-            printf '%s\n' "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$*"
+            env | ${pkgs.gnugrep}/bin/grep -E '^MCP_PROXY_[A-Z]+_(HEADER_X_SERVICE_TOKEN|ORIGIN|PATH)=' | ${pkgs.coreutils}/bin/sort
+            printf '%s\n' "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$@"
           '';
         };
         proxyLib = import ../../lib/ai/mcpProxy.nix {
           inherit lib;
           pkgs = pkgs // {inherit caddy;};
         };
-        sample = proxySampleServer // {proxy = proxySampleServer.proxy // {headers = {};};};
-        launcher = name: url:
+        launcher = name: url: headers:
           services.mkLauncher {
             inherit pkgs;
             name = "mcp-proxy-${name}";
-            entry = (proxyLib.serviceFor name (sample // {inherit url;})) // {files = {};};
+            entry =
+              (proxyLib.serviceFor name {
+                inherit url;
+                proxy = proxySampleServer.proxy // {inherit headers;};
+              })
+              // {files = {};};
           };
-        secret = launcher "secret" (redact.command "${urlReader}/bin/mcp-proxy-test-url");
-        plain = launcher "plain" "https://upstream.example.test";
-        caddyfile = name: proxyLib.caddyfileFor (proxyLib.specFor name (sample // {url = "https://upstream.example.test";}));
+        secret = launcher "secret" (redact.command (lib.getExe urlReader)) {
+          "X-Service-Token" = redact.file "/run/proxy-test-token";
+        };
+        plain = launcher "plain" "https://upstream.example.test" {};
       in
         pkgs.runCommandLocal "mcp-proxy-run-script-splits-url-and-isolates-state" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           export XDG_RUNTIME_DIR="$TMPDIR/runtime"
           ${pkgs.coreutils}/bin/mkdir -p "$XDG_RUNTIME_DIR"
-          ${secret}/bin/ai-service-mcp-proxy-secret > actual
-          ${pkgs.diffutils}/bin/diff -u ${pkgs.writeText "proxy-url-expected" "MCP_PROXY_SECRET_ORIGIN=https://upstream.example.test\nMCP_PROXY_SECRET_PATH=/path\n"} <(${pkgs.coreutils}/bin/head -2 actual)
+          # Substitute only the fixture's runtime path, not the emitted
+          # variable, reader or launch command.
+          ${pkgs.gnused}/bin/sed "s|/run/proxy-test-token|$TMPDIR/token|" \
+            ${secret}/bin/ai-service-mcp-proxy-secret > secret-launcher
+          run_secret() { ${pkgs.bash}/bin/bash secret-launcher; }
+
+          check_launch() {
+            local name=$1 origin=$2 path=$3
+            shift 3
+            local state="$XDG_RUNTIME_DIR/mcp-proxy-$name"
+            {
+              if [[ $# != 0 ]]; then printf 'MCP_PROXY_SECRET_HEADER_X_SERVICE_TOKEN=%s\n' "$1"; fi
+              printf '%s\n' "$origin" "$path" "$state/config" "$state/data" run --config \
+                "<mcp-proxy-$name-Caddyfile>" --adapter caddyfile
+            } > expected
+            # Match the store path's name, not its independently irrelevant hash.
+            ${pkgs.gnused}/bin/sed -E 's|^${builtins.storeDir}/[a-z0-9]+-(mcp-proxy-[a-z]+-Caddyfile)$|<\1>|' actual > normalized
+            ${pkgs.diffutils}/bin/diff -u --label "$name expected" --label "$name actual" expected normalized
+            test "$(${pkgs.coreutils}/bin/stat -c %a "$state")" = 700
+          }
+
           ${plain}/bin/ai-service-mcp-proxy-plain > actual
-          printf '%s\n' MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/ "$XDG_RUNTIME_DIR/mcp-proxy-plain/config" "$XDG_RUNTIME_DIR/mcp-proxy-plain/data" 'run --config ${caddyfile "plain"} --adapter caddyfile' > expected
-          ${pkgs.diffutils}/bin/diff -u expected actual
-          test "$(${pkgs.coreutils}/bin/stat -c %a "$XDG_RUNTIME_DIR/mcp-proxy-plain")" = 700
-          if PROXY_READER_FAIL=1 ${secret}/bin/ai-service-mcp-proxy-secret > failed; then
-            echo "a failed secret read started the proxy" >&2
+          check_launch plain MCP_PROXY_PLAIN_ORIGIN=https://upstream.example.test MCP_PROXY_PLAIN_PATH=/
+          for token in first-dummy-token rotated-dummy-token; do
+            printf '%s' "$token" > "$TMPDIR/token"
+            run_secret > actual
+            check_launch secret MCP_PROXY_SECRET_ORIGIN=https://upstream.example.test MCP_PROXY_SECRET_PATH=/path "$token"
+          done
+
+          : > "$TMPDIR/token"
+          if run_secret > failed 2> error; then
+            echo "an empty startup token started the proxy" >&2
             exit 1
           fi
           test ! -s failed
+          ${pkgs.gnugrep}/bin/grep -Fx 'ai.services.mcp-proxy-secret.environment.MCP_PROXY_SECRET_HEADER_X_SERVICE_TOKEN: reference resolved empty' error
           touch "$out"
         '';
-
-      # Secrets must be read at RUNTIME from their files and never appear in
-      # argv — /proc/<pid>/cmdline is world-readable. The environment is still
-      # readable by same-uid processes, so this is not a process-isolation
-      # boundary. Also pins the absolute-coreutils-path rule and fail-closed.
-      module-mcp-proxy-start-script-reads-secrets-at-runtime = pkgs.runCommandLocal "mcp-proxy-start-script-reads-secrets-at-runtime" {} (let
-        services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
-        entry =
-          (evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              mcpServers.example = proxySampleServer;
-            };
-          }).config.ai.services.mcp-proxy-example;
-        launcher = services.mkLauncher {
-          inherit pkgs entry;
-          name = "mcp-proxy-example";
-        };
-      in ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${pkgs.gnugrep}/bin/grep -F 'redact-read' ${launcher}/bin/ai-service-mcp-proxy-example
-        ${pkgs.gnugrep}/bin/grep -F '/run/secrets/service-token' ${launcher}/bin/ai-service-mcp-proxy-example
-        ${pkgs.gnugrep}/bin/grep -F 'export MCP_PROXY_EXAMPLE_HEADER_X_SERVICE_TOKEN' ${launcher}/bin/ai-service-mcp-proxy-example
-        ${pkgs.gnugrep}/bin/grep -F '|| exit 1' ${launcher}/bin/ai-service-mcp-proxy-example
-        touch "$out"
-      '');
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      # Four endpoints are shared across clients but credentials must follow
+      # their owning Webex account; unused accounts and daemons must stay lazy.
+      module-mcp-proxy-webex-wiring = mkTest "mcp-proxy-webex-wiring" (
+        let
+          rows = backend: lib.mapAttrs' (name: value: lib.nameValuePair "${backend}: ${name}" value) (webexShared backend // webexUnused backend);
+        in
+          checkRows "Webex proxy ownership and account routing" (rows "devenv" // rows "hm")
+      );
+
       # A runtime-scoped declaration is that runtime's service, so a disabled
       # runtime runs no proxy and claims nothing.
       module-mcp-proxy-disabled-runtime-owner-emits-nothing = mkTest "mcp-proxy-disabled-runtime-owner-emits-nothing" (
@@ -761,8 +669,9 @@ in {
             };
           };
         in
-          result.config.systemd.user.services ? mcp-proxy-alpha
-          && result.config.systemd.user.services ? mcp-proxy-beta
+          builtins.attrNames (proxyServices result.config.systemd.user.services)
+          == ["mcp-proxy-alpha" "mcp-proxy-beta"]
+          && failedAssertions result == []
       );
 
       # A runtime's ordinary same-key replacement remains normal pool precedence,
@@ -806,7 +715,6 @@ in {
         in
           result.config.systemd.user.services ? mcp-proxy-direct
           && entry.url == "http://127.0.0.1:9501/"
-          && !(entry ? proxy)
       );
 
       # A top-level proxied declaration owns ONE shared daemon. The runtimes see
@@ -821,13 +729,12 @@ in {
               mcpServers.shared = proxySampleServer;
             };
           };
-          services = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) result.config.systemd.user.services;
+          services = proxyServices result.config.systemd.user.services;
           claudeEntry = (claudeMcpServers "hm" result).shared;
           codexEntry = (hmCodexSettings result).mcp_servers.shared;
           rendered = builtins.toJSON [claudeEntry codexEntry];
         in
-          lib.all webexShared ["devenv" "hm"]
-          && builtins.attrNames services
+          builtins.attrNames services
           == ["mcp-proxy-shared"]
           && claudeEntry.url == "http://127.0.0.1:9501/"
           && codexEntry.url == "http://127.0.0.1:9501/"
@@ -837,24 +744,51 @@ in {
           && !(lib.hasInfix "X-Service-Token" rendered)
       );
 
-      module-mcp-proxy-unit-uses-services-launcher = mkTest "mcp-proxy-unit-uses-services-launcher" (
-        let
-          result = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              mcpServers.jira = proxySampleServer;
-            };
+      # Follow the command emitted by the module, not a freshly rendered
+      # script. A correctly named script can still use the wrong declaration.
+      module-mcp-proxy-unit-uses-services-launcher = let
+        result = evalHm {
+          ai.kiro = {
+            cli.enable = true;
+            mcpServers.jira = lib.recursiveUpdate proxySampleServer {proxy.host = "127.0.0.2";};
           };
-          unit = result.config.systemd.user.services.mcp-proxy-jira;
-          service = result.config.ai.services.mcp-proxy-jira;
-        in
-          lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
-          && unit.Unit.Description == "mcp-proxy-jira (ai.services)"
-          && !(unit.Service ? Environment)
-          && service.command == [(lib.getExe (mcpProxyLib.runScriptFor (mcpProxyLib.specFor "jira" proxySampleServer)))]
-          && result.config.ai.claims.service.mcp-proxy-jira == ["kiro"]
-          && result.config.ai.claims.port."9501" == ["kiro:mcp-proxy-jira.ports.main"]
-      );
+        };
+        unit = result.config.systemd.user.services.mcp-proxy-jira;
+        service = result.config.ai.services.mcp-proxy-jira;
+      in
+        assert checkRows "Kiro Jira proxy service" {
+          "binds only daemon credentials to the launcher's environment" =
+            service.environment
+            == {
+              MCP_PROXY_JIRA_HEADER_X_API_KEY = redact.concat ["Bearer " (redact.file "/run/secrets/api-key")];
+              MCP_PROXY_JIRA_HEADER_X_SERVICE_TOKEN = redact.file "/run/secrets/service-token";
+              MCP_PROXY_JIRA_URL = redact.file "/run/secrets/upstream-url";
+            };
+          "uses the services launcher without unit environment" =
+            lib.hasSuffix "/bin/ai-service-mcp-proxy-jira" unit.Service.ExecStart
+            && !(unit.Service ? Environment);
+        };
+          pkgs.runCommandLocal "module-test-mcp-proxy-unit-uses-services-launcher" {
+            nativeBuildInputs = [pkgs.gnugrep pkgs.gnused];
+            proxyCommand = builtins.head service.command;
+            unitLauncher = unit.Service.ExecStart;
+          } ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+
+            grep -Fx ${lib.escapeShellArg "exec ${lib.escapeShellArg (builtins.head service.command)}"} "$unitLauncher"
+            grep -Fx '_url="''${MCP_PROXY_JIRA_URL}"' "$proxyCommand"
+            caddyfile=$(sed -n 's/^exec .* run --config \([^ ]*\) --adapter caddyfile$/\1/p' "$proxyCommand")
+            grep -Fx ':9501 {' "$caddyfile"
+            grep -Fx $'\tbind 127.0.0.2' "$caddyfile"
+            grep -F 'rewrite * {$MCP_PROXY_JIRA_PATH}' "$caddyfile"
+            grep -F 'reverse_proxy {$MCP_PROXY_JIRA_ORIGIN} {' "$caddyfile"
+            grep -F 'header_up X-Api-Key "{$MCP_PROXY_JIRA_HEADER_X_API_KEY}"' "$caddyfile"
+            grep -F 'header_up X-Route "primary"' "$caddyfile"
+            grep -F 'header_up X-Service-Token "{$MCP_PROXY_JIRA_HEADER_X_SERVICE_TOKEN}"' "$caddyfile"
+            grep -F 'header_up -X-Drop-Me' "$caddyfile"
+            touch "$out"
+          '';
 
       # A top-level owner is lazy: if every enabled capable runtime replaces or
       # tombstones the key, no client can reach it and no managed daemon exists.
@@ -870,8 +804,7 @@ in {
             };
           };
         in
-          lib.all webexUnused ["devenv" "hm"]
-          && !(result.config.systemd.user.services ? mcp-proxy-unused)
+          !(result.config.systemd.user.services ? mcp-proxy-unused)
           && !(claudeMcpServers "hm" result ? unused)
       );
     }

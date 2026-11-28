@@ -95,33 +95,24 @@ for bucket_dir in "$sessions_root"/*/; do
 	fi
 done
 
-# The empty-set case is a separate code path (a literal, not a hash).
-global="$(kiro_bucket)"
-if [ "$global" != "_global" ]; then
-	printf 'MISMATCH empty path set produced %s, expected _global\n' "$global" >&2
-	bad=$((bad + 1))
-fi
+check_bucket() {
+	local label="$1" expected="$2" actual
+	shift 2
+	actual="$(kiro_bucket "$@")"
+	if [ "$actual" != "$expected" ]; then
+		printf 'MISMATCH %s: bucket=%s, expected %s\n' "$label" "$actual" "$expected" >&2
+		bad=$((bad + 1))
+	fi
+}
 
-# Positive control for the separation logic. A path carrying a trailing space
-# must NOT hash the same as the trimmed path. If the reader ever regresses to
-# splitting on whitespace, these two collapse — and the bucket loop above would
-# keep reporting PASS while the harness silently mis-bucketed every seed. This
-# control is here because that exact false pass happened once already.
-spacey="$(kiro_bucket '/tmp/x ')"
-clean="$(kiro_bucket '/tmp/x')"
-if [ "$spacey" = "$clean" ]; then
-	echo 'MISMATCH trailing-space control collapsed - the reader is splitting on whitespace' >&2
-	bad=$((bad + 1))
-fi
-
-# Positive control for the joiner: two paths must not hash to the same value as
-# their concatenation, which is what a missing separator would produce.
-two="$(kiro_bucket '/tmp/a' '/tmp/b')"
-concat="$(kiro_bucket '/tmp/a/tmp/b')"
-if [ "$two" = "$concat" ]; then
-	echo 'MISMATCH join control collapsed - the separator is not being emitted' >&2
-	bad=$((bad + 1))
-fi
+# Fixed SHA-256 prefixes for these byte strings (first 16 hex digits).
+# An empty set must not hash the empty string.
+check_bucket 'empty path set uses the global bucket' '_global'
+# The reversed pair exercises sorting and the NUL separator.
+check_bucket 'two reversed paths are sorted and NUL-joined' 'c4bb7aca9eb3e434' '/tmp/b' '/tmp/a'
+# The singleton exercises hashing with no separator or terminator. A previous
+# false pass hid whitespace loss, so use a trailing space to catch trimming.
+check_bucket 'trailing space is part of the path' '790f498f3ee65d30' '/tmp/x '
 
 printf 'buckets reproduced: %d\n' "$ok"
 printf 'mismatched:         %d\n' "$bad"

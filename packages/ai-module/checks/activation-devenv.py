@@ -16,7 +16,8 @@ def main():
     with tempfile.TemporaryDirectory() as temporary:
         environment = os.environ.copy()
         environment["DEVENV_ROOT"] = temporary
-        for name in ("prune", "success"):
+        # A normal task must execute; pruning must execute even with its owner off.
+        for name, marker in (("prune", "pruned"), ("success", "success")):
             result = subprocess.run(
                 [bash, "-c", fixture[name]],
                 env=environment,
@@ -24,15 +25,15 @@ def main():
                 text=True,
             )
             assert result.returncode == 0, (name, result.stderr)
-        assert (Path(temporary) / "pruned").read_text() == "pruned"
-        assert (Path(temporary) / "success").read_text() == "success"
+            assert (Path(temporary) / marker).read_text() == marker
+        # A mid-task failure must propagate, not run the trailing command.
         result = subprocess.run(
             [bash, "-c", fixture["failure"]],
             env=environment,
             capture_output=True,
             text=True,
         )
-        assert result.returncode != 0, result
+        assert result.returncode == 1, result
         assert (Path(temporary) / "failure-started").read_text() == "started"
         assert not (Path(temporary) / "failure-escaped").exists()
     print("PASS: task success, disabled drain, and failure propagation")

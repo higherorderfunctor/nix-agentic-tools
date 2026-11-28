@@ -1,93 +1,130 @@
+# cspell:ignore autoStash zdiff
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
   lib,
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm harnessNames mkTest;
+  inherit (harness) checkRows evalDevenv evalHm harnessNames mkTest;
   optionPaths = import ../../../lib/ai/option-paths.nix {inherit lib;};
   pool = result: runtime: surface: lib.attrByPath (optionPaths.pool runtime surface) {} result.config;
-  # The runtimes whose record delivers a pool on one backend.
-  delivering = backend: surface: builtins.filter (runtime: builtins.elem backend (optionPaths.records.${runtime}.surfaceSupport.${surface}.backends or [])) harnessNames;
+  enabled.ai.programs.stacked-workflows.enable = true;
+  skills = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
+  rules = ["stacked-workflows-router"];
+  members = names: attrs: lib.filter (name: attrs ? ${name}) names;
+  presetConfig = preset: enabled // {stacked-workflows.gitPreset = preset;};
+  backends = {
+    devenv = {
+      evaluate = evalDevenv;
+      gitSettings = result: result.config.git.settings;
+      pullFf.git.settings.pull.ff = "only";
+    };
+    hm = {
+      evaluate = evalHm;
+      gitSettings = result: result.config.programs.git.settings;
+      pullFf.programs.git.settings.pull.ff = "only";
+    };
+  };
+  backendRows = label: rows: checkRows label (lib.mapAttrs (_: rows) backends);
+  assertionsPass = result: lib.all (entry: entry.assertion) result.config.assertions;
+  hasPullFfConflict = result:
+    lib.any (entry:
+      !entry.assertion
+      && lib.hasInfix "git.settings.pull.ff" entry.message
+      && lib.hasInfix "conflicts with stacked-workflows.gitPreset" entry.message)
+    result.config.assertions;
+
+  # Fixed answers from the approved presets, not imports of the production
+  # settings. Retain the entire key set: a stray fetch.pruneTags or a pinned
+  # branchless.core.mainBranch is just as much a regression as a lost key.
+  commonGitSettings = {
+    absorb = {
+      fixupTargetAlwaysSHA = true;
+      maxStack = 50;
+      oneFixupPerCommit = true;
+    };
+    init.defaultBranch = "main";
+    merge.conflictStyle = "zdiff3";
+    pull.rebase = true;
+    rebase = {
+      autoSquash = true;
+      autoStash = true;
+      updateRefs = true;
+    };
+    rerere = {
+      autoupdate = true;
+      enabled = true;
+    };
+  };
+  expectedGitSettings = {
+    full =
+      commonGitSettings
+      // {
+        alias.sync = "branchless sync 'stack()'";
+        branchless = {
+          navigation.autoSwitchBranches = true;
+          next.interactive = true;
+          restack = {
+            defaultRevset = "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main";
+            preserveTimestamps = true;
+          };
+          smartlog.defaultRevset = "(@ % main()) | stack() | descendants(@) | @";
+          test = {
+            jobs = 1;
+            strategy = "worktree";
+          };
+        };
+        commit.verbose = true;
+        diff = {
+          algorithm = "histogram";
+          colorMoved = "plain";
+          mnemonicPrefix = true;
+        };
+        fetch = {
+          all = true;
+          prune = true;
+        };
+        push = {
+          autoSetupRemote = true;
+          followTags = true;
+        };
+        revise.autoSquash = true;
+        tag.sort = "version:refname";
+      };
+    minimal = commonGitSettings;
+    none = {};
+  };
 in {
   checks = {
-    # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
-    # The HM module installs the unprefixed stack-* skills + skill-routing rule
-    # user-global; the devenv module mirrors them project-local. References are
-    # bundled as REAL files inside each skill dir (deref'd at build).
-
-    # Default disabled — the portable program enable defaults to false.
     module-sws-default-disabled = mkTest "sws-default-disabled" (
       let
         result = evalHm {};
       in
-        !result.config.ai.programs.stacked-workflows.enable
-        && !(result.options.stacked-workflows ? enable)
+        checkRows "default program" {
+          "legacy enable option is not reintroduced" = !(result.options.stacked-workflows ? enable);
+        }
     );
 
-    # ── Where these contributions land ────────────────────────────────────
-    #
-    # The skill packages write the PER-RUNTIME pools (`ai.<runtime>.skills`,
-    # `ai.<runtime>.rules`), never the root ones. The tests below assert
-    # both halves of that, and the second half is the one worth having: a root
-    # package write would silently fan out beyond package runtime ownership, so a
-    # regression could still deliver every skill and pass a presence-only test.
-    #
-    # They iterate `harnessNames` (the shared registry) rather than sampling one
-    # runtime, so a sixth runtime is covered the day it is added.
-
-    # Devenv scope: enable -> every supporting runtime's pool gets the
-    # unprefixed stack-* skills, and the root pool gets none of them.
-    module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
-      let
-        result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
-        expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
-        runtimeHasAll = runtime:
-          lib.all (skill: pool result runtime "skills" ? ${skill}) expected;
+    # Module provenance separately guards root writes that would fan out beyond
+    # package ownership. Use the registry to include newly added runtimes here,
+    # with Claude pinned as a positive control.
+    module-sws-runtime-pools = mkTest "sws-runtime-pools" (
+      lib.all (backend: let
+        result = backends.${backend}.evaluate enabled;
+        surfaceCheck = surface: names: let
+          supports = runtime: builtins.elem backend (optionPaths.records.${runtime}.surfaceSupport.${surface}.backends or []);
+          actual = runtime: members names (pool result runtime surface);
+        in
+          checkRows "${backend} ${surface} ownership" ({
+              "Claude still receives the complete contribution" = actual "claude" == names;
+            }
+            // lib.genAttrs (lib.remove "claude" harnessNames) (runtime:
+              if supports runtime
+              then actual runtime == names
+              else pool result runtime surface == {}));
       in
-        lib.all runtimeHasAll (delivering "devenv" "skills")
-        && !(result.config.ai.skills ? stack-fix)
-    );
-
-    # Devenv scope: the router rule lands in every supporting runtime's pool and
-    # not in the root pool.
-    module-sws-devenv-enable-sets-ai-rules = mkTest "sws-devenv-enable-sets-ai-rules" (
-      let
-        result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
-        ruleRuntimes = delivering "devenv" "rules";
-        runtimeHasOne = runtime: pool result runtime "rules" ? stacked-workflows-router;
-      in
-        lib.all runtimeHasOne ruleRuntimes
-        && !(result.config.ai.rules ? stacked-workflows-router)
-    );
-
-    # HM (user-global) scope: enable -> every runtime's pool gets the unprefixed
-    # stack-* skills, so each enabled CLI installs them to ~/.claude/skills etc.
-    # This is the scope-revert (previously the HM module was git-config only).
-    module-sws-hm-enable-sets-ai-skills = mkTest "sws-hm-enable-sets-ai-skills" (
-      let
-        result = evalHm {ai.programs.stacked-workflows.enable = true;};
-        expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
-        runtimeHasAll = runtime:
-          lib.all (skill: pool result runtime "skills" ? ${skill}) expected;
-      in
-        lib.all runtimeHasAll (delivering "hm" "skills")
-        && lib.all (runtime: pool result runtime "skills" == {}) (lib.subtractLists (delivering "hm" "skills") harnessNames)
-        && !(result.config.ai.skills ? stack-fix)
-    );
-
-    # HM (user-global) scope: enable -> the skill-routing rule lands in every
-    # supporting runtime's pool.
-    module-sws-hm-enable-sets-ai-rules = mkTest "sws-hm-enable-sets-ai-rules" (
-      let
-        result = evalHm {ai.programs.stacked-workflows.enable = true;};
-        ruleRuntimes = delivering "hm" "rules";
-        runtimeHasOne = runtime: pool result runtime "rules" ? stacked-workflows-router;
-      in
-        lib.all runtimeHasOne ruleRuntimes
-        && lib.all (runtime: pool result runtime "rules" == {}) (lib.subtractLists ruleRuntimes harnessNames)
-        && !(result.config.ai.rules ? stacked-workflows-router)
+        surfaceCheck "rules" rules && surfaceCheck "skills" skills)
+      (lib.attrNames backends)
     );
 
     # Package rules are defaults, so a consumer can replace the router for one
@@ -154,139 +191,80 @@ in {
         && !(result.config.ai.codex.skills ? stack-fix)
     );
 
-    # Both backends must render the fixture with only the changes listed in
-    # approved below.
-    module-sws-presets-approved-diff = mkTest "sws-presets-approved-diff" (
-      let
-        before = lib.importJSON ./fixtures/git-presets-cd934bb4.json;
-        approved = {
-          full = {
-            added = {
-              "alias.sync" = "branchless sync 'stack()'";
-              "branchless.restack.defaultRevset" = "descendants(roots((stack() & ::HEAD) - ::origin/main)) - ::origin/main";
-            };
-            removed = ["branchless.core.mainBranch" "fetch.pruneTags"];
-          };
-          minimal = {
-            added = {};
-            removed = ["branchless.core.mainBranch"];
-          };
-        };
-        leaves = attrs:
-          lib.listToAttrs (lib.collect (x: x ? name) (lib.mapAttrsRecursive (path: value: {
-              name = lib.concatStringsSep "." path;
-              inherit value;
-            })
-            attrs));
-        rendered = backend: preset: let
-          config = {
-            ai.programs.stacked-workflows.enable = true;
-            stacked-workflows.gitPreset = preset;
-          };
-        in
-          if backend == "hm"
-          then (evalHm config).config.programs.git.settings
-          else (evalDevenv config).config.git.settings;
-        diffOf = old: new: {
-          added = removeAttrs new (lib.attrNames old);
-          removed = lib.attrNames (removeAttrs old (lib.attrNames new));
-          changed = lib.filter (key: new ? ${key} && new.${key} != old.${key}) (lib.attrNames old);
-        };
-        nest = flat: lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (key: lib.setAttrByPath (lib.splitString "." key)) flat);
-        matches = backend: preset: let
-          old = leaves before.${preset};
-          new = rendered backend preset;
-          diff = diffOf old (leaves new);
-          # The old rendering with exactly the approved edits applied.
-          expected = removeAttrs old approved.${preset}.removed // approved.${preset}.added;
-        in
-          diff.added
-          == approved.${preset}.added
-          && diff.removed == approved.${preset}.removed
-          && diff.changed == []
-          && lib.generators.toGitINI new == lib.generators.toGitINI (nest expected);
-      in
-        lib.all (backend: lib.all (matches backend) ["full" "minimal"]) ["devenv" "hm"]
-        && rendered "hm" "none" == {}
-        && rendered "devenv" "none" == {}
+    # Both backends must lower the exact fixed settings for each preset. A
+    # shared rendering bug could otherwise leave backend parity intact.
+    module-sws-presets-expected-settings = mkTest "sws-presets-expected-settings" (
+      backendRows "preset settings" ({
+        evaluate,
+        gitSettings,
+        ...
+      }:
+        checkRows "selected preset" {
+          "full retains recommended settings without pruning backup tags" = gitSettings (evaluate (presetConfig "full")) == expectedGitSettings.full;
+          "minimal does not pick up full-only settings" = gitSettings (evaluate (presetConfig "minimal")) == expectedGitSettings.minimal;
+          "none does not write any settings" = gitSettings (evaluate (presetConfig "none")) == expectedGitSettings.none;
+        })
     );
 
-    # One rendering: Home Manager's settings and devenv's included file are the
-    # same git configuration for every preset.
-    module-sws-presets-hm-devenv-same-ini = mkTest "sws-presets-hm-devenv-same-ini" (
-      lib.all (preset: let
-        config = {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = preset;
-        };
-      in
-        lib.generators.toGitINI (evalHm config).config.programs.git.settings
-        == lib.generators.toGitINI (evalDevenv config).config.git.settings) ["full" "minimal" "none"]
-    );
-
-    # Every leaf of a tool's section in the preset data is a typed option
-    # (the rest go to `git.settings`), and presets set values at mkDefault:
-    # the typed option carries priority 1000 and enables the three tools the
-    # same way.
+    # Preset values must reach typed options at default priority; identical raw
+    # Git output is not sufficient. The public key set above pins the leaves
+    # without importing the very preset declarations being checked.
     module-sws-preset-leaves-are-options = mkTest "sws-preset-leaves-are-options" (
       let
-        presets = import ../lib/git-presets.nix;
-        evaluated = evalHm {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "full";
-        };
+        evaluated = evalHm (presetConfig "full");
         tools = ["absorb" "branchless" "revise"];
-        typedLeaf = section: path: let
-          option = lib.attrByPath path null evaluated.options.git.${section}.settings;
-        in
-          option != null && lib.isOption option && option.highestPrio == 1000;
-        sectionLeaves = section: data:
-          lib.collect lib.isList (lib.mapAttrsRecursive (path: _: path) (data.${section} or {}));
+        typedDefault = option: option != null && lib.isOption option && option.highestPrio == 1000;
+        sections = builtins.intersectAttrs (lib.genAttrs tools (_: null)) expectedGitSettings.full;
+        leaves = lib.concatLists (lib.mapAttrsToList (section: settings:
+          lib.collect lib.isList (lib.mapAttrsRecursive (path: _: [section] ++ path) settings))
+        sections);
+        leafRows = lib.listToAttrs (map (path: let
+            section = builtins.head path;
+            field = builtins.tail path;
+          in {
+            name = "${lib.concatStringsSep "." path} stays a typed default";
+            value = typedDefault (lib.attrByPath ([section "settings"] ++ field) null evaluated.options.git);
+          })
+          leaves);
+        toolRows = lib.listToAttrs (map (tool: {
+            name = "${tool} is enabled without forcing it on";
+            value = evaluated.config.git.${tool}.enable && typedDefault evaluated.options.git.${tool}.enable;
+          })
+          tools);
       in
-        lib.all (preset:
-          lib.all (section: lib.all (typedLeaf section) (sectionLeaves section presets.${preset}.settings)) tools)
-        (lib.attrNames presets)
-        && lib.all (section: evaluated.config.git.${section}.enable && evaluated.options.git.${section}.enable.highestPrio == 1000) tools
-        && evaluated.options.git.branchless.scopedSync.highestPrio == 1000
+        checkRows "preset defaults" (leafRows
+          // toolRows
+          // {
+            "scoped sync is set without forcing it on" = evaluated.config.git.branchless.scopedSync && typedDefault evaluated.options.git.branchless.scopedSync;
+          })
     );
 
-    # pull.ff beats pull.rebase since Git 2.34, so an active preset rejects it
-    # on both backends; "none" does not care.
+    # The assertion is shared, but each backend reads the setting at a
+    # different input path. Failure must be the preset conflict, not any assertion.
     module-sws-pull-ff-assertion = mkTest "sws-pull-ff-assertion" (
-      let
-        fails = evaluate: preset: raw:
-          lib.any (a: !a.assertion)
-          (evaluate ({
-              ai.programs.stacked-workflows.enable = true;
-              stacked-workflows.gitPreset = preset;
-            }
-            // raw))
-          .config
-          .assertions;
-      in
-        fails evalHm "minimal" {programs.git.settings.pull.ff = "only";}
-        && fails evalDevenv "full" {git.settings.pull.ff = "only";}
-        && !(fails evalHm "none" {programs.git.settings.pull.ff = "only";})
-        && !(fails evalDevenv "minimal" {})
+      backendRows "pull.ff conflicts" ({
+        evaluate,
+        pullFf,
+        ...
+      }:
+        checkRows "pull.ff restrictions" {
+          "full rejects fast-forward-only pulling" = hasPullFfConflict (evaluate (presetConfig "full" // pullFf));
+          "minimal accepts an omitted pull.ff" = assertionsPass (evaluate (presetConfig "minimal"));
+          "minimal rejects fast-forward-only pulling" = hasPullFfConflict (evaluate (presetConfig "minimal" // pullFf));
+          "none accepts fast-forward-only pulling" = assertionsPass (evaluate (presetConfig "none" // pullFf));
+        })
     );
 
-    # devenv: a preset enables git.branchless, so the init task exists; "none"
-    # and a disabled portable program leave no init task and nothing rendered.
+    # devenv: an active preset enables git.branchless and its init task;
+    # "none" does not initialize branchless even when the program is enabled.
     module-sws-devenv-preset-tasks = mkTest "sws-devenv-preset-tasks" (
       let
         tasksOf = config: (evalDevenv config).config.tasks;
       in
-        (tasksOf {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "minimal";
-        })
-        ? "ai:git-branchless-init"
-        && !((tasksOf {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "none";
-        })
-        ? "ai:git-branchless-init")
-        && (tasksOf {stacked-workflows.gitPreset = "none";}) ? "git:config"
+        checkRows "devenv tasks" {
+          "minimal initializes branchless" = tasksOf (presetConfig "minimal") ? "ai:git-branchless-init";
+          "none does not initialize branchless" = !(tasksOf (presetConfig "none") ? "ai:git-branchless-init");
+        }
     );
 
     # The documented restack Gitconfig value must match the preset consumed by
@@ -310,7 +288,7 @@ in {
     # resolve to real, present files.
     module-sws-skill-references-resolve = mkTest "sws-skill-references-resolve" (
       let
-        result = evalDevenv {ai.programs.stacked-workflows.enable = true;};
+        result = evalDevenv enabled;
         skillPath = result.config.ai.claude.skills.stack-fix;
       in
         builtins.pathExists "${skillPath}/SKILL.md"

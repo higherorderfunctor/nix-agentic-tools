@@ -8,9 +8,11 @@ import json
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import semble.mcp
 from semble import cli
+from semble.cache import find_index_from_cache_folder
 from semble.types import ContentType
 
 expected = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
@@ -47,8 +49,8 @@ try:
             cli.main()
         except _Exited:
             pass
-        assert captured == [(case["content"], case["port"])], (case, captured)
-        print("ok argv", case["argv"])
+        assert captured == [(case["content"], case["port"])], (case["name"], captured)
+        print("ok argv", case["name"])
 finally:
     semble.mcp.serve = real_serve
     os._exit = real_exit
@@ -100,23 +102,39 @@ async def failed_load_is_retrieved() -> None:
     print("ok failed load retrieved")
 
 
+class RecordingCache(semble.mcp._IndexCache):
+    """Observe the real index that each tool receives, including cache hits."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.served = []
+
+    async def get(self, source, content=(ContentType.CODE,)):
+        index = await super().get(source, content=content)
+        self.served.append((source, sorted(item.value for item in index.content), index._model_path))
+        return index
+
+
 async def main() -> None:
+    # A fixed model name pins the cache ABI without hashing the production input twice.
+    name = find_index_from_cache_folder(repo, (ContentType.DOCS,), "fixture/model").name
+    assert name == "index-docs@9f0bc9496cfb0995", name
     default = [ContentType(value) for value in expected["defaultContent"]]
     await drive_serve(default)
     await failed_load_is_retrieved()
-    cache = semble.mcp._IndexCache()
+    cache = RecordingCache()
     server = semble.mcp.create_server(cache, default_content=default)
-    for call in expected["calls"]:
-        arguments = {"repo": repo, **call["arguments"]}
-        text = text_of(await server.call_tool(call["tool"], arguments))
-        assert text.startswith("{") and '"error"' not in text, (call, text)
-        selected = semble.mcp._resolve_content_selection(call["arguments"].get("content"), default)
-        key = cache._compute_cache_key(repo, selected)
-        assert key[2] == call["model"], (call, key)
-        assert cache._tasks[key].result()._model_path == call["model"], call
-        print("ok call", call["tool"], call["arguments"].get("content"))
-    # One load per model, each used by its own content.
-    assert sorted(cache._models) == sorted(expected["models"]), sorted(cache._models)
+    with patch.object(semble.mcp, "_load_model", wraps=semble.mcp._load_model) as load:
+        for call in expected["calls"]:
+            cache.served.clear()
+            arguments = {"repo": repo, **call["arguments"]}
+            text = text_of(await server.call_tool(call["tool"], arguments))
+            assert text.startswith("{") and "error" not in json.loads(text), (call["name"], text)
+            assert cache.served == [(repo, call["content"], call["model"])], (call["name"], cache.served)
+            print("ok", call["name"])
+    # Count actual loads, not just distinct model keys remaining in the cache.
+    loads = sorted(args[0] for args, _ in load.await_args_list)
+    assert loads == sorted(expected["models"]), loads
 
 
 asyncio.run(main())

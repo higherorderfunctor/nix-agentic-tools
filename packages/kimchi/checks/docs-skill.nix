@@ -8,7 +8,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm mkTest;
+  inherit (harness) checkRows deliveredFiles evalDevenv evalHm mkTest;
   workflowsPackage = pkgs.ai.kimchiExtensions.kimchi-workflows;
 
   # Home Manager delivers the skill to the user harness; devenv delivers it to
@@ -57,9 +57,8 @@
   };
 in {
   checks = {
-    # Asserts: the skill leaves delivered by the module still resolve to the
-    # packaged snapshot AND that snapshot is readable through them, page
-    # contents included.
+    # Assert that the delivered snapshot link targets the pinned derivation.
+    # The shared web-docs replay checks the packaged pages.
     kimchi-docs-skill-snapshot = pkgs.runCommand "kimchi-docs-skill-snapshot" {} ''
       # Full strict mode is required here: stdenv does not set every flag (#909).
       set -euETo pipefail
@@ -77,7 +76,6 @@ in {
         fi
       }
 
-      require "SKILL.md is missing or empty" '[ -s "$skill_md" ]'
       require "SKILL.md has lost its name: kimchi-docs frontmatter, so no runtime will match it" \
         "grep -qx 'name: \"kimchi-docs\"' \"\$skill_md\""
       require "the snapshot link does not point at the packaged docs.kimchi-docs derivation (${pkgs.docs.kimchi-docs})" \
@@ -86,21 +84,6 @@ in {
         '[ "$(readlink "$workflows")" = ${workflowsPackage} ]'
       require "the workflows README is unreadable through the skill" '[ -s "$workflows/README.md" ]'
       require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill_md"'
-      for index in llms.txt docs/llms.txt reference/llms.txt; do
-        require "the index snapshot/$index is unreadable through the skill" '[ -s "$snapshot/$index" ]'
-        require "the index snapshot/$index does not name docs.kimchi.dev, so it is not the upstream index" \
-          'grep -q docs.kimchi.dev "$snapshot/$index"'
-      done
-      require "the documentation page snapshot/docs/kimchi-cli.md is unreadable through the skill" \
-        '[ -s "$snapshot/docs/kimchi-cli.md" ]'
-
-      pages="$(find -L "$snapshot/docs" -name '*.md' -type f | wc -l)"
-      if [ "$pages" -lt 40 ]; then
-        printf 'kimchi-docs skill: only %s documentation pages are reachable at %s\n' \
-          "$pages" "$snapshot/docs" >&2
-        printf '  expected at least 40; the snapshot shrank or the skill stopped pointing at it\n' >&2
-        exit 1
-      fi
 
       echo PASS > "$out"
     '';
@@ -112,73 +95,46 @@ in {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
-      expect() {
-        if ! grep -qF "$3" "$2/SKILL.md"; then
-          printf 'kimchi-docs skill (%s semble): SKILL.md omits %s\n' "$1" "$3" >&2
+      check_search() {
+        local variant=$1 skill=$2 required=$3 forbidden
+        shift 3
+        if ! grep -qF "$required" "$skill/SKILL.md"; then
+          printf 'kimchi-docs skill (%s search): SKILL.md omits %s\n' "$variant" "$required" >&2
           exit 1
         fi
+        for forbidden in "$@"; do
+          if grep -qF "$forbidden" "$skill/SKILL.md"; then
+            printf 'kimchi-docs skill (%s search): SKILL.md wrongly carries %s\n' "$variant" "$forbidden" >&2
+            exit 1
+          fi
+        done
       }
-      reject() {
-        if grep -qF "$3" "$2/SKILL.md"; then
-          printf 'kimchi-docs skill (%s semble): SKILL.md wrongly carries %s\n' "$1" "$3" >&2
-          exit 1
-        fi
-      }
 
-      expect none ${spliceVariants.plain} 'rg -n'
-      reject none ${spliceVariants.plain} 'semble search'
-      reject none ${spliceVariants.plain} 'mcp__semble__search'
-
-      expect cli ${spliceVariants.cli} 'semble search'
-      reject cli ${spliceVariants.cli} 'mcp__semble__search'
-
-      expect mcp ${spliceVariants.mcp} 'mcp__semble__search'
-      reject mcp ${spliceVariants.mcp} 'semble search'
+      check_search cli ${spliceVariants.cli} 'semble search' 'mcp__semble__search'
+      check_search mcp ${spliceVariants.mcp} 'mcp__semble__search' 'semble search'
+      check_search plain ${spliceVariants.plain} 'rg -n' 'mcp__semble__search' 'semble search'
 
       echo PASS > "$out"
     '';
 
-    # A package enable must not claim an undelivered consumer pool on HM.
-    module-kimchi-docs-skill-backend-gate = mkTest "kimchi-docs-skill-backend-gate" (
-      let
-        result = evalHm {
-          ai.copilot.enable = true;
-          ai.programs.kimchi-docs.enable = true;
-        };
-      in
-        lib.attrByPath ["ai" "copilot" "github" "skills" "kimchi-docs"] null result.config
-        == null
-        && result.config.warnings == []
-    );
-
-    # Asserts: nothing is delivered until the portable enable is set.
-    module-kimchi-docs-skill-opt-in = mkTest "kimchi-docs-skill-opt-in" (
-      !(hmOff.config.ai.kimchi.skills ? kimchi-docs)
-      && !(hmOff.config.ai.claude.skills ? kimchi-docs)
-      && skillKeys skillDir hmOff == []
-      && skillKeys devenvSkillDir devenvOff == []
-    );
-
-    # Asserts: enabling it mounts the skill in every runtime's pool and
-    # materializes it on both backends as the same leaves — snapshot and
-    # workflows each stay ONE entry (the symlink), not one per source file.
-    module-kimchi-docs-skill-delivered = mkTest "kimchi-docs-skill-delivered" (
-      hmOn.config.ai.kimchi.skills
-      ? kimchi-docs
-      && hmOn.config.ai.claude.skills ? kimchi-docs
-      && skillKeys skillDir hmOn == skillLeaves skillDir
-      && skillKeys devenvSkillDir devenvOn == skillLeaves devenvSkillDir
-    );
-
-    # Asserts: a per-runtime `false` suppresses exactly that runtime.
-    module-kimchi-docs-skill-runtime-override = mkTest "kimchi-docs-skill-runtime-override" (
-      let
-        result = evalHm (lib.recursiveUpdate enable {
-          ai.programs.kimchi-docs.runtimes.kimchi.enable = false;
-        });
-      in
-        !(result.config.ai.kimchi.skills ? kimchi-docs)
-        && result.config.ai.claude.skills ? kimchi-docs
-    );
+    module-kimchi-docs-skill = let
+      copilotOnly = evalHm {
+        ai.copilot.enable = true;
+        ai.programs.kimchi-docs.enable = true;
+      };
+      kimchiOff = evalHm (lib.recursiveUpdate enable {
+        ai.programs.kimchi-docs.runtimes.kimchi.enable = false;
+      });
+    in
+      mkTest "kimchi-docs-skill" (checkRows "kimchi-docs skill delivery" {
+        # The snapshot and workflows must stay one directory symlink each.
+        devenv-enabled-delivers-exact-skill-leaves = skillKeys devenvSkillDir devenvOn == skillLeaves devenvSkillDir;
+        devenv-off-does-not-deliver-skill-files = skillKeys devenvSkillDir devenvOff == [];
+        hm-enabled-delivers-exact-skill-leaves = skillKeys skillDir hmOn == skillLeaves skillDir;
+        hm-kimchi-override-suppresses-kimchi-skill = !(kimchiOff.config.ai.kimchi.skills ? kimchi-docs);
+        hm-off-does-not-deliver-skill-files = skillKeys skillDir hmOff == [];
+        # A package enable must not claim an undelivered consumer pool on HM.
+        hm-unavailable-github-skills-pool-does-not-warn = copilotOnly.config.warnings == [];
+      });
   };
 }

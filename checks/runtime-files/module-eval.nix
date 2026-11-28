@@ -6,7 +6,34 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromGeneratedTree harnessNames mkTest setEnable;
+  inherit (harness) checkRows deliveredFiles deliveredMarkdown deliveredTree evalDevenv evalHm fromGeneratedTree harnessNames mkTest rejectsChange setEnable;
+  inherit (import ../../packages/ai-module/lib/files/default.nix {inherit lib pkgs;}) validate;
+  backends = {
+    devenv = evalDevenv;
+    hm = evalHm;
+  };
+  fixtureSource = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+  claudeFile = target: entry: {
+    ai.claude = {
+      enable = true;
+      files.${target} = entry;
+    };
+  };
+  # Inspect the exact refusal on the forwarded record, then force the real HM
+  # sink: the diagnostic alone would pass if lowering stopped enforcing it.
+  hmIssue = config:
+    validate {
+      backend = "hm";
+      files = config.ai.files;
+      namespace = "ai";
+    };
+  # Build-time probes must not realize input that a final file discards.
+  unbuildable = name:
+    pkgs.runCommand name {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      exit 1
+    '';
   # A delivered Markdown file's text, from the evaluated `config`.
   markdownOf = config: path:
     if fromGeneratedTree path (deliveredFiles config).${path}
@@ -15,329 +42,207 @@
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
-    module-runtime-files-option-parity = mkTest "runtime-files-option-parity" (
-      let
-        hm = evalHm {};
-        devenv = evalDevenv {};
-        optionType = evaluated: runtime:
-          (lib.getAttrFromPath ["ai" runtime "files"] evaluated.options).type.description;
-      in
-        lib.all (runtime: optionType hm runtime == optionType devenv runtime) harnessNames
-    );
-
-    module-runtime-files-lower-to-both-backends = mkTest "runtime-files-lower-to-both-backends" (
-      let
-        checkRuntime = runtime: let
-          textTarget = "literal/${runtime}.txt";
-          sourceTarget = "literal/${runtime}.source";
-          config = lib.recursiveUpdate (setEnable runtime true) {
-            ai.${runtime} = {
-              files = {
-                ${textTarget} = {
-                  content.text = "${runtime}-TEXT";
-                  executable = true;
-                };
-                ${sourceTarget}.content.source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-              };
+    # Each runtime/backend can independently lose literal text bytes, source
+    # passthrough, or the executable bit while keeping its option declaration.
+    module-runtime-files-lower-to-both-backends = let
+      runtimeCheck = runtime: backend: evaluate: let
+        textTarget = "literal/${runtime}.txt";
+        sourceTarget = "literal/${runtime}.source";
+        text = "${runtime}-TEXT";
+        config = lib.recursiveUpdate (setEnable runtime true) {
+          ai.${runtime}.files = {
+            ${sourceTarget}.content.source = fixtureSource;
+            ${textTarget} = {
+              content = {inherit text;};
+              executable = true;
             };
           };
-          hm = evalHm config;
-          devenv = evalDevenv config;
-        in
-          lib.all (evaluated: let
-            files = deliveredFiles evaluated.config;
-          in
-            evaluated.config.ai.files.${textTarget}.content.text
-            == "${runtime}-TEXT"
-            && evaluated.config.ai.files.${sourceTarget}.content.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-            && files.${textTarget}.executable
-            && toString files.${textTarget}.source == toString (pkgs.writeText "files-link" "${runtime}-TEXT")
-            && toString files.${sourceTarget}.source == toString ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-            && !(files.${sourceTarget} ? text)) [hm devenv];
+        };
+        evaluated = evaluate config;
+        files = deliveredFiles evaluated.config;
       in
-        lib.all checkRuntime harnessNames
-    );
+        assert lib.assertMsg (
+          evaluated.config.ai.files.${textTarget}.content.text
+          == text
+          && evaluated.config.ai.files.${sourceTarget}.content.source == fixtureSource
+          && files.${textTarget}.executable
+          && toString files.${sourceTarget}.source == toString fixtureSource
+          && !(files.${sourceTarget} ? text)
+        ) "${runtime}/${backend}: literal files must preserve text, source and executable metadata"; ''
+          printf '%s\n' ${lib.escapeShellArg "Checking ${runtime}/${backend} literal text"} >&2
+          ${pkgs.diffutils}/bin/cmp <(printf '%s' ${lib.escapeShellArg text}) ${lib.escapeShellArg (toString files.${textTarget}.source)}
+        '';
+      checks = lib.concatMapStrings (runtime:
+        lib.concatStrings (lib.mapAttrsToList (runtimeCheck runtime) backends))
+      harnessNames;
+    in
+      pkgs.runCommand "module-test-runtime-files-lower-to-both-backends" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${checks}
+        echo PASS > "$out"
+      '';
 
-    # A disabled runtime emits nothing it declares, and an enabled runtime's
-    # entry switched off with `enable = false` needs no content.
     module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
       let
-        target = "literal/disabled.txt";
-        config.ai.claude.files.${target}.content.text = "DECLARED-BUT-DISABLED";
-        hm = (evalHm config).config;
-        devenv = (evalDevenv config).config;
-        switchedOff = evaluate:
-          (evaluate {
-            ai.claude = {
-              enable = true;
-              files."literal/disabled".enable = false;
-            };
-          }).config;
+        target = "literal/probe";
+        entry.content.text = "DECLARED-BUT-DISABLED";
+        switchedOff = (evalDevenv (claudeFile target {enable = false;})).config;
+        rows = backend: evaluate: let
+          dormant = (evaluate {ai.claude.files.${target} = entry;}).config;
+          enabled = (evaluate (claudeFile target entry)).config;
+          delivered = config: deliveredFiles config ? ${target};
+        in {
+          "${backend}: disabled runtime must not forward its otherwise valid literal" =
+            dormant.ai.claude.files.${target}.content.text
+            == "DECLARED-BUT-DISABLED"
+            && !(dormant.ai.files ? ${target})
+            && !(delivered dormant)
+            && delivered enabled;
+        };
       in
-        hm.ai.claude.files.${target}.content.text
-        == "DECLARED-BUT-DISABLED"
-        && !(hm.ai.files ? ${target})
-        && !(hm.home.file ? ${target})
-        && !(devenv.files ? ${target})
-        && !((switchedOff evalHm).home.file ? "literal/disabled")
-        && !((deliveredFiles (switchedOff evalDevenv)) ? "literal/disabled")
+        checkRows "runtime and literal enable gates" (
+          lib.mergeAttrsList (lib.mapAttrsToList rows backends)
+          // {
+            "devenv: switching off a literal must not require content or deliver a file" =
+              !switchedOff.ai.claude.files.${target}.enable && !(deliveredFiles switchedOff ? ${target});
+          }
+        )
     );
 
     module-runtime-files-invalid-targets-rejected = mkTest "runtime-files-invalid-targets-rejected" (
       let
-        rejected = target: let
-          attempt = builtins.tryEval (let
-            evaluated = evalHm {
-              ai.claude = {
-                enable = true;
-                files.${target}.content.text = "invalid";
-              };
-            };
-          in
-            builtins.deepSeq evaluated.config.home.file true);
+        target = "literal/probe";
+        text = {content.text = "probe";};
+        evaluate = path: (evalHm (claudeFile path text)).config;
+        valid = evaluate target;
+        rejectsTarget = path: let
+          invalid = evaluate path;
         in
-          !attempt.success;
+          hmIssue invalid
+          == ''files."${path}": target must be a normalized relative path without empty, . or .. segments''
+          && rejectsChange (config: config.home.file ? ${target}) {
+            inherit valid invalid;
+            expected = true;
+          };
       in
-        lib.all rejected ["" "/absolute" "double//slash" "./dot" "parent/../escape"]
+        checkRows "runtime file targets" {
+          "parent segment is not resolved before validation" = rejectsTarget "parent/../escape";
+        }
     );
 
     module-runtime-files-content-shape-rejected = mkTest "runtime-files-content-shape-rejected" (
       let
-        disabled =
-          (evalHm {
-            ai.claude.files."literal/disabled".enable = false;
-          }).config.ai.claude.files."literal/disabled";
-        rejected = entry: let
-          attempt = builtins.tryEval (let
-            evaluated = evalHm {
-              ai.claude = {
-                enable = true;
-                files."literal/invalid" = entry;
-              };
-            };
+        target = "literal/probe";
+        evaluate = entry: (evalHm (claudeFile target entry)).config;
+        delivered = config: config.home.file ? ${target};
+        disabled = evaluate {enable = false;};
+        applyCommand = config: config.home.activation.ai-files-apply.text or "";
+        # Force the native link map without walking its derivations. The apply
+        # command must differ from the disabled control even without a native link.
+        reachesSink = config:
+          builtins.seq (delivered config) (let
+            command = applyCommand config;
           in
-            builtins.deepSeq evaluated.config.home.file true);
+            lib.hasInfix "--phase apply" command && command != applyCommand disabled);
+        textEntry = {content.text = "probe";};
+        runEntry = {
+          content.run = "printf '{}'";
+          method = "ro";
+        };
+        # Equal-priority alternatives are rejected by the shared content
+        # selection, not by a method/format constraint on one of the forms.
+        rejectsTie = alternatives: valid: content: let
+          invalid = evaluate (lib.recursiveUpdate valid {inherit content;});
         in
-          !attempt.success;
+          hmIssue invalid
+          == ''files."${target}": content alternatives tie at priority 100: ${alternatives}''
+          && rejectsChange reachesSink {
+            inherit invalid;
+            valid = evaluate valid;
+            expected = true;
+          };
       in
-        # An explicit enable flag is the disabled shape, not a null sentinel.
-        !disabled.enable
-        # Equal-priority text and source are rejected by the shared
-        # content selection.
-        && rejected {
-          content = {
-            source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-            text = "both";
+        checkRows "runtime file content restrictions" {
+          "equal-priority run and text must not prefer the renderer" = rejectsTie "run, text" runEntry textEntry.content;
+          "equal-priority run and value must not prefer structured data" = rejectsTie "run, value" (runEntry // {format = "json";}) {value.probe = true;};
+          # An entry with `text` at the top level has not been migrated;
+          # accepting it would deliver a file with no bytes.
+          "retired flat text field is not a runtime file option" = rejectsChange (config: config.ai.claude.files.${target}.content.text) {
+            valid = evaluate textEntry;
+            invalid = evaluate {text = "probe";};
+            expected = "probe";
           };
         }
-        # Delivery-specific alternatives remain exclusive with text/source and
-        # with each other.
-        && rejected {
-          content = {
-            run = "printf probe";
-            text = "both";
-          };
-        }
-        && rejected {
-          content = {
-            run = "printf probe";
-            value.probe = true;
-          };
-        }
-        # The retired flat shape must not quietly keep working: an entry that
-        # still says `text` at the top level has not been migrated, and
-        # accepting it would deliver a file with no bytes.
-        && rejected {text = "flat";}
-    );
-
-    module-runtime-files-generated-default-disable = mkTest "runtime-files-generated-default-disable" (
-      let
-        target = ".claude/CLAUDE.md";
-        config.ai.claude = {
-          enable = true;
-          context.text = "GENERATED-CONTEXT";
-          files.${target}.enable = false;
-        };
-        hm = (evalHm config).config;
-        devenv = (evalDevenv config).config;
-      in
-        !hm.ai.files.${target}.enable
-        && !devenv.ai.files.${target}.enable
-        && !(hm.home.file ? ${target})
-        && !(devenv.files ? ${target})
-    );
-
-    # Positive inclusion inventory: every primary normalized output reaches its
-    # runtime map, or the one shared repository AGENTS.md map, before lowering.
-    module-runtime-files-primary-inclusion-contract = mkTest "runtime-files-primary-inclusion-contract" (
-      let
-        config = {
-          ai = {
-            context.text = "SHARED-CONTEXT";
-            rules.scoped = {
-              matcher = ["src/**"];
-              text = "SCOPED-RULE";
-            };
-            claude.enable = true;
-            codex.enable = true;
-            copilot.enable = true;
-            kimchi.enable = true;
-            kiro.cli.enable = true;
-          };
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        hmConfig = hm.config;
-        devenvConfig = devenv.config;
-      in
-        hmConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
-        && hmConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
-        && hmConfig.ai.codex._generatedFiles ? ".codex/AGENTS.md"
-        && hmConfig.ai.kimchi._generatedFiles ? ".config/kimchi/harness/AGENTS.md"
-        && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/AGENTS.md"
-        && hmConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
-        && devenvConfig.ai.claude._generatedFiles ? ".claude/CLAUDE.md"
-        && devenvConfig.ai.claude._generatedFiles ? ".claude/rules/scoped.md"
-        && devenvConfig.ai.copilot._generatedFiles ? ".github/copilot-instructions.md"
-        && !(devenvConfig.ai.internal.agentsMdTargets ? copilot)
-        && devenvConfig.ai.copilot._generatedFiles ? ".github/instructions/scoped.instructions.md"
-        && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
-        && devenvConfig.ai.kiro._generatedFiles ? ".kiro/steering/scoped.md"
-        && devenvConfig.ai.internal._generatedFiles ? "AGENTS.md"
-        && devenvConfig.ai.internal._generatedFiles."AGENTS.md".content.text == markdownOf devenvConfig "AGENTS.md"
     );
 
     module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
       let
-        base = {
-          ai = {
-            codex.enable = true;
-            context.text = "GENERATED-SHARED-CONTEXT";
-            kimchi.enable = true;
-            kiro.cli.enable = true;
-          };
-        };
-        replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
-        });
-        suppressed = evalDevenv (lib.recursiveUpdate base {
-          ai.kiro.files."AGENTS.md".enable = false;
-        });
-        deduplicated = evalDevenv (lib.recursiveUpdate base {
-          ai = {
-            codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kimchi.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-            kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
-          };
-        });
-        divergent = builtins.tryEval (let
-          evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai = {
-              codex.files."AGENTS.md".content.text = "OTHER-CONSUMER";
-              kimchi.files."AGENTS.md".content.text = "KIMCHI-CONSUMER";
-              kiro.files."AGENTS.md".content.text = "OTHER-CONSUMER";
-            };
-          });
-        in
-          builtins.deepSeq evaluated.config.ai.files."AGENTS.md" true);
         # The consumerOnly* cases have NO generated context, so Kimchi never
         # registers its generated shared target. A consumer-authored final
         # AGENTS.md must still arbitrate with Codex's, land alone, suppress,
         # and reject a text-versus-suppression conflict. Ported from #1849.
-        consumerOnly = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".content.text = "CONSUMER-ONLY";
-            };
-            kimchi = {
-              enable = true;
-              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+        consumerOnly = kimchiEntry:
+          evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md" = {
+                  enable = true;
+                  content.text = "CONSUMER-ONLY";
+                };
+              };
+              kimchi = {
+                enable = true;
+                files."AGENTS.md" = kimchiEntry;
+              };
             };
           };
-        };
-        kimchiConsumerOnly = evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            context.filename = "custom.md";
-            files."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
+        consumerAgreement = (consumerOnly {content.text = "CONSUMER-ONLY";}).config;
+        standaloneKimchi = entry: context:
+          evalDevenv {
+            ai.kimchi = {
+              enable = true;
+              files."AGENTS.md" = entry;
+              context = {filename = "custom.md";} // context;
+            };
           };
-        };
+        kimchiConsumerOnly = standaloneKimchi {content.text = "KIMCHI-CONSUMER-ONLY";} {};
         # Generated Kimchi context beside a custom (Home Manager) filename. The
         # devenv factory still writes AGENTS.md, so a public override on that
         # path must arbitrate with the shared owner rather than fail its
         # aggregate assertion for a context.filename that names another file.
-        kimchiContextOverride = evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            context = {
-              filename = "custom.md";
-              text = "KIMCHI-GENERATED";
-            };
-            files."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
-          };
-        };
-        consumerOnlySuppressed = evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            context.filename = "custom.md";
-            files."AGENTS.md".enable = false;
-          };
-        };
+        kimchiContextOverride = standaloneKimchi {content.text = "KIMCHI-CONTEXT-OVERRIDE";} {text = "KIMCHI-GENERATED";};
+        consumerOnlySuppressed = standaloneKimchi {enable = false;} {};
         # Identical to consumerOnly except Kimchi suppresses instead of
         # agreeing. The rejection is pinned to its cause: the merged `enable`
         # throws, and the definitions reaching it are exactly one suppression
         # and one enabled text, so an unrelated evaluation failure cannot pass
         # for this one.
-        consumerOnlyDivergentEval = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md" = {
-                enable = true;
-                content.text = "CONSUMER-ONLY";
-              };
-            };
-            kimchi = {
-              enable = true;
-              files."AGENTS.md".enable = false;
-            };
+        consumerSuppressionConflict = (consumerOnly {enable = false;}).config;
+        rejectsSuppression = read: expected:
+          rejectsChange read {
+            valid = consumerAgreement;
+            invalid = consumerSuppressionConflict;
+            inherit expected;
           };
-        };
-        consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq (deliveredFiles consumerOnlyDivergentEval.config)."AGENTS.md" true);
-        consumerOnlyDivergentCause = !(builtins.tryEval consumerOnlyDivergentEval.config.ai.files."AGENTS.md".enable).success;
-        # A source-backed consumer AGENTS.md beside generated context. Only the
-        # shared owner may lower it: when a runtime's ordinary sink lowers the
-        # same target too (the runtime missing from mkBackendTransform's
-        # sharedAgentsMdTargets), the second `source` definition conflicts and
-        # this throws. Identical text from two sinks merges silently, which is
-        # why the text cases above could not catch that bypass.
-        sourced = runtime: let
-          file = pkgs.writeText "${runtime}-agents.md" "SOURCED-${runtime}";
-          evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.${runtime}.files."AGENTS.md".content.source = file;
-          });
-        in
-          (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
-          && (deliveredFiles evaluated.config)."AGENTS.md".source == toString file;
       in
-        replaced.config.ai.files."AGENTS.md".content.text
-        == "CONSUMER-REPLACEMENT"
-        && markdownOf replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
-        && !suppressed.config.ai.files."AGENTS.md".enable
-        && !((deliveredFiles suppressed.config) ? "AGENTS.md")
-        && deduplicated.config.ai.files."AGENTS.md".content.text == "SHARED-CONSUMER"
-        && !divergent.success
-        && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
-        && markdownOf kimchiConsumerOnly.config "AGENTS.md" == "KIMCHI-CONSUMER-ONLY"
-        && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md")
-        && markdownOf kimchiContextOverride.config "AGENTS.md" == "KIMCHI-CONTEXT-OVERRIDE"
-        && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
-        && !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
-        && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md")
-        && !consumerOnlyDivergent.success
-        && consumerOnlyDivergentCause
-        && lib.all sourced ["codex" "kimchi" "kiro"]
+        checkRows "shared AGENTS.md arbitration" {
+          "explicit enable and suppression conflict at the merged leaf and sink" =
+            rejectsSuppression (config: config.ai.files."AGENTS.md".enable) true
+            && rejectsSuppression (config: (deliveredFiles config) ? "AGENTS.md") true;
+          "Kimchi consumer suppression does not emit either name" =
+            !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
+            && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md");
+          "Kimchi generated context can be overridden despite a custom HM filename" =
+            markdownOf kimchiContextOverride.config "AGENTS.md"
+            == "KIMCHI-CONTEXT-OVERRIDE"
+            && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions;
+          "Kimchi standalone consumer text is delivered at the shared path" =
+            markdownOf kimchiConsumerOnly.config "AGENTS.md"
+            == "KIMCHI-CONSUMER-ONLY"
+            && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md");
+        }
     );
 
     module-runtime-files-shared-agentsmd-ignores-disabled-runtime = mkTest "runtime-files-shared-agentsmd-ignores-disabled-runtime" (
@@ -353,44 +258,17 @@ in {
               ${dormantRuntime}.files."AGENTS.md" = entry;
             };
           });
-        evaluations = [
-          (withDormantEntry {
-            activeRuntime = "codex";
-            dormantRuntime = "kimchi";
-            entry.content.text = "DORMANT-KIMCHI";
-          })
-          (withDormantEntry {
-            activeRuntime = "kimchi";
-            dormantRuntime = "codex";
-            entry = null;
-          })
-          (withDormantEntry {
-            activeRuntime = "codex";
-            dormantRuntime = "kiro";
-            entry.content.text = "DORMANT-KIRO";
-          })
-          (withDormantEntry {
-            activeRuntime = "codex";
-            dormantRuntime = "kiro";
-            entry = null;
-          })
-          (withDormantEntry {
-            activeRuntime = "kiro";
-            dormantRuntime = "codex";
-            entry.content.text = "DORMANT-CODEX";
-          })
-          (withDormantEntry {
-            activeRuntime = "kiro";
-            dormantRuntime = "codex";
-            entry = null;
-          })
-        ];
+        ignores = activeRuntime: dormantRuntime: entry: let
+          inherit (withDormantEntry {inherit activeRuntime dormantRuntime entry;}) config;
+          delivered = markdownOf config "AGENTS.md";
+        in
+          lib.hasInfix "ACTIVE-SHARED-CONTEXT" delivered && !(lib.hasInfix "DORMANT-" delivered);
       in
-        lib.all (evaluated:
-          (deliveredFiles evaluated.config) ? "AGENTS.md"
-          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (markdownOf evaluated.config "AGENTS.md")
-          && !(lib.hasInfix "DORMANT-" (markdownOf evaluated.config "AGENTS.md")))
-        evaluations
+        checkRows "disabled runtimes must not participate in shared arbitration" {
+          "Codex null entry must not suppress active Kimchi context" = ignores "kimchi" "codex" null;
+          "Kimchi text must not override active Codex context" = ignores "codex" "kimchi" {content.text = "DORMANT-KIMCHI";};
+          "Kiro null entry must not suppress active Codex context" = ignores "codex" "kiro" null;
+        }
     );
 
     # Layer-1 replacements discard oversized generated content unread, and
@@ -398,162 +276,82 @@ in {
     # consumer content bypasses that generated-tree guard.
     module-runtime-files-byte-limit-follows-final-entry = let
       oversized = lib.concatStrings (lib.replicate 64 "x");
-      hmReplacement = evalHm {
-        ai.codex = {
-          context.text = oversized;
-          enable = true;
-          files.".codex/AGENTS.md".content.text = "short";
-          projectDocMaxBytes = 8;
-        };
-      };
-      hmDisabled = evalHm {
-        ai.codex = {
-          context.text = oversized;
-          enable = true;
-          files.".codex/AGENTS.md".enable = false;
-          projectDocMaxBytes = 8;
-        };
-      };
-      devenvReplacement = evalDevenv {
-        ai = {
-          codex = {
-            enable = true;
-            files."AGENTS.md".content.text = "short";
-            projectDocMaxBytes = 8;
+      override = evaluate: target: contextPath: entry:
+        evaluate {
+          ai = lib.recursiveUpdate (lib.setAttrByPath contextPath oversized) {
+            codex = {
+              enable = true;
+              files.${target} = entry;
+              projectDocMaxBytes = 8;
+            };
           };
-          context.text = oversized;
         };
-      };
-      devenvDisabled = evalDevenv {
-        ai = {
-          codex = {
-            enable = true;
-            files."AGENTS.md".enable = false;
-            projectDocMaxBytes = 8;
-          };
-          context.text = oversized;
-        };
-      };
+      overrideHm = override evalHm ".codex/AGENTS.md" ["codex" "context" "text"];
+      overrideDevenv = override evalDevenv "AGENTS.md" ["context" "text"];
+      # Longer than the configured limit: checking a short replacement would
+      # also pass if the generated-tree guard were applied to consumer bytes.
+      replacementText = "consumer replacement";
+      replacement.content.text = replacementText;
+      hmReplacement = overrideHm replacement;
+      hmDisabled = overrideHm {enable = false;};
+      devenvReplacement = overrideDevenv replacement;
+      devenvDisabled = overrideDevenv {enable = false;};
       passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
       hmFile = hmReplacement.config.home.file.".codex/AGENTS.md";
       devenvFile = (deliveredFiles devenvReplacement.config)."AGENTS.md";
     in
       assert lib.assertMsg (lib.all passes [hmReplacement hmDisabled devenvReplacement devenvDisabled])
       "runtime-files-byte-limit-follows-final-entry: a fixture fails its assertions";
-      assert lib.assertMsg (markdownOf hmReplacement.config ".codex/AGENTS.md" == "short" && markdownOf devenvReplacement.config "AGENTS.md" == "short")
-      "runtime-files-byte-limit-follows-final-entry: the replacement does not reach the final entry";
-      assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal.agentsMd."AGENTS.md".maxBytes == 8)
-      "runtime-files-byte-limit-follows-final-entry: the replacement's path lost its limit";
-      assert devenvFile.text == "short";
-      assert lib.assertMsg (!(hmDisabled.config.home.file ? ".codex/AGENTS.md") && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md"))
-      "runtime-files-byte-limit-follows-final-entry: a disabled AGENTS.md is still delivered";
+      assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8)
+      "runtime-files-byte-limit-follows-final-entry: the Home Manager replacement's path lost its limit";
+      assert lib.assertMsg (devenvFile.text == replacementText)
+      "runtime-files-byte-limit-follows-final-entry: the shared copy lost the consumer bytes";
         pkgs.runCommand "module-test-runtime-files-byte-limit-follows-final-entry" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          [ "$(cat ${hmFile.source})" = short ]
+          ${pkgs.diffutils}/bin/cmp <(printf '%s' ${lib.escapeShellArg replacementText}) ${lib.escapeShellArg (toString hmFile.source)}
           echo PASS > "$out"
         '';
 
     module-runtime-files-discarded-codex-source-stays-lazy = mkTest "runtime-files-discarded-codex-source-stays-lazy" (
       let
-        source = pkgs.runCommand "discarded-codex-context-must-not-build" {} ''
-          exit 1
-        '';
-        hmReplacement = evalHm {
-          ai = {
-            context = {inherit source;};
-            codex = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
+        source = unbuildable "discarded-codex-context-must-not-build";
+        fixture = evaluate: runtime: target: entry:
+          (evaluate (lib.recursiveUpdate (setEnable runtime true) {
+            ai = {
+              context = {inherit source;};
+              ${runtime} = {
+                context.text = "RUNTIME-CONTEXT";
+                files.${target} = entry;
+              };
             };
-          };
-        };
-        hmDisabled = evalHm {
-          ai = {
-            context = {inherit source;};
-            codex = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".codex/AGENTS.md".enable = false;
-            };
-          };
-        };
-        devenvReplacement = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            codex = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
-            };
-          };
-        };
-        devenvDisabled = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            codex = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files."AGENTS.md".enable = false;
-            };
-          };
-        };
-        hmKiroDisabled = evalHm {
-          ai = {
-            context = {inherit source;};
-            kiro = {
-              context.text = "RUNTIME-CONTEXT";
-              cli.enable = true;
-              files.".kiro/steering/AGENTS.md".enable = false;
-            };
-          };
-        };
-        devenvKiroDisabled = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            kiro = {
-              context.text = "RUNTIME-CONTEXT";
-              cli.enable = true;
-              files."AGENTS.md".enable = false;
-            };
-          };
-        };
+          })).config;
+        replaced = evaluate: target: text:
+          markdownOf (fixture evaluate "codex" target {content = {inherit text;};}) target == text;
+        disabled = evaluate: runtime: target:
+          !(deliveredFiles (fixture evaluate runtime target {enable = false;}) ? ${target});
       in
-        markdownOf hmReplacement.config ".codex/AGENTS.md"
-        == "HM-REPLACEMENT"
-        && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && markdownOf devenvReplacement.config "AGENTS.md" == "DEVENV-REPLACEMENT"
-        && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
-        && !(hmKiroDisabled.config.home.file ? ".kiro/steering/AGENTS.md")
-        && !((deliveredFiles devenvKiroDisabled.config) ? "AGENTS.md")
+        checkRows "final file must not read discarded context source" {
+          "devenv Codex suppression" = disabled evalDevenv "codex" "AGENTS.md";
+          "home-manager Codex replacement" = replaced evalHm ".codex/AGENTS.md" "HM-REPLACEMENT";
+          "home-manager Codex suppression" = disabled evalHm "codex" ".codex/AGENTS.md";
+          "home-manager Kiro suppression" = disabled evalHm "kiro" ".kiro/steering/AGENTS.md";
+        }
     );
 
     module-runtime-files-generated-empty-codex-source-omitted = mkTest "runtime-files-generated-empty-codex-source-omitted" (
       let
         source = ../../lib/testing/fixtures/empty;
-        hmCodex = evalHm {
-          ai = {
-            context = {inherit source;};
-            codex.enable = true;
-          };
-        };
-        devenvCodex = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            codex.enable = true;
-          };
-        };
-        devenvKiro = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            kiro.cli.enable = true;
-          };
-        };
+        omitted = evaluate: runtime: target: let
+          evaluated = evaluate (lib.recursiveUpdate (setEnable runtime true) {ai.context = {inherit source;};});
+        in
+          !(deliveredFiles evaluated.config ? ${target});
       in
-        !(hmCodex.config.home.file ? ".codex/AGENTS.md")
-        && !((deliveredFiles devenvCodex.config) ? "AGENTS.md")
-        && !((deliveredFiles devenvKiro.config) ? "AGENTS.md")
+        checkRows "empty context must not produce a document" {
+          "devenv Codex does not emit an empty shared document even with its limit" = omitted evalDevenv "codex" "AGENTS.md";
+          "devenv Kiro does not contribute an empty document to the shared owner" = omitted evalDevenv "kiro" "AGENTS.md";
+          "home-manager Codex does not emit an empty native document" = omitted evalHm "codex" ".codex/AGENTS.md";
+        }
     );
 
     # Content at `mkDefault` is still content: the leaf-default idiom a
@@ -562,51 +360,81 @@ in {
     # lands as its own bytes, outside the generated tree.
     module-runtime-files-default-priority-content-delivers = mkTest "runtime-files-default-priority-content-delivers" (
       let
-        source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+        sourcePath = "literal/default-source.md";
+        textPath = "literal/default-text.md";
         config.ai.claude = {
           enable = true;
           files = {
-            "literal/default-source.md".content.source = lib.mkDefault source;
-            "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
+            ${sourcePath}.content.source = lib.mkDefault fixtureSource;
+            ${textPath}.content.text = lib.mkDefault "DEFAULT-TEXT";
           };
         };
-        delivered = evaluated:
-          (deliveredFiles evaluated.config)."literal/default-source.md".source
-          == source
-          && deliveredFiles evaluated.config ? "literal/default-text.md"
-          && evaluated.config.ai.files."literal/default-text.md".content.text == "DEFAULT-TEXT";
+        rows = backend: evaluate: let
+          evaluated = evaluate config;
+          files = deliveredFiles evaluated.config;
+        in {
+          "${backend}: default-priority source must not be dropped or rendered as text" =
+            toString files.${sourcePath}.source == toString fixtureSource;
+          "${backend}: default-priority text must reach the native sink" =
+            toString files.${textPath}.source
+            != ""
+            && evaluated.config.ai.files.${textPath}.content.text == "DEFAULT-TEXT";
+        };
       in
-        delivered (evalHm config)
-        && delivered (evalDevenv config)
+        checkRows "literal content at default priority" (lib.mergeAttrsList (lib.mapAttrsToList rows backends))
     );
 
-    # Entry enable suppresses structured values and run content.
+    # Entry enable gates each engine content shape, including a structured
+    # value that has only a default-priority child.
     module-runtime-files-disable-suppresses-every-form = mkTest "runtime-files-disable-suppresses-every-form" (
-      lib.all (evaluate:
-        lib.all (content:
-          lib.all (enable: let
+      let
+        path = ".kiro/probe.json";
+        rows = backend: evaluate: let
+          check = entry: enable: let
             inherit
-              ((evaluate {
+              (evaluate {
                 ai.kiro = {
                   cli.enable = true;
-                  files.".kiro/probe.json" = {
-                    inherit content;
-                    enable = lib.mkForce enable;
-                    format = "json";
-                    method =
-                      if content ? run
-                      then "ro"
-                      else "symlink";
-                  };
+                  files.${path} =
+                    entry
+                    // {
+                      enable = lib.mkForce enable;
+                      format = "json";
+                    };
                 };
-              }))
+              })
               config
               ;
-            entry = config.ai.files.".kiro/probe.json";
-            delivered = deliveredFiles config;
+            files = deliveredFiles config;
+            source = files.${path}.source or null;
           in
-            entry.enable == enable && (delivered ? ".kiro/probe.json") == enable)
-          [false true]) [{value.a = true;} {value.a = lib.mkDefault true;} {run = "printf '{}'";}]) [evalHm evalDevenv]
+            config.ai.files.${path}.enable
+            == enable
+            && (
+              if !enable
+              then !(files ? ${path})
+              else if entry.content ? run
+              then (files.${path}.run or null) == "printf '{}'"
+              else source != null && builtins.isString (toString source)
+            );
+          structured = value: {
+            content.value.a = value;
+            method = "symlink";
+          };
+          renderer = {
+            content.run = "printf '{}'";
+            method = "ro";
+          };
+        in {
+          "${backend}: disabled default-priority structured child cannot still link" = check (structured (lib.mkDefault true)) false;
+          "${backend}: disabled renderer cannot still reach the engine" = check renderer false;
+          "${backend}: disabled structured value cannot still link" = check (structured true) false;
+          "${backend}: enabled renderer must reach the engine unchanged" = check renderer true;
+          "${backend}: enabled structured value must still link" = check (structured true) true;
+          "${backend}: default-priority structured child must still link" = check (structured (lib.mkDefault true)) true;
+        };
+      in
+        checkRows "structured and render-time runtime files" (lib.mergeAttrsList (lib.mapAttrsToList rows backends))
     );
 
     # A store-backed replacement of the shared AGENTS.md stays lazy: its size
@@ -614,9 +442,7 @@ in {
     # during evaluation. The source is a derivation that fails to build.
     module-runtime-files-shared-agentsmd-source-stays-lazy = mkTest "runtime-files-shared-agentsmd-source-stays-lazy" (
       let
-        source = pkgs.runCommand "shared-agents-md-source-must-not-build" {} ''
-          exit 1
-        '';
+        source = unbuildable "shared-agents-md-source-must-not-build";
         evaluated = evalDevenv {
           ai = {
             codex = {
@@ -634,95 +460,73 @@ in {
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (
       let
-        source = pkgs.runCommand "discarded-runtime-contexts-must-not-build" {} ''
-          exit 1
-        '';
-        hmClaude = evalHm {
-          ai = {
-            context = {inherit source;};
-            claude = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
-            };
-          };
-        };
-        devenvClaude = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            claude = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
-            };
-          };
-        };
-        # A layer-1 replacement lands as its own bytes, outside the tree, and
-        # instantiating it instantiates the tree it requires.
-        claudeText = evaluated:
-          builtins.seq (toString (deliveredFiles evaluated.config).".claude/CLAUDE.md".source)
-          evaluated.config.ai.files.".claude/CLAUDE.md".content.text;
-        # Switched off at layer 1, the context stays out of the tree too.
-        claudeOff = evaluate: let
-          evaluated = evaluate {
+        source = unbuildable "discarded-runtime-contexts-must-not-build";
+        fixture = evaluate: runtime: target: entry: extras:
+          (evaluate {
             ai = {
               context = {inherit source;};
-              claude = {
-                context.text = "RUNTIME-CONTEXT";
-                enable = true;
-                files.".claude/CLAUDE.md".enable = false;
-                rules.probe.text = "probe";
-              };
+              ${runtime} =
+                {
+                  context.text = "RUNTIME-CONTEXT";
+                  enable = true;
+                  files.${target} = entry;
+                }
+                // extras;
             };
-          };
+          }).config;
+        claudePath = ".claude/CLAUDE.md";
+        hmKimchiPath = ".config/kimchi/harness/AGENTS.md";
+        # Instantiating a replacement instantiates its required tree: check the
+        # native sink source, not just the public override's text.
+        nativeText = config: path:
+          assert lib.assertMsg (toString (deliveredFiles config).${path}.source != "") "${path} has no native source";
+            config.ai.files.${path}.content.text;
+        claudeReplacement = evaluate:
+          nativeText (fixture evaluate "claude" claudePath {content.text = "CLAUDE-REPLACEMENT";} {}) claudePath
+          == "CLAUDE-REPLACEMENT";
+        # Leave a live rule in the tree so that suppressing context cannot
+        # make the assertion pass by skipping tree instantiation entirely.
+        claudeOff = evaluate: let
+          config = fixture evaluate "claude" claudePath {enable = false;} {rules.probe.text = "probe";};
         in
-          !(deliveredFiles evaluated.config ? ".claude/CLAUDE.md")
-          && builtins.isString evaluated.config.ai.claude._generatedTree.drvPath;
-        hmKimchi = evalHm {
-          ai = {
-            context = {inherit source;};
-            kimchi = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
-            };
-          };
-        };
-        devenvKimchi = evalDevenv {
-          ai = {
-            context = {inherit source;};
-            kimchi = {
-              context.text = "RUNTIME-CONTEXT";
-              enable = true;
-              files."AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
-            };
-          };
-        };
+          !(deliveredFiles config ? ${claudePath})
+          && builtins.isString config.ai.claude._generatedTree.drvPath;
+        hmKimchi = fixture evalHm "kimchi" hmKimchiPath {content.text = "KIMCHI-REPLACEMENT";} {};
+        shared = (deliveredFiles (fixture evalDevenv "kimchi" "AGENTS.md" {content.text = "KIMCHI-REPLACEMENT";} {}))."AGENTS.md";
       in
-        claudeText hmClaude
-        == "CLAUDE-REPLACEMENT"
-        && claudeText devenvClaude == "CLAUDE-REPLACEMENT"
-        && lib.all claudeOff [evalHm evalDevenv]
-        && builtins.isString (toString (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".source)
-        && hmKimchi.config.ai.files.".config/kimchi/harness/AGENTS.md".content.text == "KIMCHI-REPLACEMENT"
-        && hmKimchi.config.ai.files.".config/kimchi/harness/AGENTS.md".method == "symlink"
-        && devenvKimchi.config.ai.files."AGENTS.md".method == "ro"
-        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        checkRows "discarded composed context must not realize its source" {
+          "devenv Claude replacement instantiates the native sink" = claudeReplacement evalDevenv;
+          "devenv Claude suppression leaves the rules tree instantiable" = claudeOff evalDevenv;
+          "devenv Kimchi replacement is copied by the shared owner" =
+            shared.method == "ro" && shared.text == "KIMCHI-REPLACEMENT";
+          "home-manager Claude replacement instantiates the native sink" = claudeReplacement evalHm;
+          "home-manager Claude suppression leaves the rules tree instantiable" = claudeOff evalHm;
+          "home-manager Kimchi replacement stays a native symlink" =
+            nativeText hmKimchi hmKimchiPath
+            == "KIMCHI-REPLACEMENT"
+            && hmKimchi.ai.files.${hmKimchiPath}.method == "symlink";
+        }
     );
 
+    # A wildcard or wrong-runtime dispatcher would give these checks an extra
+    # file, the wrong path, or the wrong runtime even though their tree builds.
     module-ai-checks-routes-files-by-surface = let
+      expectRoute = runtime: path: marker: ''
+        test "$AI_RUNTIME" = ${lib.escapeShellArg runtime}
+        test "$#" = 1
+        test "$1" = ${lib.escapeShellArg path}
+        test -f "$1"
+        touch ${lib.escapeShellArg marker}
+      '';
       evaluated = evalDevenv {
         ai = {
-          checks.context = "# comment-only check";
-          checks.rules = ''
-            test "$AI_RUNTIME" = claude
-            test "$#" = 1
-            case "$1" in
-              .claude/rules/*) ;;
-              *) exit 1 ;;
-            esac
-            touch .rules-check-ran
-          '';
+          checks = {
+            context = expectRoute "claude" ".claude/CLAUDE.md" ".context-check-ran";
+            rules = expectRoute "claude" ".claude/rules/probe.md" ".rules-check-ran";
+            # A comment-only consumer check must not make the generated script
+            # a syntax error. The skills fixture makes the tree run this check.
+            skills = "# comment-only check";
+          };
           claude = {
             enable = true;
             skills.probe = ../../packages/ai-module/checks/fixtures/probe-skill;
@@ -731,23 +535,33 @@ in {
           rules.probe.text = "probe";
         };
       };
-      tree = evaluated.config.ai.claude._generatedTree;
-      internalTree =
-        (evalDevenv {
-          ai = {
-            checks.context = "x";
-            codex.enable = true;
-            context.text = "probe";
-          };
-        }).config.ai.internal._generatedTree;
+      tree = deliveredTree evaluated ".claude/rules/probe.md";
+      internal = evalDevenv {
+        ai = {
+          checks.context = expectRoute "internal" "AGENTS.md" ".context-check-ran";
+          codex.enable = true;
+          context.text = "probe";
+        };
+      };
+      internalTree = deliveredTree internal "AGENTS.md";
     in
-      assert lib.hasInfix "AGENTS.md" internalTree.installCheckPhase
-      && lib.any (lib.hasSuffix "-ai-internal-context-check.drv") (builtins.attrNames (builtins.getContext internalTree.installCheckPhase));
-        pkgs.runCommand "module-test-ai-checks-routes-files-by-surface" {} ''
-          test -e ${tree}/.rules-check-ran
-          touch "$out"
-        '';
+      pkgs.runCommand "module-test-ai-checks-routes-files-by-surface" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        require_marker() {
+          if ! test -e "$1"; then
+            printf 'Generated-file check did not create %s\n' "$1" >&2
+            return 1
+          fi
+        }
+        require_marker ${tree}/.context-check-ran
+        require_marker ${tree}/.rules-check-ran
+        test -f ${tree}/.claude/skills/probe/SKILL.md
+        require_marker ${internalTree}/.context-check-ran
+        touch "$out"
+      '';
 
+    # A bare failure would hide which generated-file check exited and why.
     module-ai-checks-failure-names-surface-and-runtime = let
       evaluated = evalDevenv {
         ai = {
@@ -761,10 +575,14 @@ in {
       expectedFailure = pkgs.testers.testBuildFailure evaluated.config.ai.claude._generatedTree;
     in
       pkgs.runCommand "module-test-ai-checks-failure-names-surface-and-runtime" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         grep -q -F 'Generated-file check failed for surface skills in runtime claude (exit 7)' ${expectedFailure}/testBuildFailure.log
         touch "$out"
       '';
 
+    # An empty runtime tier suppresses the inherited check for one surface,
+    # without dropping the generated file or unsetting other root checks.
     module-ai-checks-tier-replacement = let
       fixture = {
         ai = {
@@ -779,6 +597,7 @@ in {
                 "$schema": "https://json.schemastore.org/claude-code-settings.json",
                 "env": {"DISABLE_AUTOUPDATER": "1"}
               }' "$1" >/dev/null
+              touch .settings-check-ran
             '';
           };
           claude.enable = true;
@@ -796,7 +615,10 @@ in {
       assert replaced.ai.claude.checks.rules == "";
       assert inherited.ai.claude.checks.rules == "exit 1";
         pkgs.runCommand "module-test-ai-checks-tier-replacement" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           test -e ${replaced.ai.claude._generatedTree}/.claude/rules/probe.md
+          test -e ${replaced.ai.claude._generatedTree}/.settings-check-ran
           grep -q -F 'Generated-file check failed for surface rules in runtime claude (exit 1)' ${expectedFailure}/testBuildFailure.log
           touch "$out"
         '';
@@ -804,22 +626,36 @@ in {
     module-ai-checks-stamp-coverage = mkTest "ai-checks-stamp-coverage" (
       let
         specimen = import ./specimen.nix {inherit lib;};
-        missing = mode: runtime: let
-          evaluated =
-            if mode == "hm"
-            then evalHm (specimen mode runtime)
-            else evalDevenv (specimen mode runtime);
+        # Pin a required stamp for each runtime and backend with generated
+        # files, so an empty inventory cannot pass. Copilot has no HM tree.
+        required = {
+          devenv = {
+            claude.".claude/CLAUDE.md" = "context";
+            codex.".codex/config.toml" = "settings";
+            copilot.".github/copilot-instructions.md" = "context";
+            kimchi.".kimchi/mcp.json" = "mcpServers";
+            kiro.".kiro/steering/scoped.md" = "rules";
+          };
+          hm = {
+            claude.".claude/CLAUDE.md" = "context";
+            codex.".codex/AGENTS.md" = "context";
+            copilot = {};
+            kimchi.".config/kimchi/harness/AGENTS.md" = "context";
+            kiro.".kiro/steering/AGENTS.md" = "context";
+          };
+        };
+        rows = mode: evaluate: runtime: let
+          entries = (evaluate (specimen mode runtime)).config.ai.${runtime}._generatedFiles;
         in
-          lib.mapAttrsToList
-          (path: _: "${runtime}/${mode}/${path}")
-          (lib.filterAttrs
-            (_: entry: entry.surface == null)
-            evaluated.config.ai.${runtime}._generatedFiles);
-        failures = lib.concatMap (runtime: missing "devenv" runtime ++ missing "hm" runtime) harnessNames;
+          lib.mapAttrs' (path: entry: lib.nameValuePair "${runtime}/${mode}/${path} has no surface stamp" (entry.surface != null)) entries
+          // lib.mapAttrs' (path: surface:
+            lib.nameValuePair "${runtime}/${mode}/${path} must be stamped ${surface}" (
+              (entries.${path}.surface or null) == surface
+            ))
+          required.${mode}.${runtime};
+        runtimeRows = lib.concatMap (runtime: [(rows "devenv" evalDevenv runtime) (rows "hm" evalHm runtime)]) harnessNames;
       in
-        if failures == []
-        then true
-        else builtins.trace "ai-checks-stamp-coverage: missing ${lib.concatStringsSep ", " failures}" false
+        checkRows "generated-file surface stamps" (lib.mergeAttrsList runtimeRows)
     );
   };
 }

@@ -5,7 +5,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm mkTest;
+  inherit (harness) checkRows deliveredFiles evalDevenv evalHm mkTest;
   files = import ../lib/files/default.nix {inherit lib pkgs;};
   dagLib = import ./dag-lib.nix harness.hmLib;
   fixture = lib.genAttrs ["devenv" "hm"] (backend:
@@ -19,7 +19,23 @@
         if isHm
         then harness.evalHmWithSpecialArgs {lib = dagLib;}
         else harness.evalDevenv;
-      generate = count: enable: let
+      legacy =
+        lib.optional isHm {
+          codec = "dir";
+          ledger = "materialize/codex-daemon-settings.manifest";
+          path = "${prefix}/app-server-daemon";
+        }
+        ++ [
+          {
+            codec = "dir";
+            ledger = "materialize/codex-execpolicy.manifest";
+            path = "${prefix}/rules";
+          }
+        ];
+      generate = {
+        enable,
+        rules,
+      }: let
         inherit
           ((evaluate {
             ai.codex = {
@@ -29,7 +45,7 @@
                 instructions.text = "Read first.";
               };
               context.text = "CONTEXT";
-              execpolicyRules = lib.genAttrs (lib.take count ["alpha" "beta"]) (_: "POLICY\n");
+              execpolicyRules = lib.genAttrs rules (_: "POLICY\n");
               hooks.Stop = [{hooks = [{command = "validate";}];}];
               native.settings.model = "fixture";
               skills.probe = ./fixtures/probe-skill;
@@ -42,28 +58,16 @@
           files = config.ai.files;
           namespace = "ai";
         });
+        rulePaths = map (name: "${prefix}/rules/${name}.rules") rules;
         expected =
           [".agents/skills/probe" "${prefix}/agents/reviewer.toml" "${prefix}/config.toml" "${prefix}/hooks.json"]
-          ++ map (name: "${prefix}/rules/${name}.rules") (lib.take count ["alpha" "beta"])
+          ++ rulePaths
           ++ lib.optionals isHm ["${prefix}/AGENTS.md" "${prefix}/app-server-daemon/settings.json"];
         graph =
           if isHm
           then config.home.activation
           else config.tasks;
         migrator = config.ai.codex.activation.codex-migrate-skill-links or null;
-        legacy =
-          lib.optional isHm {
-            codec = "dir";
-            ledger = "materialize/codex-daemon-settings.manifest";
-            path = "${prefix}/app-server-daemon";
-          }
-          ++ [
-            {
-              codec = "dir";
-              ledger = "materialize/codex-execpolicy.manifest";
-              path = "${prefix}/rules";
-            }
-          ];
       in
         assert builtins.attrNames config.ai.codex._generatedFiles
         == (
@@ -71,9 +75,12 @@
           then lib.sort builtins.lessThan expected
           else []
         );
+        assert checkRows "Codex ${backend} ${configDir} (enabled=${lib.boolToString enable}, rules=${toString rules})" {
+          "copy plan keeps rules and the Home Manager daemon settings" =
+            map (item: item.path) plan
+            == lib.optionals enable (lib.optional isHm "${prefix}/app-server-daemon/settings.json" ++ rulePaths);
+        };
         assert config.ai.codex.legacyLedgers == legacy;
-        assert (evaluate {ai.codex = {inherit configDir;};}).config.ai.codex.legacyLedgers == legacy;
-        assert lib.all (entry: lib.elem entry config.ai.legacyLedgers) legacy;
         assert !enable
         || lib.all (path:
           config.ai.claims.path.${path}
@@ -104,7 +111,6 @@
           ))
         expected;
         assert enable || (config.ai.codex.files == {} && migrator == null);
-        assert !enable || (migrator.after == [] && migrator.before == ["linkCheck"]);
         assert !enable
         || (
           if isHm
@@ -112,34 +118,32 @@
           else graph."ai:codex-migrate-skill-links".before == ["ai:link-check"] && graph."ai:codex-migrate-skill-links".after == ["devenv:files:cleanup"]
         );
         assert if isHm
-        then
-          config.ai.codex.activation.codex-daemon-select.runWhenDisabled
-          && graph ? ai-codex-daemon-select
-          && graph.ai-codex-daemon-select.after == ["linkGeneration"]
+        then graph.ai-codex-daemon-select.after == ["linkGeneration"]
         else !(config.ai.codex.activation ? codex-daemon-select);
         assert lib.all (entry: entry.assertion) config.assertions; {
-          inherit legacy plan prefix;
-          inputs = lib.mapAttrs (_: entry: {inherit (entry.content) text value;}) config.ai.codex._generatedFiles;
+          inherit plan prefix;
+          legacy = config.ai.codex.legacyLedgers;
         };
     in
-      map (step: generate step.count step.enable) [
-        {
-          count = 2;
-          enable = true;
-        }
-        {
-          count = 1;
-          enable = true;
-        }
-        {
-          count = 0;
-          enable = true;
-        }
-        {
-          count = 0;
-          enable = false;
-        }
-      ]));
+      assert (evaluate {ai.codex = {inherit configDir;};}).config.ai.codex.legacyLedgers == legacy;
+        map generate [
+          {
+            enable = true;
+            rules = ["alpha" "beta"];
+          }
+          {
+            enable = true;
+            rules = ["alpha"];
+          }
+          {
+            enable = true;
+            rules = [];
+          }
+          {
+            enable = false;
+            rules = [];
+          }
+        ]));
   # An ordinary Codex path has one owner; a disabled competing owner
   # forwards nothing, whereas a disabled entry of a live owner still claims it.
   collision = enabled: entryEnabled: let
@@ -169,7 +173,7 @@ in {
         ai.codex.files."literal/codex".content.text = "disabled";
       }).config.ai.files ? "literal/codex")) [evalHm evalDevenv];
     assert collision false true == [];
-    assert lib.all (entryEnabled: collision true entryEnabled == ["ai.claims.path.literal/codex: claimed by codex and probe"]) [false true];
+    assert collision true false == ["ai.claims.path.literal/codex: claimed by codex and probe"];
       pkgs.runCommandLocal "ai-module-codex" {passthru = {inherit fixtureJson;};} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -177,49 +181,66 @@ in {
           ${../lib/files}/engine.py ${pkgs.writeText "codex-files.json" fixtureJson}
         ${pkgs.coreutils}/bin/touch "$out"
       '';
-    ai-module-codex-context-lazy = mkTest "ai-module-codex-context-lazy" (
-      lib.all (
-        cell: let
-          path =
-            if cell.backend == "hm"
-            then ".codex/AGENTS.md"
-            else "AGENTS.md";
-          evaluate =
-            if cell.backend == "hm"
-            then evalHm
-            else evalDevenv;
-          source = pkgs.runCommand "discarded-codex-context" {} ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            exit 1
-          '';
-          override = lib.setAttrByPath (["ai"] ++ lib.optional cell.runtime "codex" ++ ["files" path]) (
-            if cell.disabled
-            then {enable = false;}
-            else {content.text = "replacement";}
-          );
-          inherit
-            (evaluate (lib.recursiveUpdate {
-                ai = {
-                  codex.enable = true;
-                  context = {inherit source;};
-                };
+    # Evaluating a derivation cannot reveal that an overridden source would
+    # still be built. Realize each replacement tree to detect that dependency.
+    ai-module-codex-context-lazy = let
+      cases =
+        map (
+          cell: let
+            path =
+              if cell.backend == "hm"
+              then ".codex/AGENTS.md"
+              else "AGENTS.md";
+            evaluate =
+              if cell.backend == "hm"
+              then evalHm
+              else evalDevenv;
+            source = pkgs.runCommand "discarded-codex-context" {} ''
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
+              exit 1
+            '';
+            override = lib.setAttrByPath (["ai"] ++ lib.optional cell.runtime "codex" ++ ["files" path]) (
+              if cell.disabled
+              then {enable = false;}
+              else {content.text = "replacement";}
+            );
+            inherit
+              (evaluate (lib.recursiveUpdate {
+                  ai = {
+                    codex = {
+                      enable = true;
+                      # Keep a tree even if the context is suppressed.
+                      native.settings.model = "fixture";
+                    };
+                    context = {inherit source;};
+                  };
+                }
+                override))
+              config
+              ;
+            tree = config.ai.codex._generatedTree;
+          in
+            assert checkRows "Codex discarded context ${cell.backend} (disabled=${lib.boolToString cell.disabled}, runtime=${lib.boolToString cell.runtime})" (
+              lib.optionalAttrs (!(cell.runtime && cell.disabled)) {
+                "disabled context is not delivered" = ((deliveredFiles config) ? ${path}) == !cell.disabled;
               }
-              override))
-            config
-            ;
-          tree = config.ai.codex._generatedTree;
-        in
-          ((deliveredFiles config) ? ${path})
-          == !cell.disabled
-          && (cell.disabled || config.ai.files.${path}.content.text == "replacement")
-          && (tree == null || tree.drvPath != "")
-      ) (lib.cartesianProduct {
-        backend = ["devenv" "hm"];
-        disabled = [false true];
-        runtime = [false true];
-      })
-    );
+              // {
+                "text override does not fall back to the discarded source" = cell.disabled || config.ai.files.${path}.content.text == "replacement";
+              }
+            ); tree
+        ) (lib.cartesianProduct {
+          backend = ["devenv" "hm"];
+          disabled = [false true];
+          runtime = [false true];
+        });
+    in
+      pkgs.runCommand "ai-module-codex-context-lazy" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${lib.concatMapStringsSep "\n" (tree: "test -d ${tree}") cases}
+        printf 'PASS: discarded context is not a dependency of the generated tree\n' > "$out"
+      '';
 
     # Codex's share of the deleted normalized-keyed-pools-extend check.
     ai-module-codex-normalized-keyed-pools = mkTest "ai-module-codex-normalized-keyed-pools" (

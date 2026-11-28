@@ -13,7 +13,7 @@
   "block_roles": ["selection", "selection", "guard", "mutator", "guard"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "An explicit pre-move commit hash still selects its rewritten branch in the submission preview",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R3-N2",

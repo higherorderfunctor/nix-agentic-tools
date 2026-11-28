@@ -1,5 +1,6 @@
-{runCommandLocal}:
-runCommandLocal "facet-ancestor" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+{writeTextFile}:
+writeTextFile {
+  destination = "/passed";
+  name = "facet-ancestor";
+  text = "ancestor\n";
+}

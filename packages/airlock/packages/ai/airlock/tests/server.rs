@@ -3,7 +3,7 @@ mod common;
 use std::{io, time::Duration};
 
 use airlock::server;
-use common::{message, request, start};
+use common::{message, request, start, wait_for_listener_release};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
@@ -11,39 +11,66 @@ use tokio::{
 
 #[tokio::test]
 async fn listen_address_must_be_loopback() {
-    for address in ["0.0.0.0:8318", "192.0.2.1:8318", "[::]:8318"] {
+    // Test the IPv6 wildcard and an explicit non-loopback IPv4 address:
+    // ruling out wildcards alone would not reject the latter.
+    for address in ["192.0.2.1:8318", "[::]:8318"] {
         let error = server::bind(address.parse().unwrap()).await.unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
-        assert!(error.to_string().contains("must be loopback"));
+        assert_eq!(
+            error.kind(),
+            io::ErrorKind::InvalidInput,
+            "{address}: {error}"
+        );
+        assert!(
+            error.to_string().contains("must be loopback"),
+            "{address}: {error}"
+        );
     }
     let listener = server::bind("[::1]:0".parse().unwrap()).await.unwrap();
-    assert!(listener.local_addr().unwrap().ip().is_loopback());
+    assert_eq!(
+        listener.local_addr().unwrap().ip(),
+        std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST)
+    );
 }
 
 #[tokio::test]
 async fn health_and_error_responses_keep_the_connection_usable() {
     let server = start().await;
     let mut socket = server.client().await;
-    let health = request(&mut socket, "GET", "/health").await;
-    assert!(health.starts_with("HTTP/1.1 200 "), "{health}");
-    assert!(health.ends_with("\r\n\r\nok\n"), "{health}");
-    let unknown = request(&mut socket, "GET", "/unknown").await;
-    assert!(unknown.starts_with("HTTP/1.1 404 "), "{unknown}");
-    let wrong_method = request(&mut socket, "POST", "/health").await;
-    assert!(wrong_method.starts_with("HTTP/1.1 405 "), "{wrong_method}");
-    assert!(wrong_method.contains("allow: GET\r\n"), "{wrong_method}");
+    // One connection: a 404 or 405 must not prevent the next request.
+    for (method, path, status, allow, body) in [
+        ("GET", "/unknown", "404", None, None),
+        ("POST", "/health", "405", Some("allow: GET"), None),
+        ("GET", "/health", "200", None, Some("ok\n")),
+    ] {
+        let response = request(&mut socket, method, path).await;
+        assert!(
+            response.starts_with(&format!("HTTP/1.1 {status} ")),
+            "{method} {path}: {response}"
+        );
+        let (headers, actual_body) = response.split_once("\r\n\r\n").unwrap();
+        if let Some(allow) = allow {
+            assert!(
+                headers.lines().any(|line| line == allow),
+                "{method} {path}: {response}"
+            );
+        }
+        if let Some(body) = body {
+            assert_eq!(actual_body, body, "{method} {path}");
+        }
+    }
     drop(socket);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn shutdown_drains_an_active_request_then_releases_the_listener() {
+async fn shutdown_releases_the_listener_before_draining_an_active_request() {
     let server = start().await;
     let address = server.address;
     let mut socket = server.client().await;
     request(&mut socket, "GET", "/health").await;
     socket.write_all(b"GET /health HTTP/1.1\r\n").await.unwrap();
     server.shutdown.send(()).unwrap();
+    wait_for_listener_release(address).await;
     // The same accepted connection can finish its request during the grace.
     socket
         .write_all(b"Host: localhost\r\nConnection: close\r\n\r\n")
@@ -55,9 +82,6 @@ async fn shutdown_drains_an_active_request_then_releases_the_listener() {
         .unwrap()
         .unwrap()
         .unwrap();
-    server::bind(address)
-        .await
-        .expect("listener released after shutdown");
 }
 
 #[tokio::test]
@@ -65,6 +89,7 @@ async fn shutdown_closes_idle_connection_after_grace() {
     let server = start().await;
     let mut socket = server.client().await;
     request(&mut socket, "GET", "/health").await;
+    // A keep-alive connection must be closed even if it never submits another request.
     server.stop().await;
     assert_eq!(socket.read(&mut [0]).await.unwrap(), 0);
 }

@@ -7,13 +7,13 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "Submit preflight resolves both stale rebase paths through Git instead of treating the linked worktree .git file as a directory",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-06",
   "kind": "static",
   "path": "skills/stack-submit/SKILL.md",
-  "pattern": "git rev-parse --git-path rebase-merge",
+  "pattern": "ls -d \"\\$\\(git rev-parse --git-path rebase-merge\\)\"\\s+\\\\\\s+\"\\$\\(git rev-parse --git-path rebase-apply\\)\"",
   "present": true,
   "topology": "T4"
 }

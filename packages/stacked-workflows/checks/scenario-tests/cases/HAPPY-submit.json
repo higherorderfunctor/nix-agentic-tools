@@ -13,7 +13,7 @@
   "block_roles": ["selection", "guard", "mutator", "guard", "mutator"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Preview includes the moved stack, and publication replaces inherited main tracking with the pushed branch",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "HAPPY-submit",

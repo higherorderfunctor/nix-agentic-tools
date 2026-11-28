@@ -5,6 +5,21 @@
   pkgs,
   ...
 }: let
+  # Spell out the native points; reusing pointNodes would pass if a point
+  # were remapped in production and the consumer graph followed it.
+  nativePoints = {
+    devenv = {
+      files = ["ai:files-linked"];
+      materialized = ["ai:files-ready"];
+      shell = ["devenv:enterShell"];
+    };
+    hm = {
+      files = ["linkGeneration"];
+      materialized = ["ai-files-ready"];
+      secrets = ["sops-nix"];
+      shell = ["ai-ready"];
+    };
+  };
   hmLib = import ./dag-lib.nix harness.hmLib;
   evaluate = backend:
     if backend == "hm"
@@ -44,25 +59,24 @@
         owner = "glab";
       }
     ]
-    ++ map (hooks: {
-      backend = "devenv";
-      beforeNodes = ["git:config"] ++ lib.optional hooks "devenv:git-hooks:install";
-      config.git.branchless.enable = true;
-      key = "git-branchless-init";
-      modules = [
-        {
-          options.git-hooks.enable = lib.mkOption {
-            default = hooks;
-            type = lib.types.bool;
-          };
-        }
-      ];
-      owner = "git-branchless";
-      suffix =
-        if hooks
-        then "hooks"
-        else "no-hooks";
-    }) [false true]
+    ++ [
+      {
+        backend = "devenv";
+        beforeNodes = ["git:config" "devenv:git-hooks:install"];
+        config.git.branchless.enable = true;
+        key = "git-branchless-init";
+        modules = [
+          {
+            options.git-hooks.enable = lib.mkOption {
+              default = true;
+              type = lib.types.bool;
+            };
+          }
+        ];
+        owner = "git-branchless";
+        suffix = "hooks";
+      }
+    ]
     ++ map (backend: {
       after = ["materialized"];
       inherit backend;
@@ -95,22 +109,28 @@
       then disabled.home.activation
       else disabled.tasks;
     expectedAfter = case.after or ["files"];
-    nodesFor = (import ../lib/activation.nix {inherit lib;}).pointNodes case.backend (
-      if hm
-      then ["sops-nix"]
-      else []
-    );
+    nodes = nativePoints.${case.backend};
   in
-    entry.command
-    == root.command
-    && root.enable
-    && root.after == expectedAfter
-    && root.beforeNodes.devenv == (case.beforeNodes or [])
-    && graph.${native}.after == lib.concatMap nodesFor expectedAfter
-    && graph.${native}.before == lib.concatMap nodesFor ["shell"] ++ (case.beforeNodes or [])
-    && config.ai.${case.owner}.files == {}
-    && (case.owner == "git" || !(builtins.hasAttr native disabledGraph))
-    && (case.owner != "beads" || lib.all (task: !(task ? after) && !(task ? before)) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "beads:" name) graph)));
+    harness.checkRows "${case.owner}/${case.backend} activation" ({
+        "manual beads tasks do not enter the graph" =
+          case.owner
+          != "beads"
+          || lib.all (task: !(task ? after) && !(task ? before)) (lib.attrValues (lib.filterAttrs (name: _: lib.hasPrefix "beads:" name) graph));
+        "native task follows required predecessors" = graph.${native}.after == lib.concatMap (point: nodes.${point}) expectedAfter;
+        "owner forwards the command and ordering without declaring files" =
+          entry.command
+          == root.command
+          && root.enable
+          && root.after == expectedAfter
+          && root.beforeNodes.devenv == (case.beforeNodes or [])
+          && config.ai.${case.owner}.files == {};
+      }
+      // lib.optionalAttrs (case.owner == "glab") {
+        "disabled owner installs no task" = !(builtins.hasAttr native disabledGraph);
+      }
+      // lib.optionalAttrs (!(builtins.elem case.owner ["beads" "git" "git-branchless"])) {
+        "native task precedes shell" = graph.${native}.before == nodes.shell;
+      });
 in {
   checks = builtins.listToAttrs (map (case: let
       name = "ai-module-${case.owner}-${case.backend}${lib.optionalString (case ? suffix) "-${case.suffix}"}";

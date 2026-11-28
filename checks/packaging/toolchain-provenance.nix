@@ -5,6 +5,7 @@
 # own go, rustc or cargo (no silent nixpkgs fallback).
 {
   buildOverlay,
+  harness,
   inputs,
   lib,
   pkgs,
@@ -25,7 +26,8 @@
         inherit name;
         outPath = probe.value;
       }) (["cargo" "go" "rustc"] ++ builtins.filter (n: builtins.match "go_1_[0-9]+" n != null) (builtins.attrNames pkgs));
-    packages = builtins.attrValues self.ciPackages.${system};
+    packageSet = self.ciPackages.${system};
+    packages = builtins.attrValues packageSet;
     nested = lib.concatMap (p:
       builtins.filter
       (value: lib.isDerivation value && value ? goModules)
@@ -125,7 +127,12 @@
       ++ lib.concatMap (h: carriesBanned "helper" h (h.nativeBuildInputs or [])) helpers
       ++ jsFailures;
   in
-    assert goPackages != [] && rustPackages != [] && jsNames != [] && jsPackages != [];
+    assert harness.checkRows "toolchain-provenance audit inputs" {
+      "Go audit reaches the gh binary" = builtins.elem packageSet.gh.outPath (outPaths goPackages);
+      "JS audit reaches the oxlint build" = builtins.elem markedPkgs.ai.devTools.oxlint.outPath (outPaths jsPackages);
+      "JS marker includes the consumer pnpm 12 interpreter" = builtins.elem "pnpm_12" jsNames;
+      "Rust audit reaches the oxlint binary" = builtins.elem packageSet.oxlint.outPath (outPaths rustPackages);
+    };
     assert lib.assertMsg (failures == []) "compiler provenance mismatch: ${lib.concatStringsSep ", " failures}";
       pkgs.runCommand "toolchain-provenance" {} ''
         set -euETo pipefail

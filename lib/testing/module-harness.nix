@@ -269,6 +269,19 @@
   # silently measuring production builtins.getEnv behavior.
   evalDevenvWithGetEnv = codexGetEnv: evalDevenvWithSpecialArgs {inherit codexGetEnv;};
   mkTest = mkAssertion "module-test";
+  # A table check: every named row must hold, and a failing row throws with
+  # its name, so one check covers a declaration's cases.
+  checkRows = label: rows:
+    lib.all (name: assert lib.assertMsg rows.${name} "${label}: ${name}"; true) (lib.attrNames rows);
+  # tryEval does not expose error messages, so a rejection row forces only the
+  # field that owns the restriction and changes just one input from a valid
+  # control that must read back as expected.
+  rejectsChange = read: {
+    valid,
+    invalid,
+    expected,
+  }:
+    read valid == expected && !(builtins.tryEval (builtins.deepSeq (read invalid) true)).success;
   mkAssertion = prefix: name: assertion:
     pkgs.runCommand "${prefix}-${name}" {} ''
       ${
@@ -471,6 +484,6 @@
     && builtins.length agent.config.ProgramArguments == 1
     && lib.hasSuffix "/bin/ai-service-${name}" (builtins.head agent.config.ProgramArguments);
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs launchdAgentRunsLauncher markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan setEnable tomlFormat;
+  inherit aiBase aiStubs checkRows claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs launchdAgentRunsLauncher markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan rejectsChange setEnable tomlFormat;
   inherit testing;
 }

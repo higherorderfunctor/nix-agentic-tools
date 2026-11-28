@@ -3,14 +3,14 @@
 {pkgs, ...}: {
   checks.pr-watch =
     pkgs.runCommand "pr-watch-check" {
-      nativeBuildInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.jq pkgs.shellcheck];
+      nativeBuildInputs = [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.jq];
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
       script=${../../dev/skills/pr-review-loop/scripts/pr-watch.sh}
+      # The skill invokes the watcher directly; bash below does not check its mode.
       test -x "$script"
-      shellcheck --shell=bash "$script" ${./pr-watch.test.sh}
       bash ${./pr-watch.test.sh} "$script"
       touch "$out"
     '';

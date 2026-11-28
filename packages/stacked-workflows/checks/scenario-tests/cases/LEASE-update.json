@@ -13,7 +13,7 @@
   "block_roles": ["selection", "guard", "mutator", "mutator"],
   "env": {},
   "expected": {
-    "description": "publication honors the pre-rewrite remote snapshot for update",
+    "description": "An unchanged existing remote tip permits the rewrite and publishes both stack branches with tracking",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "LEASE-update",

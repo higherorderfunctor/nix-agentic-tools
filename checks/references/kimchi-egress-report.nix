@@ -1,4 +1,7 @@
 # Regenerate through lib.extracted; compare parsed JSON because treefmt owns layout.
+# A pin or fact update can pass extraction validation but leave the committed
+# report stale (for example, header.scan still names the previous scan). Only
+# this comparison checks the published report against the current inputs.
 {
   lib,
   pkgs,

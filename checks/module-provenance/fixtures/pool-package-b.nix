@@ -1,13 +1,8 @@
-# Positive-control package B deliberately claims package A's keys.
-{lib, ...}: let
-  pools = [
-    "agents"
-    "environmentVariables"
-    "mcpServers"
-    "rules"
-    "skills"
-  ];
-  claims = lib.genAttrs pools (_: {shared = "package-b";});
-in {
-  config.ai = claims // {claude = claims;};
+# The same package file claims either an unrelated key or package A's key.
+{
+  fixtureClaims,
+  fixturePackageBKey,
+  ...
+}: {
+  config.ai = fixtureClaims fixturePackageBKey "package-b";
 }

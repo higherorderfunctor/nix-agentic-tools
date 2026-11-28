@@ -7,31 +7,19 @@
       rows = {
         Added = {
           after = ["First"];
-          before = ["Second"];
           text = "PORTABLE ADDED";
         };
         Disabled = {
-          after = ["Second"];
-          before = ["Source"];
           enable = false;
           text = "PORTABLE DISABLED";
         };
-        First = {
-          after = [];
-          text = "PORTABLE FIRST\ncontinued";
-        };
-        Replaced = {
-          after = ["Source"];
-          text = "PORTABLE REPLACED";
-        };
-        Second = {
-          after = ["Added"];
-          text = "PORTABLE SECOND";
-        };
+        First.text = "PORTABLE FIRST\ncontinued";
+        Replaced.text = "PORTABLE REPLACED";
         Source = {
-          after = ["Second"];
+          after = ["Added"];
+          # The sole edge to Replaced; ignoring before now moves Replaced ahead of Source.
           before = ["Replaced"];
-          source = pkgs.writeText "row-source.md" "SOURCE\ncontinued";
+          source = pkgs.writeText "row-source.md" "SOURCE";
         };
       };
     };

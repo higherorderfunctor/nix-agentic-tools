@@ -13,6 +13,8 @@
     ];
   };
 in {
+  # Run the published recipes against real Git tools in CI, not just the
+  # extractor: a valid shell block can still mutate the wrong stack.
   checks.stacked-workflows-scenarios =
     pkgs.runCommand "stacked-workflows-scenarios" {
       nativeBuildInputs = [
@@ -26,10 +28,6 @@ in {
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      export HOME="$TMPDIR/home"
-      export XDG_CONFIG_HOME="$HOME/.config"
-      export GIT_CONFIG_NOSYSTEM=1
-      mkdir -p "$XDG_CONFIG_HOME"
       python3 ${./scenario-tests}/scenarios.py \
         --source-dir ${source} --output "$out"
     '';

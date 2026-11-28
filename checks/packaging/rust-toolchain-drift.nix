@@ -1,11 +1,13 @@
 # Compare recorded Rust channels with the actual crate/workspace source files.
 {
+  harness,
   lib,
   pkgs,
   self,
   ...
 }: {
   checks = let
+    inherit (harness) checkRows;
     vu = import ../../lib/packaging.nix;
     pkgSet = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
     # Keep check-name discovery independent of package/compiler evaluation.
@@ -78,7 +80,7 @@
       ${orderAssertFn}
       printf '%s\n' /fixture-fix-src-test /fixture-fix-rust-toolchain-test /fixture-fix-cargo-test >ordered
       assert_chain_order ordered control-ordered
-      for stages in 'src cargo rust-toolchain' 'rust-toolchain src cargo' 'src rust-toolchain' 'rust-toolchain cargo'; do
+      while IFS='|' read -r stages expected; do
         : >broken
         for stage in $stages; do
           printf '/fixture-fix-%s-test\n' "$stage" >>broken
@@ -87,13 +89,23 @@
           echo "FAIL: accepted broken Rust chain: $stages" >&2
           exit 1
         fi
-        grep -qF 'FAIL:' diagnostic
-      done
+        if ! grep -F -- "$expected" diagnostic; then
+          printf 'FAIL: %s: expected %s, got:\n' "$stages" "$expected" >&2
+          cat diagnostic >&2
+          exit 1
+        fi
+      done <<'CASES'
+      rust-toolchain cargo|source hash repair must precede rust-toolchain extraction
+      rust-toolchain src cargo|source hash repair must precede rust-toolchain extraction
+      src cargo|no rust-toolchain fixer in its extract chain
+      src cargo rust-toolchain|does not precede the cargo fixer
+      src rust-toolchain|no cargo fixer in its extract chain
+      CASES
       echo 'ordered Rust chain passes; dependency-first, source-last and missing stages fail with diagnostics' > "$out"
     '';
   in
     {
-      rust-toolchain-declared-list = assert lib.assertMsg (lib.all (passed: passed) (builtins.attrValues roster)) "rust-toolchain-declared-list: update the drift roster and rustToolchainChannel metadata";
+      rust-toolchain-declared-list = assert checkRows "rust-toolchain-declared-list (update the drift roster and rustToolchainChannel metadata)" roster;
         pkgs.runCommand "rust-toolchain-declared-list" {passthru.cases = roster;} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :

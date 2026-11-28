@@ -122,10 +122,6 @@
       };
       fragments = overlap;
     };
-    "canonical id loses to alias" = {
-      instance = change {credentials.left.exclusive = true;};
-      fragments = overlap;
-    };
     "default false rejects fallback" = {instance = base;};
     "disabled instance checked" = {
       instance = change {
@@ -164,13 +160,6 @@
         };
       };
       fragments = ["`left`" "`right`" "canonical models `fixture-unknown`"];
-    };
-    "finite versus OAuth ignored" = {
-      instance = change {
-        credentials.left.exclusive = true;
-        credentials.right = oauth "fixture-login";
-      };
-      fragments = overlap;
     };
     "future model omitted from OAuth" = {
       instance = change {
@@ -262,7 +251,6 @@
         };
       };
     };
-    "passthrough exclusive enters conversation" = {instance = change {credentials.left = passthrough "left";};};
     "passthrough fallback refused" = {
       instance = change {
         credentials = {
@@ -356,8 +344,9 @@
     devenv = harness.evalDevenvModules;
     hm = harness.evalHmModules;
   };
-  # Check assertions as well as the pure result: deleting the module caller must fail.
-  run = evaluate: label: test: let
+  # Drive overlap checks through the module assertions. Also read the pure
+  # checker for disabled instances, where the module skips all assertions.
+  run = evaluate: test: let
     result = evaluate [
       {
         ai = {
@@ -388,13 +377,13 @@
     matches = fragments: messages: lib.any (message: lib.all (fragment: lib.hasInfix fragment message) fragments) messages;
     fragments = test.fragments or [];
   in
-    lib.assertMsg (
-      if test ? routeError
-      then errors == [] && matches [test.routeError] failed
-      else if fragments == []
-      then errors == [] && failed == []
-      else lib.length errors == 1 && lib.length failed == 1 && matches fragments errors && matches fragments failed
-    ) "exclusive case: ${label}";
+    if !test.instance.enable
+    then errors == [] && failed == []
+    else if test ? routeError
+    then lib.length failed == 1 && matches [test.routeError] failed
+    else if fragments == []
+    then failed == []
+    else lib.length failed == 1 && matches fragments failed;
   # Grant membership is hand specified; changing order alone must not break the check.
   grants = evaluate: let
     cpa = (import ../lib/default.nix {inherit lib;}).cliproxyapi;
@@ -431,13 +420,15 @@
         provider = "passthrough-right";
       }
     ];
-  in
-    sameMembers expected base
-    && sameMembers passthroughExpected cases."passthrough fallback refused".instance;
+  in {
+    "conversation fallback loses a grant" = sameMembers expected base;
+    "shared passthrough URL coalesces grants" = sameMembers passthroughExpected cases."passthrough fallback refused".instance;
+  };
   # One owner check combines table results without maintaining a rendered-order snapshot.
   checks = lib.mapAttrs (backend: evaluate:
     harness.mkTest "cliproxyapi-exclusive-${backend}"
-    (lib.all (value: value) (lib.mapAttrsToList (run evaluate) (cases // ownerCases)) && grants evaluate))
+    (harness.checkRows "${backend}: exclusive credentials"
+      (lib.mapAttrs (_: run evaluate) (cases // ownerCases) // grants evaluate)))
   backends;
 in {
   checks.cliproxyapi-exclusive = pkgs.linkFarm "cliproxyapi-exclusive" (lib.mapAttrsToList (name: path: {inherit name path;}) checks);

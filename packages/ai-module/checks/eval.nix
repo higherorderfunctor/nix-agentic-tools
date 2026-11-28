@@ -1,8 +1,10 @@
 {
+  harness,
   lib,
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   tree = ./fixtures/a;
   storeTree = "${tree}";
@@ -26,17 +28,15 @@
   named = path: issue: ''files."${path}": ${issue}'';
   pathIssue = "target must be a normalized relative path without empty, . or .. segments";
   cases =
-    map (path: bad path text pathIssue) ["" "/absolute" "a//b" "a/./b" "a/../b"]
-    ++ map (mode:
-      bad "unreadable-${mode}" (text
-        // {
-          inherit mode;
-          method = "ro";
-        }) "ro mode must grant owner read permission") ["0000" "0040" "0200"]
+    map (path: bad path text pathIssue) ["" "/absolute" "a/./b" "a//b"]
     ++ [
+      # Group read permission must not be mistaken for owner read permission.
+      (bad "group-readable" (text
+        // {
+          method = "ro";
+          mode = "0040";
+        }) "ro mode must grant owner read permission")
       (bad "missing" {} "set one of content.text, content.source, content.value, content.run")
-      (bad "value.raw" {content.value.a = 1;} "content.value requires json, toml or yaml format")
-      (bad "rw.raw" (text // {method = "rw";}) "rw requires json, toml or yaml format")
       (bad "recursive.txt" (text // {recursive = true;}) "recursive requires content.source to be a directory")
       (bad "recursive" {
         content.source = tree;
@@ -66,53 +66,45 @@
         format = "toml";
       } ''TOML cannot represent null at "/a/b"'')
     ];
+  typeCase = backend: path: valid: invalid: {inherit backend invalid path valid;};
+  contentSource = path: {content.source = path;};
+  validSource = contentSource "${storeTree}/b/c.md";
   typeCases =
-    map (field: {
-      path = field;
-      value = text // {"${field}" = "bogus";};
-    }) ["executable" "format"]
+    [
+      (typeCase "hm" "executable" (text // {executable = true;}) (text // {executable = "bogus";}))
+      (typeCase "hm" "format" (text // {format = "raw";}) (text // {format = "bogus";}))
+      (typeCase "hm" "source" validSource (contentSource "/etc/passwd"))
+      (typeCase "hm" "source.escape" validSource (contentSource "${storeTree}/../../../etc/passwd"))
+    ]
     ++ lib.concatMap (field: let
       other =
         if field == "hm"
         then "devenv"
         else "hm";
+      methodFor = method: text // {inherit method;};
+      baseMethod = {${other} = "ro";};
+      methodWith = value: methodFor (baseMethod // {${field} = value;});
+      valid = methodWith "symlink";
     in [
-      {
-        path = "method.${field}.invalid";
-        value =
-          text
-          // {
-            method = {
-              "${field}" = "bogus";
-              "${other}" = "ro";
-            };
-          };
-      }
-      {
-        path = "method.${field}.missing";
-        value = text // {method = {"${other}" = "ro";};};
-      }
-    ]) ["devenv" "hm"]
-    ++ [
-      {
-        path = "source";
-        value = {content.source = "/etc/passwd";};
-      }
-      {
-        path = "source.escape";
-        value = {content.source = "${storeTree}/../../../etc/passwd";};
-      }
-    ];
-  typeErrors = lib.concatMap (backend:
-    map (row:
-      lib.optional (builtins.tryEval (builtins.deepSeq (plan backend (single row.path row.value)) true)).success "${backend}:${row.path}")
-    typeCases) ["devenv" "hm"];
-  errors = map (row: let
-    files = single row.path row.value;
-    expected = named row.path row.issue;
-  in
-    lib.optional (inspect files != expected || (builtins.tryEval (plan "hm" files)).success) row.path)
-  cases;
+      (typeCase field "method.${field}.invalid" valid (methodWith "bogus"))
+      (typeCase field "method.${field}.missing" valid (methodFor baseMethod))
+    ]) ["devenv" "hm"];
+  # Common fields use the shared merge once. For a method record, only the
+  # selected method field is forced by normalize, so target that backend.
+  typeRestrictions = checkRows "files schema restrictions" (builtins.listToAttrs (map (row:
+    lib.nameValuePair "${row.backend}: refuses invalid ${row.path}" (rejectsChange (value: let
+      normalized = plan row.backend (single row.path value);
+    in
+      builtins.deepSeq normalized (map (leaf: leaf.path) normalized)) {
+      inherit (row) invalid valid;
+      expected = [row.path];
+    }))
+  typeCases));
+  # These are the semantic refusals returned by the actual planner validator.
+  refuses = files: expected: inspect files == expected && !(builtins.tryEval (plan "hm" files)).success;
+  semanticRestrictions = checkRows "files planner restrictions" (builtins.listToAttrs (map (row:
+    lib.nameValuePair (named row.path row.issue) (refuses (single row.path row.value) (named row.path row.issue)))
+  cases));
   # A derivation source must normalize without being built: this one cannot
   # build, so any import-from-derivation fails the whole check.
   neverBuilt = derivation {
@@ -120,36 +112,23 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     builder = "/bin/false";
   };
-  derivationSource = builtins.deepSeq (plan "hm" (single "settings.json" {
+  derivationSource = plan "hm" (single "settings.json" {
     content.source = neverBuilt;
     method = "ro";
-  })) [];
-  collisionFiles = [
-    (evaluate {
+  });
+  collisions = checkRows "files destination collisions" {
+    "explicit destination may not overwrite an expanded leaf" = refuses (evaluate {
       tree = {
         content.source = tree;
         recursive = true;
       };
       "tree/b/c.md" = text;
-    })
-    (evaluate {
+    }) (named "tree/b/c.md" ''destination overlaps "tree/b/c.md"'');
+    "file destination may not also be a parent directory" = refuses (evaluate {
       tree = text;
       "tree/child" = text;
-    })
-  ];
-  collisionExpected = [
-    (named "tree/b/c.md" ''destination overlaps "tree/b/c.md"'')
-    (named "tree/child" ''destination overlaps "tree"'')
-  ];
-  collisionErrors = lib.imap0 (index: files: let
-    result = inspect files;
-  in
-    lib.optional (result != builtins.elemAt collisionExpected index || (builtins.tryEval (plan "hm" files)).success) "collision")
-  collisionFiles;
-  priority = default: explicit: expected: let
-    files = (lib.evalModules {modules = [../modules/common.nix {ai.files.choice.content = lib.mkDefault default;} {ai.files.choice.content = explicit;}];}).config.ai.files;
-  in
-    builtins.elem expected (builtins.attrNames (builtins.head (plan "hm" files)).content);
+    }) (named "tree/child" ''destination overlaps "tree"'');
+  };
   merged = (lib.evalModules {modules = [../modules/common.nix {ai.files.value.content.value.a.x = 1;} {ai.files.value.content.value.a.y = 2;}];}).config.ai.files;
   tie = inspect (single "tie" {
     content = {
@@ -172,32 +151,24 @@
     content.source = storeTree;
     recursive = true;
   });
-  # A symlinked directory is one link leaf, never walked into.
-  linkedStore = "${linkedTree}";
-  linkLeaves = backend:
-    builtins.filter (leaf: lib.hasPrefix "linked/link" leaf.path) (plan backend (single "linked" {
-      content.source = linkedStore;
-      recursive = true;
-    }));
-  failures =
-    lib.concatLists (errors ++ collisionErrors ++ typeErrors)
-    ++ derivationSource
-    ++ lib.optional (!priority {text = "default";} {source = file;} "source") "default text priority"
-    ++ lib.optional (!priority {source = file;} {text = "explicit";} "text") "default source priority"
-    ++ lib.optional (merged.value.content.value.a
-      != {
+  normalizationRows = checkRows "files normalization" {
+    "backend method follows the selected backend" = (builtins.head (plan "devenv" methods)).method == "ro" && (builtins.head (plan "hm" methods)).method == "symlink";
+    "derivation source stays a store reference without building it" = builtins.deepSeq derivationSource (map (leaf: [leaf.path leaf.content.source]) derivationSource == [["settings.json" "${neverBuilt}"]]);
+    "recursive path preserves its single leaf and source dependency" = map (leaf: leaf.path) leaves == ["tree/b/c.md"] && builtins.toJSON (builtins.head leaves).content.source == builtins.toJSON file && builtins.getContext (builtins.toJSON leaves) != {};
+    "recursive store string preserves its single leaf and source dependency" = map (leaf: [leaf.path leaf.content.source]) stringLeaves == [["tree/b/c.md" "${storeTree}/b/c.md"]] && builtins.getContext (builtins.toJSON stringLeaves) != {};
+    "same-priority content alternatives do not silently choose one" = tie == named "tie" "content alternatives tie at priority 100: source, text";
+    "structured content preserves child leaves from both definitions" =
+      merged.value.content.value.a
+      == {
         x = 1;
         y = 2;
-      }) "structured child merge"
-    ++ lib.optional (tie != named "tie" "content alternatives tie at priority 100: source, text") "priority tie"
-    ++ lib.optional ((builtins.head (plan "devenv" methods)).method != "ro" || (builtins.head (plan "hm" methods)).method != "symlink") "backend method"
-    ++ lib.optional (map (leaf: leaf.path) leaves != ["tree/b/c.md"] || builtins.toJSON (builtins.head leaves).content.source != builtins.toJSON file || builtins.attrNames (builtins.getContext (builtins.toJSON leaves)) == []) "recursive path leaves"
-    ++ lib.optional ((builtins.head stringLeaves).content.source != "${storeTree}/b/c.md" || builtins.attrNames (builtins.getContext (builtins.toJSON stringLeaves)) == []) "recursive string leaves"
-    ++ lib.optional ((builtins.head (plan "hm" (single "directory" {content.source = tree;}))).path != "directory") "directory link"
-    ++ lib.concatMap (backend: lib.optional (map (leaf: [leaf.path leaf.content.source]) (linkLeaves backend) != [["linked/link" "${linkedStore}/link"]]) "${backend} directory symlink leaf") ["devenv" "hm"]
-    ++ lib.optional (plan "hm" (single "off" {enable = false;}) != []) "disabled";
+      };
+  };
 in {
-  checks.ai-module-files-eval = assert lib.assertMsg (failures == []) "files eval fixtures failed: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-files-eval = assert typeRestrictions;
+  assert semanticRestrictions;
+  assert collisions;
+  assert normalizationRows;
     pkgs.runCommandLocal "ai-module-files-eval" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

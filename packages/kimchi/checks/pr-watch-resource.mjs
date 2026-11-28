@@ -1,3 +1,4 @@
+// cspell:ignore unconfigured
 // Prove the extensions.pr-watch resource gate in a Kimchi source tree.
 // Called by pr-watch-resource.nix with the tree root as argv[2]. The real
 // resource registry, store, filter and pr-watch session policy run here;
@@ -127,16 +128,24 @@ const managed = [resource, "extensions.remote-run", "extensions.teleport"];
 
 // Fails on a missing definition (unknown ids default on) or defaultEnabled true.
 withResources({}, () =>
-  assert.deepEqual(enabledIds(managed), [
-    "extensions.remote-run",
-    "extensions.teleport",
-  ]),
+  assert.deepEqual(
+    enabledIds(managed),
+    ["extensions.remote-run", "extensions.teleport"],
+    "unconfigured pr-watch must not load; unrelated factories stay enabled",
+  ),
 );
 // Fails when the resource cannot be enabled through either delivery path:
 // Home Manager writes settings.json, devenv sets KIMCHI_ENABLE_RESOURCES.
-for (const delivery of [{ env: resource }, { settings: { [resource]: true } }])
+for (const [label, delivery] of [
+  ["devenv environment", { env: resource }],
+  ["Home Manager settings", { settings: { [resource]: true } }],
+])
   withResources(delivery, () =>
-    assert.deepEqual(enabledIds([resource]), [resource]),
+    assert.deepEqual(
+      enabledIds([resource]),
+      [resource],
+      `${label} must enable pr-watch`,
+    ),
   );
 
 const policy = await load("src/extensions/pr-watch/session-policy");
@@ -144,15 +153,27 @@ const policy = await load("src/extensions/pr-watch/session-policy");
 // ACP sessions (and any caller outside cli.ts's list) watching PRs.
 for (const host of [false, true]) {
   acpHost = host;
+  const mode = host ? "ACP" : "CLI";
   policy.setPRMonitoringPermitted(true);
   withResources({}, () => {
-    assert.equal(policy.isPRWatchResourceEnabled(), false);
-    assert.equal(policy.isPRMonitoringPermitted(), false);
+    assert.equal(
+      policy.isPRMonitoringPermitted(),
+      false,
+      `${mode}: permission cannot bypass a disabled resource`,
+    );
   });
   withResources({ env: resource }, () => {
-    assert.equal(policy.isPRMonitoringPermitted(), true);
+    assert.equal(
+      policy.isPRMonitoringPermitted(),
+      true,
+      `${mode}: enabled resource permits monitoring after opt-in`,
+    );
     policy.setPRMonitoringPermitted(false);
-    assert.equal(policy.isPRMonitoringPermitted(), !host);
+    assert.equal(
+      policy.isPRMonitoringPermitted(),
+      !host,
+      `${mode}: only ACP also needs client opt-in`,
+    );
   });
 }
 

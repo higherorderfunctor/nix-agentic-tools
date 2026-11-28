@@ -1,4 +1,4 @@
-"""Prove the Slack extractor accepts the pinned page and refuses degraded ones."""
+"""Prove the Slack extractor refuses specific degradations of the pinned page."""
 
 import re
 import subprocess
@@ -32,36 +32,33 @@ def keep_rows(text, count):
 
 
 class SlackExtraction(unittest.TestCase):
-    def test_pinned_page_parses(self):
-        result = extract(document)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
     def test_degraded_pages_fail_with_their_reason(self):
-        # The first link in its row, so it is removed with its trailing separator.
-        search_public = re.search(r"\[`search:read.public`\]\([^)]*\), ", document).group(0)
+        # The public scope is the first link in its row. Remove its trailing
+        # separator so the remaining search row stays well-formed.
+        search_public = re.search(r"^\[`search:read\.public`\]\([^)]*\), ", document, re.MULTILINE).group(0)
         last_scopes = SCOPE_LINE.findall(document)[-1]
         # The callout closing the table: a heading line, then one paragraph.
         callout = re.search(r"^Consider using PKCE\n\n.*\n", document, re.MULTILINE).group(0)
         mutations = [
-            ("is not one https url", document.replace(
+            ("accepts a plaintext transport URL", "transport endpoint 'http://mcp.slack.com/mcp' is not one https url", document.replace(
                 "https://mcp.slack.com/mcp\n```", "http://mcp.slack.com/mcp\n```"
             )),
-            ("missing required scopes ['search:read.public']", document.replace(search_public, "")),
-            ("incomplete tool row before 'Consider using PKCE': 'Upload a file'", document.replace(
+            ("accepts a table without a baseline read scope", "missing required scopes ['search:read.public']", document.replace(
+                search_public, ""
+            )),
+            ("accepts a tool with no scope line", "incomplete tool row before 'Consider using PKCE': 'Upload a file'", document.replace(
                 last_scopes, "", 1
             )),
-            ("closing the tool table", document.replace("Consider using PKCE", "Note")),
-            ("scope link outside the tool table: '[`chat:write`]", document.replace(
-                "Consider using PKCE\n", "Consider using PKCE\n\n[`chat:write`](https://docs.slack.dev/x.md)\n", 1
+            ("accepts an unmarked end of table", "expected exactly one 'Consider using PKCE' line closing the tool table", document.replace(
+                "Consider using PKCE", "Note"
             )),
-            ("expected at least 10 tools, found 9", keep_rows(document, 9)),
-            ("scope link outside the tool table: '[`chat:write`]", document.replace(
-                callout, callout + "\n[`chat:write`](https://docs.slack.dev/x.md)\n"
+            ("accepts nine valid rows as a full table", "expected at least 10 tools, found 9", keep_rows(document, 9)),
+            ("ignores a stray scope link beyond the first callout paragraph", "scope link outside the tool table: '[`chat:write`]", document.replace(
+                callout, callout + "\n[`chat:write`](https://docs.slack.dev/x.md)\n", 1
             )),
         ]
-        for message, text in mutations:
-            with self.subTest(message=message):
-                self.assertNotEqual(text, document)
+        for regression, message, text in mutations:
+            with self.subTest(regression=regression):
                 result = extract(text)
                 self.assertEqual(result.returncode, 1, result.stdout)
                 self.assertRegex(result.stderr, rf"^slack-mcp-extract: .*{re.escape(message)}")

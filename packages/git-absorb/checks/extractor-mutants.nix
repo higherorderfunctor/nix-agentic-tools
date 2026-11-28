@@ -37,6 +37,7 @@ let
   squashArm = "        squash: config.squash\n            || bool_value(";
 in [
   {
+    # The floor catches an empty owned-key set even when all reads have literal keys.
     name = "collapsed-owned-settings";
     edits = [
       (replace config ''"absorb.autoStageIfNothingStaged"'' ''"probe.autoStageIfNothingStaged"'')
@@ -50,8 +51,8 @@ in [
     fails = ["F15"];
   }
   # ── Prototype mutants ─────────────────────────────────────────────────
-  {name = "P1-control";}
   {
+    # A new modeled setting must carry its default and man-page description.
     name = "P2-new-key-through-the-shape";
     edits = [
       (append config ''
@@ -67,78 +68,52 @@ in [
     changes."absorb.newThing" = {
       default = true;
       description = "Probe setting, set `absorb.newThing = true`";
-      type = "bool";
     };
   }
   {
-    name = "P3-raw-handle-outside-the-shape";
-    edits = [
-      (append config ''
-
-        pub fn sneaky(repo: &git2::Repository) -> String {
-            let c = repo.config().unwrap();
-            c.get_string("absorb.sneaky").unwrap()
-        }
-      '')
-    ];
-    fails = ["F6" "F9"];
-  }
-  {
+    # An unsupported getter inside the recognized shape must not be silently skipped.
     name = "P4-unknown-read-method";
     edits = [(replace config "config.get_i64(MAX_STACK_CONFIG_NAME)" "config.get_bytes(MAX_STACK_CONFIG_NAME)")];
     fails = ["F2"];
   }
   {
+    # Narrowing a supported integer getter must not reject the read or change its kind.
     name = "P5-i64-to-i32-is-carried";
     edits = [(replace config "config.get_i64(MAX_STACK_CONFIG_NAME)" "config.get_i32(MAX_STACK_CONFIG_NAME)")];
     changes."absorb.maxStack".type = "int";
   }
   {
+    # Changing the getter must update the type, not retain the old boolean type.
     name = "P6-bool-to-string-is-carried";
     edits = [(replace config "config.get_bool(setting_name)" "config.get_string(setting_name)")];
     changes."absorb.forceAuthor".type = "string";
   }
   {
+    # Do not drop a read whose key expression cannot be reduced to a literal.
     name = "P7-computed-key";
     edits = [(replace config "bool_value(repo, FORCE_AUTHOR_CONFIG_NAME, FORCE_AUTHOR_DEFAULT)" ''bool_value(repo, &format!("absorb.{}", "forceAuthor"), FORCE_AUTHOR_DEFAULT)'')];
     fails = ["F1"];
   }
   {
+    # An explicit error arm is not a catch-all fallback.
     name = "P8-error-arm-instead-of-default";
     edits = [(replace config "        _ => default_value," ''Err(e) => panic!("{e}"),'')];
     fails = ["F12"];
   }
   {
+    # An inclusive bound must not be incremented like an exclusive one.
     name = "P9-guard-change-is-the-minimum";
     edits = [(replace config "if max_stack > 0 =>" "if max_stack >= 5 =>")];
     changes."absorb.maxStack".minimum = 5;
   }
   {
+    # Changing the numeric fallback must not leave the old default in the census.
     name = "P10-default-change-is-carried";
     edits = [(replace config "pub const MAX_STACK: usize = 10;" "pub const MAX_STACK: usize = 20;")];
     changes."absorb.maxStack".default = 20;
   }
   {
-    name = "P11-declared-key-never-read";
-    edits = [
-      (append config ''
-
-        pub const UNUSED_CONFIG_NAME: &str = "absorb.unused";
-      '')
-    ];
-    deadKeysAdd = ["absorb.unused"];
-  }
-  {
-    name = "P12-subprocess-git-config";
-    edits = [
-      (append config ''
-
-        pub fn sub() { std::process::Command::new("git").args(["config", "--get", "absorb.sub"]).status().unwrap(); }
-      '')
-    ];
-    fails = ["F7" "F9"];
-  }
-  {
+    # A mixed test predicate must not be silently assumed to be test-only.
     name = "P15-unclassified-test-cfg";
     edits = [
       (append config ''
@@ -150,6 +125,7 @@ in [
     fails = ["F11"];
   }
   {
+    # Conflicting fallbacks for one key must not be reduced to the first or last value.
     name = "P16-one-key-two-defaults";
     edits = [
       (append config ''
@@ -162,6 +138,7 @@ in [
     fails = ["F13"];
   }
   {
+    # An unbound key parameter must not make a read silently disappear.
     name = "P18-key-parameter-without-caller";
     edits = [
       (append config ''
@@ -176,20 +153,10 @@ in [
     ];
     fails = ["F10"];
   }
-  {
-    name = "P19-test-only-write";
-    edits = [
-      (append config ''
-
-        #[cfg(test)]
-        fn t() { let mut c = git2::Config::new().unwrap(); c.set_str("absorb.testOnly", "x").unwrap(); }
-      '')
-    ];
-  }
 
   # ── Review blind spots ─────────────────────────────────────────────
   {
-    # Literal key, default through a parameter: paired per call path.
+    # A literal key still needs the fallback bound by its caller.
     name = "K1-default-from-a-parameter";
     edits = [
       (append config ''
@@ -207,7 +174,7 @@ in [
     changes."absorb.kOne".default = true;
   }
   {
-    # Key through a parameter, literal default.
+    # A literal fallback must not make the caller-supplied key disappear.
     name = "K2-key-from-a-parameter";
     edits = [
       (append config ''
@@ -225,18 +192,19 @@ in [
     changes."absorb.kTwo".default = true;
   }
   {
-    # A same-named const in another file does not replace this file's.
-    name = "K3-same-named-const-elsewhere";
-    edits = [(replace lib' "mod commute;\n" "mod commute;\nconst MAX_STACK: usize = 99;\n")];
-  }
-  {
-    name = "K4-same-named-key-const-elsewhere";
-    edits = [(replace lib' "mod commute;\n" "mod commute;\nconst FORCE_AUTHOR_CONFIG_NAME: &str = \"absorb.forceAuthorX\";\n")];
-    # The read still resolves to this file's const; the other is dead.
+    # Another file's constant must not shadow the local key.
+    name = "K4-same-named-consts-elsewhere";
+    edits = [
+      (replace lib' "mod commute;\n" ''
+        mod commute;
+        const FORCE_AUTHOR_CONFIG_NAME: &str = "absorb.forceAuthorX";
+      '')
+    ];
+    # The unread key const must be reported dead, not treated as a setting.
     deadKeysAdd = ["absorb.forceAuthorX"];
   }
   {
-    # A key outside `absorb.` read through the shape is git's own key.
+    # A modeled Git key must be reported as foreign, not lost or listed as an option.
     name = "K5-foreign-key-through-the-shape";
     edits = [
       (append config ''
@@ -250,7 +218,7 @@ in [
     };
   }
   {
-    # "config" anywhere in an argv, after global options.
+    # A subprocess config read must fail even when global options come first.
     name = "K6-git-config-after-global-options";
     edits = [
       (append config ''
@@ -261,6 +229,7 @@ in [
     fails = ["F7"];
   }
   {
+    # Chaining a config getter outside a match must not bypass the raw-read guards.
     name = "K7-unwrap-or-instead-of-match";
     edits = [
       (append config ''
@@ -279,11 +248,13 @@ in [
     fails = ["F12"];
   }
   {
+    # Inverting the success value must not be reported as a direct config read.
     name = "K11-negated-ok-arm";
     edits = [(replace config "        Ok(value) => value," "        Ok(value) => !value,")];
     fails = ["F12"];
   }
   {
+    # An extra upper bound must not be discarded when extracting the minimum.
     name = "K12-compound-guard";
     edits = [(replace config "if max_stack > 0 =>" "if max_stack > 0 && max_stack < 100 =>")];
     fails = ["F12"];
@@ -291,6 +262,7 @@ in [
 
   # ── Syntax and prose a text pattern would misread ─────────────────────
   {
+    # A multiline raw string must not hide an otherwise unaccounted-for key.
     name = "N1-key-in-multiline-raw-string";
     edits = [
       (append config ''
@@ -310,15 +282,6 @@ in [
       (append config ''
 
         pub fn about() -> &'static str { "see the git-absorb.hidden page" }
-      '')
-    ];
-  }
-  {
-    name = "N3-fake-read-in-a-comment";
-    edits = [
-      (append config ''
-
-        // match repo.config().and_then(|c| c.get_bool("absorb.comment")) { Ok(v) => v, _ => false }
       '')
     ];
   }

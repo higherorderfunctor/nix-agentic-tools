@@ -24,10 +24,5 @@
       }
     ]
   },
-  { "match": null, "events": ["MAIN_DONE"] },
-  { "match": null, "events": ["MAIN_DONE"] },
-  { "match": null, "events": ["MAIN_DONE"] },
-  { "match": null, "events": ["MAIN_DONE"] },
-  { "match": null, "events": ["MAIN_DONE"] },
-  { "match": null, "events": ["MAIN_DONE"] }
+  { "events": ["MAIN_DONE"], "match": null, "reuse": true }
 ]

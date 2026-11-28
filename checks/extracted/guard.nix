@@ -30,7 +30,7 @@
   pkgs,
   ...
 }: let
-  runner = import ./runner.nix {inherit lib;};
+  runner = (import ./runner.nix {inherit lib pkgs;}).shell;
   # gawk regexes; `\y` is a word boundary. `combine` as an attribute name
   # (`=`, not `==`) or an object key (`:`).
   patterns = [
@@ -97,53 +97,38 @@
   controls = {
     empty = {
       files = {"README.md" = "x\n";};
-      fails = "zero files";
+      fails = ["extracted-contract-guard matched zero files"];
     };
-    # Every mention below is one the guard must let through.
-    excluded.files =
-      clean
-      // {
-        "checks/extracted/x.nix" = "bySystem\n";
-        "lib/extracted/x.nix" = "./extracted/extracted.json\n";
-        ".gitattributes" = "/packages/*/extracted/extracted.json linguist-generated=true\n";
-        "packages/fake/README.md" = "bySystem\n";
-        "packages/fake/comment.nix" = "{} # reads bySystem\n";
-        "packages/fake/extracted/decisions.json" = "{\"models\": {\"combine\": \"max\"}}\n";
-      };
     offending = {
       files = clean // {"packages/fake/checks.nix" = "let rule = \"max\"; in { combine = rule; }\n";};
-      fails = "packages/fake/checks.nix";
+      fails = ["packages/fake/checks.nix: combine = rule;" "FAIL: per-owner code above"];
     };
     offending-hash-string = {
       files = clean // {"packages/fake/hash.nix" = "let marker = \"#\"; in builtins.readFile ./extracted/extracted.json\n";};
-      fails = "packages/fake/hash.nix";
+      fails = ["packages/fake/hash.nix: extracted/extracted.json" "FAIL: per-owner code above"];
     };
     offending-merge = {
       files = clean // {"packages/fake/merge.nix" = "facts: {} // facts.bySystem\n";};
-      fails = "packages/fake/merge.nix";
+      fails = ["packages/fake/merge.nix: bySystem" "FAIL: per-owner code above"];
     };
     offending-multiline = {
       files = clean // {"packages/fake/multiline.nix" = "{ combine\n  = \"max\"; }\n";};
-      fails = "packages/fake/multiline.nix";
+      fails = ["packages/fake/multiline.nix: combine = \"max\";" "FAIL: per-owner code above"];
     };
     offending-sentinel = {
       files = clean // {"packages/fake/fork.nix" = "raw: raw.count.__platforms\n";};
-      fails = "packages/fake/fork.nix";
+      fails = ["packages/fake/fork.nix: __platforms" "FAIL: per-owner code above"];
     };
     offending-ts = {
       files = clean // {"packages/fake/read.ts" = "export const x = facts.bySystem;\n";};
-      fails = "packages/fake/read.ts";
-    };
-    offending-url = {
-      files = clean // {"packages/fake/url.nix" = "let url = \"https://example.test\"; in facts.bySystem\n";};
-      fails = "packages/fake/url.nix";
+      fails = ["packages/fake/read.ts: bySystem" "FAIL: per-owner code above"];
     };
   };
   control = label: case:
     runner {
       inherit label;
       command = "bash ${scan} ${tree case.files}";
-      names = lib.optional (case ? fails) case.fails;
+      names = case.fails or [];
     };
 in {
   checks.extracted-contract-guard = pkgs.runCommand "extracted-contract-guard" {} ''

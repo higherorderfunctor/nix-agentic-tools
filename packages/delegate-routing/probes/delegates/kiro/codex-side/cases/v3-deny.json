@@ -13,11 +13,6 @@
           }
         }
       ]
-    },
-    {
-      "match": "HOLD_CHILD",
-      "delay": 8,
-      "events": ["CHILD_REPLY"]
     }
   ],
   "agents": [
@@ -31,9 +26,6 @@
   ],
   "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
   "acp": true,
-  "initSettings": {
-    "inlineAgents": true
-  },
   "new": {
     "_meta": {
       "kiro": {
@@ -58,6 +50,5 @@
     {
       "wait": "prompt_run"
     }
-  ],
-  "permission": "reject"
+  ]
 }

@@ -23,7 +23,6 @@
         ];
       }) "prune";
     in {
-      inherit (prune) before;
       command = sink.command prune;
     })
     backends.sinks;

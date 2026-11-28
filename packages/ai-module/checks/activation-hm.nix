@@ -4,6 +4,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows;
   activation = import ../lib/activation.nix {inherit lib;};
   dagLib = import ./dag-lib.nix lib;
   evaluate = definitions:
@@ -97,27 +98,31 @@
       };
     };
   };
-  failures =
-    lib.optional (builtins.attrNames graph != ["ai-drain" "ai-files-prune" "ai-files-ready" "ai-ready" "ai-write" "external-name"]) "gating"
-    ++ lib.optional (graph.ai-write.after != ["linkGeneration"] || graph.ai-write.before != ["ai-ready"]) "default edges"
-    ++ lib.optional (graph.external-name.after != ["external-provider"] || graph.external-name.before != ["checkLinkTargets"]) "native edges"
-    ++ lib.optional (graph.ai-files-ready.after != ["linkGeneration"] || graph.ai-files-ready.before != ["ai-ready"]) "internal points"
-    ++ lib.optional (config.ai.activationOrder.secretNodes != []) "secret default"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.cycle || !lib.hasInfix "ai-a" errors.cycle || !lib.hasInfix "ai-b" errors.cycle) "cycle"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.abstractCycle || !lib.hasInfix "ai-a" errors.abstractCycle) "abstract cycle"
-    ++ lib.optional (errors.duplicate != "ai.activation: duplicate hm name shared") "duplicate"
-    ++ lib.optional (errors.empty != "ai.activation.a: command must be nonempty") "empty command"
-    ++ lib.optional (!lib.hasInfix "invalid entry name" errors.invalid) "invalid name"
-    ++ lib.optional (!lib.hasInfix "cycle" errors.nativeCycle || !lib.hasInfix "ai-files-ready" errors.nativeCycle) "native cycle"
-    ++ lib.optional (errors.reserved != "ai.activation: reserved hm name ai-ready") "reserved"
-    ++ lib.optional (!lib.hasInfix "cycle ai-a -> ai-a" errors.self) "self edge";
+  graphRows = checkRows "Home Manager activation graph" {
+    "default writer cannot run before links or after readiness" = graph.ai-write.after == ["linkGeneration"] && graph.ai-write.before == ["ai-ready"];
+    "files-ready cannot run before links or after activation readiness" = graph.ai-files-ready.after == ["linkGeneration"] && graph.ai-files-ready.before == ["ai-ready"];
+    "named writer retains explicit external and pre-link dependencies" = graph.external-name.after == ["external-provider"] && graph.external-name.before == ["checkLinkTargets"];
+    "only the disabled entry with drain enabled survives" = builtins.attrNames graph == ["ai-drain" "ai-files-prune" "ai-files-ready" "ai-ready" "ai-write" "external-name"];
+    "provider nodes are not declared by default" = config.ai.activationOrder.secretNodes == [];
+  };
+  validationRows = checkRows "Home Manager activation validation" {
+    "blank command cannot become a no-op activation" = errors.empty == "ai.activation.a: command must be nonempty";
+    "commands with the same native name cannot overwrite each other" = errors.duplicate == "ai.activation: duplicate hm name shared";
+    "entry key cannot contain a slash" = errors.invalid == ''ai.activation: invalid entry name "bad/name"'';
+    "explicit edges cannot form a loop between two owners" = lib.hasInfix "cycle" errors.cycle && lib.hasInfix "ai-a" errors.cycle && lib.hasInfix "ai-b" errors.cycle;
+    "native edge cannot loop through files-ready" = lib.hasInfix "cycle" errors.nativeCycle && lib.hasInfix "ai-files-ready" errors.nativeCycle;
+    "ordinary entry cannot shadow internal readiness" = errors.reserved == "ai.activation: reserved hm name ai-ready";
+    "point edges cannot schedule a default writer before link check" = lib.hasInfix "cycle" errors.abstractCycle && lib.hasInfix "ai-a" errors.abstractCycle && lib.hasInfix "checkLinkTargets" errors.abstractCycle;
+    "self dependency cannot bypass cycle detection" = errors.self == "ai.activation: cycle ai-a -> ai-a";
+  };
   fixture = pkgs.writeText "activation-hm.json" (builtins.toJSON {
     drain = graph.ai-drain.text;
     write = graph.ai-write.text;
   });
   shim = pkgs.writeText "activation-hm-run.sh" harness.hmRunShim;
 in {
-  checks.ai-module-activation-hm = assert lib.assertMsg (failures == []) "activation HM: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-activation-hm = assert graphRows;
+  assert validationRows;
     pkgs.runCommandLocal "ai-module-activation-hm" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

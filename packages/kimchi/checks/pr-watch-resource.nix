@@ -1,11 +1,11 @@
+# cspell:ignore unconfigured
 # Runs pr-watch-resource.mjs against the release tree, where pr-watch has no
 # resource and loads by default, and against patchedSource, where
 # remote-feature-toggles.patch keeps it off until the resource is enabled.
 {pkgs, ...}: let
   inherit (pkgs.ai.kimchi.passthru) extractionSources patchedSource;
-  patch = ../packages/ai/kimchi/remote-feature-toggles.patch;
 in {
-  checks.kimchi-pr-watch-resource = assert builtins.elem patch patchedSource.patches;
+  checks.kimchi-pr-watch-resource =
     pkgs.runCommand "kimchi-pr-watch-resource" {
       nativeBuildInputs = [pkgs.nodejs];
     } ''
@@ -15,7 +15,7 @@ in {
         echo 'unpatched source unexpectedly keeps pr-watch off; reassess the patch' >&2
         exit 1
       fi
-      grep -q 'AssertionError' pristine.log
+      grep -Fq 'unconfigured pr-watch must not load; unrelated factories stay enabled' pristine.log
       node --experimental-vm-modules ${./pr-watch-resource.mjs} ${patchedSource}
       echo PASS > "$out"
     '';

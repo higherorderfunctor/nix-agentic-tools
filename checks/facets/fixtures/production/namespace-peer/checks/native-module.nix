@@ -1,20 +1,15 @@
 {
   config,
   lib,
-  nativeCheckMarker,
   options,
   pkgs,
   ...
 }: {
   checks = lib.mkIf (config.testing.moduleProbes != []) {
-    native-check-module = assert nativeCheckMarker == "owner-module-argument";
-    assert options ? testing.moduleProbes;
-    assert config.testing.moduleProbes == [{nativeCheckProbe = true;}];
-      pkgs.runCommandLocal "facet-native-check-module" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        mkdir -p "$out"
-        touch "$out/passed"
-      '';
+    native-check-module = assert lib.assertMsg (config.testing.moduleProbes == [{nativeCheckProbe = true;}]) "the imported check must see the merged probe from another owner";
+    # The declaration also exists in the isolated module; only the combined
+    # options carry the probe definition from alpha.
+    assert lib.assertMsg (map (definition: definition.value) options.testing.moduleProbes.definitionsWithLocations == [[{nativeCheckProbe = true;}]]) "the imported check must see another owner's option definition, not the isolated default";
+      pkgs.writeTextDir "passed" "";
   };
 }

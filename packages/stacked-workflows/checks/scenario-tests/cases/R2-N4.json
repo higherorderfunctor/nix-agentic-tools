@@ -1,19 +1,29 @@
 {
   "args": {
-    "scenario": "revise",
+    "scenario": "static",
     "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
   },
+  "assertions": [
+    {
+      "id": "no-forced-branch-repair-command",
+      "pattern": "git branch -f",
+      "present": false
+    },
+    {
+      "id": "no-revise-application-command",
+      "pattern": "git revise\\b",
+      "present": false
+    }
+  ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Stack fix does not teach unsupported rewrite or forced branch repair",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R2-N4",
-  "kind": "static",
+  "kind": "static-set",
   "path": "skills/stack-fix/SKILL.md",
-  "pattern": "git revise \\\"\\$target\\\"",
-  "present": false,
   "topology": "T4"
 }

@@ -1,5 +1,3 @@
-{runCommandLocal}:
-runCommandLocal "facet-reserved" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+# A nested recipe must not shadow the injected inputs argument.
+{writeText}:
+writeText "facet-reserved-inputs" ""

@@ -6,7 +6,7 @@
         "limits": {
           "allowance": {
             "capacity": 40.0,
-            "models": ["canonical-b"],
+            "models": ["served-fable"],
             "role": "pace",
             "window": "7d"
           }

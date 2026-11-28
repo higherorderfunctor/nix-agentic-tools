@@ -1,7 +1,8 @@
 # Fixture matrix: backend × format × method × shape, generated with
-# cartesianProduct. Evaluation only, through the real backend modules: a valid
-# cell asserts its normalized plan, its sink (native link or engine plan) and
-# its secret edge; an impossible cell asserts its exact named refusal.
+# cartesianProduct. Through the real backend modules, every valid cell checks
+# normalization; representative cells check the sinks and secret edges.
+# Single restrictions exercise backend rejection; exact
+# diagnostics here pin markdown coverage and precedence, beyond eval.nix.
 {
   harness,
   lib,
@@ -65,7 +66,7 @@
       when = cell: cell.shape == "run" && cell.method == "symlink";
     }
   ];
-  refusal = cell: lib.findFirst (row: row.when cell) null refusals;
+  matchingRefusals = cell: builtins.filter (row: row.when cell) refusals;
   leaves = cell:
     if cell.shape == "recursive"
     then map (leaf: "${target}/${leaf}") treeLeaves
@@ -84,7 +85,9 @@
         then true
         else null;
       inherit (cell) format method;
+      mode = null;
       inherit path;
+      recursive = cell.shape == "recursive";
       rendered =
         if cell.shape == "value"
         then "files-value.${cell.format}"
@@ -92,7 +95,7 @@
     }) (leaves cell);
   summary = item: {
     content = builtins.removeAttrs item.content ["rendered"];
-    inherit (item) executable format method path;
+    inherit (item) executable format method mode path recursive;
     rendered = item.content.rendered.name or null;
   };
   # Path sources link to that exact path; built content (text, value) links to
@@ -129,62 +132,105 @@
       namespace = "ai";
     };
   };
+  readSinks = candidate: let
+    inherit (evaluate candidate) config sink;
+  in [
+    (builtins.attrNames (sink.native config))
+    (builtins.isString (sink.command (sink.entry config "apply")))
+  ];
+  # Backend wiring does not dispatch on format. Keep one format per
+  # method and shape for the native sink and secret edge, and one plan
+  # reference per content shape that exercises distinct normalization.
+  applyCells = ["json/ro/value" "json/rw/run" "raw/ro/text" "raw/symlink/recursive"];
   check = cell: let
     inherit (evaluate cell) config planArgs sink;
     apply = sink.entry config "apply";
     linked = lib.all (secret: builtins.elem secret apply.after) sink.secrets;
     unlinked = !lib.any (secret: builtins.elem secret apply.after) sink.secrets;
-    row = refusal cell;
-    label = what: "${cell.backend}/${cell.format}/${cell.method}/${cell.shape}: ${what}";
+    matches = matchingRefusals cell;
     planFile = pkgs.writeText "files-ai-plan.json" (builtins.toJSON (fileLib.normalize planArgs));
-  in
-    if row != null
-    then
-      lib.optional (fileLib.validate planArgs != ''files."${target}": ${row.message}'') (label "refusal message")
-      ++ lib.optional (builtins.tryEval (builtins.seq (builtins.attrNames (sink.native config)) (sink.command apply))).success (label "accepted")
-    else
-      lib.optional (map summary (fileLib.normalize planArgs) != expectedPlan cell) (label "plan")
-      ++ lib.optional (lib.mapAttrs (_: nativeSummary) (sink.native config) != expectedNative cell) (label "native sink")
-      ++ lib.optional (!builtins.hasAttr (builtins.unsafeDiscardStringContext planFile.drvPath) (builtins.getContext (sink.command apply))) (label "engine plan")
-      ++ lib.optional (
-        if cell.shape == "run"
-        then !linked
-        else !unlinked
-      ) (label "secret edge");
-  refused = builtins.filter (cell: refusal cell != null) cells;
+    # Force both sinks. The control repairs one invalid dimension, not the
+    # backend; combined-invalid cells only add diagnostic precedence coverage.
+    control =
+      if cell.shape == "recursive" || cell.shape == "run"
+      then cell // {method = "ro";}
+      else cell // {format = "json";};
+    shapeKey = "${cell.format}/${cell.method}/${cell.shape}";
+    name = "${cell.backend}/${shapeKey}";
+    representativeRefusal =
+      (cell.method == "rw" && keyless cell.format && cell.shape == "text")
+      || shapeKey == "json/rw/recursive"
+      || shapeKey == "raw/symlink/run"
+      || (cell.shape == "value" && keyless cell.format);
+  in {
+    inherit name;
+    value = harness.checkRows name (
+      if matches != []
+      then
+        lib.optionalAttrs (builtins.length matches == 1 && representativeRefusal) {
+          "backend refuses the invalid declaration only" = harness.rejectsChange readSinks {
+            valid = control;
+            invalid = cell;
+            expected = [(lib.optionals (control.method == "symlink") [target]) true];
+          };
+        }
+        # A scalar method resolves identically in both backends. Keep the
+        # markdown keyless cases and both overlapping restriction pairs once.
+        // lib.optionalAttrs (builtins.elem name [
+          "hm/markdown/rw/text"
+          "hm/markdown/symlink/value"
+          "hm/raw/rw/recursive"
+          "hm/raw/rw/value"
+        ]) {
+          "validator names the destination and restriction" = fileLib.validate planArgs == ''files."${target}": ${(builtins.head matches).message}'';
+        }
+      else
+        {
+          "normalized plan preserves inputs and exact destination leaves" = map summary (fileLib.normalize planArgs) == expectedPlan cell;
+        }
+        // lib.optionalAttrs (builtins.elem shapeKey applyCells) {
+          "apply references the exact normalized engine plan" = builtins.hasAttr (builtins.unsafeDiscardStringContext planFile.drvPath) (builtins.getContext (sink.command apply));
+        }
+        // lib.optionalAttrs (cell.format == "json") {
+          "native sink neither drops links nor receives copies" = lib.mapAttrs (_: nativeSummary) (sink.native config) == expectedNative cell;
+          "only run content waits for secrets" =
+            if cell.shape == "run"
+            then linked
+            else unlinked;
+        }
+    );
+  };
+  refused = builtins.filter (cell: matchingRefusals cell != []) cells;
   # One rendered value per format, decoded at build time with that format's
-  # own parser; a non-json rendering must not also parse as JSON.
+  # own parser. YAML also accepts JSON, so exclude JSON for that rendering.
   rendered = builtins.listToAttrs (map (cell: {
     name = cell.format;
     value = (builtins.head (fileLib.normalize (evaluate cell).planArgs)).content.rendered;
-  }) (builtins.filter (cell: cell.shape == "value" && refusal cell == null) cells));
+  }) (builtins.filter (cell: cell.shape == "value" && matchingRefusals cell == []) cells));
   decoder = pkgs.writeText "decode.py" ''
     import json, sys, tomllib, yaml
     loaders = {"json": json.loads, "toml": tomllib.loads, "yaml": yaml.safe_load}
-    expected = json.loads(sys.argv[1])
-    for format, path in zip(sys.argv[2::2], sys.argv[3::2]):
+    expected = {"k": "v"}
+    entries = dict(zip(sys.argv[1::2], sys.argv[2::2], strict=True))
+    for format, path in entries.items():
         with open(path, encoding="utf-8") as handle:
             data = handle.read()
         if loaders[format](data) != expected:
             sys.exit(f"{format}: decoded value differs")
-        if format != "json":
+        if format == "yaml":
             try:
                 json.loads(data)
             except ValueError:
                 continue
             sys.exit(f"{format}: rendered as JSON")
   '';
-  failures =
-    lib.optional (lib.any (row: !lib.any row.when cells) refusals) "unused refusal row"
-    ++ lib.concatMap check cells;
 in {
-  checks.ai-module-matrix = assert lib.assertMsg (failures == []) "matrix: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-matrix = assert harness.checkRows "files matrix" (builtins.listToAttrs (map check cells));
     pkgs.runCommandLocal "ai-module-matrix" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.python3.withPackages (ps: [ps.pyyaml])}/bin/python3 -I ${decoder} \
-        ${lib.escapeShellArg (builtins.toJSON (content "json").value.content.value)} \
         ${lib.concatStringsSep " " (lib.mapAttrsToList (format: file: "${format} ${file}") rendered)}
-      ${pkgs.coreutils}/bin/printf 'PASS: %s matrix cells, %s refused\n' ${toString (builtins.length cells)} ${toString (builtins.length refused)} > "$out"
+      ${pkgs.coreutils}/bin/printf 'PASS: %s matrix combinations, %s invalid\n' ${toString (builtins.length cells)} ${toString (builtins.length refused)} > "$out"
     '';
 }

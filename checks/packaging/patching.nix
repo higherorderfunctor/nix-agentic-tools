@@ -53,13 +53,25 @@ in {
         printf 'offset\nheader\na\nnew\nz\n' > expected
         cmp expected ${patched}/target
         bash ${./patch-artifacts.sh} ${patched}
+        # Neither a backup from an offset patch nor a failed hunk's reject
+        # may silently pass the same artifact check used on real source trees.
+        mkdir artifacts
+        for artifact in target.orig target.rej; do
+          touch "artifacts/$artifact"
+          if bash ${./patch-artifacts.sh} artifacts > diagnostic 2>&1; then
+            echo "patch artifact check accepted $artifact" >&2
+            exit 1
+          fi
+          grep -Fx -- "artifacts/$artifact" diagnostic
+          rm "artifacts/$artifact"
+        done
         cp ${input}/target target
         sed -i 's/^a$/changed/' target
         if patch ${lib.escapeShellArgs packageLib.patchFlags} < ${patchFile} > failure.log 2>&1; then
           echo 'changed context unexpectedly applied' >&2
           exit 1
         fi
-        grep 'FAILED' failure.log
+        grep -Fx 'Hunk #1 FAILED at 2.' failure.log
         cp failure.log "$out"
       '';
   };

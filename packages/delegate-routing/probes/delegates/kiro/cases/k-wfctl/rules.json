@@ -36,9 +36,6 @@
       }
     ]
   },
-  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
-  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
-  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
   {
     "match": ["WFB_1"],
     "delay": 12,
@@ -50,9 +47,6 @@
       }
     ]
   },
-  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
-  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
-  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
   {
     "match": ["WFA_2"],
     "events": [
@@ -63,9 +57,6 @@
       }
     ]
   },
-  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
-  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
-  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
   {
     "match": ["WFB_2"],
     "events": [
@@ -76,37 +67,5 @@
       }
     ]
   },
-  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
-  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
-  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] },
-  { "match": null, "events": ["FALLBACK_TEXT"] }
+  { "events": ["FALLBACK_TEXT"], "match": null, "reuse": true }
 ]

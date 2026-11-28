@@ -32,60 +32,46 @@ def trust(entries):
     user.write_text("\n".join(f"[projects.{json.dumps(str(path))}]\ntrust_level = {json.dumps(level)}" for path, level in entries))
 
 
-def probe(directory, warning, expected_limit=32768):
+def probe(case, directory, warning, expected_limit=32768):
     result = subprocess.run([launcher], cwd=directory, capture_output=True, text=True, check=True)
-    assert result.stdout == "", result
     if warning:
-        assert "warning: Codex ignores" in result.stderr
-        assert "Set the project trust_level to trusted in the user config" in result.stderr
-        assert str(directory / ".codex/config.toml") in result.stderr
-        assert str(user) in result.stderr
+        assert result.stderr.splitlines() == [
+            f"warning: Codex ignores {directory / '.codex/config.toml'} because this project is not trusted in {user}. "
+            "Set the project trust_level to trusted in the user config to load the delivered config."
+        ], (case, result.stderr)
     else:
-        assert result.stderr == "", result.stderr
+        assert result.stderr == "", (case, result.stderr)
     result = subprocess.run([limit, str(directory), "32768"], capture_output=True, text=True, check=False)
     if expected_limit is None:
-        # The shared resolver rejects malformed TOML; advisory callers stay silent.
-        assert result.returncode != 0, result
+        # The resolver rejects malformed TOML; advisory callers stay silent.
+        assert result.returncode != 0 and result.stdout == "", (case, result)
+        assert "tomllib.TOMLDecodeError:" in result.stderr, (case, result)
     else:
-        assert result.returncode == 0 and result.stderr == "" and result.stdout.strip() == str(expected_limit), result
+        assert result.returncode == 0 and result.stderr == "" and result.stdout.strip() == str(expected_limit), (case, result)
 
 
-trust([])
-probe(root, True)
-trust([(root, "trusted")])
-probe(root, False, 65536)
-probe(worktree, False, 65536)
-trust([(root, "trusted"), (worktree, "untrusted")])
-probe(worktree, True)
-trust([(plain, "trusted")])
-probe(plain, False, 65536)
-# Measured with Codex 0.161.0: an empty worktree entry keeps clone trust.
-trust([(root, "trusted")])
-with user.open("a") as stream:
-    stream.write(f"\n[projects.{json.dumps(str(worktree))}]\n")
-probe(worktree, False, 65536)
-trust([(worktree, "trusted")])
-probe(worktree, False, 65536)
-# Missing user config is untrusted; missing project config stays silent.
-# Each unreadable input follows an otherwise identical bad case.
-trust([])
-probe(root, True)
+for case, entries, directory, warning, effective in (
+    ("exact trust works without a Git marker", [(plain, "trusted")], plain, False, 65536),
+    ("explicit worktree distrust overrides inherited trust", [(root, "trusted"), (worktree, "untrusted")], worktree, True, 32768),
+    ("explicit worktree trust does not require checkout trust", [(worktree, "trusted")], worktree, False, 65536),
+):
+    trust(entries)
+    probe(case, directory, warning, effective)
+
 user.unlink()
-for directory in (root, worktree, plain):
-    probe(directory, True)
+# The absent user file is handled before trust resolution for any topology.
+probe("missing user config still leaves the project untrusted", root, True)
 trust([])
-probe(root, True)
+probe("no trust entry leaves the checkout config unloaded", root, True)
 project = root / ".codex/config.toml"
-project.unlink()
-probe(root, False)
-project.write_text("project_doc_max_bytes = 65536\n")
 for unreadable in (user, project):
-    probe(root, True)
     unreadable.chmod(0)
     try:
-        probe(root, False)
+        probe(f"unreadable {unreadable} inhibits trust advice", root, False)
     finally:
         unreadable.chmod(0o600)
-probe(root, True)
+project.unlink()
+probe("missing project config leaves nothing to warn about", root, False)
+project.write_text("project_doc_max_bytes = 65536\n")
 user.write_text("not toml!")
-probe(root, False, None)
+probe("malformed user TOML fails resolution but does not fail launch", root, False, None)

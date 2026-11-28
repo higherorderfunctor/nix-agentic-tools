@@ -1,4 +1,3 @@
-# cspell:ignore urandom
 """Offline ai.settings.inference contract: the pinned Codex sends every request to the
 selected proxy with the selected client key, through Home Manager's user
 config.toml and devenv's launcher. Mock proxies listen on loopback inside the
@@ -83,9 +82,10 @@ project = tmp / "project"
 project.mkdir()
 
 
-def run(binary, config, key):
-    """One `codex exec` with a fresh Codex home holding `config`, or none."""
-    home = Path(tmp / "home")
+def run(binary, config, *, command_key, file_key):
+    """Run Codex with distinct reference values and fresh user state."""
+    key_path.write_text(file_key + "\n\n")
+    home = tmp / "home"
     shutil.rmtree(home, ignore_errors=True)
     codex_home = home / ".codex"
     codex_home.mkdir(parents=True)
@@ -99,7 +99,7 @@ def run(binary, config, key):
     environment = {
         "CODEX_HOME": str(codex_home),
         "CODEX_PROXY_TEST_STATUS": "0",
-        "CODEX_PROXY_TEST_VALUE": key + "\n\n",
+        "CODEX_PROXY_TEST_VALUE": command_key + "\n\n",
         "DEVENV_ROOT": str(project),
         "CODEX_API_KEY": "inherited-codex-key",
         "HOME": str(home),
@@ -134,51 +134,57 @@ def expect(name, result, seen, port, key):
     print(f"ok: {name}: {len(seen)} requests, all to :{port} with the selected key")
 
 
-def resolved(form, key):
-    return 'prefix-"\'$HOME$(touch injected)`' + key + "-suffix" if form == "concat" else key
+def run_helper(form, **variables):
+    config = Path(cases["configs"][form])
+    helper = tomllib.loads(config.read_text())["model_providers"]["ai-inference"]["auth"]["command"]
+    return subprocess.run([helper], env=dict(os.environ, **variables), capture_output=True, text=True, timeout=10)
 
 
-# Exercise runtime bytes directly: HTTP disallows embedded newlines, while a
-# reference must preserve them without interpreting any shell metacharacters.
-secret = "secret-" + os.urandom(16).hex() + " ' \" \\ $HOME $(touch injected) `touch injected`\nnext"
-helper_cases = 0
-for form, config in cases["configs"].items():
-    provider = tomllib.loads(Path(config).read_text())["model_providers"]["ai-inference"]
-    helper = provider["auth"]["command"]
-    key_path.write_text(secret + "\n\n")
-    environment = dict(os.environ, CODEX_PROXY_TEST_STATUS="0", CODEX_PROXY_TEST_VALUE=secret + "\n\n")
-    result = subprocess.run([helper], env=environment, capture_output=True, text=True)
-    assert (result.returncode, result.stdout, result.stderr) == (0, resolved(form, secret), ""), form
-    assert not Path("injected").exists(), (form, "shell injection")
-    helper_cases += 1
-    if form == "command":
-        environment["CODEX_PROXY_TEST_STATUS"] = "7"
-    else:
-        key_path.unlink()
-    result = subprocess.run([helper], env=environment, capture_output=True, text=True)
-    assert result.returncode != 0 and result.stdout == "", (form, "failed reference succeeded")
-    assert "ai.codex.settings.inference.key:" in result.stderr and secret not in result.stderr, form
-    helper_cases += 1
-print(f"verified {helper_cases} Codex helper cases: file, command, concat, multiline bytes and failures")
+# HTTP disallows embedded newlines. Check preserved bytes and literal shell
+# syntax at the helper boundary.
+secret = "probe ' \" \\ $HOME $(touch injected) `touch injected`\nnext"
+key_path.write_text(secret + "\n\n")
+result = run_helper("concat")
+assert (result.returncode, result.stdout, result.stderr) == (
+    0,
+    'prefix-"\'$HOME$(touch injected)`probe \' " \\ $HOME $(touch injected) `touch injected`\nnext-suffix',
+    "",
+), ("concat did not preserve literal affixes around the file value", result)
+assert not Path("injected").exists(), "concat evaluated literal shell syntax"
 
-# Each reference form reaches the selected proxy through real Codex provider
-# auth. A legacy bearer token in the user layer must not contaminate devenv's
-# separately named provider, and devenv must win over Home Manager's endpoint.
-for form, config in cases["configs"].items():
-    key = f"sk-hm-{form}"
-    key_path.write_text(key + "\n\n")
-    expect(f"hm {form}", *run(codex, config, key), HM_PORT, resolved(form, key))
-for form, binary in cases["launchers"].items():
-    key = f"sk-devenv-{form}"
-    key_path.write_text(key + "\n\n")
-    expect(f"devenv {form}", *run(binary, None, key), DEVENV_PORT, resolved(form, key))
-key_path.write_text("sk-selected\n")
+# Fail after the command has already printed the value.
+result = run_helper("command", CODEX_PROXY_TEST_STATUS="7", CODEX_PROXY_TEST_VALUE=secret + "\n\n")
+assert (result.returncode, result.stdout, result.stderr) == (
+    1, "", "ai.codex.settings.inference.key: reference command failed\n"
+), ("wrong command failure or leaked reference output", result)
+
+# The precedence cases below exercise HM command delivery and devenv command
+# and file delivery; devenv concat also runs with no user config.
+# Vary the file and command inputs so using the wrong reference cannot pass.
+wire_keys = {
+    "concat": 'prefix-"\'$HOME$(touch injected)`sk-file-suffix',
+    "file": "sk-file",
+}
+for form, key in wire_keys.items():
+    inputs = {"command_key": "sk-command", "file_key": "sk-file"}
+    expect(f"hm auth reads the {form} reference", *run(codex, cases["configs"][form], **inputs), HM_PORT, key)
+    if form == "concat":
+        expect("devenv auth reads the concat reference", *run(cases["launchers"][form], None, **inputs), DEVENV_PORT, key)
+
+# A higher layer must win both the endpoint and credential, not just one.
 expect(
-    "hm + devenv command",
-    *run(cases["launchers"]["command"], cases["configs"]["file"], "sk-selected"),
+    "HM runtime selection overrides shared inference",
+    *run(codex, cases["hmOverride"], command_key="sk-runtime", file_key="sk-shared"),
     DEVENV_PORT,
-    "sk-selected",
+    "sk-runtime",
 )
+expect(
+    "devenv session selection overrides HM user config",
+    *run(cases["launchers"]["command"], cases["configs"]["file"], command_key="sk-devenv", file_key="sk-hm"),
+    DEVENV_PORT,
+    "sk-devenv",
+)
+# A deep merge under a reused provider ID would inherit incompatible legacy auth.
 legacy = tmp / "legacy.toml"
 legacy.write_text(
     'model_provider = "ai-inference"\n[model_providers.ai-inference]\n'
@@ -187,7 +193,7 @@ legacy.write_text(
 )
 expect(
     "legacy user auth + devenv file",
-    *run(cases["launchers"]["file"], legacy, "sk-selected"),
+    *run(cases["launchers"]["file"], legacy, command_key="sk-unused", file_key="sk-selected"),
     DEVENV_PORT,
     "sk-selected",
 )

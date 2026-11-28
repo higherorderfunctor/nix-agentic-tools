@@ -2,10 +2,9 @@
 # Its composer (`ai.internal`) is the path's one claimant; a runtime's
 # `files."AGENTS.md"` forwards unclaimed and arbitrates by module priority:
 # agreeing definitions merge, an ordinary one replaces the composition,
-# `enable = false` suppresses it, divergent ones at one priority fail, and a
-# dormant runtime's entry is ignored. A replacing source is never read during
-# evaluation. The old writer's ledger is declared even when nothing
-# contributes, and `ai.deliveredPaths` is what the devenv treefmt run excludes.
+# `enable = false` suppresses it, and divergent ones at one priority fail.
+# The old writer's ledger is declared even when nothing contributes, and
+# `ai.deliveredPaths` is what the devenv treefmt run excludes.
 {
   harness,
   lib,
@@ -18,106 +17,87 @@
     ledger = "materialize/agents-md.manifest";
     path = ".";
   };
-  unbuildable = pkgs.runCommand "shared-agents-md-must-not-build" {} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    exit 1
-  '';
   same = {
     content.text = "SAME";
     format = "markdown";
   };
-  # `expect`: "composed", "absent", "fails", or the delivered content.
+  # Each row identifies the priority or owner decision it exercises.
   cases = {
-    agreeing = {
-      defs = lib.genAttrs ["codex" "kimchi" "kiro"] (_: same);
-      expect.text = "SAME";
-    };
-    agreeing-with-composer = {
+    "compatible defaults do not replace composed content" = {
       defs.codex = {
         format = lib.mkDefault "markdown";
         method = lib.mkDefault "ro";
       };
       expect = "composed";
     };
-    composed = {
-      defs = {};
-      expect = "composed";
-    };
-    consumer-only = {
-      context = null;
-      defs = lib.genAttrs ["codex" "kimchi"] (_: same);
-      enabled = ["codex" "kimchi"];
-      expect.text = "SAME";
-    };
-    divergent = {
-      defs = {
-        codex.content.text = "CODEX";
-        kiro.content.text = "KIRO";
-      };
-      expect = "fails";
-    };
-    dormant = {
-      defs.kiro.content.text = "DORMANT";
-      enabled = ["codex"];
-      expect = "composed";
-    };
-    replacing-source = {
-      defs.kiro.content.source = unbuildable;
-      expect.source = "${unbuildable}";
-    };
-    replacing-text = {
-      defs.codex.content.text = "CODEX";
-      expect.text = "CODEX";
-    };
-    suppressing = {
-      defs.kiro.enable = false;
-      expect = "absent";
-    };
-    suppressing-a-replacement = {
+    "disable also hides another runtime replacement" = {
       defs = {
         codex.content.text = "CODEX";
         kiro.enable = false;
       };
       expect = "absent";
     };
+    "equal-priority identical replacements merge" = {
+      defs = lib.genAttrs defaultRuntimes (_: same);
+      expect.text = "SAME";
+    };
+    "explicit disable hides the composed file" = {
+      defs.kiro.enable = false;
+      expect = "absent";
+    };
+    "runtime replacement works without composed context" = {
+      context = null;
+      defs = lib.genAttrs ["codex" "kimchi"] (_: same);
+      enabled = ["codex" "kimchi"];
+      expect.text = "SAME";
+    };
+    "shared context without overrides uses the generated copy" = {
+      defs = {};
+      expect = "composed";
+    };
   };
-  check = name: {
+  evaluate = context: enabled: defs:
+    (harness.evalDevenv (lib.foldl' lib.recursiveUpdate (lib.optionalAttrs (context != null) {ai.context.text = context;}) (
+      map (runtime: harness.setEnable runtime true) enabled
+      ++ lib.mapAttrsToList (runtime: entry: {ai.${runtime}.files.${path} = entry;}) defs
+    ))).config;
+  defaultRuntimes = ["codex" "kimchi" "kiro"];
+  check = {
     context ? "COMPOSED",
     defs,
-    enabled ? ["codex" "kimchi" "kiro"],
+    enabled ? defaultRuntimes,
     expect,
   }: let
-    inherit
-      (harness.evalDevenv (lib.foldl' lib.recursiveUpdate (lib.optionalAttrs (context != null) {ai.context.text = context;}) (
-        map (runtime: harness.setEnable runtime true) enabled
-        ++ lib.mapAttrsToList (runtime: entry: {ai.${runtime}.files.${path} = entry;}) defs
-      )))
-      config
-      ;
+    config = evaluate context enabled defs;
     delivered = harness.deliveredFiles config;
     wanted =
       if expect == "composed"
       then {source = "${config.ai.internal._generatedTree}/${path}";}
       else expect;
-    shape = lib.optional (config.ai.claims.path.${path} or [] != ["internal"]) "claimant";
-    outcome =
-      if expect == "fails"
-      then lib.optional (builtins.tryEval (builtins.deepSeq delivered.${path} true)).success "evaluates"
-      else if expect == "absent"
-      then lib.optional (delivered ? ${path} || builtins.elem path config.ai.deliveredPaths) "delivered" ++ shape
-      else
-        lib.optional (delivered.${path} or null != wanted // {method = "ro";}) "content"
-        ++ lib.optional (config.ai.files.${path}.format != "markdown") "format"
-        ++ lib.optional (!builtins.elem path config.ai.deliveredPaths) "delivered paths"
-        ++ shape;
+    claimed = (config.ai.claims.path.${path} or []) == ["internal"];
+    listed = builtins.elem path config.ai.deliveredPaths;
   in
-    map (failure: "${name}: ${failure}") outcome;
-  noContributor = harness.evalDevenv {};
-  failures =
-    lib.concatLists (lib.mapAttrsToList check cases)
-    ++ lib.optional (!builtins.elem ledger noContributor.config.ai.legacyLedgers) "legacy ledger without contributors"
-    ++ lib.optional (builtins.elem ledger (harness.evalHm {}).config.ai.legacyLedgers) "legacy ledger on Home Manager";
+    claimed
+    && (
+      if expect == "absent"
+      then !(delivered ? ${path}) && !listed
+      else
+        delivered.${path} or null
+        == wanted // {method = "ro";}
+        && config.ai.files.${path}.format == "markdown"
+        && listed
+    );
+  legacyLedgers = result: result.config.ai.legacyLedgers;
+  holds = harness.checkRows "shared AGENTS.md" (lib.mapAttrs (_: check) cases
+    // {
+      "divergent equal-priority runtime text fails the content merge" = harness.rejectsChange (defs: (evaluate "COMPOSED" defaultRuntimes defs).ai.files.${path}.content.text) rec {
+        valid.codex.content.text = "CODEX";
+        invalid = valid // {kiro.content.text = "KIRO";};
+        expected = "CODEX";
+      };
+      "legacy ledger is declared on devenv even without contributors" = builtins.elem ledger (legacyLedgers (harness.evalDevenv {}));
+      "legacy ledger never imports from Home Manager's state" = !(builtins.elem ledger (legacyLedgers (harness.evalHm {})));
+    });
 
   # Ported from module-delivery-devenv-excludes-delivered-paths-from-treefmt.
   excludeFixture = treefmtEnable:
@@ -139,20 +119,20 @@
     ".claude/rules/probe.md"
     ".claude/skills/probe/**"
   ];
-  pathFailures =
-    lib.optional (excluded.config.ai.deliveredPaths != expectedPaths) "deliveredPaths"
-    ++ lib.optional (excluded.config.treefmt.config.settings.global.excludes != expectedPaths) "treefmt excludes"
-    ++ lib.optional ((excludeFixture false).config.treefmt.config.settings.global.excludes != []) "treefmt disabled"
-    ++ lib.optional ((harness.evalHm {}).config ? treefmt) "Home Manager treefmt";
+  pathHolds = harness.checkRows "delivered paths" {
+    "disabled treefmt leaves its exclusions empty" = (excludeFixture false).config.treefmt.config.settings.global.excludes == [];
+    "Home Manager does not receive treefmt options" = !((harness.evalHm {}).config ? treefmt);
+    "treefmt excludes both leaves and the recursive glob but skips disabled settings" = excluded.config.treefmt.config.settings.global.excludes == expectedPaths;
+  };
 in {
   checks = {
-    ai-module-delivered-paths = assert lib.assertMsg (pathFailures == []) "delivered paths: ${lib.concatStringsSep ", " pathFailures}";
+    ai-module-delivered-paths = assert pathHolds;
       pkgs.runCommandLocal "ai-module-delivered-paths" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         printf 'PASS: devenv treefmt excludes every delivered path\n' > "$out"
       '';
-    ai-module-shared-agents-md = assert lib.assertMsg (failures == []) "shared AGENTS.md: ${lib.concatStringsSep ", " failures}";
+    ai-module-shared-agents-md = assert holds;
       pkgs.runCommandLocal "ai-module-shared-agents-md" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

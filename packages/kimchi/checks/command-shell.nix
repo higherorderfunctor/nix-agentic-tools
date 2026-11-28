@@ -20,7 +20,11 @@ in {
         echo 'unpatched source unexpectedly honors shellPath; reassess the patch' >&2
         exit 1
       fi
-      grep -q 'AssertionError' pristine.log
+      if ! grep -qF 'AssertionError [ERR_ASSERTION]: configured shell reaches spawned operations' pristine.log; then
+        cat pristine.log >&2
+        echo 'unpatched source did not fail the configured shell assertion' >&2
+        exit 1
+      fi
       patch ${lib.escapeShellArgs patchedSource.patchFlags} < ${patch}
       node --experimental-vm-modules ${./command-shell.mjs} .
       echo PASS > "$out"

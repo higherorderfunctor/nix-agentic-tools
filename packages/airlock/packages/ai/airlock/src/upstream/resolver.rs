@@ -78,21 +78,19 @@ mod tests {
             .unwrap();
 
         let executions = Arc::new(AtomicUsize::new(0));
-        for _ in 0..3 {
-            let executions = Arc::clone(&executions);
-            let queued = timeout(
-                Duration::from_millis(20),
-                resolve(Arc::clone(&slots), move || {
-                    executions.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
-                }),
-            )
-            .await;
-            assert!(
-                queued.is_err(),
-                "canceled caller must not release its live lookup's capacity"
-            );
-        }
+        let unexpected = Arc::clone(&executions);
+        let queued = timeout(
+            Duration::from_millis(20),
+            resolve(Arc::clone(&slots), move || {
+                unexpected.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }),
+        )
+        .await;
+        assert!(
+            queued.is_err(),
+            "canceled caller must not release its live lookup's capacity"
+        );
         assert_eq!(
             executions.load(Ordering::SeqCst),
             0,
@@ -101,17 +99,16 @@ mod tests {
 
         release.send(()).unwrap();
         let next = Arc::clone(&executions);
-        let recovered = timeout(
+        timeout(
             Duration::from_secs(2),
             resolve(slots, move || {
                 next.fetch_add(1, Ordering::SeqCst);
-                Ok("resolved")
+                Ok(())
             }),
         )
         .await
         .unwrap()
         .unwrap();
-        assert_eq!(recovered, "resolved");
         assert_eq!(executions.load(Ordering::SeqCst), 1);
     }
 }

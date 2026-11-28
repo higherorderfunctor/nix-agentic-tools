@@ -1,3 +1,4 @@
+# cspell:ignore materializers
 # slack-mcp contracts: an ordinary `ai.mcpServers.slack-mcp` declaration with
 # the reserved `settings.token` resolves to the pool's generic http fields, and
 # the pool's existing machinery delivers its bearer header on each path.
@@ -8,91 +9,89 @@
   ...
 }: let
   inherit (import ../../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
-  inherit (harness) claudeMcpServers evalDevenv evalHm mcpLib;
-  inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) renderedMcpJson;
-  extracted = import ../lib/extracted.nix {inherit lib;};
+  inherit (harness) checkRows claudeMcpServers evalDevenv evalHm mcpLib rejectsChange;
   manifestLib = import ../lib/manifest.nix {inherit lib;};
   mcpProxy = import ../../../lib/ai/mcpProxy.nix {inherit lib pkgs;};
   redact = import ../../../lib/redact {inherit lib;};
-  token = redact.file "/run/secrets/slack-user-token";
-  bearer = redact.concat ["Bearer " token];
+  endpoint = "https://mcp.slack.com/mcp";
+  loopback = "http://127.0.0.1:9600/";
+  tokenPath = "/run/secrets/slack-user-token";
+  token = redact.file tokenPath;
+  bearer = {_redact.concat = ["Bearer " {_redact.file = tokenPath;}];};
   proxy = {
     enable = true;
     port = 9600;
   };
+  direct = {settings = {inherit token;};};
+  viaProxy = direct // {inherit proxy;};
+  kiroConfig = entry: {
+    ai.kiro.cli.enable = true;
+    ai.mcpServers.slack-mcp = entry;
+  };
   # The declaration as the pool evaluates it, before and after resolution.
-  declare = entry:
-    (evalHm {
-      ai.kiro.cli.enable = true;
-      ai.mcpServers.slack-mcp = entry;
-    }).config.ai.mcpServers.slack-mcp;
+  declare = entry: (evalHm (kiroConfig entry)).config.ai.mcpServers.slack-mcp;
   resolve = mcpLib.resolveRemote "slack-mcp";
-  native = resolve (declare {settings = {inherit token;};});
-  proxied = resolve (declare {
-    settings = {inherit token;};
-    inherit proxy;
-  });
-  evaluates = value: (builtins.tryEval (builtins.deepSeq value true)).success;
+  declaredProxy = {slack-mcp = declare viaProxy;};
+  proxied = resolve declaredProxy.slack-mcp;
   manifestOf = settings: manifestLib.slackManifest {inherit pkgs settings;};
-  manifest = manifestOf {inherit token;};
+  scopesOf = selection: (manifestOf {manifest = selection;}).manifest.oauth_config.scopes.user;
+  descriptionOf = args:
+    (manifestLib.slackManifest ({
+        inherit pkgs;
+        settings = {};
+      }
+      // args)).manifest.display_information.description;
+  manifest = manifestOf direct.settings;
+  canvas = {writes = ["Canvas create/update"];};
   mcpFile = ev: ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/mcp.json";
 in {
   checks =
     {
-      # The same declaration renders one mcp.json template on both backends,
-      # with the header as a launcher environment placeholder.
+      # Check the actual materializer against a fixed client document, not a
+      # second call to Kiro's renderer. The template must carry no token path.
       factory-slack-mcp-backend-parity = mkTest "slack-mcp-backend-parity" (
         let
-          cfg = {
-            ai.kiro.cli.enable = true;
-            ai.mcpServers.slack-mcp.settings = {inherit token;};
+          expected = builtins.toJSON {
+            mcpServers.slack-mcp = {
+              headers.Authorization = "\${env:KIRO_MCP_SLACK_MCP_HEADER_AUTHORIZATION}";
+              type = "http";
+              url = endpoint;
+            };
           };
-          rendered = renderedMcpJson {slack-mcp = native;};
-          template = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" rendered}";
+          template = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" expected}";
         in
-          lib.hasInfix template (mcpFile (evalHm cfg)).content.run
-          && lib.hasInfix template (mcpFile (evalDevenv cfg)).content.run
-          && lib.hasInfix "_HEADER_AUTHORIZATION}" rendered
-          && !(lib.hasInfix "/run/secrets/slack-user-token" rendered)
+          checkRows "Slack Kiro template delivery" {
+            "devenv writes the default URL and launcher placeholder for the root declaration" = lib.hasInfix template (mcpFile (evalDevenv (kiroConfig direct))).content.run;
+          }
       );
 
       factory-slack-mcp-default-url = mkTest "slack-mcp-default-url" (
-        native.type
-        == "http"
-        && native.url == extracted.url
-        && !(native ? settings)
-        && (resolve (declare {
-          settings = {inherit token;};
-          url = "https://slack.example.test/mcp";
-        })).url
-        == "https://slack.example.test/mcp"
+        let
+          override = "https://slack.example.test/mcp";
+        in
+          checkRows "Slack remote resolution" {
+            "an explicit entry URL wins over the owner default" = (resolve (declare (direct // {url = override;}))).url == override;
+          }
       );
 
       # The field warnings judge the resolved entry: a remote server's timeout
       # is an http field, delivered or proxied, and its consumed settings are
-      # not an ignored field. Fields http ignores still warn; a representable
-      # stdio timeout is delivered without a warning.
+      # not an ignored field. Fields http ignores still warn.
       factory-slack-mcp-http-field-warnings = mkTest "slack-mcp-http-field-warnings" (
         let
-          warned = entry: field:
-            lib.any (lib.hasPrefix "ai.kiro.mcpServers.slack-mcp.${field} is set")
+          warnings = entry:
             (evalHm {
               ai.kiro.cli.enable = true;
               ai.kiro.mcpServers.slack-mcp = entry;
             }).config.warnings;
-          direct = {
-            settings = {inherit token;};
-            timeout = 300000;
-          };
-          proxied = direct // {inherit proxy;};
+          warned = messages: field: lib.any (lib.hasPrefix "ai.kiro.mcpServers.slack-mcp.${field} is set") messages;
+          proxiedHttp = viaProxy // {timeout = 300000;};
+          proxyWarnings = warnings proxiedHttp;
         in
-          lib.all (entry: !(warned entry "timeout") && !(warned entry "settings")) [direct proxied]
-          && warned (direct // {args = ["--verbose"];}) "args"
-          && warned (proxied // {env.DEBUG = "1";}) "env"
-          && !(warned {
-            command = "slack-mcp";
-            timeout = 300000;
-          } "timeout")
+          checkRows "Slack Kiro ignored-field warnings" {
+            "HTTP env warns on the proxy path" = warned (warnings (proxiedHttp // {env.DEBUG = "1";})) "env";
+            "proxied HTTP does not warn about consumed settings or a supported timeout" = !(warned proxyWarnings "settings" || warned proxyWarnings "timeout");
+          }
       );
 
       # One file printed by a flake app and a devenv task, nothing installed.
@@ -101,64 +100,85 @@ in {
           app = manifestLib.mkManifestApp pkgs manifest;
           task = manifestLib.mkManifestTask pkgs manifest;
         in
-          app.type
-          == "app"
-          && lib.hasPrefix "${builtins.storeDir}/" app.program
-          && task.exec == app.program
-          && task.description == "Print slack-mcp-manifest.yaml"
-          && manifest.name == "slack-mcp-manifest.yaml"
-      );
-
-      # Read rows are selected by default and write rows are opt in: the
-      # default manifest holds no `:write` scope; naming Canvas create/update adds its pair.
-      factory-slack-mcp-manifest-rows = mkTest "slack-mcp-manifest-rows" (
-        let
-          defaults = manifest.manifest.oauth_config.scopes.user;
-          withCanvas =
-            (manifestOf {
-              inherit token;
-              manifest.writes = ["Canvas create/update"];
-            }).manifest.oauth_config.scopes.user;
-        in
-          !(lib.any (lib.hasSuffix ":write") defaults)
-          && builtins.elem "search:read.public" defaults
-          && !(builtins.elem "canvases:write" defaults)
-          && builtins.elem "canvases:write" withCanvas
-          && builtins.elem "canvases:read" withCanvas
-          && !(evaluates
-            (manifestOf {
-              inherit token;
-              manifest.reads = ["Canvas create/update"];
-            }).manifest)
+          checkRows "Slack manifest printer registration" {
+            "devenv executes the same printer as the app" = task.exec == app.program;
+            "the flake app supplies a store executable" = app.type == "app" && lib.hasPrefix "${builtins.storeDir}/" app.program;
+          }
       );
 
       # The description names what the selection grants, an override is kept
       # verbatim, and Slack's 140-character limit is refused at evaluation.
       factory-slack-mcp-manifest-description = mkTest "slack-mcp-manifest-description" (
         let
-          described =
-            (manifestOf {
-              inherit token;
-              manifest.writes = ["Canvas create/update"];
-            }).manifest.display_information.description;
-          custom =
-            (manifestLib.slackManifest {
-              inherit pkgs;
-              description = "Reads channels and search only";
-              settings = {inherit token;};
-            }).manifest.display_information.description;
+          limit = lib.concatStrings (lib.replicate 140 "x");
         in
-          described
-          == "Personal MCP token acting as its user: read-only except Canvas create/update. The bot user never posts."
-          && manifest.manifest.display_information.description
-          == "Personal MCP token acting as its user: read-only. The bot user never posts."
-          && custom == "Reads channels and search only"
-          && !(evaluates
-            (manifestLib.slackManifest {
-              inherit pkgs;
-              description = lib.concatStrings (lib.replicate 141 "x");
-              settings = {inherit token;};
-            }).manifest.display_information)
+          checkRows "Slack manifest description" {
+            "a 141-character description is refused while 140 characters pass" =
+              rejectsChange
+              (description: descriptionOf {inherit description;}) {
+                expected = limit;
+                invalid = limit + "x";
+                valid = limit;
+              };
+            "the default description does not claim write access" = descriptionOf {} == "Personal MCP token acting as its user: read-only. The bot user never posts.";
+            "the generated description names the Canvas write grant" = descriptionOf {settings.manifest = canvas;} == "Personal MCP token acting as its user: read-only except Canvas create/update. The bot user never posts.";
+          }
+      );
+
+      # Read rows are selected by default and write rows are opt in. Force each
+      # enum through the same merge as the manifest; forcing generated scopes
+      # instead could mistake an unknown row's failed lookup for type rejection.
+      factory-slack-mcp-manifest-rows = mkTest "slack-mcp-manifest-rows" (
+        let
+          readSelection = field: selection: (mcpLib.evalSettings "slack-mcp" {manifest = selection;}).manifest.${field};
+          reads = ["Search users"];
+          omitScopes = ["search:read.users"];
+        in
+          checkRows "Slack manifest row selection" {
+            "a read-only row cannot be opted in as a write row" = rejectsChange (readSelection "writes") {
+              expected = canvas.writes;
+              invalid = {writes = reads;};
+              valid = canvas;
+            };
+            "an unknown read row is rejected instead of being ignored" = rejectsChange (readSelection "reads") {
+              expected = reads;
+              invalid = {reads = ["Delete workspace"];};
+              valid = {inherit reads;};
+            };
+            "an unknown scope in omitScopes is rejected instead of being ignored" = rejectsChange (readSelection "omitScopes") {
+              expected = omitScopes;
+              invalid = {omitScopes = ["admin:read"];};
+              valid = {inherit omitScopes;};
+            };
+            "default selection grants every documented read scope and no writes" =
+              scopesOf {}
+              == [
+                "channels:history"
+                "channels:read"
+                "emoji:read"
+                "files:read"
+                "groups:history"
+                "groups:read"
+                "im:history"
+                "im:read"
+                "mpim:history"
+                "mpim:read"
+                "reactions:read"
+                "search:read.files"
+                "search:read.im"
+                "search:read.mpim"
+                "search:read.private"
+                "search:read.public"
+                "search:read.users"
+                "users:read"
+                "users:read.email"
+              ];
+            "putting the Canvas write row under reads is rejected" = rejectsChange (readSelection "reads") {
+              expected = reads;
+              invalid = {reads = ["Canvas create/update"];};
+              valid = {inherit reads;};
+            };
+          }
       );
 
       # User scopes are the sorted union of the selected rows' scopes less
@@ -167,75 +187,71 @@ in {
         let
           trimmed =
             (manifestOf {
-              manifest = {
-                omitScopes = ["im:history" "mpim:history"];
-                reads = ["Read a channel/thread" "Search users"];
-                writes = ["Canvas create/update"];
-              };
+              manifest =
+                canvas
+                // {
+                  omitScopes = ["im:history" "mpim:history"];
+                  reads = ["Read a channel/thread" "Search users"];
+                };
             }).manifest;
+          json = builtins.toJSON manifest.manifest;
         in
-          trimmed.oauth_config.scopes.user
-          == ["canvases:read" "canvases:write" "channels:history" "groups:history" "search:read.users"]
-          && trimmed.oauth_config.scopes.bot == ["users:read"]
-          && trimmed.settings.org_deploy_enabled == false
-          && trimmed.settings.is_mcp_enabled
-          && trimmed.oauth_config.pkce_enabled
-          && !(lib.hasInfix "mcp.slack.com" (builtins.toJSON manifest.manifest))
-          && !(lib.hasInfix "slack-user-token" (builtins.toJSON manifest.manifest))
+          checkRows "Slack app manifest fields" {
+            "MCP is enabled so the app can use the server" = trimmed.settings.is_mcp_enabled;
+            "PKCE is enabled for authorization" = trimmed.oauth_config.pkce_enabled;
+            "a configured token and the server endpoint do not leak into the app manifest" = !(lib.hasInfix tokenPath json || lib.hasInfix "mcp.slack.com" json);
+            "the bot stub requests only users:read" = trimmed.oauth_config.scopes.bot == ["users:read"];
+            "the personal app is not deployed across the organization" = !trimmed.settings.org_deploy_enabled;
+            "Canvas opt-in adds both scopes while omitScopes removes only the selected history scopes" = trimmed.oauth_config.scopes.user == ["canvases:read" "canvases:write" "channels:history" "groups:history" "search:read.users"];
+          }
       );
 
-      # A row or scope the docs do not list is refused by the option type.
-      factory-slack-mcp-manifest-unknown = mkTest "slack-mcp-manifest-unknown" (
-        evaluates (manifestOf {manifest.reads = ["Search users"];}).manifest
-        && !(evaluates (manifestOf {manifest.reads = ["Delete workspace"];}).manifest)
-        && !(evaluates (manifestOf {manifest.omitScopes = ["admin:read"];}).manifest)
-      );
-
-      factory-slack-mcp-native-bearer = mkTest "slack-mcp-native-bearer" (
-        native.headers.Authorization == bearer && native.proxy == null
-      );
-
-      # The shared renderer refuses the client-held credential header, and
-      # renders the proxied client entry.
-      factory-slack-mcp-non-kiro-throws = mkTest "slack-mcp-non-kiro-throws" (
-        !(evaluates (mcpLib.renderServer pkgs "slack-mcp" native))
-        && evaluates (mcpLib.renderServer pkgs "slack-mcp" (mcpProxy.clientEntry "slack-mcp" proxied))
-      );
-
+      # Whether direct or proxied, the caller needs the exact Bearer value to authenticate to Slack.
       factory-slack-mcp-proxy-bearer = mkTest "slack-mcp-proxy-bearer" (
-        proxied.proxy.headers.Authorization == bearer && !(proxied.headers ? Authorization)
+        checkRows "Slack bearer resolution" {
+          "direct HTTP receives the exact Bearer reference in client headers" = (resolve (declare direct)).headers.Authorization == bearer;
+          "proxied HTTP receives the exact Bearer reference in daemon headers" = proxied.proxy.headers.Authorization == bearer;
+        }
       );
 
       # The client gets the loopback entry only, and the pool's proxy assertions
       # accept the declaration.
       factory-slack-mcp-proxy-client-entry = mkTest "slack-mcp-proxy-client-entry" (
         let
-          declared = declare {
-            settings = {inherit token;};
-            inherit proxy;
+          client = (mcpProxy.lowerClientEntries declaredProxy).slack-mcp;
+          expectedClient = {
+            type = "http";
+            url = loopback;
           };
-          client = (mcpProxy.lowerClientEntries {slack-mcp = declared;}).slack-mcp;
           assertions = mcpProxy.assertionsFor {
             key = "slack-mcp";
             optionPath = "ai.mcpServers";
             server = proxied;
           };
         in
-          client.url
-          == "http://127.0.0.1:9600/"
-          && !((client.headers or {}) ? Authorization)
-          && !(lib.hasInfix "mcp.slack.com" (builtins.toJSON client))
-          && lib.all (a: a.assertion) assertions
-          && builtins.attrNames (mcpProxy.proxiedServers {slack-mcp = declared;}) == ["slack-mcp"]
+          checkRows "Slack proxy lowering" {
+            "a resolved Slack upstream passes validation rather than appearing to lack a URL" = lib.all (a: a.assertion) assertions;
+            "lowering retains neither the upstream nor its bearer in the shared client pool" = client == expectedClient;
+          }
       );
 
-      # Refused tokens: missing, plain string, and a concat (its own seal refuses
-      # a nested concat). The redact.file token is the positive control.
+      # Force the merged token directly to pin rejection at the typed setting.
       factory-slack-mcp-token-required = mkTest "slack-mcp-token-required" (
-        evaluates native.headers
-        && !(evaluates (resolve (declare {})).headers)
-        && !(evaluates (resolve (declare {settings.token = "xoxp-not-a-reference";})).headers)
-        && !(evaluates (resolve (declare {settings.token = bearer;})).headers)
+        let
+          readToken = entry: (mcpLib.evalSettings "slack-mcp" (declare entry).settings).token;
+        in
+          checkRows "Slack token restrictions" {
+            "a literal token is rejected at the typed setting instead of being accepted" = rejectsChange readToken {
+              expected = token;
+              invalid.settings.token = "xoxp-not-a-reference";
+              valid = direct;
+            };
+            "a missing token is rejected instead of receiving a default" = rejectsChange readToken {
+              expected = token;
+              invalid = {};
+              valid = direct;
+            };
+          }
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -247,19 +263,16 @@ in {
           result = evalHm {
             ai = {
               claude.enable = true;
-              mcpServers.slack-mcp = {
-                settings = {inherit token;};
-                inherit proxy;
-              };
+              mcpServers.slack-mcp = viaProxy;
             };
           };
           services = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) result.config.systemd.user.services;
           entry = (claudeMcpServers "hm" result).slack-mcp;
         in
-          builtins.attrNames services
-          == ["mcp-proxy-slack-mcp"]
-          && entry.url == "http://127.0.0.1:9600/"
-          && !(lib.hasInfix "/run/secrets" (builtins.toJSON entry))
+          checkRows "Slack Home Manager proxy delivery" {
+            "Claude receives loopback without the token path" = entry.url == loopback && !((entry.headers or {}) ? Authorization) && !(lib.hasInfix tokenPath (builtins.toJSON entry));
+            "enabling the typed declaration creates one shared daemon, not zero or a per-runtime copy" = builtins.attrNames services == ["mcp-proxy-slack-mcp"];
+          }
       );
     };
 }

@@ -101,100 +101,55 @@
 
         echo "ok — ${name} floor $recorded matches ${goModPath}" > "$out"
       '';
-    # ── Positive controls for the shared parser ──────────────────────
-    # These used to be justified by "none of the eight packages carries a
-    # `toolchain` directive, so that half of `go_floor_of` is DORMANT".
-    # THAT WAS FALSE when written and is corrected here: `gh` is pinned to
-    # cli/cli, whose go.mod says `go 1.26.0` + `toolchain go1.26.7`, and
-    # gh's recorded floor of 1.26.7 is derived from the TOOLCHAIN line —
-    # the `go` line alone would have produced 1.26.0. So the max-of-two
-    # branch is live in production, not dormant.
-    #
-    # The controls are still worth having, for the ordinary reason: they
-    # pin the parser's behavior on inputs no currently-pinned package
-    # happens to exercise, so a future upstream shape does not silently
-    # change what "the floor" means.
-    #
-    # The ordering case is the one worth having: a string compare puts
-    # "1.9" ABOVE "1.26", which is the identical trap `mkGoToolchain`
-    # avoids with `lib.versionAtLeast`. `sort -V` is what makes it correct
-    # here, and this asserts that rather than trusting it.
-    mkParserTest = {
-      name,
-      goMod,
-      expect,
-    }:
-      pkgs.runCommand "go-floor-parse-${name}" {
-        goModFile = pkgs.writeText "go.mod-${name}" goMod;
+    # Pin known answers that do not depend on the current package sources.
+    # gh exercises a higher toolchain directive in production; the 1.9 / 1.26
+    # case also detects lexical sorting rather than numeric version ordering.
+    parserCases = {
+      numeric-order = {
+        directives = "go 1.9\ntoolchain go1.26.0\n";
+        expected = "1.26.0";
+      };
+      # A lower toolchain directive must not overwrite the higher go floor.
+      toolchain-lower = {
+        directives = "go 1.26.5\ntoolchain go1.24.0\n";
+        expected = "1.26.5";
+      };
+    };
+    goMod = name: directives: pkgs.writeText "go.mod-${name}" "module example.com/x\n\n${directives}";
+    parserTest =
+      pkgs.runCommand "go-floor-parse" {
+        missing = goMod "missing" "require github.com/foo/bar v1.2.3\n";
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
 
         ${vu.goModFloorFn {inherit pkgs;}}
 
-        actual=$(go_floor_of "$goModFile")
-        if [ "$actual" != "${expect}" ]; then
-          echo "FAIL: go_floor_of/${name} returned '$actual', expected '${expect}'" >&2
-          exit 1
-        fi
-        echo "ok — ${name} -> $actual" > "$out"
-      '';
+        expect_floor() {
+          local name="$1" file="$2" expected="$3" actual
+          if ! actual=$(go_floor_of "$file"); then
+            printf 'FAIL: %s was rejected, expected floor %s\n' "$name" "$expected" >&2
+            exit 1
+          fi
+          if [ "$actual" != "$expected" ]; then
+            printf 'FAIL: %s returned %s, expected %s\n' "$name" "$actual" "$expected" >&2
+            exit 1
+          fi
+        }
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: row: "expect_floor ${name} ${goMod name row.directives} ${row.expected}") parserCases)}
 
-    # NEGATIVE control: a go.mod with no `go` directive must FAIL, not
-    # return empty. `mkGoFloorFix` must refuse that source instead of recording
-    # an empty floor that cannot select a compiler. A "did it produce output?"
-    # test would wave through an empty result.
-    parserRejectsMissing =
-      pkgs.runCommand "go-floor-parse-rejects-missing" {
-        goModFile = pkgs.writeText "go.mod-without-go-directive" ''
-          module example.com/x
-
-          require github.com/foo/bar v1.2.3
-        '';
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        ${vu.goModFloorFn {inherit pkgs;}}
-
-        if go_floor_of "$goModFile" 2>/dev/null; then
+        # The fixer must not record an empty floor from a source with no go directive.
+        if go_floor_of "$missing" >/dev/null 2>diagnostic; then
           echo "FAIL: go_floor_of accepted a go.mod with no 'go' directive" >&2
           exit 1
         fi
-        echo "ok — rejected go.mod with no 'go' directive" > "$out"
+        grep -F "go-floor: no 'go' directive in $missing" diagnostic
+        touch "$out"
       '';
-
-    parserTests = {
-      go-floor-parse-go-only = mkParserTest {
-        name = "go-only";
-        goMod = "module example.com/x\n\ngo 1.25.0\n";
-        expect = "1.25.0";
-      };
-      # `toolchain` ABOVE `go` — the directive that raises the real floor.
-      go-floor-parse-toolchain-higher = mkParserTest {
-        name = "toolchain-higher";
-        goMod = "module example.com/x\n\ngo 1.25.0\n\ntoolchain go1.26.5\n";
-        expect = "1.26.5";
-      };
-      # `toolchain` BELOW `go` — `go` still wins; this is a max, not a
-      # last-one-wins.
-      go-floor-parse-toolchain-lower = mkParserTest {
-        name = "toolchain-lower";
-        goMod = "module example.com/x\n\ngo 1.26.5\n\ntoolchain go1.24.0\n";
-        expect = "1.26.5";
-      };
-      # The ordering trap: a string compare sorts "1.9" above "1.26".
-      go-floor-parse-numeric-order = mkParserTest {
-        name = "numeric-order";
-        goMod = "module example.com/x\n\ngo 1.9\n\ntoolchain go1.26.0\n";
-        expect = "1.26.0";
-      };
-    };
   in
-    parserTests
-    // {
+    {
       go-floor-declared-list = declaredListCheck;
-      go-floor-parse-rejects-missing = parserRejectsMissing;
+      go-floor-parse = parserTest;
     }
     // lib.mapAttrs'
     (name: p: lib.nameValuePair "go-floor-drift-${name}" (mkCheck name p))

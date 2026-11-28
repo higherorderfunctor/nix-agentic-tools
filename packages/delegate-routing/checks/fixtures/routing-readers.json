@@ -1,6 +1,6 @@
 {
   "capturedAt": "2026-11-10T00:08:41Z",
-  "normalization": "Only account.auth_index and account.name replaced with stable synthetic strings; all other fields preserved.",
+  "normalization": "Replaced account.auth_index and account.name with stable synthetic strings. Omitted idle OpenCode Go and Zhipuai 5h windows and the second Codex rate_limit_reset bonus.",
   "readers": {
     "anthropic-api": {
       "account": {
@@ -73,11 +73,6 @@
           "count": 1,
           "expiresAt": "2026-11-30T20:20:39Z",
           "kind": "rate_limit_reset"
-        },
-        {
-          "count": 1,
-          "expiresAt": "2026-12-01T22:50:26Z",
-          "kind": "rate_limit_reset"
         }
       ],
       "pool": "codex",
@@ -101,13 +96,6 @@
       "bonuses": [],
       "pool": "opencode",
       "windows": {
-        "5h": {
-          "remainingPercent": 100,
-          "resetsAt": "2026-11-10T05:08:43Z",
-          "status": "ok",
-          "usedPercent": 0,
-          "windowSeconds": 18000
-        },
         "7d": {
           "remainingPercent": 66,
           "resetsAt": "2026-11-16T00:00:00Z",
@@ -134,13 +122,6 @@
       "bonuses": [],
       "pool": "zhipuai",
       "windows": {
-        "5h": {
-          "remainingPercent": 100,
-          "resetsAt": null,
-          "status": null,
-          "usedPercent": 0,
-          "windowSeconds": 18000
-        },
         "7d": {
           "remainingPercent": 60,
           "resetsAt": "2026-11-14T00:17:30Z",
@@ -151,5 +132,5 @@
       }
     }
   },
-  "source": "five successful Reader envelopes captured live on 2026-11-10"
+  "source": "trimmed from five successful Reader envelopes captured live on 2026-11-10"
 }

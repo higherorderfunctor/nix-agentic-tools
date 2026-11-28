@@ -13,7 +13,7 @@
   "block_roles": ["selection", "guard", "mutator", "mutator"],
   "env": {},
   "expected": {
-    "description": "publication honors the pre-rewrite remote snapshot for create-race",
+    "description": "A competing branch creation is rejected even when an ordinary push could fast-forward it",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "LEASE-create-race",

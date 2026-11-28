@@ -1,12 +1,12 @@
+# cspell:ignore nonloopback
 {
   harness,
   lib,
-  pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   backendEval = import ./backend.nix {inherit harness lib;};
   inherit (backendEval) account;
-  proxy = import ../../../lib/ai/mcpProxy.nix {inherit lib pkgs;};
   server = port: endpoint: {
     url = "https://mcp.example.test/mcp/${endpoint}";
     proxy = {
@@ -29,68 +29,67 @@
     evaluated = evaluate backend {};
     cfg = evaluated.config;
     proxyServices = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) cfg.ai.services;
-    stateRoot =
-      if backend == "hm"
-      then cfg.xdg.stateHome
-      else cfg.devenv.state;
-    resolve = import ../lib/resolve-proxy.nix {inherit lib;} {
-      accounts = cfg.ai.mcp-oauth.accounts;
-      inherit backend stateRoot;
-    };
-    spec =
-      proxy.specFor "meeting"
-      (resolve {
-        key = "meeting";
-        optionPath = "ai.mcpServers";
-        server = cfg.ai.mcpServers.meeting;
-      }).server;
   in
-    assert lib.all (entry: entry.assertion) cfg.assertions;
-    assert spec.headerSecrets == {};
-    assert spec.fileHeaders == {"file_${builtins.hashString "sha256" "Authorization"}" = "${stateRoot}/mcp-oauth/${backend}/work/access-token";};
-    assert spec.headers == {Authorization = "Bearer {vars.file_${builtins.hashString "sha256" "Authorization"}}";}; {
+    assert lib.all (entry: entry.assertion) cfg.assertions; {
       clients = harness.claudeMcpServers backend evaluated;
       commands = lib.mapAttrs (_: service: service.command) proxyServices;
+      proxyEnvironments = lib.mapAttrs (_: service: service.environment) proxyServices;
       restartPaths = lib.mapAttrs (_: service: service.restartOnChange) proxyServices;
       rootOwners = builtins.attrNames cfg.ai.internal.services;
       runtimeOwners = builtins.attrNames cfg.ai.claude.services;
-      inherit stateRoot;
     };
-  # These cases reject missing resolution, disabled account lookup, overrides
-  # (including null), and checks placed only after the active-root filter.
-  refused = [
-    {ai.mcp-oauth.accounts.work.enable = false;}
-    {ai.claude.mcpServers.messaging.proxy.headers.authorization = null;}
-    {
-      ai.claude.enable = lib.mkForce false;
-      ai.mcpServers.meeting.proxy.headers.authorization = null;
-    }
-    {ai.mcpServers.meeting.proxy.oauthAccount = lib.mkForce "missing";}
-    {ai.claude.mcpServers.messaging.proxy.oauthAccount = lib.mkForce "missing";}
-    {ai.mcpServers.meeting.proxy.headers.aUtHoRiZaTiOn = "override";}
-    {ai.mcpServers.meeting.proxy.headers.AUTHORIZATION = null;}
-    {ai.mcpServers.meeting.proxy.host = "0.0.0.0";}
-    {ai.mcpServers.meeting.proxy.enable = lib.mkForce false;}
-    {
-      ai.claude.enable = lib.mkForce false;
-      ai.mcpServers.meeting.proxy.enable = lib.mkForce false;
-    }
-  ];
-  accepts = backend: extra: let
-    cfg = (evaluate backend extra).config;
+  rows = backend: let
+    cfg = extra: (evaluate backend extra).config;
+    # Read the selected service's command. Forcing assertions alone can leave
+    # the account lookup and the generated file-header type check lazy.
+    emitted = path: extra: let
+      service = lib.getAttrFromPath path (cfg extra).ai;
+    in
+      builtins.deepSeq service.command (builtins.length service.command);
+    rejectService = name: invalid:
+      rejectsChange (emitted name) {
+        inherit invalid;
+        valid = {};
+        expected = 1;
+      };
+    rejectRoot = rejectService ["internal" "services" "mcp-proxy-meeting"];
+    rejectRuntime = rejectService ["claude" "services" "mcp-proxy-messaging"];
+    # Exercise validation through the assertion path independently of active
+    # service emission: an unused root entry must still obey the schema.
+    inactive = {ai.claude.enable = lib.mkForce false;};
+    validateUnused = extra: lib.all (entry: entry.assertion) (cfg (lib.recursiveUpdate inactive extra)).assertions;
+    rejectUnused = invalid:
+      rejectsChange validateUnused {
+        inherit invalid;
+        valid = {};
+        expected = true;
+      };
+    rejectProxy = read: invalid:
+      rejectsChange (extra: (read (cfg extra)).proxy.oauthAccount) {
+        inherit invalid;
+        valid = {};
+        expected = "work";
+      };
+    rejectRootProxy = rejectProxy (config: config.ai.mcpServers.meeting);
   in
-    (builtins.tryEval (builtins.deepSeq [cfg.ai.services (map (entry: entry.assertion) cfg.assertions)] true)).success;
-  unsafeRoot = backend:
-    if backend == "hm"
-    then {xdg.stateHome = "/bad root";}
-    else {devenv.state = "/bad root";};
-  unused = (evaluate "hm" {ai.claude.enable = lib.mkForce false;}).config;
+    {
+      "generated header paths validate the backend state root" = rejectRoot (
+        if backend == "hm"
+        then {xdg.stateHome = "/bad root";}
+        else {devenv.state = "/bad root";}
+      );
+    }
+    # Schema validation and account resolution are shared before backend lowering.
+    // lib.optionalAttrs (backend == "devenv") {
+      "disabled accounts are not resolved" = rejectRoot {ai.mcp-oauth.accounts.work.enable = false;};
+      "root proxy cannot bind a nonloopback address" = rejectRootProxy {ai.mcpServers.meeting.proxy.host = "0.0.0.0";};
+      "root proxy cannot override Authorization in mixed case" = rejectRootProxy {ai.mcpServers.meeting.proxy.headers.aUtHoRiZaTiOn = "override";};
+      "runtime proxy cannot delete Authorization" = rejectProxy (config: config.ai.claude.mcpServers.messaging) {ai.claude.mcpServers.messaging.proxy.headers.authorization = null;};
+      "runtime proxy must resolve its own account" = rejectRuntime {ai.claude.mcpServers.messaging.proxy.oauthAccount = lib.mkForce "missing";};
+      "unused root declaration cannot delete Authorization" = rejectUnused {ai.mcpServers.meeting.proxy.headers.authorization = null;};
+      "unused root declaration cannot disable its OAuth proxy" = rejectUnused {ai.mcpServers.meeting.proxy.enable = lib.mkForce false;};
+    };
 in {
-  checks =
-    lib.all (backend:
-      accepts backend {}
-      && lib.all (extra: !(accepts backend extra)) refused
-      && !(accepts backend (unsafeRoot backend))) ["devenv" "hm"]
-    && !(unused.ai.services ? mcp-proxy-meeting);
+  checks = lib.all (name: checkRows "OAuth proxy (${name})" (rows name)) ["devenv" "hm"];
   snapshots = lib.genAttrs ["devenv" "hm"] snapshot;
 }

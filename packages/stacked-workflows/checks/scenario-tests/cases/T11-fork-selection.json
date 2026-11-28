@@ -1,8 +1,4 @@
 {
-  "args": {
-    "scenario": "selection",
-    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
-  },
   "block_ids": [
     "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
     "packages/stacked-workflows/skills/stack-test/SKILL.md::Steps::1"
@@ -10,8 +6,7 @@
   "block_roles": ["selection", "selection"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Both skills must retain the inactive fork descended from the current stack root, not the unrelated sibling"
   },
   "id": "T11-fork-selection",
   "kind": "selection",

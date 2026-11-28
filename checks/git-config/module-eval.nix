@@ -9,12 +9,8 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalDevenvModules evalHm mkTest;
+  inherit (harness) checkRows evalDevenv evalDevenvModules evalHm mkTest rejectsChange;
 
-  # A literal search over strings that carry store paths (a regex could
-  # not take them).
-  contains = needle: hay: harness.hasLiteral (builtins.unsafeDiscardStringContext needle) (builtins.unsafeDiscardStringContext hay);
-  evaluates = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   hmSettings = config: (evalHm config).config.programs.git.settings;
   devenvSettings = config: (evalDevenv config).config.git.settings;
   failedAssertions = evaluated: map (a: a.message) (lib.filter (a: !a.assertion) evaluated.config.assertions);
@@ -38,36 +34,44 @@ in {
         hm = shape (evalHm {}).options.git;
         devenv = shape (evalDevenv {}).options.git;
       in
-        hm
-        == devenv
-        && lib.attrNames hm == ["absorb" "branchless" "revise" "settings"]
-        && hm.branchless ? scopedSync
-        && hm.branchless.settings.test.jobs == devenv.branchless.settings.test.jobs
+        checkRows "git option parity" {
+          "Home Manager and devenv have the same option names and types" = hm == devenv;
+          "git root contains all four sections" = lib.attrNames hm == ["absorb" "branchless" "revise" "settings"];
+        }
     );
 
     # The Home Manager stub is Home Manager's real type: a four-level key and
     # a null are rejected, as Home Manager rejects them.
     module-git-hm-stub-is-the-real-type = mkTest "git-hm-stub-is-the-real-type" (
-      !(evaluates (hmSettings {programs.git.settings.branchless.test.alias.foo = "x";}))
-      && !(evaluates (hmSettings {programs.git.settings.branchless.test.jobs = null;}))
-      && evaluates (hmSettings {programs.git.settings.branchless."test.alias".foo = "x";})
+      let
+        settings = input: (hmSettings {programs.git.settings.branchless = input;}).branchless or {};
+        dotted = {"test.alias".foo = "x";};
+      in
+        checkRows "Home Manager Git INI type" {
+          "null cannot be a Git INI value" = rejectsChange settings {
+            valid = dotted;
+            invalid = {"test.alias".foo = null;};
+            expected = dotted;
+          };
+          "subsection cannot be nested four levels deep" = rejectsChange settings {
+            valid = dotted;
+            invalid = {test.alias.foo = "x";};
+            expected = dotted;
+          };
+        }
     );
 
-    # Nothing set: nothing rendered on either backend, and the devenv task
-    # removes the include instead of writing an empty file. One typed value:
-    # exactly that key, and no `null` anywhere.
+    # Check the option values before serialization: an unset scalar or empty
+    # family must not inject settings next to the configured leaf.
     module-git-typed-null-not-rendered = mkTest "git-typed-null-not-rendered" (
       let
         one = {git.absorb.settings.maxStack = 7;};
-        emptyDevenv = evalDevenv {};
+        expected = {absorb.maxStack = 7;};
       in
-        hmSettings {}
-        == {}
-        && devenvSettings {} == {}
-        && !(contains "nix-agentic-tools.gitconfig" emptyDevenv.config.tasks."git:config".exec)
-        && hmSettings one == {absorb.maxStack = 7;}
-        && devenvSettings one == {absorb.maxStack = 7;}
-        && !(lib.hasInfix "null" (lib.generators.toGitINI (devenvSettings one)))
+        checkRows "omission of unset Git settings" {
+          "Home Manager writes only absorb.maxStack when set" = hmSettings one == expected;
+          "devenv writes only absorb.maxStack when set" = devenvSettings one == expected;
+        }
     );
 
     # A `<name>` family lowers to the dotted subsection, the only shape Home
@@ -77,10 +81,9 @@ in {
         config = {git.branchless.settings.test.alias.lint = "nix flake check";};
         expected = {branchless."test.alias".lint = "nix flake check";};
       in
-        hmSettings config
-        == expected
-        && devenvSettings config == expected
-        && contains ''[branchless "test.alias"]'' (lib.generators.toGitINI (devenvSettings config))
+        checkRows "branchless test alias subsection" {
+          "Home Manager keeps test.alias as a single subsection" = hmSettings config == expected;
+        }
     );
 
     # Priorities survive lowering. A typed value set with mkDefault (what a
@@ -89,37 +92,64 @@ in {
     # backends: the raw attrset is `programs.git.settings` or `git.settings`.
     module-git-typed-priority = mkTest "git-typed-priority" (
       let
-        defaulted = {git.absorb.settings.maxStack = lib.mkDefault 5;};
-        explicit = {git.absorb.settings.maxStack = 5;};
-        hmRaw = value: {programs.git.settings.absorb.maxStack = value;};
-        devenvRaw = value: {git.settings.absorb.maxStack = value;};
+        read = settings: raw: {
+          typed,
+          value,
+        }:
+          (settings (lib.recursiveUpdate {git.absorb.settings.maxStack = typed;} (raw value))).absorb.maxStack or null;
+        hm = read hmSettings (value: {programs.git.settings.absorb.maxStack = value;});
+        devenv = read devenvSettings (value: {git.settings.absorb.maxStack = value;});
+        conflict = get:
+          rejectsChange get {
+            valid = {
+              typed = 5;
+              value = 5;
+            };
+            invalid = {
+              typed = 5;
+              value = 9;
+            };
+            expected = 5;
+          };
+        overridesDefault = get:
+          get {
+            typed = lib.mkDefault 5;
+            value = 9;
+          }
+          == 9;
       in
-        (hmSettings (lib.recursiveUpdate defaulted (hmRaw 9))).absorb.maxStack
-        == 9
-        && (devenvSettings (lib.recursiveUpdate defaulted (devenvRaw 9))).absorb.maxStack == 9
-        && !(evaluates (hmSettings (lib.recursiveUpdate explicit (hmRaw 9))))
-        && !(evaluates (devenvSettings (lib.recursiveUpdate explicit (devenvRaw 9))))
-        && (hmSettings (lib.recursiveUpdate explicit (hmRaw 5))).absorb.maxStack == 5
-        # mkForce on the typed value beats a normal raw value.
-        && (hmSettings (lib.recursiveUpdate {git.absorb.settings.maxStack = lib.mkForce 3;} (hmRaw 9))).absorb.maxStack == 3
+        checkRows "typed Git setting priorities" {
+          "Home Manager rejects conflicting explicit values" = conflict hm;
+          "Home Manager retains mkForce on typed value" =
+            hm {
+              typed = lib.mkForce 3;
+              value = 9;
+            }
+            == 3;
+          "Home Manager uses raw value over typed default" = overridesDefault hm;
+          "devenv rejects conflicting explicit values" = conflict devenv;
+          "devenv uses raw value over typed default" = overridesDefault devenv;
+        }
     );
 
     # Home Manager renders nothing while programs.git.enable is false, so
     # defining `git.*` then warns instead of doing nothing silently.
     module-git-hm-warns-without-programs-git = mkTest "git-hm-warns-without-programs-git" (
       let
-        warns = config: lib.any (lib.hasPrefix "git.* settings") (evalHm config).config.warnings;
+        warns = config:
+          lib.any (lib.hasInfix "programs.git.enable is false, so Home Manager writes no git configuration")
+          (evalHm config).config.warnings;
+        typed = {git.absorb.settings.maxStack = 3;};
       in
-        warns {git.absorb.settings.maxStack = 3;}
-        && warns {git.settings.merge.conflictStyle = "zdiff3";}
-        && warns {git.branchless.scopedSync = true;}
-        && !(warns {
-          git.absorb.settings.maxStack = 3;
-          programs.git.enable = true;
-        })
-        && !(warns {})
-        # A raw programs.git.settings value is Home Manager's own business.
-        && !(warns {programs.git.settings.merge.conflictStyle = "zdiff3";})
+        checkRows "Home Manager Git delivery warning" {
+          "empty settings do not warn" = !(warns {});
+          "enabled Git delivers typed settings without warning" = !(warns (typed // {programs.git.enable = true;}));
+          "raw git.settings warns when Git is disabled" = warns {git.settings.merge.conflictStyle = "zdiff3";};
+          # A raw programs.git.settings value is Home Manager's own business.
+          "raw programs.git.settings is outside the warning's scope" = !(warns {programs.git.settings.merge.conflictStyle = "zdiff3";});
+          "scopedSync warns when its alias would not be delivered" = warns {git.branchless.scopedSync = true;};
+          "typed absorb settings warn when Git is disabled" = warns typed;
+        }
     );
 
     # Ranges from the census: git-branchless reads test.jobs as a
@@ -127,21 +157,31 @@ in {
     module-git-int-ranges = mkTest "git-int-ranges" (
       let
         jobs = value:
-          evaluates (hmSettings {
+          (hmSettings {
             git.branchless.settings.test = {
               jobs = value;
               strategy = "worktree";
             };
-          });
-        maxStack = value: evaluates (hmSettings {git.absorb.settings.maxStack = value;});
+          }).branchless.test.jobs or null;
+        maxStack = value: (hmSettings {git.absorb.settings.maxStack = value;}).absorb.maxStack or null;
       in
-        !(jobs (-1))
-        && jobs 0
-        && jobs 2147483647
-        && !(jobs 2147483648)
-        && !(maxStack 0)
-        && maxStack 1
-        && !(maxStack 2147483648)
+        checkRows "typed Git integer bounds" {
+          "absorb maxStack must be at least one" = rejectsChange maxStack {
+            valid = 1;
+            invalid = 0;
+            expected = 1;
+          };
+          "absorb maxStack must fit in an i32" = rejectsChange maxStack {
+            valid = 2147483647;
+            invalid = 2147483648;
+            expected = 2147483647;
+          };
+          "branchless jobs must fit in an i32" = rejectsChange jobs {
+            valid = 2147483647;
+            invalid = 2147483648;
+            expected = 2147483647;
+          };
+        }
     );
 
     # Family names are plain (a dotted name would fold its head into a
@@ -150,130 +190,154 @@ in {
     # case-insensitively.
     module-git-alias-names = mkTest "git-alias-names" (
       let
-        testAlias = name: evaluates (hmSettings {git.branchless.settings.test.alias.${name} = "true";});
-        revsetAlias = name: evaluates (hmSettings {git.branchless.settings.revsets.alias.${name} = "@";});
+        testAlias = name: (hmSettings {git.branchless.settings.test.alias.${name} = "true";}).branchless."test.alias" or {};
+        revsetAlias = name: (hmSettings {git.branchless.settings.revsets.alias.${name} = "@";}).branchless."revsets.alias" or {};
+        rejectsTestAlias = invalid:
+          rejectsChange testAlias {
+            inherit invalid;
+            valid = "lint-all";
+            expected.lint-all = "true";
+          };
+        rejectsRevsetAlias = invalid:
+          rejectsChange revsetAlias {
+            inherit invalid;
+            valid = "mine";
+            expected.mine = "@";
+          };
       in
-        testAlias "lint-all"
-        && !(testAlias "a.b")
-        && !(testAlias "1st")
-        && !(testAlias "has_underscore")
-        && revsetAlias "mine"
-        && !(revsetAlias "draft")
-        && !(revsetAlias "Stack")
+        checkRows "branchless alias names" {
+          "revset builtin names are reserved case-insensitively" = rejectsRevsetAlias "Stack";
+          "test alias must start with a letter" = rejectsTestAlias "1st";
+        }
     );
 
-    # test.jobs above 1 needs the worktree strategy. Home Manager is the
-    # lowest layer, so a null strategy there is upstream's working-copy and
-    # fails; repository-local, a null strategy may come user-global, so it
-    # only warns, and only an explicit working-copy fails.
+    # A configured test.jobs other than 1 needs the worktree strategy. Home
+    # Manager is the lowest layer, so a null strategy there is upstream's
+    # working-copy and fails. Repository-local, a null strategy may come from
+    # user-global, so it only warns; an explicit working-copy fails.
     module-git-branchless-test-jobs-coupling = mkTest "git-branchless-test-jobs-coupling" (
       let
         test = settings: {git.branchless.settings.test = settings;};
-        hmFails = settings: failedAssertions (evalHm (test settings)) != [];
+        hm = settings: failedAssertions (evalHm (test settings));
         devenv = settings: evalDevenv (test settings);
-        devenvFails = settings: failedAssertions (devenv settings) != [];
-        devenvWarns = settings: lib.any (lib.hasInfix "test.strategy unset") (devenv settings).config.warnings;
+        repoFails = settings: failedAssertions (devenv settings);
+        repoWarns = settings: lib.any (lib.hasInfix "test.strategy unset") (devenv settings).config.warnings;
+        reports = reason: lib.any (lib.hasInfix reason);
       in
-        hmFails {jobs = 2;}
-        && hmFails {
-          jobs = 0;
-          strategy = "working-copy";
+        checkRows "branchless test jobs and strategy" {
+          "Home Manager accepts one job with implicit strategy" = hm {jobs = 1;} == [];
+          "Home Manager accepts parallel jobs with worktree strategy" =
+            hm {
+              jobs = 4;
+              strategy = "worktree";
+            }
+            == [];
+          "Home Manager rejects two jobs with implicit working-copy strategy" =
+            reports ''test.jobs = 2 needs git.branchless.settings.test.strategy = "worktree"'' (hm {jobs = 2;});
+          "Home Manager rejects zero jobs with explicit working-copy strategy" = reports ''test.jobs = 0 needs git.branchless.settings.test.strategy = "worktree"'' (hm {
+            jobs = 0;
+            strategy = "working-copy";
+          });
+          "devenv accepts but warns about parallel jobs with implicit strategy" =
+            repoFails {jobs = 2;} == [] && repoWarns {jobs = 2;};
+          "devenv does not warn for one job with implicit strategy" = !(repoWarns {jobs = 1;});
+          "devenv does not warn for parallel jobs with worktree strategy" =
+            !(repoWarns {
+              jobs = 2;
+              strategy = "worktree";
+            });
+          "devenv rejects parallel jobs with explicit working-copy strategy" =
+            reports ''test.jobs = 2 contradicts git.branchless.settings.test.strategy = "working-copy"''
+            (repoFails {
+              jobs = 2;
+              strategy = "working-copy";
+            });
         }
-        && !(hmFails {jobs = 1;})
-        && !(hmFails {
-          jobs = 4;
-          strategy = "worktree";
-        })
-        && devenvFails {
-          jobs = 2;
-          strategy = "working-copy";
-        }
-        && !(devenvFails {jobs = 2;})
-        && devenvWarns {jobs = 2;}
-        && !(devenvWarns {jobs = 1;})
-        && !(devenvWarns {
-          jobs = 2;
-          strategy = "worktree";
-        })
     );
 
-    # Both backends expose the patched restack key as an optional string and
-    # lower a configured revset without enabling or replacing a Git alias.
+    # The shared setting must reject a non-string revset and lower a valid
+    # revset to the patched restack key, not to a Git alias.
     module-git-branchless-restack-default-revset = mkTest "git-branchless-restack-default-revset" (
-      let
-        accepts = render: value: evaluates (render {git.branchless.settings.restack.defaultRevset = value;});
-        configured = {git.branchless.settings.restack.defaultRevset = "@";};
-        expected = {branchless.restack.defaultRevset = "@";};
-      in
-        hmSettings configured
-        == expected
-        && devenvSettings configured == expected
-        && lib.all (render: !(accepts render false) && !(accepts render 1)) [hmSettings devenvSettings]
+      checkRows "branchless restack default revset" {
+        "Home Manager rejects a boolean in place of a revset" = rejectsChange (revset: hmSettings {git.branchless.settings.restack.defaultRevset = revset;}) {
+          valid = "@";
+          invalid = false;
+          expected.branchless.restack.defaultRevset = "@";
+        };
+      }
     );
 
-    # scopedSync lowers to git's alias.sync on both backends, at the priority
-    # it is defined at.
+    # A raw alias must override the preset on either backend.
     module-git-branchless-scoped-sync = mkTest "git-branchless-scoped-sync" (
       let
-        alias = "branchless sync 'stack()'";
+        preset = {git.branchless.scopedSync = lib.mkDefault true;};
       in
-        !(hmSettings {} ? alias)
-        && (hmSettings {git.branchless.scopedSync = true;}).alias.sync == alias
-        && (devenvSettings {git.branchless.scopedSync = true;}).alias.sync == alias
-        && (hmSettings {
-          git.branchless.scopedSync = lib.mkDefault true;
-          programs.git.settings.alias.sync = "branchless sync";
-        }).alias.sync
-        == "branchless sync"
+        checkRows "scoped sync alias" {
+          "Home Manager lets a raw alias override the preset" =
+            (hmSettings (preset // {programs.git.settings.alias.sync = "branchless sync";})).alias.sync == "branchless sync";
+          "devenv lets a raw alias override the preset" =
+            (devenvSettings (lib.recursiveUpdate preset {git.settings.alias.sync = "branchless sync";})).alias.sync == "branchless sync";
+        }
     );
 
-    # `enable` installs the tool on each backend.
+    # Each enable switch must select this flake's build of its own tool.
     module-git-tools-enable-installs = mkTest "git-tools-enable-installs" (
       let
-        tools = ["absorb" "branchless" "revise"];
-        enabled = lib.genAttrs tools (_: {enable = true;});
-        names = packages: map lib.getName packages;
-        expected = map lib.getName [pkgs.ai.gitTools.git-absorb pkgs.ai.gitTools.git-branchless pkgs.ai.gitTools.git-revise];
-        hmPackages = names (evalHm {git = enabled;}).config.home.packages;
-        devenvPackages = names (evalDevenv {git = enabled;}).config.packages;
+        tools = {
+          absorb = pkgs.ai.gitTools.git-absorb;
+          branchless = pkgs.ai.gitTools.git-branchless;
+          revise = pkgs.ai.gitTools.git-revise;
+        };
+        installed = backend: packages: let
+          owns = package: lib.any (installedPackage: installedPackage.drvPath == package.drvPath);
+          disabled = packages {};
+        in
+          lib.mapAttrs' (tool: package:
+            lib.nameValuePair "${backend} installs git-${tool} only when git.${tool}.enable is set" (
+              let
+                enabled = packages {git.${tool}.enable = true;};
+              in
+                owns package enabled && !(owns package disabled)
+            ))
+          tools;
       in
-        lib.all (name: lib.elem name hmPackages && lib.elem name devenvPackages) expected
-        && !(lib.elem (lib.getName pkgs.ai.gitTools.git-absorb) (names (evalHm {}).config.home.packages))
+        checkRows "Git tool installation" (
+          installed "Home Manager" (config: (evalHm config).config.home.packages)
+          // installed "devenv" (config: (evalDevenv config).config.packages)
+        )
     );
 
-    # devenv task graph: init runs before `git:config` (whose include must end
-    # up after the one init appends) and before prek's hook installation; it
-    # passes a typed main branch; `git:config` renders `git.settings` through
-    # toGitINI into the file it includes.
+    # The runtime check runs the tasks in a fixed order. Independently pin the
+    # actual graph: init must precede config publication and hook installation.
     module-git-devenv-tasks = mkTest "git-devenv-tasks" (
       let
-        evaluated = evalDevenvModules [
-          {
-            options.git-hooks.enable = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-            };
-          }
-          {
-            config = {
-              git-hooks.enable = true;
-              git.branchless = {
-                enable = true;
-                settings.core.mainBranch = "trunk";
+        tasksFor = gitHooks:
+          (evalDevenvModules [
+            {
+              options.git-hooks.enable = lib.mkOption {
+                type = lib.types.bool;
+                default = false;
               };
-            };
-          }
-        ];
-        inherit (evaluated.config) tasks;
-        init = tasks."ai:git-branchless-init";
-        rendered = pkgs.writeText "nix-agentic-tools.gitconfig" (lib.generators.toGitINI evaluated.config.git.settings);
+            }
+            {
+              config = {
+                git-hooks.enable = gitHooks;
+                git.branchless.enable = true;
+              };
+            }
+          ]).config.tasks;
+        withHooks = tasksFor true;
+        withoutHooks = tasksFor false;
+        initBefore = tasks: lib.sort lib.lessThan tasks."ai:git-branchless-init".before;
       in
-        lib.sort lib.lessThan init.before
-        == ["devenv:enterShell" "devenv:git-hooks:install" "git:config"]
-        && tasks."git:config".before == ["devenv:enterShell"]
-        && contains "init \"$DEVENV_ROOT\" ${lib.getExe pkgs.ai.gitTools.git-branchless} trunk" init.exec
-        && contains "include \"$DEVENV_ROOT\" ${rendered}" tasks."git:config".exec
-        && !((evalDevenv {}).config.tasks ? "ai:git-branchless-init")
+        checkRows "Git devenv task graph" {
+          "branchless init does not require a disabled hook installer" =
+            initBefore withoutHooks == ["devenv:enterShell" "git:config"];
+          "branchless init is absent when branchless is disabled" = !((evalDevenv {}).config.tasks ? "ai:git-branchless-init");
+          "branchless init precedes config and the enabled hook installer" =
+            initBefore withHooks == ["devenv:enterShell" "devenv:git-hooks:install" "git:config"];
+          "config publication precedes shell entry" = withHooks."git:config".before == ["devenv:enterShell"];
+        }
     );
 
     # The task bodies are standalone Bash, which is how devenv runs them.

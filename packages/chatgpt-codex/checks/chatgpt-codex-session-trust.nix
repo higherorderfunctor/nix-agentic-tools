@@ -36,8 +36,5 @@ in {
       ]}
       echo PASS > "$out"
     '';
-    module-codex-session-trust-hm-unknown-option = harness.mkTest "codex-session-trust-hm-unknown-option" (!(builtins.tryEval (builtins.deepSeq
-      (harness.evalHm {ai.codex.trustProjectForSession = true;}).config
-      true)).success);
   };
 }

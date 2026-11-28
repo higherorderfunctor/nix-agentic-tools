@@ -1,6 +1,6 @@
-# The release selector against a manifest shaped like Kiro's real one, which
-# lists zip, tar.zst and rpm siblings and musl tarballs beside each glibc
-# tarball. Expected URLs are written by hand from the manifest's download paths.
+# The fixture keeps a Darwin ZIP, a Linux tar.zst, and a musl tarball as
+# alternatives to the selected tarballs. Expected URLs are written by hand
+# from the manifest's download paths.
 {pkgs, ...}: let
   release = import ../lib/release.nix;
   select = release.mkSelectRelease pkgs;
@@ -12,16 +12,17 @@ in {
     shopt -s inherit_errexit 2>/dev/null || :
     jq=${pkgs.jq}/bin/jq
 
-    # Picks the glibc tarball over the musl, zip, tar.zst and rpm entries that
-    # share its os and architecture; a selector on fileType alone, or on
-    # os/architecture, would pick several.
+    # The Linux musl tarball shares the selected archive's file type, and
+    # the tar.zst shares its target triple. Neither field alone is enough.
     ${select} ${fixtures}/manifest.json > selected.json
-    [ "$("$jq" -r '.version' selected.json)" = 3.1.0 ]
-    [ "$("$jq" -r '.urls."x86_64-linux"' selected.json)" = https://desktop-release.q.us-east-1.amazonaws.com/3.1.0/kirocli-x86_64-linux.tar.gz ]
-    [ "$("$jq" -r '.urls."aarch64-darwin"' selected.json)" = https://desktop-release.q.us-east-1.amazonaws.com/3.1.0/kirocli-universal-darwin.tar.gz ]
-    [ "$("$jq" '.urls | length' selected.json)" = 2 ]
+    base=https://desktop-release.q.us-east-1.amazonaws.com
+    darwin="$base/3.1.0/kirocli-universal-darwin.tar.gz"
+    linux="$base/3.1.0/kirocli-x86_64-linux.tar.gz"
+    "$jq" -e --arg darwin "$darwin" --arg linux "$linux" '. == {
+      version: "3.1.0", urls: {"aarch64-darwin": $darwin, "x86_64-linux": $linux}
+    }' selected.json > /dev/null
 
-    # Each refusal names the Nix system, and the manifest's downloads. The
+    # Each refusal names the Nix system, the reason, and the manifest's downloads. The
     # negative manifests are the fixture with one transformation each.
     expect_refusal() {
       local name="$1" filter="$2" system="$3" reason="$4" status=0
@@ -30,7 +31,6 @@ in {
       [ "$status" != 0 ]
       grep -qF "$system" err.txt
       grep -qF "$reason" err.txt
-      grep -qF 'manifest downloads:' err.txt
       grep -qF 'kirocli-x86_64-linux-musl.tar.gz' err.txt
     }
     # Wanted entry missing.
@@ -54,17 +54,22 @@ in {
     pin() {
       "$jq" -n --arg v "$1" --arg l "$2" --arg d "$3" '{
         version: $v,
-        "x86_64-linux": {url: $l, hash: "sha256-x"},
-        "aarch64-darwin": {url: $d, hash: "sha256-y"}
+        "aarch64-darwin": {hash: "sha256-y", url: $d},
+        "x86_64-linux": {hash: "sha256-x", url: $l}
       }' > "$4"
     }
-    base=https://desktop-release.q.us-east-1.amazonaws.com
-    pin 3.1.0 $base/3.1.0/kirocli-x86_64-linux.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz same.json
-    [ "$(${decide} selected.json same.json)" = skip ]
-    pin 3.1.0 $base/3.1.0/kirocli-x86_64-linux-old.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz renamed.json
-    [ "$(${decide} selected.json renamed.json)" = update ]
-    pin 3.0.0 $base/3.1.0/kirocli-x86_64-linux.tar.gz $base/3.1.0/kirocli-universal-darwin.tar.gz bumped.json
-    [ "$(${decide} selected.json bumped.json)" = update ]
+    expect_decision() {
+      local regression="$1" expected="$2" version="$3" linux_url="$4" observed
+      pin "$version" "$linux_url" "$darwin" pin.json
+      observed="$(${decide} selected.json pin.json)"
+      if [ "$observed" != "$expected" ]; then
+        printf 'FAIL: %s: expected %s, got %s\n' "$regression" "$expected" "$observed" >&2
+        return 1
+      fi
+    }
+    expect_decision 'equal version and URLs do not trigger an update' skip 3.1.0 "$linux"
+    expect_decision 'a changed URL triggers a same-version update' update 3.1.0 "$base/3.1.0/kirocli-x86_64-linux-old.tar.gz"
+    expect_decision 'a changed version triggers an update even at equal URLs' update 3.0.0 "$linux"
 
     touch "$out"
   '';

@@ -6,168 +6,25 @@
   ...
 }: let
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
-  agent = import ../../lib/ai/agent.nix {inherit lib;};
-  inherit (harness) evalDevenv evalHm;
+  inherit (harness) checkRows evalDevenv evalHm rejectsChange;
   aiTypes = import ../../lib/ai/types.nix {inherit lib;};
+  agent = import ../../lib/ai/agent.nix {inherit lib;};
   source = builtins.toFile "text-source-options-source" "packaged prose\n";
 
-  baseModule = entryType: {
-    options = {
-      entries = lib.mkOption {
-        type = lib.types.attrsOf entryType;
-        default = {};
-      };
-      required = lib.mkOption {
-        type = aiTypes.textSource {description = "required prose";};
-        default = {};
-      };
-    };
-  };
-  evaluateWith = entryType: modules:
-    lib.evalModules {
-      modules = [(baseModule entryType)] ++ modules;
-    };
-  evaluate = evaluateWith (aiTypes.optionalTextSource {description = "entry prose";});
+  evaluate = type: default: modules:
+    lib.evalModules {modules = [{options.value = lib.mkOption {inherit type default;};}] ++ modules;};
+  optionalType = args: aiTypes.optionalTextSource ({description = "entry prose";} // args);
+  requiredType = args: aiTypes.textSource ({description = "required prose";} // args);
 
-  bareStringInstructions = lib.evalModules {
-    modules = [
-      {
-        options.agent = lib.mkOption {
-          type = agent.semanticAgentType;
-        };
-        config.agent = {
-          description = "Bare-string rejection probe";
-          instructions = "untyped instructions";
-        };
-      }
-    ];
-  };
-  bareStringInstructionsFailed = !(builtins.tryEval (builtins.deepSeq bareStringInstructions.config.agent true)).success;
-  defaultContentType = aiTypes.optionalTextSource {
-    defaultContent.text = "package prose";
-    description = "defaulted prose";
-  };
-  evaluateDefaultContent = modules:
-    lib.evalModules {
-      modules =
-        [
-          {
-            options.value = lib.mkOption {
-              type = defaultContentType;
-              default = {};
-            };
-          }
-        ]
-        ++ modules;
-    };
-  defaultContentUnset = evaluateDefaultContent [];
-  defaultContentEnabled = evaluateDefaultContent [{value.enable = true;}];
-  defaultContentSource = evaluateDefaultContent [{value.source = source;}];
-  requiredDefaultContent =
-    (lib.evalModules {
-      modules = [
-        {
-          options.value = lib.mkOption {
-            type = aiTypes.textSource {
-              defaultContent.text = "required package prose";
-              description = "required defaulted prose";
-            };
-            default = {};
-          };
-        }
-      ];
-    }).config.value;
-
-  forcedSource = evaluate [
-    {
-      entries.example = {
-        source = lib.mkForce source;
-        text = "consumer prose";
-      };
-    }
-  ];
-  defaultText = evaluate [
-    {
-      entries.example = {
-        inherit source;
-        text = lib.mkDefault "default prose";
-      };
-    }
-  ];
-  packageSource = evaluate [
-    {entries.example.source = lib.mkDefault source;}
-  ];
-  packageSourceEnabledByDefault = evaluateWith (aiTypes.optionalTextSource {
-    description = "entry prose";
-    enableDefault = true;
-  }) [{entries.example.source = lib.mkDefault source;}];
-  enabledEmpty = evaluate [{entries.example.enable = true;}];
-  enabledEmptyFailed = !(builtins.tryEval (builtins.deepSeq enabledEmpty.config.entries.example true)).success;
-  requiredEmpty = evaluate [];
-  requiredEmptyFailed = !(builtins.tryEval (builtins.deepSeq requiredEmpty.config.required true)).success;
-  emptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
-    defaultContent.source = source;
-    description = "entry prose";
-    enableDefault = true;
-  }) [{entries.example.text = "";}];
-  emptyOverridesDefaultSourceFailed = !(builtins.tryEval (builtins.deepSeq emptyOverridesDefaultSource.config.entries.example true)).success;
-  disabledEmptyOverridesDefaultSource = evaluateWith (aiTypes.optionalTextSource {
-    defaultContent.source = source;
-    description = "entry prose";
-  }) [{entries.example.text = "";}];
-  samePriority = evaluate [
-    {
-      entries.example = {
-        inherit source;
-        text = "authored prose";
-      };
-    }
-  ];
-  consumerText = evaluate [
-    {entries.example.source = lib.mkDefault source;}
-    {entries.example.text = "consumer prose";}
-  ];
-  consumerTextDisabled = evaluate [
-    {
-      entries.example = {
-        enable = false;
-        text = "consumer prose";
-      };
-    }
-  ];
-  consumerSourceNull = evaluate [
-    {entries.example.source = lib.mkDefault source;}
-    {entries.example.source = null;}
-  ];
-  newConsumerText = evaluate [{entries.new.text = "new consumer prose";}];
-  sameDefaultPriority = evaluate [
-    {
-      entries.example = {
-        source = lib.mkDefault source;
-        text = lib.mkDefault "authored prose";
-      };
-    }
-  ];
-  sameDefaultPriorityFailed = !(builtins.tryEval (builtins.deepSeq sameDefaultPriority.config.entries true)).success;
-  samePriorityFailed = !(builtins.tryEval (builtins.deepSeq samePriority.config.entries true)).success;
-  unset = evaluate [{entries.example = {};}];
-
-  # `enableOnMkDefault`: a record with no package prose treats content at
-  # `mkDefault` as content. Without the flag the same definition stays dormant
-  # (pinned by package-source-does-not-change-enable-default-false).
-  evaluateEnableOnMkDefault = evaluateWith (aiTypes.optionalTextSource {
-    description = "entry prose";
-    enableOnMkDefault = true;
-  });
-  mkDefaultText = evaluateEnableOnMkDefault [{entries.example.text = lib.mkDefault "default prose";}];
-  mkDefaultSource = evaluateEnableOnMkDefault [{entries.example.source = lib.mkDefault source;}];
-  mkDefaultEmpty = evaluateEnableOnMkDefault [{entries.example.text = lib.mkDefault "";}];
-  enableOnMkDefaultWithDefaultContentFailed =
-    !(builtins.tryEval (aiTypes.optionalTextSource {
-      defaultContent.text = "package prose";
-      description = "contradictory prose";
-      enableOnMkDefault = true;
-    })).success;
+  # Exercise records inside the keyed pool as well as standalone declarations.
+  evaluateEntries = args: definitions:
+    (evaluate (lib.types.attrsOf (optionalType args)) {}
+      (map (value: {inherit value;}) definitions)).config.value;
+  readEntry = args: definitions:
+    (evaluateEntries args (map (example: {inherit example;}) definitions)).example;
+  readText = args: definitions: (readEntry args definitions).text;
+  readValue = type: fields: (evaluate type {} [{value = fields;}]).config.value;
+  hasState = value: enable: text: {inherit (value) enable text;} == {inherit enable text;};
 
   invalidTextSourceDefaults = path: declarations:
     lib.concatLists (lib.mapAttrsToList (name: declaration: let
@@ -193,86 +50,150 @@
     if invalid == []
     then true
     else throw "text-source options must install package defaults with defaultContent, not a non-empty outer mkOption default: ${lib.concatMapStringsSep ", " lib.showOption invalid}";
-  badDeclaration = type:
-    lib.evalModules {
-      modules = [
-        {
-          options.value = lib.mkOption {
-            inherit type;
-            default = {text = "bad outer default";};
+  defaultProse = optionalType {defaultContent.text = "package prose";};
+in {
+  checks = {
+    factory-text-source-options-content = mkTest "text-source-options-content" (
+      let
+        defaultSource = {source = lib.mkDefault source;};
+      in
+        checkRows "effective text source content" {
+          "a null source cancels the default source without enabling" =
+            hasState (readEntry {} [defaultSource {source = null;}]) false "";
+          "a package source derives text without enabling" =
+            hasState (readEntry {} [defaultSource]) false "packaged prose\n";
+          "consumer text beats the default source and enables" =
+            hasState (readEntry {} [defaultSource {text = "consumer prose";}]) true "consumer prose";
+          "empty default-priority text does not enable even with enableOnMkDefault" =
+            !(readEntry {enableOnMkDefault = true;} [{text = lib.mkDefault "";}]).enable;
+          "explicit empty text beats the package source without enabling" =
+            hasState (readEntry {defaultContent.source = source;} [{text = "";}]) false "";
+          "explicit enable does not discard inline package defaults" =
+            hasState (readValue defaultProse {enable = true;}) true "package prose";
+          "forced source beats consumer text" =
+            readText {} [
+              {
+                source = lib.mkForce source;
+                text = "consumer prose";
+              }
+            ]
+            == "packaged prose\n";
+          "package prose alone does not enable" = hasState (readValue defaultProse {}) false "package prose";
+          "required record cannot expose an enable switch" = !((requiredType {}).getSubOptions [] ? enable);
+          "required record does not discard inline package defaults" =
+            (readValue (requiredType {defaultContent.text = "required package prose";}) {}).text == "required package prose";
+          # Without enableOnMkDefault, the same default-priority source stays
+          # dormant (the package-source row above).
+          "source at default priority is not ignored by enableOnMkDefault" =
+            (readEntry {enableOnMkDefault = true;} [defaultSource]).enable;
+          "text at default priority is not ignored by enableOnMkDefault" =
+            (readEntry {enableOnMkDefault = true;} [{text = lib.mkDefault "default prose";}]).enable;
+        }
+    );
+
+    factory-text-source-options-outer-defaults = mkTest "text-source-options-outer-defaults" (
+      let
+        # The repository gate must reject this declaration, and its scanner
+        # must report exactly the offending option path.
+        reportsOuterDefault = eval: path: let
+          invalid = eval {text = "bad outer default";};
+        in
+          invalidTextSourceDefaults [] invalid.options
+          == [path]
+          && rejectsChange checkTextSourceDefaults {
+            inherit invalid;
+            expected = true;
+            valid = eval {};
+          };
+        reportsDirect = type: reportsOuterDefault (default: evaluate type default []) ["value"];
+        # A nonempty pool default is legal; the guard must still descend to the
+        # text-source declaration inside each pooled record.
+        nestedDefault = default:
+          evaluate (lib.types.attrsOf (lib.types.submodule {
+            options.prose = lib.mkOption {
+              inherit default;
+              type = defaultProse;
+            };
+          })) {example = {};} [];
+      in
+        checkRows "outer text source defaults" {
+          "reports nonempty outer defaults even after extending the text-source submodule" =
+            reportsDirect (aiTypes.extendSubmodule (optionalType {}) {options.extra = lib.mkOption {type = lib.types.bool;};});
+          "reports the nested declaration, not the nonempty pool default" = reportsOuterDefault nestedDefault ["value" "prose"];
+          "reports nonempty outer defaults even on a required declaration with no enable field" = reportsDirect (requiredType {});
+        }
+    );
+
+    factory-text-source-options-restrictions = mkTest "text-source-options-restrictions" (
+      let
+        # Force only the field whose merge enforces the named restriction.
+        # If bare strings become legal, return them instead of failing on .text.
+        readInstructions = instructions: let
+          observed =
+            (readValue agent.semanticAgentType {
+              inherit instructions;
+              description = "Instruction shape probe";
+            }).instructions;
+        in
+          if builtins.isAttrs observed
+          then observed.text
+          else observed;
+      in
+        checkRows "text source restrictions" {
+          "agent instructions require a record, not a bare string" = rejectsChange readInstructions {
+            expected = "typed instructions";
+            invalid = "typed instructions";
+            valid.text = "typed instructions";
+          };
+          "an enabled record rejects empty inline text that overrides its package source" =
+            rejectsChange (readText {
+              defaultContent.source = source;
+              enableDefault = true;
+            }) {
+              expected = "consumer prose";
+              invalid = [{text = "";}];
+              valid = [{text = "consumer prose";}];
+            };
+          "enableOnMkDefault cannot be declared with defaultContent" = rejectsChange (enableOnMkDefault:
+            (readValue (optionalType {
+              inherit enableOnMkDefault;
+              defaultContent.text = "package prose";
+            }) {}).text) {
+            expected = "package prose";
+            invalid = true;
+            valid = false;
+          };
+          "required records require nonempty content" = rejectsChange (fields: (readValue (requiredType {}) fields).text) {
+            expected = "required prose";
+            invalid = {};
+            valid.text = "required prose";
+          };
+          # Keep the original tie at mkDefault; restricting conflict detection
+          # to ordinary consumer priority would let this pair through.
+          "source and text at equal default priority conflict" = rejectsChange (readText {}) {
+            expected = "packaged prose\n";
+            invalid = [
+              {
+                source = lib.mkDefault source;
+                text = lib.mkDefault "authored prose";
+              }
+            ];
+            valid = [{source = lib.mkDefault source;}];
           };
         }
-      ];
-    };
-  badDirect = badDeclaration (aiTypes.optionalTextSource {
-    defaultContent.text = "package prose";
-    description = "bad direct declaration";
-  });
-  badRequired = badDeclaration (aiTypes.textSource {description = "bad required declaration";});
-  badExtended = badDeclaration (aiTypes.extendSubmodule
-    (aiTypes.optionalTextSource {description = "bad extended declaration";})
-    {options.extra = lib.mkOption {type = lib.types.bool;};});
-  badReimported = badDeclaration (lib.types.submodule {
-    imports = (aiTypes.optionalTextSource {description = "bad reimported declaration";}).getSubModules;
-  });
-  badDirectRejected = !(builtins.tryEval (checkTextSourceDefaults badDirect)).success;
-  badRequiredRejected = !(builtins.tryEval (checkTextSourceDefaults badRequired)).success;
-  badExtendedRejected = !(builtins.tryEval (checkTextSourceDefaults badExtended)).success;
-  badReimportedRejected = !(builtins.tryEval (checkTextSourceDefaults badReimported)).success;
+    );
 
-  # This repository guard covers direct text-source submodule declarations
-  # reachable through the aggregate Home Manager and devenv harness imports,
-  # including submodules nested below container options. It deliberately does
-  # not reject defaults on a wrapping type itself (such as attrsOf or nullOr),
-  # because pool-level container defaults are valid. It also cannot inspect
-  # downstream consumers or custom module sets that the harnesses do not import.
-  realDeclarationsAccepted =
-    checkTextSourceDefaults (evalHm {})
-    && checkTextSourceDefaults (evalDevenv {});
-
-  tests = {
-    bare-string-instructions-rejected = bareStringInstructionsFailed;
-    consumer-source-null-keeps-text-empty = consumerSourceNull.config.entries.example.text == "";
-    consumer-source-null-remains-disabled = !consumerSourceNull.config.entries.example.enable;
-    consumer-text-auto-enables-entry = consumerText.config.entries.example.enable;
-    consumer-text-overrides-package-source = consumerText.config.entries.example.text == "consumer prose";
-    default-content-enable-enables = defaultContentEnabled.config.value.enable;
-    default-content-enable-preserves-prose = defaultContentEnabled.config.value.text == "package prose";
-    default-content-source-overrides-prose = defaultContentSource.config.value.text == "packaged prose\n";
-    default-content-unset-preserves-prose = defaultContentUnset.config.value.text == "package prose";
-    default-content-unset-remains-disabled = !defaultContentUnset.config.value.enable;
-    default-text-yields-to-source = defaultText.config.entries.example.text == "packaged prose\n";
-    disabled-empty-default-source-keeps-text-empty = disabledEmptyOverridesDefaultSource.config.entries.example.text == "";
-    disabled-empty-default-source-remains-disabled = !disabledEmptyOverridesDefaultSource.config.entries.example.enable;
-    disabled-text-source-preserves-content = consumerTextDisabled.config.entries.example.text == "consumer prose";
-    empty-override-of-default-source-rejected = emptyOverridesDefaultSourceFailed;
-    enable-on-default-priority-empty-remains-disabled = !mkDefaultEmpty.config.entries.example.enable;
-    enable-on-default-priority-source-enables = mkDefaultSource.config.entries.example.enable;
-    enable-on-default-priority-text-enables = mkDefaultText.config.entries.example.enable;
-    enable-on-default-priority-with-default-content-rejected = enableOnMkDefaultWithDefaultContentFailed;
-    enabled-empty-optional-source-rejected = enabledEmptyFailed;
-    explicit-disable-overrides-auto-enable = !consumerTextDisabled.config.entries.example.enable;
-    forced-source-overrides-text = forcedSource.config.entries.example.text == "packaged prose\n";
-    new-consumer-text-auto-enables = newConsumerText.config.entries.new.enable;
-    outer-default-direct-rejected = badDirectRejected;
-    outer-default-extended-rejected = badExtendedRejected;
-    outer-default-reimported-rejected = badReimportedRejected;
-    outer-default-required-rejected = badRequiredRejected;
-    package-source-derives-text = packageSource.config.entries.example.text == "packaged prose\n";
-    package-source-does-not-change-enable-default-false = !packageSource.config.entries.example.enable;
-    package-source-does-not-change-enable-default-true = packageSourceEnabledByDefault.config.entries.example.enable;
-    real-declarations-accepted = realDeclarationsAccepted;
-    required-default-content-installed = requiredDefaultContent.text == "required package prose";
-    required-empty-source-rejected = requiredEmptyFailed;
-    same-default-priority-rejected = sameDefaultPriorityFailed;
-    same-priority-rejected = samePriorityFailed;
-    text-source-has-no-enable-option = !(builtins.hasAttr "enable" (unset.options.required.type.getSubOptions []));
-    unset-entry-remains-disabled = !unset.config.entries.example.enable;
-    unset-text-remains-empty = unset.config.entries.example.text == "";
+    # This repository guard covers direct text-source submodule declarations
+    # reachable through the aggregate Home Manager and devenv harness imports,
+    # including submodules nested below container options. It deliberately does
+    # not reject defaults on a wrapping type itself (such as attrsOf or nullOr),
+    # because pool-level container defaults are valid. It also cannot inspect
+    # downstream consumers or custom module sets that the harnesses do not import.
+    factory-text-source-options-real-declarations-accepted = mkTest "text-source-options-real-declarations-accepted" (
+      checkRows "real text source declarations" {
+        "devenv declarations do not put package prose in outer defaults" = checkTextSourceDefaults (evalDevenv {});
+        "Home Manager declarations do not put package prose in outer defaults" = checkTextSourceDefaults (evalHm {});
+      }
+    );
   };
-in {
-  checks = lib.mapAttrs' (name: condition:
-    lib.nameValuePair "factory-text-source-options-${name}"
-    (mkTest "text-source-options-${name}" condition))
-  tests;
 }

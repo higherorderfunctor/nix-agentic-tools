@@ -27,12 +27,9 @@
 # The second direction is the one a plain "does it still find bugs?" test would
 # miss, and it is the one that turns three files of prose into a lie.
 #
-# Two negative controls are included for the reason
-# checks/markdown/doubled-words-fixtures.nix gives: without them, "both defect fixtures
-# hit" is equally consistent with a linter that flags every table. `clean`
-# proves a well-formed table passes; `escaped-pipe-in-code-span` proves the
-# REMEDY this repo documents still works — if that one starts hitting, the fix
-# in the fragment has stopped being a fix.
+# Each defect is the other linter's negative control. The generated-files
+# check covers a plain valid table; guards-consumer covers the documented
+# escaped-pipe remedy through the combined gate.
 #
 # The fixtures are `*.md.fixture`, NOT `*.md`, and that is load-bearing twice:
 # `checks/markdown/markdown-scan.nix` walks every tracked `.md`, and the
@@ -75,61 +72,60 @@
         exit 1
       }
 
-      # Returns 0 when the tool reports a finding, 1 when it is silent. Both
-      # exit non-zero on a hit, so this inverts into a readable predicate.
-      hits() {
-        local tool="$1" file="$2"
-        case "$tool" in
-          rumdl)
-            if ${pkgs.lib.getExe rumdlTables} "$file" >/dev/null 2>&1
-            then return 1; else return 0; fi ;;
-          markdownlint)
-            if ${pkgs.lib.getExe markdownlintTables} "$file" >/dev/null 2>&1
-            then return 1; else return 0; fi ;;
-          *) fail "unknown tool '$tool'" ;;
-        esac
+      # Match a rule diagnostic for the requested file, not a summary count.
+      # rumdl 0.3.7 prints `file:line:column: [MD056]` on stdout;
+      # markdownlint-tables.mjs prints `file:line MD056` on stderr. Both put
+      # the path and rule on one line: a layout change needs a matcher update.
+      reports_md056() {
+        local file="$1"
+        shift
+        ${pkgs.gnugrep}/bin/grep -wF MD056 "$@" | ${pkgs.gnugrep}/bin/grep -F -- "$file" >/dev/null
       }
 
-      # Copying each fixture to a plain `.md` under $TMPDIR gives both tools
-      # the extension they expect. It is a copy, so the tracked fixture keeps
-      # its `.md.fixture` name.
+      # A nonzero exit alone could be a crash or another rule, not MD056.
+      check_linter() {
+        local name="$1" tool="$2" want="$3" program="$4" rc=0 got=silent
+        "$program" "$name.md" >linter.log 2>&1 || rc=$?
+        if reports_md056 "$name.md" linter.log; then
+          got=MD056
+        elif ${pkgs.gnugrep}/bin/grep -qwF MD056 linter.log; then
+          got=unattributed-MD056
+        fi
+
+        local want_rc=0
+        if [ "$want" = MD056 ]; then want_rc=1; fi
+        if [ "$rc" -ne "$want_rc" ] || [ "$got" != "$want" ]; then
+          ${pkgs.coreutils}/bin/cat linter.log >&2
+          fail "$name: $tool expected $want (exit $want_rc), got $got (exit $rc)"
+        fi
+      }
+
+      # Copy each fixture once with the `.md` extension the tools expect,
+      # leaving the tracked `.md.fixture` outside the corpus and formatter.
       check() {
         local name="$1" wantRumdl="$2" wantMdl="$3"
-        # --no-preserve=mode: store files are read-only, and without this the
-        # SECOND copy cannot overwrite the first and the suite dies half-run.
-        ${pkgs.coreutils}/bin/cp --no-preserve=mode,ownership \
-          "${fixtures}/$name.md.fixture" "$TMPDIR/case.md"
-
-        if hits rumdl "$TMPDIR/case.md"; then gotRumdl=hit; else gotRumdl=silent; fi
-        if hits markdownlint "$TMPDIR/case.md"; then gotMdl=hit; else gotMdl=silent; fi
-
-        [ "$gotRumdl" = "$wantRumdl" ] \
-          || fail "$name: rumdl expected $wantRumdl, got $gotRumdl"
-        [ "$gotMdl" = "$wantMdl" ] \
-          || fail "$name: markdownlint expected $wantMdl, got $gotMdl"
-
-        echo "ok — $name: rumdl=$gotRumdl markdownlint=$gotMdl"
+        ${pkgs.coreutils}/bin/cp "${fixtures}/$name.md.fixture" "$name.md"
+        check_linter "$name" rumdl "$wantRumdl" ${pkgs.lib.getExe rumdlTables}
+        check_linter "$name" markdownlint "$wantMdl" ${pkgs.lib.getExe markdownlintTables}
+        echo "ok — $name: rumdl=$wantRumdl markdownlint=$wantMdl"
       }
 
       #      fixture                              rumdl    markdownlint
-      check break-header-delimiter-disagree       hit      silent
-      check cause-excess-body-cell                silent   hit
-      check clean                                 silent   silent
-      check escaped-pipe-in-code-span             silent   silent
+      check break-header-delimiter-disagree       MD056    silent
+      check cause-excess-body-cell                silent   MD056
 
-      # The script itself, as the hook runs it: a finding exits 1 (not 127
-      # from a diagnostic that dies half-printed) and the diagnostic reaches
-      # its worked example. Not `fail`: this is not a disjointness failure.
-      ${pkgs.coreutils}/bin/cp --no-preserve=mode,ownership \
-        "${fixtures}/cause-excess-body-cell.md.fixture" "$TMPDIR/case.md"
-      rc=0
-      ${pkgs.lib.getExe tableCells.package} "$TMPDIR/case.md" >/dev/null 2>"$TMPDIR/err" || rc=$?
-      if [ "$rc" -ne 1 ] || ! ${pkgs.gnugrep}/bin/grep -q -F 'fixed:   | id |' "$TMPDIR/err"; then
-        echo "FAIL: markdown-table-cells exited $rc on a broken table (expected 1) or did not print its worked example:" >&2
-        ${pkgs.coreutils}/bin/cat "$TMPDIR/err" >&2
+      # guards-consumer checks exit 1 and the body-cell finding in a mixed
+      # batch. Pin the header diagnostic here: a missing file can also yield
+      # exit 1 and a worked example, and a truncated diagnostic can leave no
+      # usable fix. Require the worked example on stderr.
+      ${pkgs.lib.getExe tableCells.package} break-header-delimiter-disagree.md cause-excess-body-cell.md >gate.stdout 2>gate.stderr || :
+      if ! reports_md056 break-header-delimiter-disagree.md gate.stdout gate.stderr ||
+        ! ${pkgs.gnugrep}/bin/grep -q -F 'fixed:   | id |' gate.stderr; then
+        echo "FAIL: markdown-table-cells expected MD056 for the broken header and a worked example on stderr:" >&2
+        ${pkgs.coreutils}/bin/cat gate.stdout gate.stderr >&2
         exit 1
       fi
-      echo "ok — markdown-table-cells exits 1 and prints the worked example"
+      echo "ok — markdown-table-cells reports the broken header and prints the worked example"
 
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${pkgs.coreutils}/bin/touch "$out/ok"

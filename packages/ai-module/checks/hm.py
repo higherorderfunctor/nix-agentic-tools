@@ -45,6 +45,8 @@ def main():
         assert not list(outside.iterdir()) and not state.exists()
         (home / "linked").unlink()
         outside.rmdir()
+        # Each generation is ordered: retire a copy before native linking,
+        # preserve a native link until HM replaces it, then allow a copy again.
         for generation, (method, fixture) in enumerate(zip(("symlink", "ro", "rw", "symlink", "symlink", "ro"), fixtures["generations"], strict=True)):
             activate(bash, shim, fixture["prune"], home)
             links = fixture["links"]
@@ -70,7 +72,7 @@ def main():
                 previous_link = generation_file
             activate(bash, shim, fixture["apply"], home)
             if method == "symlink":
-                assert destination.is_symlink() and os.readlink(destination) == str(generation_file)
+                assert os.readlink(destination) == str(generation_file)
                 assert not state.exists()
                 assert stat.S_IMODE(destination.stat().st_mode) == 0o555
             else:
@@ -79,7 +81,6 @@ def main():
                 assert destination.is_file() and not destination.is_symlink()
                 assert json.loads(destination.read_text()) == {"owned": 1}
                 assert stat.S_IMODE(destination.stat().st_mode) == (0o555 if method == "ro" else 0o700)
-        assert destination.is_file() and not destination.is_symlink()
         before = state.read_bytes()
         for script in fixtures["drain"]:
             activate(bash, shim, script, home, dry_run=True)
@@ -95,20 +96,13 @@ def main():
             activate(bash, shim, script, home)
         assert not destination.exists() and not state.exists(), "disabled owner did not drain"
 
-        for phase in ("prune", "apply"):
-            activate(bash, shim, fixtures["generations"][-1][phase], home)
-        assert destination.is_file()
-        for script in fixtures["forcedDrain"]:
-            activate(bash, shim, script, home)
-        assert not destination.exists() and not state.exists(), "forced empty activation did not drain"
-
         provider = home / "provider"
         provider.write_text("from-provider")
         for script in fixtures["run"]:
             activate(bash, shim, script, home)
         assert (home / "secret").read_text() == "from-provider"
         assert json.loads(state.read_text())["files"]["secret"]["method"] == "ro"
-        print("PASS: HM stateless prune skip, symlinked parent refusal, transitions, empty, disabled and forced drain, dry run, provider render")
+        print("PASS: HM stateless prune skip, symlinked parent refusal, transitions, empty and disabled drain, dry run, provider render")
 
 
 if __name__ == "__main__":

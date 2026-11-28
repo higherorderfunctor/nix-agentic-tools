@@ -22,6 +22,8 @@
 
   mkSource = name: script:
     pkgs.runCommandLocal "claude-plugin-fixture-${name}" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       mkdir -p "$out"
       cd "$out"
       ${script}
@@ -66,8 +68,6 @@ in {
 
       # linked <entry> <src> <relpath>: one symlink pointing at the source's path.
       linked() { [[ -L $1/$3 && "$(readlink "$1/$3")" == "$2/$3" ]]; }
-      # named <manifest> <name>: the manifest's `name` field.
-      named() { jq -e --arg n "$2" '.name == $n' "$1" >/dev/null; }
       # synthesized <entry> <key>: a regular manifest carrying only the key.
       synthesized() {
         [[ -d $1/.claude-plugin && ! -L $1/.claude-plugin ]] \
@@ -75,20 +75,16 @@ in {
           && jq -e --arg n "$2" '. == {name: $n}' "$1/.claude-plugin/plugin.json" >/dev/null
       }
 
-      check "bare: manifest synthesized as {name = key}" synthesized "$bareEntry" bare-key
-      check "bare: agents/ is one link into the source" linked "$bareEntry" "$bareSrc" agents
-      check "bare: commands/ is one link into the source" linked "$bareEntry" "$bareSrc" commands
-      check "bare: root dotfile is linked" linked "$bareEntry" "$bareSrc" .hidden
+      check "bare: missing manifest is synthesized as {name = key}" synthesized "$bareEntry" bare-key
+      check "bare: agents/ flattened to per-file links" linked "$bareEntry" "$bareSrc" agents
+      check "bare: root dotfile skipped" linked "$bareEntry" "$bareSrc" .hidden
 
-      check "partial: manifest synthesized beside existing contents" synthesized "$partialEntry" partial-key
-      check "partial: existing .claude-plugin content stays a link" linked "$partialEntry" "$partialSrc" .claude-plugin/marketplace.json
-      check "partial: agents/ is one link into the source" linked "$partialEntry" "$partialSrc" agents
+      check "partial: an existing directory does not suppress synthesis" synthesized "$partialEntry" partial-key
+      check "partial: synthesis does not discard existing metadata" linked "$partialEntry" "$partialSrc" .claude-plugin/marketplace.json
 
-      check "owned: .claude-plugin/ is the source's own directory" linked "$ownedEntry" "$ownedSrc" .claude-plugin
-      check "owned: manifest resolves to the source's file" \
-        test "$(readlink -f "$ownedEntry/.claude-plugin/plugin.json")" = "$(readlink -f "$ownedSrc/.claude-plugin/plugin.json")"
-      check "owned: manifest content is not synthesized" \
-        named "$ownedEntry/.claude-plugin/plugin.json" upstream-name
+      # A direct directory link to the immutable source preserves its manifest
+      # and identity; there is no separate output file whose name can diverge.
+      check "owned: upstream manifest directory replaced" linked "$ownedEntry" "$ownedSrc" .claude-plugin
 
       if ((fail)); then exit 1; fi
       touch "$out"

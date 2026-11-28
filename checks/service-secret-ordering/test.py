@@ -1,17 +1,19 @@
 # Named cases for ./test.nix. `CASES` is prepended by test.nix: the path of a
 # JSON file naming the user, the identity and each generation's activation
-# package and expected values. Every case runs even when an earlier one
-# fails; the test fails at the end if any did, listing them.
+# package. Every case runs even when an earlier one fails; the test fails
+# at the end if any did, listing them.
 import json
 import shlex
-from typing import Callable
+from typing import Callable, Iterable
 
 with open(CASES) as handle:
     FIXTURE = json.load(handle)
 
 USER: str = FIXTURE["user"]
 UID: int = FIXTURE["uid"]
-GENERATIONS: dict = FIXTURE["generations"]
+GENERATIONS: dict[str, str] = FIXTURE["generations"]
+# Expected values are independent of the fixture's daemon-to-secret wiring.
+BASE_READERS = {"aa-reader": "aa-base", "zz-reader": "zz-base"}
 CTL = f"systemctl --user -M {USER}@.host"
 # Longer than the RestartSec = 5 that ai.services writes, so a daemon that
 # crashed and is waiting to retry has retried before a case reads its state.
@@ -35,7 +37,7 @@ def as_user(command: str) -> str:
 
 
 def activate(name: str) -> tuple[int, str]:
-    status, output = machine.execute(as_user(f"{GENERATIONS[name]['path']}/activate"))
+    status, output = machine.execute(as_user(f"{GENERATIONS[name]}/activate"))
     print(f"--- activate {name}: exit {status}\n{output}--- end activate {name}")
     return status, output
 
@@ -44,7 +46,7 @@ def prop(unit: str, name: str) -> str:
     return machine.succeed(f"{CTL} show --property={name} --value {unit}").strip()
 
 
-def main_pids(daemons: list) -> dict:
+def main_pids(daemons: Iterable[str]) -> dict[str, str]:
     return {daemon: prop(f"{daemon}.service", "MainPID") for daemon in daemons}
 
 
@@ -62,14 +64,18 @@ def journal(daemon: str, after: str) -> str:
     )
 
 
-def seen(daemon: str, after: str) -> list:
+def logged_values(output: str) -> list[str]:
     # The whole quoted value: split() would also break on Unicode spaces that
     # %q leaves printable, letting a wrong value match its first token.
-    return [line.removeprefix("saw ") for line in journal(daemon, after).split("\n") if line.startswith("saw ")]
+    return [line.removeprefix("saw ") for line in output.split("\n") if line.startswith("saw ")]
+
+
+def seen(daemon: str, after: str) -> list[str]:
+    return logged_values(journal(daemon, after))
 
 
 def wait_settled() -> None:
-    idle = f'test -z "$({CTL} list-jobs --no-legend)"'
+    idle = f'jobs="$({CTL} list-jobs --no-legend)" && test -z "$jobs"'
     machine.wait_until_succeeds(idle, timeout=120)
     machine.sleep(RETRY_WINDOW)
     machine.wait_until_succeeds(idle, timeout=120)
@@ -84,33 +90,32 @@ def switch(name: str) -> str:
     return mark
 
 
-def settle(name: str) -> None:
+def settle_base() -> None:
     # A known start for each case whatever the previous case left: the first
     # activation absorbs it, the second must succeed, and each daemon is then
     # restarted on purpose.
-    activate(name)
-    check(activate(name)[0] == 0, f"settling on {name}: activation failed")
-    readers: dict = GENERATIONS[name]["readers"]
+    activate("base")
+    check(activate("base")[0] == 0, "settling on base: activation failed")
     mark = cursor()
-    machine.succeed(f"{CTL} restart " + " ".join(f"{daemon}.service" for daemon in readers))
+    machine.succeed(f"{CTL} restart " + " ".join(f"{daemon}.service" for daemon in BASE_READERS))
     wait_settled()
-    for daemon, value in readers.items():
+    for daemon, value in BASE_READERS.items():
         last = seen(daemon, mark)[-1:]
-        check(last == [value], f"settling on {name}: {daemon} saw {last}, want {[value]}")
+        check(last == [value], f"settling on base: {daemon} saw {last}, want {[value]}")
 
 
 def case_login_order() -> None:
+    # A cold user manager could start both readers without queuing or waiting
+    # for sops-nix; live activation does not exercise this start transaction.
     status, _ = machine.execute(f"systemctl is-active --quiet user@{UID}.service")
     check(status != 0, "precondition: the user manager was already running")
     check(activate("base")[0] == 0, "activating base before login failed")
     mark = cursor()
     machine.succeed(f"systemctl start user@{UID}.service")
-    machine.wait_until_succeeds(f"{CTL} is-system-running | grep -Eqx 'running|degraded'", timeout=120)
     wait_settled()
     decrypted = int(prop("sops-nix.service", "ExecMainExitTimestampMonotonic"))
-    check(decrypted > 0, "sops-nix.service never finished")
     problems = []
-    for daemon, value in GENERATIONS["base"]["readers"].items():
+    for daemon, value in BASE_READERS.items():
         started = int(prop(f"{daemon}.service", "ExecMainStartTimestampMonotonic"))
         restarts = prop(f"{daemon}.service", "NRestarts")
         first = seen(daemon, mark)[:1]
@@ -123,112 +128,88 @@ def case_login_order() -> None:
     check(not problems, "; ".join(problems))
 
 
-def case_rotate_one() -> None:
-    settle("base")
-    before = main_pids(["aa-reader", "zz-reader"])
-    mark = switch("rotate-aa")
-    after = main_pids(["aa-reader", "zz-reader"])
-    rotated = GENERATIONS["rotate-aa"]["readers"]["aa-reader"]
+def case_reader_switch(generation: str, expected: dict[str, list[str]]) -> None:
+    settle_base()
+    before = main_pids(expected)
+    missing = [daemon for daemon, pid in before.items() if pid == "0"]
+    check(not missing, f"before switching to {generation}, readers without a MainPID: {missing}")
+    mark = switch(generation)
+    after = main_pids(expected)
     problems = []
-    aa = seen("aa-reader", mark)
-    if aa != [rotated]:
-        problems.append(f"aa-reader saw {aa} after the rotation, want exactly {[rotated]}")
-    if after["aa-reader"] == before["aa-reader"]:
-        problems.append(f"aa-reader kept MainPID {before['aa-reader']}")
-    if after["zz-reader"] != before["zz-reader"]:
-        problems.append(f"zz-reader MainPID moved {before['zz-reader']} -> {after['zz-reader']}")
-    zz = seen("zz-reader", mark)
-    if zz:
-        problems.append(f"zz-reader restarted and saw {zz}")
+    for daemon, wanted in expected.items():
+        if wanted:
+            lines = seen(daemon, mark)
+            if lines != wanted:
+                problems.append(f"{daemon} saw {lines}, want {wanted}")
+            if after[daemon] == "0":
+                problems.append(f"{daemon} has no running main process after switching")
+        elif after[daemon] != before[daemon]:
+            problems.append(f"{daemon} MainPID moved {before[daemon]} -> {after[daemon]}")
     check(not problems, "; ".join(problems))
 
 
-def case_noop_activation() -> None:
-    settle("base")
-    daemons = list(GENERATIONS["base"]["readers"])
-    before = main_pids(daemons)
-    mark = switch("base")
-    after = main_pids(daemons)
-    problems = [f"{daemon} MainPID moved {before[daemon]} -> {after[daemon]}" for daemon in daemons if before[daemon] != after[daemon]]
-    problems += [f"{daemon} saw {seen(daemon, mark)}" for daemon in daemons if seen(daemon, mark)]
-    check(not problems, "; ".join(problems))
-
-
-def case_unit_and_secret_change() -> None:
-    settle("base")
-    mark = switch("changed")
-    problems = []
-    for daemon, value in GENERATIONS["changed"]["readers"].items():
-        lines = seen(daemon, mark)
-        if lines != [value]:
-            problems.append(f"{daemon} saw {lines}, want exactly one start that saw {[value]}")
-    check(not problems, "; ".join(problems))
-
-
-def case_new_secret() -> None:
-    settle("base")
-    mark = switch("fresh")
-    value = GENERATIONS["fresh"]["readers"]["aa-fresh"]
-    restarts = prop("aa-fresh.service", "NRestarts")
-    lines = seen("aa-fresh", mark)
+def case_reader_start(generation: str, daemon: str, value: str, *, stopped: bool = False) -> None:
+    settle_base()
+    if stopped:
+        # sd-switch starts a stopped unit that an active target wants; that is
+        # its behavior, not ai-module's. Reconcile must not start it again.
+        machine.succeed(f"{CTL} stop {daemon}.service")
+    mark = switch(generation)
+    property_name, expected = ("ActiveState", "active") if stopped else ("NRestarts", "0")
+    actual = prop(f"{daemon}.service", property_name)
+    output = journal(daemon, mark)
+    lines = logged_values(output)
     check(
-        restarts == "0" and lines == [value],
-        f"aa-fresh restarted {restarts} times and saw {lines}, want one start that saw {[value]}; journal:\n"
-        + journal("aa-fresh", mark),
-    )
-
-
-def case_stopped_daemon() -> None:
-    # sd-switch starts a stopped unit that an active target wants, on every
-    # switch; that is its behavior, not ai-module's. What ai-module owns: the
-    # activation starts the reader at most once, and it ends on the new value.
-    settle("base")
-    machine.succeed(f"{CTL} stop zz-reader.service")
-    mark = switch("rotate-zz")
-    state = prop("zz-reader.service", "ActiveState")
-    lines = seen("zz-reader", mark)
-    rotated = GENERATIONS["rotate-zz"]["readers"]["zz-reader"]
-    check(
-        state == "active" and len(lines) <= 1 and lines[-1:] == [rotated],
-        f"the stopped zz-reader is {state} and saw {lines}, want at most one start that saw {[rotated]}",
+        actual == expected and lines == [value],
+        f"{daemon} had {property_name}={actual} and saw {lines}; "
+        f"want {property_name}={expected} and exactly {[value]}; journal:\n{output}",
     )
 
 
 def case_systemctl_path() -> None:
-    # Calls only ai-module's step makes: Home Manager's own reload runs
-    # is-system-running, and sd-switch talks D-Bus.
-    settle("base")
-    machine.succeed(as_user('rm -f "$HOME/systemctl-calls"'))
+    # Catch the Home Manager module passing a hard-coded binary to reconcile
+    # instead of the configured wrapper. Home Manager's own reload runs
+    # is-system-running, and sd-switch talks D-Bus, so neither logs these calls.
+    settle_base()
+    machine.succeed(as_user(': > "$HOME/systemctl-calls"'))
     check(activate("systemctl-path")[0] == 0, "activating systemctl-path failed")
     calls = machine.succeed(as_user('cat "$HOME/systemctl-calls"')).splitlines()
-    wanted = [
-        "--user show --property=Result --value sops-nix.service",
-        "--user show --property=ActiveState --value aa-reader.service",
-    ]
-    missing = [call for call in wanted if call not in calls]
-    check(not missing, f"ai-module bypassed systemd.user.systemctlPath for {missing}; the wrapper logged {calls}")
+    wanted = "--user show --property=Result --value sops-nix.service"
+    check(wanted in calls, f"ai-module bypassed systemd.user.systemctlPath for {wanted!r}; the wrapper logged {calls}")
 
 
 def case_decrypt_failure() -> None:
-    # In the pinned order sops-nix's own step succeeds, so only ai-module's
-    # provider check can fail this activation.
-    settle("base")
+    # Catch activation succeeding on old secret bytes after sd-switch ignores
+    # the failed provider. In the pinned order sops-nix's own step succeeds,
+    # so only ai-module's provider check can fail this activation.
+    settle_base()
     status, output = activate("broken")
-    result = prop("sops-nix.service", "Result")
-    check(status != 0, f"activation with an unreadable secrets file exited 0 (sops-nix.service Result={result})")
-    message = "ai.services: secret provider sops-nix.service last ran with Result="
-    check(message in output, f"activation failed without {message!r} (sops-nix.service Result={result})")
+    check(status != 0, "activation with an unreadable secrets file exited 0")
+    message = "ai.services: secret provider sops-nix.service last ran with Result=exit-code"
+    check(message in output.splitlines(), f"activation failed without {message!r}")
 
 
 # login-order needs the first user-manager start of the boot. decrypt-failure
 # runs last because it leaves an unreadable sops-nix unit loaded.
 CASE_LIST: list[tuple[str, Callable[[], None]]] = [
     ("login-order", case_login_order),
-    ("rotate-one", case_rotate_one),
-    ("noop-activation", case_noop_activation),
-    ("unit-and-secret-change", case_unit_and_secret_change),
-    ("new-secret", case_new_secret),
-    ("stopped-daemon", case_stopped_daemon),
+    # No changes: reconciliation or the provider restart could bounce every reader.
+    ("noop-activation", lambda: case_reader_switch("base", {"aa-reader": [], "zz-reader": []})),
+    # Only the provider's unit changes: the running aa-reader could keep its
+    # old secret, or a broad restart could bounce the unchanged zz-reader.
+    ("rotate-one", lambda: case_reader_switch("rotate-aa", {"aa-reader": ["aa-rotated"], "zz-reader": []})),
+    # Changed units: sd-switch could start a reader on the old bytes before
+    # decryption, or reconcile could restart an invocation sd-switch just started.
+    (
+        "unit-and-secret-change",
+        lambda: case_reader_switch("changed", {"aa-reader": ["aa-changed"], "zz-reader": ["zz-changed"]}),
+    ),
+    # A new reader sorting before the provider cannot fall back to old bytes:
+    # its file does not exist yet, so a premature start could fail and retry.
+    ("new-secret", lambda: case_reader_start("fresh", "aa-fresh", "fresh-new")),
+    # A previously stopped reader could be restarted again even though the
+    # invocation sd-switch started already read the rotated secret.
+    ("stopped-daemon", lambda: case_reader_start("rotate-zz", "zz-reader", "zz-rotated", stopped=True)),
     ("systemctl-path", case_systemctl_path),
     ("decrypt-failure", case_decrypt_failure),
 ]

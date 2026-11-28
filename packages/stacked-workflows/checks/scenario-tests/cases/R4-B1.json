@@ -10,7 +10,7 @@
   "block_roles": ["selection", "mutator"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Restructuring after upstream advances must not stage an upstream path deletion or lose either stack change",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R4-B1",

@@ -11,8 +11,7 @@
       "method": "_kiro/workflow/list",
       "params": { "sessionId": "$SID" },
       "save": {
-        "W0": "result.runs.0.workflowId",
-        "W1": "result.runs.1.workflowId"
+        "W0": "result.runs.0.workflowId"
       }
     },
     {

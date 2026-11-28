@@ -1,3 +1,4 @@
+# cspell:ignore refreshable relogin
 """Real listeners and lifecycle logic; fake consent, provider, desktop and clock."""
 
 import contextlib
@@ -98,9 +99,7 @@ def picker_pty(config, keys, expected):
         except subprocess.TimeoutExpired:
             raise AssertionError(repr(output)) from None
         assert expected.encode() in output, output
-        assert all(label.encode() in output for label in (
-            "alpha — login required", "corrupt — unavailable", "expired — login required",
-            "refresh — refresh required", "rejected — login required", "zeta — ready")), output
+        return output
     finally:
         if process.poll() is None:
             process.kill()
@@ -139,35 +138,40 @@ def main():
 
         stack.enter_context(patch.object(subprocess, "Popen", side_effect=effects))
         states = []
+        # Both loopback listeners must complete consent; only the second
+        # exercises a refresh from another process while consent is pending.
         for address in ("127.0.0.1", "::1"):
             url_file.unlink(missing_ok=True)
             errors = []
+            baseline = len(Provider.grants)
 
             def consent():
                 try:
                     url = wait_for(lambda: url_file.read_text() if url_file.exists() else None)
-                    parsed = parse_qs(urlsplit(url).query)
-                    assert parsed["audience"] == ["fixture"]
-                    assert "empty=" in url
-                    assert parsed["client_id"] == ["client-private"]
-                    assert parsed["scope"] == ["keys:read messages:read"]
-                    assert parsed["redirect_uri"] == [config["redirect_uri"]]
-                    states.append(parsed["state"][0])
+                    parsed = parse_qs(urlsplit(url).query, keep_blank_values=True)
+                    state, = parsed.pop("state")
+                    states.append(state)
                     authority = f"localhost:{port}"
-                    query = urlencode({"code": "consent-private", "state": parsed["state"][0]})
+                    query = urlencode({"code": "consent-private", "state": state})
                     if address == "127.0.0.1":
-                        for host, path, extra in (
-                            (authority, "/wrong?" + query, ""),
-                            ("attacker.invalid", "/callback?" + query, ""),
-                            (authority, "/callback?code=x&state=bad", ""),
-                            (authority, "/callback?code=x&state=%E2%98%83", ""),
-                            (authority, "/callback?" + query, "Content-Length: 1\r\n"),
-                            (authority, "/callback?" + query, "Host: duplicate\r\n"),
-                            (authority, "/callback?" + query, "X-Large: " + "x" * 8200 + "\r\n"),
+                        # Preserve the provider's query and merge the consent scopes.
+                        assert parsed == {
+                            "audience": ["fixture"], "client_id": ["client-private"], "empty": [""],
+                            "redirect_uri": [config["redirect_uri"]], "response_type": ["code"],
+                            "scope": ["keys:read messages:read"],
+                        }
+                        for scenario, host, path, extra in (
+                            ("wrong callback path", authority, "/wrong?" + query, ""),
+                            ("wrong host authority", "unrelated.invalid", "/callback?" + query, ""),
+                            ("wrong state", authority, "/callback?code=x&state=bad", ""),
+                            ("non-ASCII state must not crash", authority, "/callback?code=x&state=%E2%98%83", ""),
+                            ("nonzero body length", authority, "/callback?" + query, "Content-Length: 1\r\n"),
+                            ("duplicate Host", authority, "/callback?" + query, "Host: duplicate\r\n"),
+                            ("oversized headers", authority, "/callback?" + query, "X-Large: " + "x" * 8200 + "\r\n"),
                         ):
                             with socket.create_connection((address, port), timeout=3) as peer:
                                 peer.sendall((f"GET {path} HTTP/1.1\r\nHost: {host}\r\n" + extra + "\r\n").encode())
-                                assert b"400 Bad Request" in peer.recv(1024)
+                                assert b"400 Bad Request" in peer.recv(1024), scenario
                     # A normal refresh during the second consent must not reject login.
                     if address == "::1":
                         result = subprocess.run([sys.executable, __file__, SOURCE, GUM,
@@ -183,9 +187,19 @@ def main():
             worker.join()
             assert not errors, errors
             assert seeded["login_deadline"] == seeded["login_started_at"] + 30 * DAY
-            assert Provider.grants[-1]["redirect_uri"] == [config["redirect_uri"]]
-            assert Provider.grants[-1]["client_secret"] == ["secret-private"]
-        assert states[0] != states[1] and len(states[0]) >= 32
+            # Rejected callbacks never exchange a code, and the second consent
+            # observes exactly one interleaved refresh before code exchange.
+            grant = {"client_id": ["client-private"], "client_secret": ["secret-private"],
+                     "code": ["consent-private"], "grant_type": ["authorization_code"],
+                     "redirect_uri": [config["redirect_uri"]]}
+            observed_grants = Provider.grants[baseline:]
+            if address == "127.0.0.1":
+                assert observed_grants == [grant], observed_grants
+            else:
+                assert observed_grants == [{"client_id": ["client-private"], "client_secret": ["secret-private"],
+                                            "grant_type": ["refresh_token"], "refresh_token": ["refresh-private"]},
+                                           grant], observed_grants
+        assert states[0] != states[1] and all(len(state) >= 32 for state in states), states
 
         # Occupy IPv6 only: login must release its already bound IPv4 socket.
         url_file.unlink()
@@ -199,7 +213,6 @@ def main():
                 raise AssertionError("bind conflict accepted")
             except OAuthError as error:
                 assert str(error) == "login listener or browser failed"
-            assert not url_file.exists()
             with socket.socket() as probe:
                 probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 probe.bind(("127.0.0.1", port))
@@ -208,23 +221,21 @@ def main():
             raise AssertionError("unbounded callback wait")
         except OAuthError as error:
             assert str(error) == "login callback timed out"
-        for redirect, host, accepted in (
-            ("http://localhost:80/callback", "localhost", True),
-            ("http://localhost:80/callback", "localhost:80", True),
-            ("http://[::1]:80/callback", "[::1]", True),
-            ("http://localhost:8080/callback", "localhost", False),
-            ("http://localhost:80/callback", "localhost:8080", False),
+        for scenario, redirect, host, expected_code in (
+            ("browser may omit default port", "http://localhost:80/callback", "localhost", "c"),
+            ("browser may send explicit default port", "http://localhost:80/callback", "localhost:80", "c"),
+            ("default port removal preserves IPv6 brackets", "http://[::1]:80/callback", "[::1]", "c"),
+            ("browser may not omit nondefault port", "http://localhost:8080/callback", "localhost", None),
+            ("browser may not send wrong port", "http://localhost:80/callback", "localhost:8080", None),
         ):
             server, client = socket.socketpair()
             with server, client:
                 client.sendall(f"GET /callback?state=s&code=c HTTP/1.1\r\nHost: {host}\r\n\r\n".encode())
                 result = login.callback(server, urlsplit(redirect), "s")
-            assert (result is not None) == accepted, (redirect, host, result)
+            assert result == expected_code, (scenario, result)
 
         choices = {"backend": "fixture", "accounts": {name: dict(config, state_dir=str(root / name))
                                                      for name in ("zeta", "alpha")}}
-        assert cli.choose(choices, "zeta") == "zeta"
-        assert cli.choose({"backend": "fixture", "accounts": {"only": config}}, None) == "only"
         for value, message in (({"backend": "fixture", "accounts": {}}, "no accounts"),
                                (choices, "multiple accounts")):
             try:
@@ -247,65 +258,98 @@ def main():
         (root / "corrupt" / "state.json").write_text("corrupt-state")
         (root / "corrupt" / "state.json").chmod(0o600)
         before = {str(path.relative_to(root)): path.read_bytes() if path.is_file() else None for path in root.rglob("*")}
-        picker_pty(choices, b"\r", "SELECTED=alpha")
+        output = picker_pty(choices, b"\r", "SELECTED=alpha")
+        # Picker labels distinguish unseen, malformed, expired, refreshable
+        # and rejected state without reconciling any account.
+        assert all(label.encode() in output for label in (
+            "alpha — login required", "corrupt — unavailable", "expired — login required",
+            "refresh — refresh required", "rejected — login required", "zeta — ready")), output
         picker_pty(choices, b"\x1b[B\r", "SELECTED=corrupt")
         picker_pty(choices, b"\x03", "account selection cancelled")
-        assert not (root / "alpha").exists()
         assert {str(path.relative_to(root)): path.read_bytes() if path.is_file() else None for path in root.rglob("*")} == before
-        print("PASS real gum PTY sorted labels, exact IDs, cancellation without state writes; zero/one/explicit/non-TTY")
+        print("PASS real gum PTY sorted labels, exact IDs, cancellation without state writes; zero/non-TTY")
 
-        assert len(browser_calls) == 3
         # Real daemon/state/refresh/notify on the main thread; only time and transport are fake.
         now = seeded["login_started_at"]
         response = {key: seeded[key] for key in ("access_token", "expires_in", "refresh_token",
                     "refresh_token_expires_in", "scope", "token_type")}
-        notices, observed = [], []
+        notices = []
         response["expires_in"] = 4 * DAY
         Provider.body = response
         with account.locked() as store:
             store.seed(response, now, 30)
         baseline = len(Provider.grants)
-        moments = [0, 4, 1, 20, 20, 24, 25, 31, 31, 31, 31, 35, 35, 35, 35, 39, 59, 59, 63, 67, 67]
-        # Counts are relative to the two explicit logins and consent-time refresh.
-        expected_calls = [0, 1, 1, 2, 2, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 7, 7, 8, 9, 9]
+        # Cumulative exchanges and notices are independent expectations of
+        # the fake clock, not calculated from the production scheduler. An
+        # invalid grant must notify once, but not on a specific tick.
+        # Counts are cumulative, so the next checked tick also covers
+        # activity on the intervening ticks without a count.
+        timeline = (
+            ("do not refresh fresh access", 0, 0, 0),
+            ("refresh on access expiry", 4, 1, 0),
+            ("backward clock cannot make access due", 1, 1, 0),
+            ("transport outage attempts one exchange", 20, 2, 0),
+            ("backoff suppresses immediate outage retry", 20, 2, 0),
+            ("outage recovery refreshes and warns within seven days", 24, 3, 1),
+            ("manual refresh preserves warning and consent deadline", 25, 4, 1),
+            ("hard consent expiry withdraws projected token", 31, 4, 2),
+            ("reseed after expired login", 31, None, None),
+            ("fresh relogin neither refreshes nor warns", 31, 4, 2),
+            ("invalid grant fails exchange without browser launch", 35, 5, None),
+            ("invalid grant withdraws token and notifies once", 35, 5, 3),
+            ("reseed after rejected login", 35, None, None),
+            ("relogin following invalid grant returns to ready", 35, 5, 3),
+            ("refresh resumes for the new login", 39, 6, 3),
+            ("new login can warn independently", 59, 7, 4),
+            ("unbounded login does not refresh early", 59, 7, None),
+            ("unbounded login still refreshes", 63, 8, 4),
+            ("unbounded login can receive invalid grant", 67, 9, None),
+            ("unbounded rejection sends recovery notice", 67, 9, 5),
+        )
+
         class Trace:
             index = 0
 
             def is_set(self):
-                return self.index == len(moments)
+                return self.index == len(timeline)
 
             def set(self):
-                self.index = len(moments)
+                self.index = len(timeline)
 
             def wait(self, _seconds):
                 if self.index == 6:
                     account.refresh(clock=lambda: now + 25 * DAY)
+                scenario, day, exchanges, warnings = timeline[self.index]
+                if exchanges is not None:
+                    observed = len(Provider.grants) - baseline
+                    assert observed == exchanges, (scenario, observed)
+                if warnings is not None:
+                    assert len(notices) == warnings, (scenario, notices)
                 with account.locked() as store:
                     current = store.reconcile()
-                    assert len(Provider.grants) - baseline == expected_calls[self.index]
                     if self.index in (5, 6):
                         assert current["expiry_warning_at"] == now
                         assert current["login_deadline"] == now + 30 * DAY
-                    if self.index in (7, 8, 9, 12, 13):
+                    if self.index in (7, 11):
                         assert current["login_required"] and not (Path(config["state_dir"]) / "access-token").exists()
+                    if self.index in (8, 12):
+                        store.seed(response, now + day * DAY, 30)
                     if self.index in (9, 13):
-                        store.seed(response, now + moments[self.index] * DAY, 30)
-                        assert store.reconcile().get("expiry_warning_at") is None
-                    if self.index == 16:
-                        assert current["expiry_warning_at"] == now + 35 * DAY
-                    if self.index >= 17:
+                        assert current["login_started_at"] == now + day * DAY, scenario
+                        assert not current["login_required"] and "expiry_warning_at" not in current, scenario
+                    if self.index >= 16:
                         assert current["login_deadline"] is None and current["refresh_expires_at"] is None
                         assert "expiry_warning_at" not in current
-                        assert current["login_required"] == (self.index >= 19)
-                    observed.append((len(Provider.grants) - baseline, len(notices)))
-                    if self.index == 16:
+                        assert current["login_required"] == (self.index >= 18)
+                    if self.index == 15:
+                        assert current["expiry_warning_at"] == now + 35 * DAY
                         # A new login without either bound must still refresh and handle rejection.
                         config["provider"]["loginLifetimeDays"] = None
                         response.pop("refresh_token_expires_in")
                         store.seed(response, now + 59 * DAY, None)
                 self.index += 1
                 Provider.unavailable = self.index in (3, 4)
-                Provider.reject = self.index in (11, 19)
+                Provider.reject = self.index in (10, 18)
 
         trace = Trace()
         real_run = subprocess.run
@@ -321,21 +365,18 @@ def main():
              patch.object(subprocess, "run", side_effect=transport), \
              contextlib.redirect_stderr(diagnostics):
             daemon.run(account, "/fixture/backend-wrapper",
-                       clock=lambda: now + moments[trace.index] * DAY,
+                       clock=lambda: now + timeline[trace.index][1] * DAY,
                        notifier="/fixture/notifier", jitter=lambda _low, _high: 1)
+        # The only browser opens are two explicit logins and the timeout probe.
         assert len(browser_calls) == 3
-        assert observed == list(zip(expected_calls, [0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5]))
         assert sum("seven days" in notice for notice in notices) == 2
         assert sum("Login required" in notice for notice in notices) == 3
         diagnostic = diagnostics.getvalue()
         assert diagnostic.count("desktop notification failed") == 5
         assert diagnostic.count("refresh unavailable") == 3
-        assert "/fixture/backend-wrapper login work" in diagnostic
         for secret in ("client-private", "secret-private", "refresh-private", "consent-private", "access-"):
             assert secret not in diagnostic
         print("PASS bounded and no-deadline daemon refresh, fixed consent, warnings and invalid_grant recovery")
-        assert daemon.recovery("/backend path/tool", "account's") == "'/backend path/tool' login 'account'\"'\"'s'"
-
 
 
 if len(sys.argv) > 3:

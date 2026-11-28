@@ -44,10 +44,10 @@
 # note in the nix-standards fragment — so a new script must be `git add`ed
 # before this check can see it.
 #
-# AN EMPTY FILE SET IS A HARD FAILURE, for the reason spelled out at length in
-# checks/markdown/markdown-scan.nix: a scan of nothing exits 0 and is indistinguishable
-# from a pass. The resolved count is echoed so a set that SHRINKS is visible in
-# the build log rather than silently reported as green.
+# Pin one member unique to each selection route: an extensionless script
+# with a shebang and a .sh file without one. This catches a dropped route
+# even when the other route still finds scripts. The resolved count is echoed
+# so other changes in corpus size are visible.
 {
   lib,
   pkgs,
@@ -86,14 +86,14 @@ in
 
     mapfile -d "" -t files < "$TMPDIR/shell-files"
 
-    if [ "''${#files[@]}" -eq 0 ]; then
-      echo "ERROR: shellcheck-corpus matched zero shell scripts." >&2
-      echo "The file set moved out from under this check — a passing scan of" >&2
-      echo "nothing is not a pass. Check the find predicates and the shebang" >&2
-      echo "regex above, and that the scripts are git-tracked (untracked files" >&2
-      echo "never reach a flake sandbox)." >&2
+    # .envrc has no shell extension; hm-run.sh has no shebang.
+    for expected in ./.envrc ./lib/testing/hm-run.sh; do
+      for f in "''${files[@]}"; do
+        if [[ "$f" == "$expected" ]]; then continue 2; fi
+      done
+      printf 'ERROR: shellcheck-corpus did not select %s\n' "$expected" >&2
       exit 1
-    fi
+    done
 
     echo "shellcheck-corpus: linting ''${#files[@]} shell scripts"
 

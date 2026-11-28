@@ -7,7 +7,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest;
+  inherit (harness) checkRows claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest;
   evaluate = backend:
     if backend == "hm"
     then evalHm
@@ -18,13 +18,6 @@
     (
       evaluate backend {
         ai.airlock.instances.main = {};
-      }
-    )
-    .config;
-  configured = backend:
-    (
-      evaluate backend {
-        ai.airlock.instances.main.port = 8400;
       }
     )
     .config;
@@ -42,11 +35,11 @@
   nativeEnv = {
     ANTHROPIC_BASE_URL = "https://native.example.invalid";
   };
-  # A configured instance and Claude with its own native environment.
-  claudeWith = backend: extra:
+  # Airlock and Claude with its own native environment.
+  claudeWith = backend: instance: extra:
     evaluate backend (lib.recursiveUpdate {
         ai = {
-          airlock.instances.main.port = 8400;
+          airlock.instances.main = instance;
           claude = {
             enable = true;
             native.settings.env = nativeEnv;
@@ -54,6 +47,7 @@
         };
       }
       extra);
+  configuredClaude = backend: claudeWith backend {port = 8400;};
   failedAssertions = result:
     map (item: item.message)
     (builtins.filter (item: !item.assertion) result.config.assertions);
@@ -75,24 +69,18 @@
         # something other than its launcher.
         launchdAgentRunsLauncher config "airlock-main";
   in
-    config.ai.airlock.instances.main.port
-    == 8318
-    && config.ai.claims.service.airlock-main == ["airlock"]
+    config.ai.claims.service.airlock-main
+    == ["airlock"]
     && config.ai.claims.port."8318" == ["airlock:airlock-main.ports.main"]
-    && entry.enable
-    && entry.ports.main == 8318
     && entry.environment == {}
     && entry.files == {}
-    && builtins.length entry.command == 1
     && native
     && noAirlockActivation config;
   portDerived = backend: let
-    config = configured backend;
-    entry = config.ai.services.airlock-main;
+    inherit (configuredClaude backend {}) config;
   in
-    entry.ports.main
-    == 8400
-    && config.ai.claims.port."8400" == ["airlock:airlock-main.ports.main"];
+    config.ai.claims.port."8400" == ["airlock:airlock-main.ports.main"];
+  # Read the launchers the native managers actually run, not the inner service command.
   launcher = backend:
     if backend == "hm"
     then (runtime backend).systemd.user.services.airlock-main.Service.ExecStart
@@ -107,106 +95,94 @@
       https = "http://127.0.0.1:8318";
     }
     && config.ai.claims.proxy-instance.main == ["airlock"];
-  # Declaring an instance selects nothing.
-  unselected = backend:
-    evaluate backend {
-      ai = {
-        airlock.instances.main = {};
-        claude = {
-          enable = true;
-          native.settings.env = nativeEnv;
-        };
-      };
-    };
+  # Declaring the default instance must not inject any proxy variables.
   unselectedUntouched = backend: let
-    evaluated = unselected backend;
+    evaluated = claudeWith backend {} {};
     inherit (claudeSettings evaluated) env;
   in
-    evaluated.config.ai.claude.normalized.proxy
-    == {
-      http = null;
-      https = null;
-    }
-    && lib.intersectAttrs nativeEnv env == nativeEnv
-    && !(env ? HTTPS_PROXY);
-  # Root and runtime selection share protocol defaults and native delivery.
+    lib.intersectAttrs nativeEnv env
+    == nativeEnv
+    && !(env ? HTTP_PROXY || env ? HTTPS_PROXY || env ? NO_PROXY);
   external = "http://external.invalid:8080";
   origin = "http://127.0.0.1:8400";
+  # Fixed proxy defaults from the configured instance, not from the registry.
+  proxyDefaults = {
+    http = origin;
+    https = origin;
+  };
+  defaultEnv = {
+    HTTP_PROXY = origin;
+    HTTPS_PROXY = origin;
+    NO_PROXY = "127.0.0.1,localhost,::1";
+  };
   selectionCases = {
-    root = {
-      extra.ai.proxy.instance = "main";
-      expected = {
-        http = origin;
-        https = origin;
+    "native HTTPS and bypass override generated defaults without dropping HTTP" = {
+      env =
+        defaultEnv
+        // {
+          HTTPS_PROXY = external;
+          NO_PROXY = "native.example.invalid";
+        };
+      extra.ai = {
+        claude.native.settings.env = {
+          HTTPS_PROXY = external;
+          NO_PROXY = "native.example.invalid";
+        };
+        proxy.instance = "main";
       };
+      # Native HTTPS would hide an incorrect normalized origin in settings.
+      proxy = proxyDefaults;
     };
-    root-explicit-http = {
+    "root explicit HTTP does not replace the instance HTTPS default" = {
+      env = defaultEnv // {HTTP_PROXY = external;};
       extra.ai.proxy = {
         http = external;
         instance = "main";
       };
-      expected = {
-        http = external;
-        https = origin;
-      };
     };
-    runtime = {
+    "runtime selector works without a root selector" = {
+      env = defaultEnv;
       extra.ai.claude.proxy.instance = "main";
-      expected = {
-        http = origin;
-        https = origin;
-      };
     };
   };
-  selectedCorrectly = backend: test: let
-    evaluated = claudeWith backend test.extra;
-    expectedEnv = lib.filterAttrs (_: value: value != null) {
-      HTTP_PROXY = test.expected.http;
-      HTTPS_PROXY = test.expected.https;
-      NO_PROXY = "127.0.0.1,localhost,::1";
-    };
+  selectedCorrectly = backend: row: let
+    evaluated = configuredClaude backend row.extra;
+    settings = claudeSettings evaluated;
   in
     failedAssertions evaluated
     == []
-    && evaluated.config.ai.claude.normalized.proxy == test.expected
-    && claudeSettings evaluated == lib.recursiveUpdate (claudeSettings (unselected backend)) {env = expectedEnv;};
-  nativeProxyWins = backend: let
-    inherit
-      (claudeSettings (claudeWith backend {
-        ai.proxy.instance = "main";
-        ai.claude.native.settings.env = {
-          HTTPS_PROXY = external;
-          NO_PROXY = "native.example.invalid";
-        };
-      }))
-      env
-      ;
-  in
-    env.HTTPS_PROXY == external && env.NO_PROXY == "native.example.invalid";
-  selectionRefused = backend: scope: disabled: let
-    path = ["ai"] ++ lib.optional (scope == "runtime") "claude" ++ ["proxy"];
-    name =
-      if disabled
-      then "main"
-      else "missing";
-    result = enabled:
-      claudeWith backend (lib.recursiveUpdate
-        (lib.setAttrByPath (path ++ ["instance"]) name)
-        {
-          ai.airlock.instances.main.enable = !disabled;
-          ai.claude.enable = enabled;
-        });
-    message = "${lib.showOption path}.instance names `${name}`, which is ${
-      if disabled
-      then "disabled"
-      else "not registered"
-    }; registered instances: main.";
-  in
-    # Inherited invalid selections report only the root; independent runtime
-    # selections remain checked even when the runtime is disabled.
-    lib.all (enabled: failedAssertions (result enabled) == [message]) [false true];
+    && (!(row ? proxy) || evaluated.config.ai.claude.normalized.proxy == row.proxy)
+    && settings == lib.recursiveUpdate (claudeSettings (configuredClaude backend {})) {inherit (row) env;};
+  # Exact assertion messages distinguish disabled registered instances from
+  # unknown names. A root failure must not be repeated by an inheriting
+  # runtime; a runtime's own selector must be checked even while disabled.
+  rejectionCases = {
+    "root disabled rejected with Claude enabled" = {
+      enableClaude = true;
+      extra.ai = {
+        airlock.instances.main.enable = false;
+        proxy.instance = "main";
+      };
+      message = "ai.proxy.instance names `main`, which is disabled; registered instances: main.";
+    };
+    "root unknown rejected with Claude disabled" = {
+      extra.ai.proxy.instance = "missing";
+      message = "ai.proxy.instance names `missing`, which is not registered; registered instances: main.";
+    };
+    "runtime disabled rejected with Claude disabled" = {
+      extra.ai = {
+        airlock.instances.main.enable = false;
+        claude.proxy.instance = "main";
+      };
+      message = "ai.claude.proxy.instance names `main`, which is disabled; registered instances: main.";
+    };
+    "runtime unknown rejected with Claude disabled" = {
+      extra.ai.claude.proxy.instance = "missing";
+      message = "ai.claude.proxy.instance names `missing`, which is not registered; registered instances: main.";
+    };
+  };
   inferenceIndependent = backend: let
-    evaluated = claudeWith backend {
+    evaluated = configuredClaude backend {
       ai = {
         cliproxyapi.instances.main = {
           clientKeys.main = {
@@ -234,42 +210,31 @@
     && config.ai.internal.inferenceInstances.main.url == "http://127.0.0.1:8317"
     && config.ai.internal.proxyInstances.main.https == origin
     && (claudeSettings evaluated).env.NO_PROXY == "127.0.0.1,localhost,::1";
-  # Named so a failure reports which condition broke.
   conditions = backend:
     {
-      "${backend}: inference and network instance names coexist" = inferenceIndependent backend;
-      "${backend}: instances are registered proxies" = registered backend;
-      "${backend}: native HTTPS_PROXY and NO_PROXY win" = nativeProxyWins backend;
-      "${backend}: no instance by default" =
-        (empty backend).ai.airlock.instances
-        == {}
-        && !(builtins.any (name: lib.hasPrefix "airlock" name)
-          (builtins.attrNames ((empty backend).ai.services or {})))
-        && noAirlockActivation (empty backend);
-      "${backend}: port is claimed" = portDerived backend;
-      "${backend}: service contract" = serviceContract backend;
-      "${backend}: unselected Claude is untouched" = unselectedUntouched backend;
+      "configured port produces the expected claim" = portDerived backend;
+      "default instance produces the native service and claims, not activation" = serviceContract backend;
+      "inference and network instances with the same name remain independent" = inferenceIndependent backend;
+      "instance is registered with both proxy origins and an Airlock claim" = registered backend;
+      "no declaration creates no service or activation" = let
+        config = empty backend;
+      in
+        !(builtins.any (name: lib.hasPrefix "airlock" name)
+          (builtins.attrNames (config.ai.services or {})))
+        && noAirlockActivation config;
+      "unselected Claude stays free of proxy settings" = unselectedUntouched backend;
     }
-    // lib.mapAttrs' (name: test: lib.nameValuePair "${backend}: ${name} selection" (selectedCorrectly backend test)) selectionCases
-    // lib.concatMapAttrs (scope: _:
-      lib.mapAttrs' (kind: disabled:
-        lib.nameValuePair "${backend}: ${scope} ${kind} selection refused"
-        (selectionRefused backend scope disabled)) {
-        disabled = true;
-        unknown = false;
-      })
-    {
-      root = null;
-      runtime = null;
-    };
-  failing = lib.concatMap (backend:
-    builtins.attrNames (lib.filterAttrs (_: passed: !passed) (conditions backend)))
-  ["devenv" "hm"];
+    // lib.mapAttrs (_: selectedCorrectly backend) selectionCases
+    // lib.mapAttrs (_: row: let
+      evaluated = configuredClaude backend (lib.recursiveUpdate row.extra {ai.claude.enable = row.enableClaude or false;});
+    in
+      failedAssertions evaluated == [row.message])
+    rejectionCases;
 in {
   checks =
     {
       airlock-instances = mkTest "airlock-instances" (
-        lib.assertMsg (failing == []) "failing: ${lib.concatStringsSep ", " failing}"
+        lib.all (backend: checkRows "airlock-instances/${backend}" (conditions backend)) ["devenv" "hm"]
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {

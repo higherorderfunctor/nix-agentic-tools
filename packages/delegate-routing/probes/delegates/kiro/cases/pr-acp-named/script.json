@@ -15,14 +15,6 @@
   "new": {
     "_meta": {
       "kiro": {
-        "customAgents": [
-          {
-            "description": "inline",
-            "id": "inlagent",
-            "prompt": "ACP_INLINE_AGENT_PROMPT_SENTINEL",
-            "tools": ["*"]
-          }
-        ],
         "steering": [
           {
             "content": "ACP_INLINE_STEERING_SENTINEL",

@@ -1,5 +1,2 @@
-{runCommandLocal}:
-runCommandLocal "facet-mcp" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+{writeText}:
+writeText "facet-mcp" "mcp-namespace\n"

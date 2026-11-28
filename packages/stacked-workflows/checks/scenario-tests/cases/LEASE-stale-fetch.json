@@ -13,7 +13,7 @@
   "block_roles": ["selection", "guard", "mutator", "mutator"],
   "env": {},
   "expected": {
-    "description": "publication honors the pre-rewrite remote snapshot for stale-fetch",
+    "description": "A post-move fetch must not refresh the lease and allow overwriting the competing tip",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "LEASE-stale-fetch",

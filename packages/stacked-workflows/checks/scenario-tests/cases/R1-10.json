@@ -10,10 +10,11 @@
   "block_roles": ["selection", "selection"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Main tracks the local trunk: resolving it as a remote ref would fall back to stale main and widen the selection",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-10",
   "kind": "selection",
+  "subjects": ["a1", "a2"],
   "topology": "T12"
 }

@@ -1,22 +1,18 @@
 {
-  "args": {
-    "scenario": "static",
-    "shell_scope": "none"
-  },
   "assertions": [
     {
-      "id": "SWI-0477",
+      "id": "dirty-worktree-warning-does-not-authorize-stash",
       "pattern": "Don't use `git stash`",
       "present": true
     },
     {
-      "id": "SWI-0480",
-      "pattern": "git move -b .* --merge",
+      "id": "no-on-disk-merge-fallback-for-stack-move",
+      "pattern": "git move -b [^\\n]* --merge\\b",
       "present": false
     },
     {
-      "id": "SWI-0506",
-      "pattern": "git reword <commit>",
+      "id": "no-unguarded-reword-recipe",
+      "pattern": "git reword(?:\\s|`)",
       "present": false
     }
   ],
@@ -24,8 +20,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Submit inventory items are warnings or removed rewrites",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Submit must not stash a dirty worktree, attempt an on-disk merge repair, or reword commits without asking"
   },
   "id": "R5-unclear-submit",
   "kind": "static-set",

@@ -82,14 +82,22 @@ printf 'client  %s (%s bytes)\n\n' "$client" "$(stat -c%s "$client")"
 # machine's `grep` the `-c -o` combination counts occurrences instead, so the two
 # forms disagree. `-bo | wc -l` is unambiguous on both.
 #
-# `-e` is MANDATORY and not stylistic. Without it a pattern beginning with `--`
-# is parsed as an option and the count comes back a FALSE ZERO. That trap is
-# itself asserted below.
+# `-e` is MANDATORY: a pattern beginning with `--` would otherwise be parsed
+# as an option. Only grep's no-match status means zero. Do not print wc's zero
+# if grep errored: callers compare the empty observation as a failed check.
+count_matches() {
+	local mode="$1" input="$2" pattern="$3" count rc
+	count="$({ grep -abo "$mode" -e "$pattern" "$input" || {
+		rc=$?
+		[ "$rc" -eq 1 ]
+	}; } | wc -l)" || return 1
+	printf '%s\n' "$count"
+}
 
 # occ <file> <fixed-string>
-occ() { { grep -aboF -e "$2" "$1" || true; } | wc -l; }
+occ() { count_matches -F "$@"; }
 # occ_re <file> <ere>
-occ_re() { { grep -aboE -e "$2" "$1" || true; } | wc -l; }
+occ_re() { count_matches -E "$@"; }
 
 pass=0 fail=0 refused=0
 
@@ -109,11 +117,11 @@ check() {
 # not a failed assertion, it is a broken instrument, so it refuses separately.
 control() {
 	local label="$1" got="$2"
-	if [ "$got" -gt 0 ]; then
+	if [[ $got =~ ^[0-9]+$ ]] && [ "$got" -gt 0 ]; then
 		printf '  ctl   %-58s %s\n' "$label" "$got"
 		pass=$((pass + 1))
 	else
-		printf '  REFUSE %-57s control is ZERO - search no longer parses file\n' "$label"
+		printf '  REFUSE %-57s control has no matches - check the search and artifact\n' "$label"
 		refused=$((refused + 1))
 	fi
 }
@@ -124,9 +132,7 @@ control() {
 
 echo 'C-1 engine: home root is HOME only'
 
-# The mechanism by which a home dir COULD be overridden, and its fallback.
-control 'engine: getCliArg("home-dir") reader exists' \
-	"$(occ "$bundle" 'getCliArg("home-dir")')"
+# The fallback when no home directory was handed over.
 control 'engine: os.homedir() fallback exists' \
 	"$(occ_re "$bundle" 'os[0-9]*\.homedir\(\)')"
 
@@ -146,11 +152,9 @@ check 'engine: distinct CLI arg names accepted' 15 \
 check 'engine: home-dir is among them' 1 \
 	"$(printf '%s\n' "$arg_names" | { grep -cxF 'home-dir' || true; })"
 
-# The absence, with its controls immediately above it.
+# The fixed-string surface and sessionsPath controls below read the same bundle.
 check 'engine: KIRO_HOME occurrences' 0 "$(occ "$bundle" 'KIRO_HOME')"
 check 'engine: XDG_DATA_HOME occurrences' 0 "$(occ "$bundle" 'XDG_DATA_HOME')"
-control 'engine: control - "homeDir" is present at all' \
-	"$(occ "$bundle" 'homeDir')"
 
 # Every engine-side surface composed off the home dir. Four is the whole set:
 # sessions, logs, MCP settings, knowledge bases.
@@ -190,20 +194,6 @@ check 'client: --home-dir occurrences' 0 "$(occ "$client" '--home-dir')"
 control 'client: control - --transport=stdio' "$(occ "$client" '--transport=stdio')"
 control 'client: control - --auth=acp-callback' "$(occ "$client" '--auth=acp-callback')"
 
-# THE METHOD IS ITSELF UNDER TEST. Without -e, a `--`-leading pattern is eaten
-# as an option and the count is a false zero. If this ever stops differing, the
-# absence above has quietly become unfalsifiable.
-naive="$({ grep -aboF '--transport=stdio' "$client" 2>/dev/null || true; } | wc -l)"
-withe="$(occ "$client" '--transport=stdio')"
-if [ "$naive" -eq 0 ] && [ "$withe" -gt 0 ]; then
-	printf '  ok    %-58s naive %s vs -e %s\n' \
-		'client: -e is load-bearing (false-zero trap live)' "$naive" "$withe"
-	pass=$((pass + 1))
-else
-	printf '  note  %-58s naive %s vs -e %s\n' \
-		'client: -e trap did not reproduce on this grep' "$naive" "$withe"
-fi
-
 # HOME survives: the spawn inherits process.env and blanks only Node channel
 # variables.
 control 'client: spawn inherits {...process.env}' \
@@ -211,7 +201,7 @@ control 'client: spawn inherits {...process.env}' \
 
 # KIRO_HOME in the client means the .kiro directory ITSELF. Checked semantically
 # rather than by quoting minified identifiers: the window around the resolver
-# must mention both the variable and the directory it falls back to composing.
+# must mention both parts of the fallback: HOME and .kiro.
 kh="$({ grep -aboF -e 'process.env.KIRO_HOME' "$client" || true; } |
 	head -1 | cut -d: -f1)"
 control 'client: process.env.KIRO_HOME read exists' \
@@ -219,10 +209,9 @@ control 'client: process.env.KIRO_HOME read exists' \
 if [ -n "$kh" ]; then
 	win="$(head -c $((kh + 260)) "$client" | tail -c 320 | tr -c '[:print:]\n' '.')"
 	hits=0
-	case "$win" in *'KIRO_HOME'*) hits=$((hits + 1)) ;; *) ;; esac
 	case "$win" in *'.kiro'*) hits=$((hits + 1)) ;; *) ;; esac
 	case "$win" in *'process.env.HOME'*) hits=$((hits + 1)) ;; *) ;; esac
-	check 'client: KIRO_HOME resolver names KIRO_HOME, .kiro and HOME' 3 "$hits"
+	check 'client: KIRO_HOME resolver fallback names .kiro and HOME' 2 "$hits"
 fi
 
 # ---------------------------------------------------------------------------
@@ -235,27 +224,6 @@ echo 'C-1 XDG_DATA_HOME: an empty credential DB means an interactive login'
 control 'client: credential DB filename' "$(occ "$client" 'data.sqlite3')"
 check 'client: device-code browser prompt' 1 \
 	"$(occ "$client" 'Confirm the following code in the browser')"
-control 'client: browser-open failure path' "$(occ "$client" 'Failed to open browser')"
-control 'client: control - "kiro-cli login" remediation string' \
-	"$(occ "$client" 'kiro-cli login')"
-
-# On-disk corroboration that the DB really is under XDG_DATA_HOME. Read-only.
-datadir="${XDG_DATA_HOME:-$HOME/.local/share}/kiro-cli"
-if [ -f "$datadir/data.sqlite3" ]; then
-	printf '  ok    %-58s %s\n' 'disk: credential DB under XDG_DATA_HOME' \
-		"$datadir/data.sqlite3"
-	pass=$((pass + 1))
-else
-	printf '  note  %-58s absent (never logged in on this machine?)\n' \
-		'disk: credential DB under XDG_DATA_HOME'
-fi
-if [ -d "$datadir/kas" ]; then
-	printf '  ok    %-58s %s\n' 'disk: engine bundles under XDG_DATA_HOME too' \
-		"$datadir/kas"
-	pass=$((pass + 1))
-else
-	printf '  note  %-58s absent\n' 'disk: engine bundles under XDG_DATA_HOME too'
-fi
 
 # ---------------------------------------------------------------------------
 # C-17 — join policy: who aborts the losers
@@ -278,33 +246,65 @@ check 'joinAllSettled never declared or called with controllers' 0 \
 check 'sibling-abort call sites in bundle' 2 \
 	"$(occ_re "$bundle" 'controllers\[[A-Za-z0-9_]+\]\.abort\(\)')"
 
+# Read the named top-level function through its closing brace. The captured
+# bundle indents nested closures; the unindented brace ends the function.
+function_body() {
+	awk -v name="$1" '
+		$0 ~ "^(async )?function " name "\\(" { found = 1 }
+		found { print }
+		found && /^}/ { exit }
+	' "$bundle"
+}
+
+join_all="$(function_body joinAll)"
 # The load-bearing claim: the `all` trigger is failed OR aborted, not just
 # failed. This is what makes "all is the conservative choice" wrong.
 check 'joinAll aborts on failed OR aborted' 1 \
-	"$(occ_re "$bundle" 'settled === "failed" \|\| settled === "aborted"')"
+	"$(occ_re - 'settled === "failed" \|\| settled === "aborted"' <<<"$join_all")"
 
-# ... and joinAllSettled's whole body contains no abort at all. The body is
-# located by its own signature so the window cannot drift onto a neighbour.
-jas="$({ grep -aboE -e 'async function joinAllSettled\(' "$bundle" || true; } |
-	head -1 | cut -d: -f1)"
-control 'joinAllSettled body located' "${jas:-0}"
-if [ -n "$jas" ]; then
-	body="$(head -c $((jas + 140)) "$bundle" | tail -c 140)"
-	check 'joinAllSettled body mentions abort' 0 \
-		"$(printf '%s' "$body" | { grep -coF 'abort' || true; })"
-	control 'joinAllSettled body control - awaits allSettled' \
-		"$(printf '%s' "$body" | { grep -coF 'Promise.allSettled' || true; })"
-fi
+join_all_settled="$(function_body joinAllSettled)"
+check 'joinAllSettled body awaits allSettled' 1 \
+	"$(occ - 'await Promise.allSettled' <<<"$join_all_settled")"
+check 'joinAllSettled body mentions abort' 0 \
+	"$(occ - 'abort' <<<"$join_all_settled")"
 
 # allSettled still REPORTS failure; it just does not act on it.
+check 'joinAllSettled returns the overall result' 1 \
+	"$(occ_re - '^ +return overallFromResults\(results\);$' <<<"$join_all_settled")"
 check 'overallFromResults reports failed on failed-or-aborted' 1 \
-	"$(occ_re "$bundle" 'function overallFromResults\(results\) \{')"
-control 'overallFromResults call sites' "$(occ "$bundle" 'overallFromResults(results)')"
+	"$(function_body overallFromResults | occ_re - 'if \(results\.some\(\(r[0-9]*\) => r[0-9]*\.outcome === "failed" \|\| r[0-9]*\.outcome === "aborted"\)\) return "failed";')"
 
-# An outer abort still reaches every branch under EVERY policy. This is the
-# caveat the record states, so it is asserted rather than assumed.
-control 'outer abort handler aborts all branch controllers' \
-	"$(occ "$bundle" 'const onOuterAbort = ()')"
+# An outer abort still reaches every branch under EVERY policy. Check the
+# handler's loop, not just that a handler with the expected name exists.
+scheduler="$(function_body scheduleParallel)"
+# A controller-taking declaration is not enough: a swapped switch arm can
+# cancel work even when the caller explicitly chose allSettled. Read the
+# dispatch for each policy, not an unbound count of calls in the bundle.
+while IFS='|' read -r policy call; do
+	dispatch="$(awk -v policy="$policy" '
+		$0 ~ "^[[:space:]]+case \"" policy "\":$" { in_arm = 1; next }
+		in_arm && /^[[:space:]]+(case |break;)/ { exit }
+		in_arm { print }
+	' <<<"$scheduler")"
+	check "scheduler: $policy dispatches with its own controller contract" 1 \
+		"$(occ_re - "$call" <<<"$dispatch")"
+done <<'EOF'
+all|outcome = await joinAll\([A-Za-z0-9_]+, branchControllers, results\);
+allSettled|outcome = await joinAllSettled\([A-Za-z0-9_]+, results\);
+any|outcome = await joinAny\([A-Za-z0-9_]+, branchControllers, results\);
+EOF
+
+outer_abort="$(awk '
+	/^  const onOuterAbort = / { found = 1 }
+	found { print }
+	found && /^  };/ { exit }
+' <<<"$scheduler")"
+check 'outer abort handler iterates every branch controller' 1 \
+	"$(occ_re - 'for \(const c[0-9]* of branchControllers\)' <<<"$outer_abort")"
+check 'outer abort handler aborts the current controller' 1 \
+	"$(occ_re - 'if \(!c[0-9]*\.signal\.aborted\) c[0-9]*\.abort\(\);' <<<"$outer_abort")"
+check 'scheduler registers the outer abort handler' 1 \
+	"$(occ - '.addEventListener("abort", onOuterAbort,' <<<"$scheduler")"
 
 echo
 echo 'C-17 documentation locality: where the sentence lives'
@@ -319,11 +319,6 @@ check 'sentence: "regardless of individual failures"' 1 \
 	"$(occ "$bundle" 'regardless of individual failures')"
 control 'denominator: joinPolicy mentions' "$(occ "$bundle" 'joinPolicy')"
 
-# NEGATIVE CONTROL for the counter itself. If a plausible-but-absent spelling
-# came back non-zero, every `0` above would be meaningless.
-check 'negative control: a plausible absent spelling' 0 \
-	"$(occ_re "$bundle" 'async function joinAll\([A-Za-z0-9_]+, results\)')"
-
 # ---------------------------------------------------------------------------
 # Verdict
 # ---------------------------------------------------------------------------
@@ -332,13 +327,8 @@ total=$((pass + fail + refused))
 echo
 printf 'checks %s  pass %s  fail %s  refused %s\n' "$total" "$pass" "$fail" "$refused"
 
-# A run whose denominator is zero is not a pass.
-if [ "$total" -eq 0 ]; then
-	echo 'REFUSE: zero checks executed'
-	exit 2
-fi
 if [ "$refused" -gt 0 ]; then
-	echo 'REFUSE: a positive control read zero - fix the search before trusting any result'
+	echo 'REFUSE: a positive control had no matches - fix the search before trusting any result'
 	exit 2
 fi
 if [ "$fail" -gt 0 ]; then

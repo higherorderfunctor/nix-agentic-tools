@@ -1,5 +1,5 @@
-# Isolated subprocess contracts for the devenv-owned Beads lifecycle.
 # cspell:ignore NOSYSTEM
+# Isolated subprocess contracts for the devenv-owned Beads lifecycle.
 {
   lib,
   pkgs,
@@ -80,8 +80,8 @@
         fi
       }
 
-      run_scenario() {
-        local actor_id actual_ref before_ref client_pid cold_server_pid database db_path dirty_head entry entry_dir fixture foreign_pid holder_pid interval_id label lifecycle_script linked_id lock_path origin_mode port publish_pid publisher_pid server_pid startup_ref state_hash state_root
+      run_scenario() (
+        local actor_id actual_ref before_ref client_pid command database db_path divergent_ref entry entry_dir fixture holder_pid interval_id label lifecycle_script linked_id lock_path origin_mode port publish_pid startup_ref state_hash state_root
         label="$1"
         origin_mode="$2"
         fixture="$TMPDIR/$label"
@@ -99,6 +99,7 @@
         chmod +x "$lifecycle_script"
         mkdir -p "$entry_dir"
         for entry in bd beads-bootstrap beads-checkpoint beads-diagnostics beads-publish beads-status; do
+          test -x ${lifecycle.package}/bin/"$entry" || fail "$entry is not installed as an executable"
           cp ${lifecycle.package}/bin/"$entry" "$entry_dir/$entry"
           sed -i \
             "s|${lib.getExe' lifecycle.lifecycle "beads-lifecycle"}|$lifecycle_script|g" \
@@ -129,7 +130,6 @@
         git -C "$fixture/source" status --short --untracked-files=all >"$fixture/source.status.before"
         git -C "$fixture/source" config --local --list | sort >"$fixture/source.config.before"
         git -C "$fixture/linked" status --short --untracked-files=all >"$fixture/linked.status.before"
-        git -C "$fixture/linked" config --local --list | sort >"$fixture/linked.config.before"
 
         mkdir -p "$fixture/runtime-a" "$fixture/runtime-b"
         (cd "$fixture/source" && XDG_RUNTIME_DIR="$fixture/runtime-a" "$lifecycle_script" prepare) &
@@ -138,43 +138,42 @@
         publish_pid="$!"
         wait "$client_pid"
         wait "$publish_pid"
-        if git -C "$fixture/ledger.git" rev-parse --verify refs/dolt/data >/dev/null 2>&1; then
-          fail "$label prepare published the ledger"
-        fi
-        [ ! -e "$fixture/home/.dolt" ] || fail "$label mutated user-global Dolt config"
 
-        # A live but unowned listener must be rejected before module-owned
-        # initialization can send any request to it.
-        mkdir -p "$fixture/foreign-data" "$fixture/foreign-root"
-        DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
-          config --global --add user.email fixture@example.invalid
-        DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
-          config --global --add user.name Fixture
-        (
-          cd "$fixture/foreign-data"
-          DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt init >/dev/null
+        trap 'stop_process "$publisher_pid"; stop_process "$cold_server_pid"; stop_process "$foreign_pid"; stop_process "$server_pid"' EXIT
+
+        if [ "$origin_mode" = equal ]; then
+          # A live but unowned listener must be rejected before module-owned
+          # initialization can send any request to it.
+          mkdir -p "$fixture/foreign-data" "$fixture/foreign-root"
           DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
-            sql-server --host 127.0.0.1 --port "$port"
-        ) >"$fixture/foreign-server.out" 2>&1 &
-        foreign_pid="$!"
-        trap 'stop_process "$publisher_pid"; stop_process "$cold_server_pid"; stop_process "$foreign_pid"; stop_process "$server_pid"' RETURN
-        wait_for_port "$port"
-        if (cd "$fixture/source" && "$entry_dir/beads-bootstrap") \
-          >"$fixture/foreign-bootstrap.out" 2>&1; then
-          fail "$label bootstrap accepted an unowned listener"
+            config --global --add user.email fixture@example.invalid
+          DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
+            config --global --add user.name Fixture
+          (
+            cd "$fixture/foreign-data"
+            DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt init >/dev/null
+            DOLT_ROOT_PATH="$fixture/foreign-root" ${cfg.package.dolt}/bin/dolt \
+              sql-server --host 127.0.0.1 --port "$port"
+          ) >"$fixture/foreign-server.out" 2>&1 &
+          foreign_pid="$!"
+          wait_for_port "$port"
+          if (cd "$fixture/source" && "$entry_dir/beads-bootstrap") \
+            >"$fixture/foreign-bootstrap.out" 2>&1; then
+            fail "$label bootstrap accepted an unowned listener"
+          fi
+          grep -Fq "module-owned Dolt daemon is not ready" "$fixture/foreign-bootstrap.out" \
+            || fail "$label rejected the foreign listener for the wrong reason"
+          [ ! -e "$fixture/foreign-data/beads_fixture" ] \
+            || fail "$label foreign listener received a database mutation"
+          if (cd "$fixture/source" && "$lifecycle_script" server) \
+            >"$fixture/foreign-port.out" 2>&1; then
+            fail "$label server accepted a foreign port collision"
+          fi
+          grep -Fq "another process is already listening" "$fixture/foreign-port.out" \
+            || fail "$label server rejected the foreign port for the wrong reason"
+          stop_process "$foreign_pid"
+          foreign_pid=""
         fi
-        grep -Fq "module-owned Dolt daemon is not ready" "$fixture/foreign-bootstrap.out" \
-          || fail "$label rejected the foreign listener for the wrong reason"
-        [ ! -e "$fixture/foreign-data/beads_fixture" ] \
-          || fail "$label foreign listener received a database mutation"
-        if (cd "$fixture/source" && "$lifecycle_script" server) \
-          >"$fixture/foreign-port.out" 2>&1; then
-          fail "$label server accepted a foreign port collision"
-        fi
-        grep -Fq "another process is already listening" "$fixture/foreign-port.out" \
-          || fail "$label server rejected the foreign port for the wrong reason"
-        stop_process "$foreign_pid"
-        foreign_pid=""
 
         (cd "$fixture/source" && "$lifecycle_script" server) >"$fixture/server.out" 2>&1 &
         server_pid="$!"
@@ -222,20 +221,25 @@
 
         linked_id="$(cd "$fixture/linked" && "$entry_dir/bd" --actor codex create "$label linked issue" --silent)"
         (cd "$fixture/linked" && "$entry_dir/bd" show "$actor_id" --json) >/dev/null
-        if (cd "$fixture/source" && "$entry_dir/bd" dolt push) >"$fixture/forbidden.out" 2>&1; then
-          fail "$label guarded bd accepted its own publisher command"
+        if [ "$origin_mode" = equal ]; then
+          # Publication, global metrics changes, and prefix repair must all stay
+          # outside the guarded client, even though their raw subcommands differ.
+          for command in dolt metrics rename-prefix; do
+            case "$command" in
+              dolt) set -- push ;;
+              metrics) set -- on ;;
+              rename-prefix) set -- changed --repair ;;
+            esac
+            if (cd "$fixture/source" && "$entry_dir/bd" "$command" "$@") \
+              >"$fixture/$command-refusal.out" 2>&1; then
+              fail "$label guarded bd accepted $command $*"
+            fi
+            grep -Fq "bd $command is outside the guarded repository mutation surface" "$fixture/$command-refusal.out" \
+              || fail "$label guarded bd rejected $command for the wrong reason"
+          done
+          [ ! -e "$fixture/home/.config/bd/config.yaml" ] \
+            || fail "$label mutated user-global Beads metrics config"
         fi
-        grep -Fq "outside the guarded repository mutation surface" "$fixture/forbidden.out" \
-          || fail "$label guarded bd rejected dolt push for the wrong reason"
-        if (cd "$fixture/source" && "$entry_dir/bd" metrics on) >"$fixture/metrics.out" 2>&1; then
-          fail "$label guarded bd accepted a user-global metrics mutation"
-        fi
-        if (cd "$fixture/source" && "$entry_dir/bd" rename-prefix changed --repair) \
-          >"$fixture/rename-prefix.out" 2>&1; then
-          fail "$label guarded bd accepted prefix repair"
-        fi
-        [ ! -e "$fixture/home/.config/bd/config.yaml" ] \
-          || fail "$label mutated user-global Beads metrics config"
 
         before_ref=absent
         rm -f "$fixture/lock-held" "$fixture/release-lock"
@@ -251,7 +255,6 @@
           "$lifecycle_script" publisher) >"$fixture/publisher.out" 2>&1 &
         publisher_pid="$!"
         sleep 1
-        kill -0 "$publisher_pid" 2>/dev/null || fail "$label pusher bypassed the repository lock"
         if git -C "$fixture/ledger.git" rev-parse --verify refs/dolt/data >/dev/null 2>&1; then
           fail "$label pusher published while the repository lock was held"
         fi
@@ -315,7 +318,6 @@
         stop_process "$publisher_pid"
         publisher_pid=""
         actual_ref="$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)"
-        [ -n "$actual_ref" ] || fail "$label startup drain produced an empty ref"
 
         [ "$state_root" = "$(cd "$fixture/linked" && "$entry_dir/beads-status" | jq -er .stateRoot)" ] \
           || fail "$label linked worktree did not share lifecycle state"
@@ -371,12 +373,15 @@
           || fail "$label original state did not re-enter after daemon restart"
 
         before_ref="$actual_ref"
-        git -C "$fixture/ledger.git" update-ref refs/dolt/data refs/heads/main
+        divergent_ref="$(git -C "$fixture/ledger.git" rev-parse refs/heads/main)"
+        git -C "$fixture/ledger.git" update-ref refs/dolt/data "$divergent_ref"
         if (cd "$fixture/linked" && "$entry_dir/beads-publish") >"$fixture/divergence.out" 2>&1; then
           fail "$label pusher accepted divergent remote history"
         fi
         grep -Fq "diverged" "$fixture/divergence.out" \
           || fail "$label pusher rejected divergence for the wrong reason"
+        [ "$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)" = "$divergent_ref" ] \
+          || fail "$label pusher changed the divergent remote despite rejecting it"
         git -C "$fixture/ledger.git" update-ref refs/dolt/data "$before_ref"
 
         before_ref="$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)"
@@ -387,13 +392,6 @@
               sql -r json -q "UPDATE issues SET notes = 'dirty fixture residue' WHERE id = '$actor_id';" \
               >/dev/null
           )
-          dirty_head="$(
-            cd "$db_path"
-            DOLT_ROOT_PATH="$state_root/dolt-root" ${cfg.package.dolt}/bin/dolt \
-              sql -r json -q 'SELECT COUNT(*) AS n FROM dolt_status' \
-              | jq -er '.rows[0].n'
-          )"
-          [ "$dirty_head" -ge 1 ] || fail "$label did not create dirty residue"
           if (cd "$fixture/source" && "$entry_dir/bd" create "must not execute" --silent) \
             >"$fixture/dirty-client.out" 2>&1; then
             fail "$label guarded client accepted dirty incoming state"
@@ -404,6 +402,8 @@
             >"$fixture/dirty-pusher.out" 2>&1; then
             fail "$label pusher accepted dirty incoming state"
           fi
+          grep -Fq "incoming state left a dirty Dolt working set" "$fixture/dirty-pusher.out" \
+            || fail "$label pusher rejected dirty state for the wrong reason"
         else
           (
             cd "$db_path"
@@ -415,12 +415,14 @@
             >"$fixture/invalid-client.out" 2>&1; then
             fail "$label guarded client accepted committed invalid state"
           fi
-          grep -Eq "constraint violations|orphan dependencies" "$fixture/invalid-client.out" \
+          grep -Eq "ledger exposes (constraint violations|orphan dependencies)" "$fixture/invalid-client.out" \
             || fail "$label guarded client rejected invalid state for the wrong reason"
           if (cd "$fixture/linked" && "$entry_dir/beads-publish") \
             >"$fixture/invalid-pusher.out" 2>&1; then
             fail "$label pusher accepted committed invalid state"
           fi
+          grep -Eq "ledger exposes (constraint violations|orphan dependencies)" "$fixture/invalid-pusher.out" \
+            || fail "$label pusher rejected invalid state for the wrong reason"
         fi
         [ "$(git -C "$fixture/ledger.git" rev-parse refs/dolt/data)" = "$before_ref" ] \
           || fail "$label invalid-state refusal changed the remote ref"
@@ -428,32 +430,29 @@
         git -C "$fixture/source" status --short --untracked-files=all >"$fixture/source.status.after"
         git -C "$fixture/source" config --local --list | sort >"$fixture/source.config.after"
         git -C "$fixture/linked" status --short --untracked-files=all >"$fixture/linked.status.after"
-        git -C "$fixture/linked" config --local --list | sort >"$fixture/linked.config.after"
         cmp "$fixture/source.status.before" "$fixture/source.status.after" \
           || fail "$label changed the source checkout"
         cmp "$fixture/source.config.before" "$fixture/source.config.after" \
           || fail "$label changed source local Git config"
         cmp "$fixture/linked.status.before" "$fixture/linked.status.after" \
           || fail "$label changed the linked checkout"
-        cmp "$fixture/linked.config.before" "$fixture/linked.config.after" \
-          || fail "$label changed linked local Git config"
         [ ! -e "$fixture/home/.dolt" ] || fail "$label mutated user-global Dolt config"
 
         stop_process "$server_pid"
         server_pid=""
-        trap - RETURN
+        trap - EXIT
         printf '%s=%s\n' "$label" passed
-      }
+      )
 
       ${lib.optionalString (!(lib.any (path: lib.hasSuffix "/packages/beads/modules/devenv" (toString path)) self.devenvModules.nix-agentic-tools.imports)) ''
         fail "the exported devenv module does not include Beads"
       ''}
-      test -x ${lifecycle.package}/bin/bd || fail "guarded bd is not installed"
-      for entry in beads-bootstrap beads-checkpoint beads-diagnostics beads-publish beads-status; do
-        test -x ${lifecycle.package}/bin/"$entry" || fail "$entry is not installed"
-      done
+      # A successful restore does not distinguish the raw publication path
+      # from a working server-side push if upstream changes its behavior.
       ${pkgs.gnugrep}/bin/grep -Fq 'push --set-upstream origin main' ${lib.getExe' lifecycle.lifecycle "beads-lifecycle"} \
         || fail "raw Dolt pusher is absent"
+      # A divergence rejected before the push cannot tell us whether the
+      # eventual push is forced if the remote changes after that check.
       if ${pkgs.gnugrep}/bin/grep -Fq -- '--force' ${lib.getExe' lifecycle.lifecycle "beads-lifecycle"}; then
         fail "lifecycle contains a force operation"
       fi

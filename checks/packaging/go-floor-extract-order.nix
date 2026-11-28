@@ -124,7 +124,7 @@
 
           ${orderAssertFn}
 
-          assert_chain_order "$extract" "${name}"
+          assert_chain_order "$extract" "${name}" > "$out"
 
           ${
             if (p.passthru or {}) ? updateScript
@@ -148,25 +148,15 @@
               exit 1
             ''
           }
-
-          assert_chain_order "$extract" "${name}" > "$out"
         '';
 
     checks = lib.mapAttrs' (name: p: lib.nameValuePair (drvName name) (mkCheck name p)) subjects;
 
     # ── Positive control ─────────────────────────────────────────────
-    # Without this, "every subject passed" is equally consistent with the
-    # assertion never having run. It calls `assert_chain_order` — the SAME
-    # function the real checks call — on a deliberately mis-ordered chain
-    # and requires it to FAIL. Flip the shared `-ge` to `-lt` and this goes
-    # red, which is the property a re-implemented control did not have.
-    misordered = pkgs.writeText "go-update-extract-MISORDERED" ''
-      /nix/store/0000000000000000000000000000000-fix-vendor-fixture
-      /nix/store/0000000000000000000000000000000-fix-go-floor-fixture
-    '';
-
-    # Second fixture: src AFTER the floor, which the real subjects cannot
-    # exercise (only glab carries a src fixer, and it is ordered correctly).
+    # Call the same assertion as the real subjects, with src AFTER the floor.
+    # Real subjects cannot exercise this rejection: only glab carries a src
+    # fixer, and it is ordered correctly. rust-toolchain-drift.nix exercises
+    # the shared dependency-before-version rejection.
     misorderedSrc = pkgs.writeText "go-update-extract-MISORDERED-SRC" ''
       /nix/store/0000000000000000000000000000000-fix-go-floor-fixture
       /nix/store/0000000000000000000000000000000-fix-src-fixture
@@ -179,21 +169,21 @@
 
       ${orderAssertFn}
 
-      # Each call is expected to fail, so guard it against errexit.
-      if assert_chain_order "${misordered}" "control-vendor-first" 2>/dev/null; then
-        echo "FAIL: a floor-AFTER-vendor chain was accepted. The ordering assertion" >&2
-        echo "no longer detects the bug this check exists for, so every green result" >&2
-        echo "it reports is meaningless." >&2
-        exit 1
-      fi
+      reject_order() {
+        local file="$1" label="$2" expected="$3" diagnostic
+        if diagnostic=$(assert_chain_order "$file" "$label" 2>&1); then
+          echo "FAIL: $label: accepted a misordered Go extract chain" >&2
+          exit 1
+        fi
+        if ! grep -F -- "$expected" <<<"$diagnostic"; then
+          printf 'FAIL: %s: expected %s, got:\n%s\n' "$label" "$expected" "$diagnostic" >&2
+          exit 1
+        fi
+      }
+      reject_order "${misorderedSrc}" control-src-after-floor \
+        'control-src-after-floor: source hash repair must precede go-floor extraction'
 
-      if assert_chain_order "${misorderedSrc}" "control-src-after-floor" 2>/dev/null; then
-        echo "FAIL: a src-AFTER-floor chain was accepted. The floor fixer builds .src," >&2
-        echo "so that ordering breaks glab's shape and must be rejected." >&2
-        exit 1
-      fi
-
-      echo "ok — the invariant rejects both a floor-after-vendor and a src-after-floor chain" > "$out"
+      echo "ok — the invariant rejects a src-after-floor chain" > "$out"
     '';
   in
     checks // {go-floor-extract-order-positive-control = positiveControl;};

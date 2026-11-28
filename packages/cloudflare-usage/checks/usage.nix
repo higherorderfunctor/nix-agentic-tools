@@ -3,6 +3,7 @@
   self,
   ...
 }: let
+  # Use the public export: ciPackages alone would miss a private-only command.
   package = self.packages.${pkgs.stdenv.hostPlatform.system}.cloudflare-usage;
 in {
   checks = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {

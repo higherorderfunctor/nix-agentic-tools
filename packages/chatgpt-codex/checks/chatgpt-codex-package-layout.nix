@@ -6,14 +6,10 @@
   ...
 }: {
   checks = let
-    inherit (pkgs.stdenv.hostPlatform) isLinux system;
+    inherit (pkgs.stdenv.hostPlatform) system;
     codex = self.ciPackages.${system}.chatgpt-codex;
     inherit (codex.passthru.codexPackage) resources root target;
-    # The files the daemon bootstrap's `validate_package` requires, each
-    # executable. bwrap is Linux-only upstream too.
-    required =
-      ["bin/codex" "bin/codex-code-mode-host" "codex-path/rg"]
-      ++ pkgs.lib.optional isLinux "codex-resources/bwrap";
+    publicExecutables = ["codex" "codex-code-mode-host"];
   in {
     chatgpt-codex-package-layout =
       pkgs.runCommand "chatgpt-codex-package-layout" {
@@ -31,18 +27,18 @@
 
         # Codex locates its package from its canonical executable, so resolve
         # the entrypoint exactly as exec does.
-        [ "$(realpath "$pkg/bin/codex")" = "$root/bin/codex" ] \
-          || fail "bin/codex resolves to $(realpath "$pkg/bin/codex"), not $root/bin/codex"
-        [ "$(realpath "$pkg/bin/codex-code-mode-host")" = "$root/bin/codex-code-mode-host" ] \
-          || fail "bin/codex-code-mode-host does not resolve into the package"
+        for exe in ${pkgs.lib.escapeShellArgs publicExecutables}; do
+          actual="$(realpath "$pkg/bin/$exe")"
+          [ "$actual" = "$root/bin/$exe" ] \
+            || fail "bin/$exe resolves to $actual, not $root/bin/$exe"
+        done
 
-        [ -f "$root/codex-package.json" ] || fail "$root has no codex-package.json"
         jq -e --arg version ${codex.version} --arg target ${target} \
           '.version == $version and .target == $target and .entrypoint == "bin/codex"' \
           "$root/codex-package.json" > /dev/null \
           || fail "codex-package.json does not describe this package: $(cat "$root/codex-package.json")"
 
-        for f in ${pkgs.lib.escapeShellArgs (required ++ resources)}; do
+        for f in ${pkgs.lib.escapeShellArgs resources}; do
           [ -f "$root/$f" ] && [ -x "$root/$f" ] || fail "package is missing executable $f"
         done
 
@@ -55,11 +51,12 @@
           || fail "package must contain one layout"
         [ "$(find "$root" -name codex-voice-host | wc -l)" -eq 1 ] \
           || fail "package must contain one voice host"
-        [ "$(find "$pkg/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)" = "$(printf '%s\n' codex codex-code-mode-host)" ] \
+        [ "$(find "$pkg/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)" = "$(printf '%s\n' ${pkgs.lib.escapeShellArgs publicExecutables})" ] \
           || fail "unexpected public executable set"
 
-        # The behavioral half: the bootstrap that failed. A short CODEX_HOME
-        # keeps the control socket under the Unix path-length limit.
+        # Bootstrap validates the daemon's executable helpers, including
+        # bwrap on Linux. A short CODEX_HOME keeps the control socket under
+        # the Unix path-length limit.
         export HOME="$TMPDIR/home"
         export CODEX_HOME="$TMPDIR/c"
         mkdir -p "$HOME" "$CODEX_HOME"

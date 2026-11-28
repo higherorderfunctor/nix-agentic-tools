@@ -1,8 +1,10 @@
 {
+  harness,
   lib,
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   proxy = import ../../lib/ai/mcpProxy.nix {inherit lib pkgs;};
   header = {
     file = "/TOKEN";
@@ -12,55 +14,75 @@
     Authorization = header;
     "X-Token" = {file = "/SECOND";};
   };
-  evaluate = headers:
+  evaluate = definitions:
     (lib.evalModules {
-      modules = [
-        ../../lib/ai/mcpServer/commonSchema.nix
-        {
-          proxy = {
-            inherit headers;
-            port = 19591;
-          };
-        }
-      ];
+      modules =
+        [
+          ../../lib/ai/mcpServer/commonSchema.nix
+          {proxy.port = 19591;}
+        ]
+        ++ map (headers: {proxy = {inherit headers;};}) definitions;
     }).config.proxy.headers;
-  splitCollision =
-    (lib.evalModules {
-      modules = [
-        ../../lib/ai/mcpServer/commonSchema.nix
-        {
-          proxy = {
-            headers.Authorization = header;
-            port = 19591;
-          };
-        }
-        {proxy.headers.authorization = null;}
-      ];
-    }).config.proxy.headers;
-  accepts = headers: (builtins.tryEval (builtins.deepSeq (evaluate headers) true)).success;
-  badPaths = [(builtins.appendContext "/runtime-token" (builtins.getContext "${pkgs.caddy}")) "${pkgs.caddy}/token" "${builtins.storeDir}/token" "relative" "/run/../nix/store/token" "//nix/store/token" "/run/./token" "/run/token/" "/bad path" "/bad\npath" "/bad\rpath" "/bad{path}" "/bad\"path" "/bad\\path"];
-  badPrefixes = ["bad\n" "bad\r" "bad\"" "bad\\" "{env.SECRET}"];
+  # Force the changed field so a rejection cannot come from an unrelated option.
+  readHeader = field: value: (evaluate [{Authorization = header // {${field} = value;};}]).Authorization.${field};
+  rejectHeader = field:
+    lib.mapAttrs (_: invalid:
+      rejectsChange (readHeader field) {
+        inherit invalid;
+        valid = header.${field};
+        expected = header.${field};
+      });
+  readNames = definitions: builtins.attrNames (evaluate definitions);
+  rejectName = invalid:
+    rejectsChange (name: readNames [{${name} = header;}]) {
+      inherit invalid;
+      valid = "Authorization";
+      expected = ["Authorization"];
+    };
+  rejectCollision = rejectsChange (name: readNames [{Authorization = header;} {${name} = null;}]) {
+    valid = "X-Drop-Me";
+    invalid = "authorization";
+    expected = ["Authorization" "X-Drop-Me"];
+  };
   spec = proxy.specFor "fixture" {
     url = "http://127.0.0.1/endpoint";
     proxy = {
       host = "127.0.0.1";
       port = 19591;
-      headers = evaluate declared;
+      headers = evaluate [declared];
     };
   };
 in {
-  checks.module-mcp-proxy-file-headers = assert accepts declared;
-  assert lib.all (file: !(accepts {Authorization = {inherit file;};})) badPaths;
-  assert lib.all (prefix: !(accepts {Authorization = header // {inherit prefix;};})) badPrefixes;
-  assert !(accepts {
-    Authorization = header;
-    authorization = null;
-  });
-  assert !(accepts {"X-Forwarded-For" = header;});
-  assert !(accepts {"Bad Header" = header;});
-  assert !(accepts {"-Authorization" = header;});
-  assert !(builtins.tryEval (builtins.deepSeq splitCollision true)).success;
-  assert spec.headerSecrets == {};
+  checks.module-mcp-proxy-file-headers = assert checkRows "proxy file headers" (
+    {
+      "header name cannot contain a space" = rejectName "Bad Header";
+      "header name cannot start with a hyphen" = rejectName "-Authorization";
+      "header name cannot use a stripped hop header" = rejectName "X-Forwarded-For";
+      "header names reject a case collision across definitions" = rejectCollision;
+    }
+    // rejectHeader "file" {
+      "path cannot be relative" = "relative";
+      # A literal store path and attached context exercise independent guards.
+      "path cannot be under the store directory" = "${builtins.storeDir}/token";
+      "path cannot contain a backslash" = "/bad\\path";
+      "path cannot contain a brace" = "/bad{path}";
+      "path cannot contain a newline" = "/bad\npath";
+      "path cannot contain a quote" = "/bad\"path";
+      "path cannot contain a space" = "/bad path";
+      "path cannot contain a traversal segment" = "/run/../nix/store/token";
+      "path cannot contain an empty leading segment" = "//nix/store/token";
+      "path cannot contain an empty trailing segment" = "/run/token/";
+      "path cannot contain an explicit current-directory segment" = "/run/./token";
+      "path cannot refer to a store output through string context" = builtins.appendContext "/runtime-token" (builtins.getContext "${pkgs.caddy}");
+    }
+    // rejectHeader "prefix" {
+      "prefix cannot contain a backslash" = "bad\\";
+      "prefix cannot contain a carriage return" = "bad\r";
+      "prefix cannot contain a newline" = "bad\n";
+      "prefix cannot contain a placeholder" = "{env.SECRET}";
+      "prefix cannot contain a quote" = "bad\"";
+    }
+  );
     pkgs.runCommand "module-mcp-proxy-file-headers" {nativeBuildInputs = [pkgs.python3];} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

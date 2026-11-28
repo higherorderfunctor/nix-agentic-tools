@@ -12,6 +12,20 @@
     "/kimchi-fixture/link/project" = true;
     "/nonexistent/kimchi-project" = false;
   };
+  # Historical receipt identifiers for these directories and documents.
+  # A new naming algorithm must still be able to discover the old receipts.
+  receiptIds = {
+    ".config/kimchi" = "035bd2b9569f8113a65c9e27c226078fa53df91fe844d4a655a90c46b442cd9e";
+    ".config/kimchi/config.json" = "d2a1f6816b75f1d70a1825b9c4a9b5333efed6b058d44dff3568f06b4279f98d";
+    ".config/kimchi/harness" = "973dbb6fca194c773a3b7d2cc3dfd092628eed472fd458e0305b2101412acaff";
+    ".config/kimchi/harness/settings.json" = "e15b059f35df670ae8e8892ba5826fdbea2591df1a85f9cc0f1e4d0ab66509c2";
+    ".kimchi" = "f687b7c79c400c5dbe15635b4c12bb39d98de8a018e5c5cfe955366c28e039b5";
+    ".kimchi/agents" = "f51666134f0f7fab0992c2a9aad962375bdb543d9f51a613950f3f4797f3d149";
+    "custom/kimchi" = "00c6a2dcb0a92cd96e2a8335a5d9aab36ce357305e8abda12653d696393b4eff";
+    "custom/kimchi/config.json" = "19850c76e0ccd8338bf62a914a4831a55ef1755003497e4a178b49af87ca170a";
+    "custom/kimchi/harness" = "a0e8830fb226624e3f5ce96d1384c325b0edbf383f6746a18fbbf6b4e59b209f";
+    "custom/kimchi/harness/settings.json" = "a2dcb916dd0dfe8ee0985f5aa271cf03263c1de78f7edbec8b9327c389b38086";
+  };
   fixture = lib.genAttrs ["devenv" "hm"] (backend:
     lib.genAttrs [".config/kimchi" "custom/kimchi"] (configDir: let
       isHm = backend == "hm";
@@ -86,12 +100,6 @@
           then "ai-files-apply"
           else "ai:files-apply";
         apply = graph.${applyName};
-        prune =
-          graph.${
-            if isHm
-            then "ai-files-prune"
-            else "ai:files-prune"
-          };
         expected =
           if !enabled
           then []
@@ -108,11 +116,11 @@
           [
             {
               codec = "dir";
-              ledger = "materialize/kimchi-agents-${builtins.hashString "sha256" (
+              ledger = "materialize/kimchi-agents-${receiptIds.${
                 if isHm
                 then configDir
                 else ".kimchi/agents"
-              )}.manifest";
+              }}.manifest";
               path =
                 if isHm
                 then "${harnessDir}/agents"
@@ -121,7 +129,7 @@
           ]
           ++ map (path: {
             codec = "dir";
-            ledger = "materialize/kimchi-files-${builtins.hashString "sha256" path}.manifest";
+            ledger = "materialize/kimchi-files-${receiptIds.${path}}.manifest";
             inherit path;
           })
           (lib.unique (
@@ -131,13 +139,16 @@
           ))
           ++ lib.optionals isHm (map (path: {
             codec = "json";
-            ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
+            ledger = "materialize/kimchi-shared-${receiptIds.${path}}.json";
             inherit path;
           }) [configPath "${harnessDir}/settings.json"]);
-        hasRun = lib.any (item: item.content ? run) copies;
+        # Home Manager always renders trust; devenv renders only the provider fixture.
+        hasRun = enabled && (isHm || name == "run");
+        expectedCopies = lib.remove ".kimchi/hooks.json" expected;
       in
         assert builtins.attrNames config.ai.kimchi.files == lib.sort builtins.lessThan expected;
         assert lib.all (path: config.ai.claims.path.${path} == ["kimchi"]) expected;
+        assert lib.sort builtins.lessThan (map (item: item.path) copies) == lib.sort builtins.lessThan expectedCopies;
         assert lib.all (item:
           item.format
           == "json"
@@ -155,45 +166,10 @@
             else null
           ))
         copies;
-        assert lib.elem (
-          if isHm
-          then "checkLinkTargets"
-          else "ai:link-check"
-        )
-        prune.before;
-        assert (graph ? ${applyName}) == (plan != []);
         assert plan == [] || hasRun == lib.elem "fixture-provider" apply.after;
         assert plan == [] || !isHm || hasRun == lib.elem "sops-nix" apply.after;
-        assert plan
-        == []
-        || lib.elem (
-          if isHm
-          then "linkGeneration"
-          else "ai:files-linked"
-        )
-        apply.after;
         assert config.ai.kimchi.legacyLedgers == expectedLegacy;
         assert lib.all (item: lib.elem item config.ai.legacyLedgers) config.ai.kimchi.legacyLedgers;
-        assert !enabled
-        || isHm
-        || !declared
-        || (
-          config.ai.files.".kimchi/hooks.json".method
-          == "symlink"
-          && config.ai.files.".kimchi/hooks.json".content.value
-          == {
-            hooks.TurnStart = [
-              {
-                hooks = [
-                  {
-                    command = "turn";
-                    type = "command";
-                  }
-                ];
-              }
-            ];
-          }
-        );
         assert lib.all (item: item.assertion) config.assertions; {
           inherit configPath harnessDir;
           inherit (config.ai.kimchi) legacyLedgers;
@@ -208,9 +184,16 @@
             path = "${pkgs.writeText "kimchi-config.json" (builtins.toJSON value)}";
           };
         };
-      steps = lib.genAttrs ["disabled" "empty" "helper" "plain" "run" "secret"] generate;
+      # The token renderer exists only in HM; the project renderer is devenv-only.
+      steps = lib.genAttrs (["disabled" "empty" "plain"]
+        ++ (
+          if isHm
+          then ["helper" "secret"]
+          else ["run"]
+        ))
+      generate;
     in
-      assert lib.all (step: step.legacyLedgers == steps.disabled.legacyLedgers) (builtins.attrValues steps); steps));
+      steps));
   fixtureJson = builtins.toJSON {
     inherit fixture trust;
     bash = lib.getExe pkgs.bash;

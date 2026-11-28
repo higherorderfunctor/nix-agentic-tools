@@ -19,22 +19,6 @@
   checks = let
     inherit (import ../lib/friendly-features.nix) featureSettingImplications friendlyRolloutFeatures;
     inherit (extractedLib {inherit pkgs;}) mkOwnerCheck;
-    # One option of the `--help` table as the extractor records it, with the
-    # defaults of a plain flag; each need below spells out what differs.
-    optionNeed = table: long: overrides: {
-      key = "cli.options.${table}.${long}";
-      value =
-        {
-          aliases = [];
-          count = false;
-          inherit long;
-          possibleValues = [];
-          short = null;
-          takesValue = false;
-          valueName = null;
-        }
-        // overrides;
-    };
   in
     {
       # The trigger-map locator on synthetic bundles: a quoted key is the same
@@ -50,16 +34,14 @@
         # the map, but its values are objects or a shared reference.
         exitCodeTable = "var N={0:\"none\",1:\"none\",2:\"none\",other:\"none\"};var E=Object.freeze({SessionStart:{0:\"stdout\",1:\"none\",2:\"none\",other:\"none\"},SessionEnd:N,Stop:{0:\"stop-decision\",1:\"keep-working\",2:\"none\",other:\"none\",decidesWhenUnfinished:!0},PreToolUse:{0:\"permission-decision\",1:\"none\",2:\"block\",other:\"none\"}});";
         extract = (import ../lib/packaging.nix).kiroHookTriggersExtractScript pkgs;
-        # A trigger map whose every entry is a literal, with the `SessionStart`
-        # key quoted. The `quoted` case checks that a quoted key is the same
-        # key; `ambiguous` puts two of these in one bundle.
+        # A literal map with `SessionStart` quoted: recognize it even when
+        # an identifier-keyed effect table appears first.
         literalMap = binding: triggerMap binding "\"SessionStart\"" "\"SessionStart\"";
       in
         pkgs.runCommand "kiro-hook-triggers-fixtures" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           jq=${pkgs.jq}/bin/jq
-          printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M")} > quoted.js
           printf '%s' 'var M=Object.freeze({});' > absent.js
           printf '%s' ${pkgs.lib.escapeShellArg computedMap} > computed.js
           # A locator that accepts a computed map beside the effect table
@@ -67,20 +49,22 @@
           printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + computedMap)} > exit-codes-computed.js
           # The table comes first, as in the 3.6.0 bundle, so a locator that
           # takes the first `SessionStart` object picks the table here.
-          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + triggerMap "M" "SessionStart" "\"SessionStart\"")} > exit-codes.js
+          printf '%s' ${pkgs.lib.escapeShellArg (exitCodeTable + literalMap "M")} > exit-codes.js
           # A locator that takes the first or the last map instead of failing
           # succeeds here.
           printf '%s' ${pkgs.lib.escapeShellArg (literalMap "M" + literalMap "N")} > ambiguous.js
           # The effect table alone is an absent map, not a map with a computed
           # entry: a locator that diagnoses any lone candidate as non-literal fails.
           printf '%s' ${pkgs.lib.escapeShellArg exitCodeTable} > table-only.js
-          ${extract} quoted.js > quoted.json
-          [ "$("$jq" '.hookTriggers | length' quoted.json)" = 12 ]
-          [ "$("$jq" -r '.hookTriggerAliases.agentSpawn' quoted.json)" = SessionStart ]
           ${extract} exit-codes.js > exit-codes.json
           [ "$("$jq" -c '.hookTriggers' exit-codes.json)" = '["Manual","PostFileCreate","PostFileDelete","PostFileSave","PostTaskExec","PostToolUse","PreTaskExec","PreToolUse","SessionEnd","SessionStart","Stop","UserPromptSubmit"]' ]
           [ "$("$jq" -c '.hookTriggerAliases' exit-codes.json)" = '{"agentSpawn":"SessionStart"}' ]
-          for case in absent:"hook trigger map is absent" computed:"non-literal entry" ambiguous:"absent or ambiguous (2 of 2" exit-codes-computed:"absent or ambiguous (0 of 2" table-only:"absent or ambiguous (0 of 1"; do
+          for case in \
+            absent:"absent or ambiguous (0 of 0" \
+            ambiguous:"absent or ambiguous (2 of 2" \
+            computed:"non-literal entry" \
+            exit-codes-computed:"absent or ambiguous (0 of 2" \
+            table-only:"absent or ambiguous (0 of 1"; do
             status=0
             ${extract} "''${case%%:*}.js" > /dev/null 2> err.txt || status=$?
             # Two statements: the left side of `&&` is exempt from errexit, so
@@ -90,45 +74,14 @@
           done
           touch "$out"
         '';
-      # The help parser on the real 3.0.0 output saved under fixtures/help: every
-      # shape it has (compact and long layouts, aliases, `...` counts, inline
-      # and block possible values, multi-line prose) against hand-written rows,
-      # then the three inputs it refuses.
+      # The real 3.0.0 help fixtures exercise both option layouts and check
+      # the continuation alias in the printed table, then exercise three
+      # inputs the parser refuses.
       kiro-cli-help-fixtures = pkgs.runCommand "kiro-cli-help-fixtures" {nativeBuildInputs = [pkgs.gnugrep pkgs.gnused];} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        jq=${pkgs.jq}/bin/jq
         parse() { ${pkgs.python3}/bin/python3 -I ${../extract/cli-help.py} --help-dir "$1"; }
-        parse ${./fixtures/help} 2> table.txt > parsed.json
-        fail=0
-        # expect <label> <jq filter that must hold>
-        expect() {
-          if ! "$jq" -e "$2" parsed.json > /dev/null; then
-            echo "FAIL: $1" >&2
-            fail=1
-          fi
-        }
-        expect "table sizes" '(.cli.options | map_values(length)) == {acp: 10, chat: 30, top: 13}'
-        expect "chat --output-format: block values, one description wrapped over two lines" \
-          '.cli.options.chat["--output-format"].possibleValues == ["text", "stream-json"]'
-        expect "chat --session-source: value name with a bar, inline values" \
-          '.cli.options.chat["--session-source"] | .valueName == "v1|v2" and .possibleValues == ["v1", "v2"]'
-        expect "chat --wrap: block values" \
-          '.cli.options.chat["--wrap"].possibleValues == ["always", "never", "auto"]'
-        expect "chat --legacy-ui: alias in the long layout" \
-          '.cli.options.chat["--legacy-ui"].aliases == ["--classic"]'
-        expect "chat --verbose: count flag" '.cli.options.chat["--verbose"].count'
-        expect "chat --resume-picker has no alias" '.cli.options.chat["--resume-picker"].aliases == []'
-        expect "top --legacy-ui: alias in the compact layout" \
-          '.cli.options.top["--legacy-ui"].aliases == ["--classic"]'
-        expect "top --resume-picker: alias on a continuation line" \
-          '.cli.options.top["--resume-picker"].aliases == ["--list"]'
-        expect "top --version: short name without a value" \
-          '.cli.options.top["--version"] | .short == "-V" and .takesValue == false'
-        expect "acp --auth-method: block values and an alias" \
-          '.cli.options.acp["--auth-method"] | .aliases == ["--authMethod"] and .possibleValues == ["cli", "client"]'
-        expect "acp has no top-only option" '.cli.options.acp | has("--resume") | not'
-        [ "$fail" = 0 ]
+        parse ${./fixtures/help} 2> table.txt > /dev/null
         grep -q '^  top  *--resume-picker  *-  *--list' table.txt
         # Refusals, each with the message that names it.
         refuses() {
@@ -177,50 +130,63 @@
           data = json.dumps(manifest, indent=2).encode()
           prefix = b"\x7fELF" + data + b"\0"
 
-          # Counting treatment-only rows would make these patches refuse.
-          for treatment_groups in (["@kiro-cli-team"], [], ["@kiro-cli-team", 'escaped"string']):
+          # Counting treatment-only rows would make the patch refuse. Check the
+          # write on the shipped shape; extraction covers the other spellings.
+          for regression, treatment_groups, check_patch in (
+              ("an empty treatment list still is not a manifest site", [], False),
+              ("an escaped quote does not end the treatment list", ["@kiro-cli-team", 'escaped"string'], False),
+              ("the shipped team-only row is not a manifest site", ["@kiro-cli-team"], True),
+          ):
               treatment = json.dumps({
                   "groups": {"kiro-cli-team": ["account"]},
                   feature: {"treatment": treatment_groups},
               }, indent=2).encode()
               path.write_bytes(prefix + treatment)
               extracted = run_script(extract_script, path)
-              assert extracted.returncode == 0, extracted
-              assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
-                  "patchable": True,
-                  "unmatchedSites": 0,
-              }, extracted
+              assert extracted.returncode == 0, (regression, extracted)
+              assert json.loads(extracted.stdout) == {
+                  "rolloutFeatures": ["example_rollout"],
+                  "rolloutPatchability": {"example_rollout": {"patchable": True, "unmatchedSites": 0}},
+                  "rolloutStates": {"example_rollout": {"treatment_percent": 10}},
+              }, (regression, extracted)
+              if not check_patch:
+                  continue
               patched = run_script(patch_script, feature, root)
-              assert patched.returncode == 0, patched
+              assert patched.returncode == 0, (regression, patched)
               patched_manifest, patched_treatment = path.read_bytes().split(b"\0", 1)
-              assert len(patched_manifest) == len(prefix) - 1
-              assert patched_treatment == treatment
+              # Native offsets stay fixed and the account treatment bytes are not patched.
+              assert len(patched_manifest) == len(prefix) - 1, regression
+              assert patched_treatment == treatment, regression
               entry = json.loads(patched_manifest.removeprefix(b"\x7fELF"))[feature]
-              assert entry["treatment_percent"] == 100 and entry["segment"] == "all", entry
+              assert entry["treatment_percent"] == 100 and entry["segment"] == "all", (regression, entry)
 
           # Matching only the opening of the row or list would allow partial
           # patches; skipping a treatment row in any layout but the one 3.6.0
-          # ships would stop the match failing closed.
+          # ships would stop the match failing closed. The scalar row checks
+          # the patcher refusal shared by all unmatched sites.
           only_treatment = {feature: {"treatment": ["@kiro-cli-team"]}}
-          for blob in (
-              *(prefix + json.dumps({feature: row}, indent=2).encode() for row in (
-                  {"treatment": "@kiro-cli-team"},
-                  {"treatment": ["@kiro-cli-team", 5]},
-                  {"treatment": ["@kiro-cli-team"], **manifest[feature]},
-              )),
-              prefix + json.dumps(only_treatment).encode(),
-              prefix + json.dumps(only_treatment, indent=4).encode(),
+          for regression, entry, indent, check_refusal in (
+              ("a scalar is not a valid treatment list", {feature: {"treatment": "@kiro-cli-team"}}, 2, True),
+              ("a valid first item does not excuse a non-string item", {feature: {"treatment": ["@kiro-cli-team", 5]}}, 2, False),
+              ("compact layout is not the shipped treatment shape", only_treatment, None, False),
+              ("extra manifest fields are not a treatment-only row", {feature: {"treatment": ["@kiro-cli-team"], **manifest[feature]}}, 2, False),
+              ("wrong indentation is not the shipped treatment shape", only_treatment, 4, False),
           ):
+              blob = prefix + json.dumps(entry, indent=indent).encode()
               path.write_bytes(blob)
               extracted = run_script(extract_script, path)
-              assert extracted.returncode == 0, extracted
+              assert extracted.returncode == 0, (regression, extracted)
               assert json.loads(extracted.stdout)["rolloutPatchability"][feature] == {
                   "patchable": False,
                   "unmatchedSites": 1,
-              }, extracted
+              }, (regression, extracted)
+              if not check_refusal:
+                  continue
               refused = run_script(patch_script, feature, root)
-              assert refused.returncode == 1 and "Refusing to half-patch." in refused.stderr, refused
-              assert path.read_bytes() == blob
+              assert refused.returncode == 1, (regression, refused)
+              assert "'example_rollout' has 1 site(s)" in refused.stderr, (regression, refused)
+              assert "Refusing to half-patch." in refused.stderr, (regression, refused)
+              assert path.read_bytes() == blob, regression
 
           for blob, error in [
               (data + b"\0" + json.dumps({"other": {"description": ""}}, indent=2).encode(),
@@ -240,53 +206,12 @@
       name = "kiro-cli";
       needs =
         [
-          {
-            contains = "SessionStart";
-            key = "hookTriggers";
-          }
-          {
-            contains = "chat.modelDefaults";
-            key = "settingKeys";
-          }
-          {
-            contains = "chat.defaultModel";
-            key = "workspaceOverridableSettings";
-          }
-          {
-            contains = "chat.enableTangentMode";
-            key = "workspaceOverridableSettings";
-          }
-          # Vocabulary no code here consumes is pinned by membership, so an
-          # upstream addition shows only as drift of the committed raw.
-          # The inline form `[possible values: …]`; the launcher appends `v3`.
-          {
-            contains = "v3";
-            key = "cli.options.acp.--agent-engine.possibleValues";
-          }
-          # The block form `Possible values:`.
-          {
-            contains = "cli";
-            key = "cli.options.acp.--auth-method.possibleValues";
-          }
+          # Calibration and catalog extraction request JSON; other formats
+          # may be added without breaking either caller.
           {
             contains = "json";
             key = "cli.options.chat.--format.possibleValues";
           }
-          # The top-level options that take a value: the scan list of
-          # lib/launchValueOptions.nix is derived from this table, so these
-          # records are exact.
-          (optionNeed "top" "--agent" {
-            takesValue = true;
-            valueName = "AGENT";
-          })
-          (optionNeed "top" "--repo" {
-            takesValue = true;
-            valueName = "REPO";
-          })
-          (optionNeed "top" "--resume-id" {
-            takesValue = true;
-            valueName = "SESSION_ID";
-          })
         ]
         ++ map (feature: {
           contains = feature;

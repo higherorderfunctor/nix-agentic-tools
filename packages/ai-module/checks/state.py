@@ -22,19 +22,18 @@ with tempfile.TemporaryDirectory() as temporary:
     root.mkdir()
     state = Path(temporary) / "state" / "runtime.json"
     owned = root / "owned"
-    engine.reconcile([], root, state, "apply")
-    assert not state.exists()
     engine.reconcile(plan("old"), root, state, "apply")
     original = json.loads(state.read_text())
     assert original["version"] == 1
-    print("PASS: missing state starts at v1; nothing owned leaves no state file")
+    print("PASS: missing state starts at v1")
 
     state.write_text(json.dumps({**original, "version": 0}))
-    bad_source = plan("old") + [{**plan("new")[0], "path": "other", "content": {"source": "/missing"}}]
+    missing_source = Path(temporary) / "missing"
+    bad_source = [{**plan("old")[0], "content": {"source": str(missing_source)}}]
     try:
         engine.reconcile(bad_source, root, state, "apply")
     except ValueError as error:
-        assert "source must be a file" in str(error)
+        assert str(error) == f"source must be a file: {missing_source}"
     else:
         raise AssertionError("bad source accepted")
     assert json.loads(state.read_text()) == original
@@ -44,30 +43,38 @@ with tempfile.TemporaryDirectory() as temporary:
     assert state.stat().st_ino == migrated_inode
     print("PASS: v0 changes only version, saves before reconciliation, repeat load is a no-op")
 
+    def record(**changes):
+        return {**original, "files": {"owned": {**original["files"]["owned"], **changes}}}
+
+    invalid_entry = "invalid state entry: owned"
+    unsupported_version = f"unsupported files state version: {state}"
     malformed = {
-        "bad digest": {**original, "files": {"owned": {**original["files"]["owned"], "digest": "bad"}}},
-        "bad files": {"files": [], "version": 1},
-        "bad method": {**original, "files": {"owned": {**original["files"]["owned"], "method": "missing"}}},
-        "bad path": {**original, "files": {"../outside": original["files"]["owned"]}},
-        "missing version": {"files": original["files"]},
-        "negative version": {**original, "version": -1},
-        "unknown version": {**original, "version": 2},
-        "v0 bad digest": {"files": {"owned": {**original["files"]["owned"], "digest": "bad"}}, "version": 0},
-        "version boolean": {**original, "version": True},
+        "bad digest": (record(digest="bad"), invalid_entry),
+        "bad files": ({"files": [], "version": 1}, "invalid files state files"),
+        "bad method": (record(method="missing"), invalid_entry),
+        "bad path": ({**original, "files": {"../outside": original["files"]["owned"]}},
+                     "invalid state path: ../outside"),
+        "missing version": ({"files": original["files"]}, unsupported_version),
+        "negative version": ({**original, "version": -1}, unsupported_version),
+        "unknown version": ({**original, "version": 2}, unsupported_version),
+        "v0 bad digest": ({**record(digest="bad"), "version": 0}, invalid_entry),
+        "version boolean": ({**original, "version": True}, unsupported_version),
     }
-    for name, value in malformed.items():
+    for name, (value, expected) in malformed.items():
         state.write_text(json.dumps(value))
         before = state.read_bytes()
         try:
             engine.reconcile(plan("new"), root, state, "apply")
-        except ValueError:
-            pass
+        except ValueError as error:
+            assert str(error) == expected, (name, str(error))
         else:
             raise AssertionError(f"{name} accepted")
         assert state.read_bytes() == before and owned.read_text() == "old"
     print(f"PASS: {len(malformed)} malformed states refused before destination mutation")
 
 
+# A missing destination moves the whole legacy namespace, a live destination
+# never gets overwritten, and a cold start does not invent legacy state.
 for previous_exists, current_exists in ((True, False), (True, True), (False, False)):
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary) / "root"
@@ -85,9 +92,11 @@ for previous_exists, current_exists in ((True, False), (True, True), (False, Fal
         desired = plan(expected) if previous_exists or current_exists else []
         original_lock = engine.fcntl.flock
         original_mkdir = Path.mkdir
+        checkpoints = []
 
         def before_mkdir(path, *args, **kwargs):
-            if path == current:
+            if path == current and not checkpoints:
+                checkpoints.append("mkdir")
                 # Before namespace creation, migration either moved everything
                 # or left the absent pair untouched.
                 assert previous.exists() == (previous_exists and current_exists)
@@ -95,6 +104,7 @@ for previous_exists, current_exists in ((True, False), (True, True), (False, Fal
             return original_mkdir(path, *args, **kwargs)
 
         def before_lock(stream, operation):
+            checkpoints.append("lock")
             assert previous.exists() == (previous_exists and current_exists)
             if previous_exists and not current_exists:
                 assert (current / "ai.json").read_bytes() == previous_state
@@ -103,6 +113,7 @@ for previous_exists, current_exists in ((True, False), (True, True), (False, Fal
 
         with patch.object(Path, "mkdir", before_mkdir), patch.object(engine.fcntl, "flock", before_lock):
             engine.reconcile(desired, root, current / "ai.json", "apply", legacy_state=legacy)
+        assert checkpoints == ["mkdir", "lock"], checkpoints
         assert (current / "ai.json").exists() == bool(desired)
         if desired:
             assert sorted(json.loads((current / "ai.json").read_text())["files"]) == ["owned"]

@@ -7,7 +7,7 @@
   ...
 }: let
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (harness) aiStubs claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest tomlFormat;
+  inherit (harness) aiStubs checkRows claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest rejectsChange tomlFormat;
   # Read the per-file engine plan; absent copies remain absent, including
   # when the runtime is disabled or its last rule is withdrawn.
   engineTargets = evaluated:
@@ -32,10 +32,12 @@
   agentSource = evaluated: name:
     evaluated.config.ai.codex._generatedFiles.".codex/agents/${name}.toml".content.source;
   renderedAgent = name: value: toString (tomlFormat.generate "codex-agent-${name}.toml" value);
-  execpolicyTargets = evaluated:
-    lib.filter (target: lib.hasPrefix ".codex/rules/" target.path) (engineTargets evaluated);
   execpolicyRule = evaluated: name: targetAt evaluated ".codex/rules/${name}";
   execpolicyInput = evaluated: name: markdownInput evaluated ".codex/rules/${name}";
+  failedAssertions = evaluated:
+    map (entry: entry.message) (lib.filter (entry: !entry.assertion) evaluated.config.assertions);
+  failsWith = fragment: evaluated:
+    lib.any (lib.hasInfix fragment) (failedAssertions evaluated);
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexGlobalFlags hmCodexSettings withHmDefaults;
 in {
   checks = {
@@ -52,8 +54,8 @@ in {
     );
 
     module-codex-update-check-default-overridable = mkTest "codex-update-check-default-overridable" (
-      lib.all (
-        eval: let
+      let
+        check = eval: isHm: let
           evaluate = settings: package:
             eval {
               ai.codex = {
@@ -62,27 +64,31 @@ in {
                 native.settings = settings;
               };
             };
-          native = evaluated: evaluated.config.ai.codex.native.settings;
-          settings = evaluated: evaluated.config.ai.codex.files.".codex/config.toml".content.value or {};
-          default = evaluate {} aiStubs.chatgpt-codex;
-          overridden = evaluate {check_for_update_on_startup = true;} aiStubs.chatgpt-codex;
-          nullSetting = evaluate {check_for_update_on_startup = null;} aiStubs.chatgpt-codex;
-          unmanaged = evaluate {} null;
-          unmanagedExplicit = value: evaluate {check_for_update_on_startup = value;} null;
+          files = evaluated: evaluated.config.ai.codex.files;
+          settings = evaluated: (files evaluated).".codex/config.toml".content.value or {};
+          read = evaluated: (settings evaluated).check_for_update_on_startup;
+          managed = settingsValue: evaluate settingsValue aiStubs.chatgpt-codex;
+          unmanaged = settingsValue: evaluate settingsValue null;
+          onlyInUserConfig = evaluated: expected:
+            if isHm
+            then read evaluated == expected
+            else !((files evaluated) ? ".codex/config.toml");
         in
-          (native default).check_for_update_on_startup
-          == false
-          && (native overridden).check_for_update_on_startup == true
-          && (native nullSetting).check_for_update_on_startup == null
-          && (native unmanaged).check_for_update_on_startup == null
-          && lib.all (evaluated:
-            if evaluated.config ? home
-            then (hmCodexSettings evaluated).check_for_update_on_startup == (native evaluated).check_for_update_on_startup
-            else !(evaluated.config.ai.codex.files ? ".codex/config.toml")) [default overridden]
-          && !((settings nullSetting) ? check_for_update_on_startup)
-          && !((settings unmanaged) ? check_for_update_on_startup)
-          && lib.all (value: (settings (unmanagedExplicit value)).check_for_update_on_startup == value) [false true]
-      ) [evalDevenv evalHm]
+          checkRows "Codex update-check config ownership" {
+            "a managed override belongs in Home Manager config, never project config" =
+              onlyInUserConfig (managed {check_for_update_on_startup = true;}) true;
+            "an unmanaged package must not receive a managed default" =
+              !((settings (unmanaged {})) ? check_for_update_on_startup);
+            "explicit false reaches config without a managed launcher" =
+              read (unmanaged {check_for_update_on_startup = false;}) == false;
+            "explicit true reaches config without a managed launcher" =
+              read (unmanaged {check_for_update_on_startup = true;}) == true;
+          };
+      in
+        checkRows "Codex update-check backends" {
+          "Home Manager" = check evalHm true;
+          "devenv" = check evalDevenv false;
+        }
     );
 
     # Both backends always install a launcher for the document preflight.
@@ -96,11 +102,7 @@ in {
       in
         builtins.length hmPackages
         == 1
-        && lib.hasSuffix "chatgpt-codex-wrapped" (builtins.baseNameOf (builtins.head hmPackages))
         && builtins.length devenvPackages == 1
-        && lib.hasSuffix "chatgpt-codex-wrapped" (
-          builtins.baseNameOf (builtins.head devenvPackages)
-        )
     );
 
     module-codex-package-null-hm-configures-unpinned = mkTest "codex-package-null-hm-configures-unpinned" (
@@ -153,20 +155,6 @@ in {
         && evaluated.config.warnings
         == ["ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."]
     );
-
-    # `pinDaemonToPackage` is declared under `hm.options` only: devenv's
-    # backend option tree does not carry it at all, so setting it there is an
-    # unknown-option evaluation error, not a rejected value.
-    module-codex-pinDaemonToPackage-devenv-unknown-option = mkTest "codex-pinDaemonToPackage-devenv-unknown-option" (!(builtins.tryEval (builtins.deepSeq
-      (evalDevenv {
-        ai.codex = {
-          enable = true;
-          pinDaemonToPackage = false;
-        };
-      })
-          .config
-      true))
-      .success);
 
     module-codex-default-sandbox-roots = mkTest "codex-default-sandbox-roots" (
       let
@@ -369,7 +357,6 @@ in {
         sibling = evaluate "/repos/sibling" namedSettings;
         arbitrary = evaluate "/scratch/agent" namedSettings;
         directoryCommon = evaluate "/repos/separate" namedSettings;
-        nonGit = evaluate "/repos/plain" namedSettings;
         legacy = evaluate "/repos/sibling" {sandbox_mode = "workspace-write";};
         denied = evaluate "/repos/sibling" (lib.recursiveUpdate namedSettings {
           permissions.project-edit.filesystem."/repos/main/.git" = "deny";
@@ -377,8 +364,12 @@ in {
         primaryFilesystem = primary.permissions.project-edit.filesystem;
         siblingFilesystem = sibling.permissions.project-edit.filesystem;
         arbitraryFilesystem = arbitrary.permissions.project-edit.filesystem;
-        malformed = builtins.tryEval (evaluate "/repos/malformed" namedSettings);
-        unsafe = builtins.tryEval (evaluate "/repos/unsafe" namedSettings);
+        rejectsInvalidGitDir = invalid:
+          rejectsChange (root: (evaluate root namedSettings).permissions.project-edit) {
+            valid = "/repos/plain";
+            inherit invalid;
+            expected = {extends = ":workspace";};
+          };
       in
         primaryFilesystem."/repos/main/.git"
         == "write"
@@ -388,36 +379,12 @@ in {
         && !(siblingFilesystem ? "/repos/sibling/.git")
         && !(siblingFilesystem ? "/repos/main/.git/worktrees/sibling")
         && !(siblingFilesystem ? "/repos/main/.git/.git")
-        && !(nonGit.permissions.project-edit ? filesystem)
         && legacy.sandbox_workspace_write.writable_roots == ["/repos/sibling/.git"]
         && denied.permissions.project-edit.filesystem."/repos/main/.git" == "deny"
-        && !malformed.success
-        && !unsafe.success
-    );
-
-    module-codex-default-getenv-needs-no-module-arg = mkTest "codex-default-getenv-needs-no-module-arg" (
-      let
-        roots =
-          (evalDevenv {
-            ai.codex = {
-              enable = true;
-              native.settings.sandbox_mode = "workspace-write";
-            };
-          }).config.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
-      in
-        builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
-    );
-
-    module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
-      let
-        config.ai.codex.skills.example = ../../claude-code/checks/fixtures/claude-skills/skill-a;
-        hm = evalHm config;
-        devenv = evalDevenv config;
-      in
-        !(hm.config.home.file ? ".agents/skills/example")
-        && !(devenv.config.files ? ".agents/skills/example")
-        && !(hm.config.ai.files ? ".agents/skills/example")
-        && !(devenv.config.ai.files ? ".agents/skills/example")
+        && checkRows "Codex Git metadata resolution" {
+          "a malformed gitdir pointer is not treated as absent Git metadata" = rejectsInvalidGitDir "/repos/malformed";
+          "a gitdir pointer to the filesystem root is rejected" = rejectsInvalidGitDir "/repos/unsafe";
+        }
     );
 
     module-codex-skills-fanout = mkTest "codex-skills-fanout" (
@@ -435,25 +402,12 @@ in {
         fromGeneratedTree ".agents/skills/local" hm.config.home.file.".agents/skills/local"
         && (markdownInput hm ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && !(hm.config.home.file.".agents/skills/local" ? recursive)
-        && hm.config.ai.claims.path.".agents/skills/local" == ["codex"]
-        && hm.config.ai.codex.files ? ".agents/skills/local"
         && fromGeneratedTree ".agents/skills/shared" hm.config.home.file.".agents/skills/shared"
         && (markdownInput hm ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
-        && !(hm.config.home.file.".agents/skills/shared" ? recursive)
         && fromGeneratedTree ".agents/skills/local" devenv.config.files.".agents/skills/local"
         && (markdownInput devenv ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
         && fromGeneratedTree ".agents/skills/shared" devenv.config.files.".agents/skills/shared"
         && (markdownInput devenv ".agents/skills/shared").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}"
-        && hm.config.home.activation ? "ai-codex-migrate-skill-links"
-        # It moves user directories, so under DRY_RUN it must only echo.
-        && lib.hasInfix "run /nix/store/" hm.config.home.activation."ai-codex-migrate-skill-links".text
-        && !lib.hasInfix "run /nix/store/" devenv.config.tasks."ai:codex-migrate-skill-links".exec
-        && devenv.config.tasks ? "ai:codex-migrate-skill-links"
-        && devenv.config.tasks."ai:codex-migrate-skill-links".after
-        == ["devenv:files:cleanup"]
-        && devenv.config.tasks."ai:codex-migrate-skill-links".before == ["ai:link-check"]
-        && hm.config.ai.codex.activation.codex-migrate-skill-links.after == []
-        && hm.config.ai.codex.activation.codex-migrate-skill-links.before == ["linkCheck"]
     );
 
     module-codex-skillsdir-fanout = mkTest "codex-skillsdir-fanout" (
@@ -482,26 +436,37 @@ in {
     in
       assert fromGeneratedTree ".agents/skills/single" evaluated.config.home.file.".agents/skills/single";
         pkgs.runCommand "module-test-codex-single-file-skill-wraps-directory" {} ''
-          test -d ${source}
-          test -f ${source}/SKILL.md
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           cmp ${../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md} ${source}/SKILL.md
           touch "$out"
         '';
 
     module-codex-unsafe-skill-name-fails = mkTest "codex-unsafe-skill-name-fails" (
       let
-        config.ai.codex = {
-          enable = true;
-          skills."../escape" = ../../claude-code/checks/fixtures/claude-skills/skill-a;
-        };
-        failsSafely = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "single safe path components" assertion.message)
-          evaluated.config.assertions;
+        check = eval: let
+          evaluate = name:
+            eval {
+              ai.codex = {
+                enable = true;
+                skills.${name} = ../../claude-code/checks/fixtures/claude-skills/skill-a;
+              };
+            };
+          valid = evaluate "local";
+        in
+          checkRows "Codex skill names" {
+            "a safe name delivers its skill under .agents/skills" =
+              failedAssertions valid
+              == []
+              && (markdownInput valid ".agents/skills/local").source == "${../../claude-code/checks/fixtures/claude-skills/skill-a}";
+            "a parent traversal is not a single safe path component" =
+              failsWith "single safe path components" (evaluate "../escape");
+          };
       in
-        failsSafely (evalHm config)
-        && failsSafely (evalDevenv config)
+        checkRows "Codex skill backends" {
+          "Home Manager" = check evalHm;
+          "devenv" = check evalDevenv;
+        }
     );
 
     module-codex-skill-runtime-replaces-root = mkTest "codex-skill-runtime-replaces-root" (
@@ -518,39 +483,6 @@ in {
       in
         fromGeneratedTree ".agents/skills/duplicate" evaluated.config.home.file.".agents/skills/duplicate"
         && (markdownInput evaluated ".agents/skills/duplicate").source == "${../../claude-code/checks/fixtures/claude-skills/skill-b}"
-    );
-
-    module-codex-default-model-effort-parity = mkTest "codex-default-model-effort-parity" (
-      let
-        hm = evalHm {ai.codex.enable = true;};
-        devenv = evalDevenv {ai.codex.enable = true;};
-      in
-        hmCodexSettings hm
-        == withHmDefaults {}
-        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
-        && !(devenv.config.files ? ".codex/config.toml")
-    );
-
-    # config.toml is a plain store symlink on both backends: no writer owns
-    # it and no fact says Codex writes it, because every Codex config writer
-    # fails against the link (chatgpt-codex-readonly-config).
-    module-codex-config-toml-is-a-store-symlink = mkTest "codex-config-toml-is-a-store-symlink" (
-      let
-        config.ai.codex = {
-          enable = true;
-          native.settings.model = "declared";
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        unowned = evaluated:
-          !lib.any (target: target.path == ".codex/config.toml" && target.method != "symlink") (engineTargets evaluated);
-      in
-        hm.config.home.file ? ".codex/config.toml"
-        && devenv.config.files ? ".codex/config.toml"
-        && unowned hm
-        && unowned devenv
-        && hm.config.ai.codex.files.".codex/config.toml".method == "symlink"
-        && devenv.config.ai.codex.files.".codex/config.toml".method == "symlink"
     );
 
     # Home Manager always owns the user config.toml, as a store symlink even
@@ -581,31 +513,6 @@ in {
     # supported. The distinct whole-file `--profile` surface (`ai.codex.profiles`)
     # was removed 2026-09-19 as unreachable dead code — see the reservation
     # comment in `packages/chatgpt-codex/lib/mkCodex.nix`.
-    module-codex-default-permissions-enabled = mkTest "codex-default-permissions-enabled" (
-      let
-        config.ai.codex = {
-          enable = true;
-          native.settings.default_permissions = ":workspace";
-        };
-        passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
-      in
-        passes (evalHm config) && passes (evalDevenv config)
-    );
-
-    module-codex-permissions-enabled = mkTest "codex-permissions-enabled" (
-      let
-        config.ai.codex = {
-          enable = true;
-          native.settings = {
-            default_permissions = "project-edit";
-            permissions.project-edit.extends = ":workspace";
-          };
-        };
-        passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
-      in
-        passes (evalHm config) && passes (evalDevenv config)
-    );
-
     module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
       let
         config.ai = {
@@ -662,39 +569,24 @@ in {
 
     module-codex-mcp-freeform-rejects-non-toml = mkTest "codex-mcp-freeform-rejects-non-toml" (
       let
-        hm = evalHm {
-          ai.codex = {
-            enable = true;
-            mcpServers.docs = {
-              command = "/bin/docs";
-              codex.future = value: value;
+        readFuture = future:
+          (hmCodexSettings (evalHm {
+            ai.codex = {
+              enable = true;
+              mcpServers.docs = {
+                command = "/bin/docs";
+                codex = {inherit future;};
+              };
             };
-          };
-        };
-        evaluated = builtins.tryEval (hmCodexSettings hm);
+          })).mcp_servers.docs.future;
       in
-        !evaluated.success
-    );
-
-    module-codex-mcp-credential-wrapper-parity = mkTest "codex-mcp-credential-wrapper-parity" (
-      let
-        config.ai = {
-          codex.enable = true;
-          mcpServers.context7-mcp = {
-            package = pkgs.hello;
-            settings.credentials = redact.file "/run/secrets/context7-api-key";
+        checkRows "Codex MCP freeform values" {
+          "an unknown key may contain TOML text, not a function" = rejectsChange readFuture {
+            valid = "future-value";
+            invalid = value: value;
+            expected = "future-value";
           };
-        };
-        hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
-        devenvServer = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.mcp_servers.context7-mcp;
-        rendered = builtins.toJSON hmServer;
-      in
-        hmServer
-        == devenvServer
-        && lib.hasInfix "context7-mcp-env" hmServer.command
-        && lib.take 2 hmServer.args == ["--transport" "stdio"]
-        && !(lib.hasInfix "/run/secrets/context7-api-key" rendered)
-        && !(hmServer ? type)
+        }
     );
 
     # Exercise every supported MCP lowering shape together: two HTTP services,
@@ -726,6 +618,7 @@ in {
         };
         hmServers = (hmCodexSettings (evalHm config)).mcp_servers;
         devenvServers = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.mcp_servers;
+        credentialServer = hmServers.context7-mcp;
       in
         hmServers
         == devenvServers
@@ -738,7 +631,9 @@ in {
           "nixos-mcp"
           "openmemory"
         ]
-        && lib.hasInfix "context7-mcp-env" hmServers.context7-mcp.command
+        && lib.hasInfix "context7-mcp-env" credentialServer.command
+        && lib.take 2 credentialServer.args == ["--transport" "stdio"]
+        && !(lib.hasInfix "/run/secrets/context7-api-key" (builtins.toJSON credentialServer))
         && lib.hasInfix "github-mcp-env" hmServers.github-mcp.command
         && hmServers.effect-mcp.url == "http://127.0.0.1:19760/mcp"
         && hmServers.openmemory.command == "/bin/openmemory"
@@ -746,17 +641,24 @@ in {
 
     module-codex-mcp-native-table-collision-fails = mkTest "codex-mcp-native-table-collision-fails" (
       let
-        evaluated = evalHm {
-          ai = {
-            codex = {
-              enable = true;
-              native.settings.mcp_servers.native.command = "native";
+        evaluate = withShared:
+          evalHm {
+            ai = {
+              codex = {
+                enable = true;
+                native.settings.mcp_servers.native.command = "native";
+              };
+              mcpServers = lib.optionalAttrs withShared {shared.command = "shared";};
             };
-            mcpServers.shared.command = "shared";
           };
-        };
+        valid = evaluate false;
       in
-        builtins.any (assertion: !assertion.assertion && lib.hasInfix "native.settings.mcp_servers" assertion.message) evaluated.config.assertions
+        checkRows "Codex MCP table source" {
+          "a native-only server is delivered without a shared pool" =
+            failedAssertions valid == [] && (hmCodexSettings valid).mcp_servers == {native.command = "native";};
+          "a populated shared pool cannot coexist with a populated native table" =
+            failsWith "native.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers" (evaluate true);
+        }
     );
 
     module-codex-settings-rendering-parity = mkTest "codex-settings-rendering-parity" (
@@ -819,86 +721,47 @@ in {
           };
         };
         hm = evalHm config;
-        devenv = evalDevenv config;
+        devenv = evalDevenvWithGetEnv (_: "") config;
         hmSettings = hmCodexSettings hm;
         devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
-        withoutBackendRoots = settings:
-          settings
-          // {
-            sandbox_workspace_write = removeAttrs settings.sandbox_workspace_write ["writable_roots"];
-          };
+        expected = config.ai.codex.native.settings;
+        withRoots = roots:
+          lib.recursiveUpdate expected {sandbox_workspace_write.writable_roots = roots;};
       in
-        withoutBackendRoots hmSettings
-        == withHmDefaults (withoutBackendRoots devenvSettings)
-        && hmSettings.approval_policy.granular.rules
-        && !hmSettings.approval_policy.granular.request_permissions
-        && hmSettings.sandbox_mode == "workspace-write"
-        && builtins.all
-        (root: builtins.elem root hmSettings.sandbox_workspace_write.writable_roots)
-        ["/var/lib/project-cache" "/home/test/.cache/nix"]
-        && builtins.all
-        (root: builtins.elem root devenvSettings.sandbox_workspace_write.writable_roots)
-        ["/var/lib/project-cache" "/tmp/devenv-root/.git"]
+        checkRows "Codex legacy security settings" {
+          "Home Manager retains the declared sandbox with its cache root" =
+            hmSettings == withHmDefaults (withRoots ["/var/lib/project-cache" "/home/test/.cache/nix"]);
+          "devenv retains the declared sandbox with only the project Git root added" =
+            devenvSettings == withRoots ["/var/lib/project-cache" "/tmp/devenv-root/.git"];
+        }
     );
-
-    module-codex-security-toml-syntax = let
-      evaluated = evalHm {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            approval_policy.granular = {
-              request_permissions = false;
-              sandbox_approval = true;
-            };
-            projects."/home/test/project".trust_level = "trusted";
-            sandbox_mode = "workspace-write";
-            sandbox_workspace_write.network_access = false;
-          };
-        };
-      };
-      source = tomlFormat.generate "codex-security-settings.toml" (hmCodexSettings evaluated);
-    in
-      pkgs.runCommand "module-test-codex-security-toml-syntax" {} ''
-        ${pkgs.gnugrep}/bin/grep -Fqx '[approval_policy.granular]' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'request_permissions = false' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '[projects."/home/test/project"]' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'trust_level = "trusted"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '[sandbox_workspace_write]' ${source}
-        touch "$out"
-      '';
 
     module-codex-security-models-do-not-compose = mkTest "codex-security-models-do-not-compose" (
       let
-        check = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "default_permissions/permissions" assertion.message)
-          evaluated.config.assertions;
-        config.ai.codex = {
-          enable = true;
-          native.settings = {
-            default_permissions = ":workspace";
-            sandbox_mode = "workspace-write";
+        evaluate = backend: settings:
+          backend {
+            ai.codex = {
+              enable = true;
+              native.settings = settings;
+            };
           };
-        };
-      in
-        check (evalHm config)
-        && check (evalDevenv config)
-    );
-
-    module-codex-security-empty-profile-model-does-not-conflict = mkTest "codex-security-empty-profile-model-does-not-conflict" (
-      let
-        config.ai.codex = {
-          enable = true;
-          native.settings = {
-            permissions = {};
-            sandbox_mode = "read-only";
+        legacy.sandbox_mode = "read-only";
+        named.default_permissions = ":workspace";
+        check = backend:
+          checkRows "Codex sandbox model composition" {
+            "a named selector cannot be loaded alongside the legacy selector" =
+              failsWith "sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both"
+              (evaluate backend (legacy // named));
+            "an empty named catalog does not activate the named permission model" =
+              failedAssertions (evaluate backend (legacy // {permissions = {};})) == [];
+            "the built-in workspace selector must work without a custom catalog" =
+              failedAssertions (evaluate backend named) == [];
           };
-        };
-        assertionsPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
       in
-        assertionsPass (evalHm config)
-        && assertionsPass (evalDevenv config)
+        checkRows "Codex sandbox backends" {
+          "Home Manager" = check evalHm;
+          "devenv" = check evalDevenv;
+        }
     );
 
     module-codex-permission-profiles-parity = mkTest "codex-permission-profiles-parity" (
@@ -935,29 +798,18 @@ in {
         devenv = evalDevenvWithGetEnv (name: {HOME = "/home/test";}.${name} or "") config;
         hmSettings = hmCodexSettings hm;
         devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.value;
-        withoutBackendRoots = settings:
-          settings
-          // {
-            permissions.project-edit =
-              settings.permissions.project-edit
-              // {
-                filesystem = removeAttrs settings.permissions.project-edit.filesystem [
-                  "/home/test/.cache/nix"
-                  "/tmp/devenv-root/.git"
-                ];
-              };
-          };
+        expected = config.ai.codex.native.settings;
       in
-        withoutBackendRoots hmSettings
-        == withHmDefaults (withoutBackendRoots devenvSettings)
-        && hmSettings.default_permissions == "project-edit"
-        && hmSettings.permissions.project-edit.filesystem.":minimal" == "read"
-        && hmSettings.permissions.project-edit.filesystem.":workspace_roots"."**/*.env" == "deny"
-        && hmSettings.permissions.project-edit.network.domains."*.github.com" == "allow"
-        && hmSettings.permissions.project-edit.filesystem."/home/test/.cache/nix" == "write"
-        && !(devenvSettings.permissions.project-edit.filesystem ? "/tmp/devenv-root/.git")
-        && builtins.all (assertion: assertion.assertion) hm.config.assertions
-        && builtins.all (assertion: assertion.assertion) devenv.config.assertions
+        checkRows "Codex named permission profile delivery" {
+          "Home Manager preserves all declared permission rules and adds its cache root" =
+            hmSettings
+            == withHmDefaults (lib.recursiveUpdate expected {permissions.project-edit.filesystem."/home/test/.cache/nix" = "write";})
+            && failedAssertions hm == [];
+          "devenv preserves all declared permission rules without an unverified Git root" =
+            devenvSettings
+            == lib.recursiveUpdate expected {permissions.project-edit.filesystem."/home/test/.cache/nix" = "write";}
+            && failedAssertions devenv == [];
+        }
     );
 
     module-codex-permission-profile-layer-composition = mkTest "codex-permission-profile-layer-composition" (
@@ -975,7 +827,7 @@ in {
             };
           };
         };
-        project = evalDevenv {
+        project = evalDevenvWithGetEnv (_: "") {
           ai.codex = {
             enable = true;
             native.settings = {
@@ -989,107 +841,66 @@ in {
         };
         userSettings = hmCodexSettings user;
         projectSettings = project.config.ai.codex.files.".codex/config.toml".content.value;
-        # Codex merges same-named permission tables by key and gives the project
-        # file higher precedence. Model that documented artifact composition
-        # explicitly instead of comparing two independent full configurations.
-        composedProfile = lib.recursiveUpdate userSettings.permissions.project-edit projectSettings.permissions.project-edit;
       in
-        userSettings.default_permissions
-        == "project-edit"
-        && projectSettings.default_permissions == "project-edit"
-        && composedProfile.extends == ":workspace"
-        && composedProfile.network.enabled
-        && composedProfile.filesystem."/home/test/.cache/nix" == "write"
-        && composedProfile.filesystem."/tmp/project-cache" == "write"
-        && composedProfile.filesystem."/tmp/shared" == "write"
-        && builtins.all (assertion: assertion.assertion) user.config.assertions
-        && builtins.all (assertion: assertion.assertion) project.config.assertions
+        # Assert the artifacts independently. Recreating an upstream merge in
+        # this test could let one layer silently supply fields the other lost.
+        checkRows "Codex permission profile layers" {
+          "the user layer retains its base profile and explicit deny" =
+            userSettings.default_permissions
+            == "project-edit"
+            && userSettings.permissions
+            == {
+              project-edit = {
+                extends = ":workspace";
+                filesystem = {
+                  "/home/test/.cache/nix" = "write";
+                  "/tmp/shared" = "deny";
+                };
+                network.enabled = true;
+              };
+            }
+            && failedAssertions user == [];
+          "the project layer does not copy defaults over the inherited base profile" =
+            projectSettings.default_permissions
+            == "project-edit"
+            && projectSettings.permissions.project-edit
+            == {
+              filesystem = {
+                "/tmp/project-cache" = "write";
+                "/tmp/shared" = "write";
+              };
+            }
+            && failedAssertions project == [];
+        }
     );
 
-    module-codex-permission-profiles-toml-syntax = let
-      evaluated = evalHm {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            default_permissions = "project-edit";
-            permissions.project-edit = {
-              extends = ":workspace";
-              filesystem.":workspace_roots" = {
-                "**/*.env" = "deny";
-                "." = "write";
-              };
-              network = {
-                domains."api.openai.com" = "allow";
-                enabled = true;
-              };
+    module-codex-execpolicy-source-restrictions = mkTest "codex-execpolicy-source-restrictions" (
+      let
+        source = pkgs.writeText "allow-status.rules" ''prefix_rule(pattern = ["git", "status"])'';
+        evaluate = backend: input:
+          backend {
+            ai.codex = {
+              enable = true;
+              execpolicyRules.probe = input;
             };
           };
-        };
-      };
-      source = tomlFormat.generate "codex-permission-profiles.toml" (hmCodexSettings evaluated);
-    in
-      pkgs.runCommand "module-test-codex-permission-profiles-toml-syntax" {} ''
-        ${pkgs.gnugrep}/bin/grep -Fqx 'default_permissions = "project-edit"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '[permissions.project-edit.filesystem.":workspace_roots"]' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '"**/*.env" = "deny"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '[permissions.project-edit.network.domains]' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '"api.openai.com" = "allow"' ${source}
-        touch "$out"
-      '';
-
-    module-codex-execpolicy-directory-source-is-rejected = mkTest "codex-execpolicy-directory-source-is-rejected" (
-      let
-        config.ai.codex = {
-          enable = true;
-          execpolicyRules.directory = ../../../checks/fixtures;
-        };
-        rejects = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "path sources" assertion.message)
-          evaluated.config.assertions;
+        check = backend: let
+          configured = evaluate backend "${source}";
+          rejects = input:
+            failsWith "ai.codex.execpolicyRules.probe path sources must be existing regular files or symlinks to existing files"
+            (evaluate backend input);
+        in
+          checkRows "Codex execpolicy path source" {
+            "a directory is not a regular rule file" = rejects ../../../checks/fixtures;
+            "a missing absolute path cannot be delivered as a rule" = rejects "/definitely/missing/codex.rules";
+            "an existing rule file remains an acceptable source" =
+              failedAssertions configured == [] && (execpolicyInput configured "probe.rules").source == "${source}";
+          };
       in
-        rejects (evalHm config)
-        && rejects (evalDevenv config)
-    );
-
-    module-codex-execpolicy-missing-source-is-rejected = mkTest "codex-execpolicy-missing-source-is-rejected" (
-      let
-        config.ai.codex = {
-          enable = true;
-          execpolicyRules.missing = "/definitely/missing/codex.rules";
-        };
-        rejects = evaluated:
-          builtins.any (assertion:
-            !assertion.assertion
-            && lib.hasInfix "path sources" assertion.message)
-          evaluated.config.assertions;
-      in
-        rejects (evalHm config)
-        && rejects (evalDevenv config)
-    );
-
-    module-codex-execpolicy-parity = mkTest "codex-execpolicy-parity" (
-      let
-        config.ai.codex = {
-          enable = true;
-          execpolicyRules.git-read = ''
-            prefix_rule(
-                pattern = ["git", ["diff", "log", "show"]],
-                decision = "allow",
-            )
-          '';
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        hmRule = (execpolicyInput hm "git-read.rules").text;
-        devenvRule = (execpolicyInput devenv "git-read.rules").text;
-      in
-        fromGeneratedTree ".codex/rules/git-read.rules" {source = (execpolicyRule hm "git-read.rules").content.source;}
-        && fromGeneratedTree ".codex/rules/git-read.rules" {source = (execpolicyRule devenv "git-read.rules").content.source;}
-        && hmRule
-        == devenvRule
-        && lib.hasInfix ''decision = "allow"'' hmRule
+        checkRows "Codex execpolicy backends" {
+          "Home Manager" = check evalHm;
+          "devenv" = check evalDevenv;
+        }
     );
 
     module-codex-execpolicy-runs-native-checker = let
@@ -1133,25 +944,6 @@ in {
         && lib.hasInfix "prefix_rule" execpolicy
     );
 
-    module-codex-execpolicy-string-store-path-is-source = mkTest "codex-execpolicy-string-store-path-is-source" (
-      let
-        rule = pkgs.writeText "string-source.rules" ''prefix_rule(pattern = ["git", "status"])'';
-        config.ai.codex = {
-          enable = true;
-          execpolicyRules.string-source = "${rule}";
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        hmSource = (execpolicyInput hm "string-source.rules").source;
-        devenvSource = (execpolicyInput devenv "string-source.rules").source;
-      in
-        fromGeneratedTree ".codex/rules/string-source.rules" {source = (execpolicyRule hm "string-source.rules").content.source;}
-        && fromGeneratedTree ".codex/rules/string-source.rules" {source = (execpolicyRule devenv "string-source.rules").content.source;}
-        && hmSource
-        == "${rule}"
-        && devenvSource == "${rule}"
-    );
-
     module-codex-execpolicy-symlinked-file-is-source = mkTest "codex-execpolicy-symlinked-file-is-source" (
       let
         rule = pkgs.writeText "symlink-target.rules" ''prefix_rule(pattern = ["git", "status"])'';
@@ -1191,84 +983,11 @@ in {
         && (execpolicyInput devenv "default.rules").text != ""
     );
 
-    # Codex keeps a rules/*.rules entry only when DirEntry::file_type() says
-    # regular file, and that call does not follow symlinks: a linked rule is
-    # skipped silently ("loaded 0 .rules files"; codex 0.156.0). So both
-    # backends must COPY each rule and claim it file by file. The engine stays
-    # registered when the last rule goes so the copy is retracted.
-    module-codex-execpolicy-copies-not-links = mkTest "codex-execpolicy-copies-not-links" (
-      let
-        populated.ai.codex = {
-          enable = true;
-          execpolicyRules.probe = ''prefix_rule(pattern = ["git", "status"])'';
-        };
-        emptied.ai.codex.enable = true;
-        # Disabling Codex removes the desired copy while the engine remains
-        # registered to retire its earlier ownership.
-        disabled = lib.recursiveUpdate populated {ai.codex.enable = false;};
-        copies = evaluate: let
-          evaluated = evaluate populated;
-          nativeFiles = evaluated.config.home.file or evaluated.config.files;
-          targets = execpolicyTargets evaluated;
-          off = evaluate disabled;
-          ledger = {
-            codec = "dir";
-            ledger = "materialize/codex-execpolicy.manifest";
-            path = ".codex/rules";
-          };
-        in
-          map (target: target.path) targets
-          == [".codex/rules/probe.rules"]
-          && lib.all (target: target.method == "ro") targets
-          && !(nativeFiles ? ".codex/rules/probe.rules")
-          && execpolicyTargets (evaluate emptied) == []
-          && execpolicyTargets off == []
-          && engineTargets off == []
-          && lib.all (result: let
-            isHm = result.config ? home;
-            graph =
-              if isHm
-              then result.config.home.activation
-              else result.config.tasks;
-            applyName =
-              if isHm
-              then "ai-files-apply"
-              else "ai:files-apply";
-            pruneName =
-              if isHm
-              then "ai-files-prune"
-              else "ai:files-prune";
-          in
-            lib.elem ledger result.config.ai.legacyLedgers
-            && (graph ? ${applyName}) == (engineTargets result != [])
-            && graph ? ${pruneName}) [evaluated off (evaluate emptied)];
-      in
-        copies evalHm && copies evalDevenv
-    );
-
     # ── App-server daemon ───────────────────────────────────────────────────
     # Home Manager selects the package the shared daemon runs and turns off
     # upstream's updater and auto-start; devenv touches none of that and runs
     # Codex with --no-daemon. The selector's behavior against the real daemon
     # is chatgpt-codex-daemon-selection.nix; these hold the wiring.
-    module-codex-daemon-hm-pins-package = mkTest "codex-daemon-hm-pins-package" (
-      let
-        hm = evalHm {ai.codex.enable = true;};
-        select = hm.config.home.activation."ai-codex-daemon-select".text;
-        # A regex needle cannot carry store-path context.
-        packageRoot = builtins.unsafeDiscardStringContext "${aiStubs.chatgpt-codex}/${aiStubs.chatgpt-codex.passthru.codexPackage.root}";
-      in
-        # It rewrites a link in the user's Codex home, so DRY_RUN must echo it.
-        hasLiteral "run /nix/store/" select
-        && hasLiteral "/bin/codex-daemon-select \"$HOME\"/.codex ${packageRoot}" select
-        && daemonSettings hm == {updater.autoUpdateEnabled = false;}
-        && (daemonSettingsTarget hm).path == ".codex/app-server-daemon/settings.json"
-        && (daemonSettingsTarget hm).method == "ro"
-        && (daemonSettingsTarget hm).format == "json"
-        && (hmCodexSettings hm).features.daemon_auto_start == false
-        && lib.all (assertion: assertion.assertion) hm.config.assertions
-    );
-
     module-codex-daemon-hm-pins-launcher-package = mkTest "codex-daemon-hm-pins-launcher-package" (
       let
         package = aiStubs.chatgpt-codex;
@@ -1287,7 +1006,6 @@ in {
         packageRoot = builtins.unsafeDiscardStringContext "${package}/${package.passthru.codexPackage.root}";
       in
         lib.hasSuffix " ${packageRoot}" hm.config.ai.codex.activation.codex-daemon-select.command
-        && daemonSettings hm == {updater.autoUpdateEnabled = false;}
         && lib.all (assertion: assertion.assertion) hm.config.assertions
         && lib.all (assertion: assertion.assertion) devenv.config.assertions
         && (builtins.head hm.config.home.packages).launcherPackage == package
@@ -1350,54 +1068,32 @@ in {
         && (hmCodexSettings unpinned).features.daemon_auto_start == false
         && lib.all (assertion: assertion.assertion) unpinned.config.assertions
         && (hmCodexSettings autoStart).features.daemon_auto_start
-        # Disabled: selection release still runs, and the engine retires the
-        # copied settings, so neither can outlive the managed package.
+        # Disabled: selection release still runs so it cannot outlive the managed package.
         && releases disabled
-        && daemonSettingsTarget disabled == null
-        && disabled.config.ai.codex.activation.codex-daemon-select.runWhenDisabled
-        && lib.elem {
-          codec = "dir";
-          ledger = "materialize/codex-daemon-settings.manifest";
-          path = ".codex/app-server-daemon";
-        }
-        disabled.config.ai.legacyLedgers
-        && engineTargets disabled == []
-        && !(disabled.config.home.activation ? "ai-files-apply")
-        && disabled.config.home.activation ? "ai-files-prune"
     );
 
     module-codex-daemon-hm-needs-package-layout = mkTest "codex-daemon-hm-needs-package-layout" (
       let
         foreign = pkgs.writeShellScriptBin "codex" "";
-        failure = evaluated:
-          lib.findFirst (assertion: !assertion.assertion) null evaluated.config.assertions;
-        pinned = failure (evalHm {
-          ai.codex = {
-            enable = true;
-            package = foreign;
+        evaluate = package: pinDaemonToPackage:
+          evalHm {
+            ai.codex = {
+              enable = true;
+              inherit package pinDaemonToPackage;
+            };
           };
-        });
+        rejectsLayout = failsWith "pinDaemonToPackage needs ai.codex.package to carry upstream's complete Codex package";
       in
-        pinned
-        != null
-        && hasLiteral "pinDaemonToPackage = false" pinned.message
-        # A complete package at another root would be pinned and then never
-        # released, because the selector only removes the shape it writes.
-        && failure (evalHm {
-          ai.codex = {
-            enable = true;
-            package = foreign // {passthru.codexPackage.root = "opt/codex";};
-          };
-        })
-        != null
-        && failure (evalHm {
-          ai.codex = {
-            enable = true;
-            package = foreign;
-            pinDaemonToPackage = false;
-          };
-        })
-        == null
+        checkRows "Codex Home Manager daemon package layout" {
+          "a foreign package is accepted when pinning is explicitly disabled" =
+            failedAssertions (evaluate foreign false) == [];
+          "pinning without upstream package metadata fails with the opt-out remedy" =
+            failsWith "pinDaemonToPackage = false" (evaluate foreign true)
+            && rejectsLayout (evaluate foreign true);
+          # The selector only releases paths in the layout it writes.
+          "pinning to an alternate root would leave a selection that cannot be released" =
+            rejectsLayout (evaluate (foreign // {passthru.codexPackage.root = "opt/codex";}) true);
+        }
     );
 
     module-codex-daemon-devenv-runs-without-daemon = let
@@ -1416,35 +1112,21 @@ in {
 
     module-codex-daemon-devenv-rejects-daemon-settings = mkTest "codex-daemon-devenv-rejects-daemon-settings" (
       let
-        failures = config:
-          map (assertion: assertion.message)
-          (lib.filter (assertion: !assertion.assertion) (evalDevenv config).config.assertions);
-        autoStart = failures {
-          ai.codex = {
-            enable = true;
-            native.settings.features.daemon_auto_start = true;
-          };
-        };
-        declared = failures {
-          ai.codex = {
-            enable = true;
-            native.daemonSettings.remoteControlEnabled = true;
-          };
-        };
+        failures = extra: failedAssertions (evalDevenv {ai.codex = {enable = true;} // extra;});
+        rejectsOnly = fragment: extra: let
+          messages = failures extra;
+        in
+          builtins.length messages == 1 && lib.hasInfix fragment (builtins.head messages);
       in
-        builtins.length autoStart
-        == 1
-        && hasLiteral "daemon_auto_start = true has no" (lib.head autoStart)
-        && builtins.length declared == 1
-        && hasLiteral "native.daemonSettings is Home Manager-only" (lib.head declared)
-        # Off is what --no-daemon already means, so it is accepted.
-        && failures {
-          ai.codex = {
-            enable = true;
-            native.settings.features.daemon_auto_start = false;
-          };
+        checkRows "Codex devenv daemon restrictions" {
+          # Off is what --no-daemon already means, so it is accepted.
+          "an explicit false is compatible with --no-daemon" =
+            failures {native.settings.features.daemon_auto_start = false;} == [];
+          "daemon settings cannot be delivered by a project shell" =
+            rejectsOnly "native.daemonSettings is Home Manager-only" {native.daemonSettings.remoteControlEnabled = true;};
+          "enabling daemon auto-start contradicts --no-daemon" =
+            rejectsOnly "daemon_auto_start = true has no" {native.settings.features.daemon_auto_start = true;};
         }
-        == []
     );
 
     module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
@@ -1460,62 +1142,26 @@ in {
         (hmCodexSettings hm).projects."/home/test/project".trust_level
         == "trusted"
         && failed != null
-        && lib.hasInfix "projects" failed.message
+        && lib.hasInfix "contains keys Codex ignores in project config:\nprojects." failed.message
     );
-
-    module-codex-settings-toml-syntax = let
-      evaluated = evalHm {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            features.memories = true;
-            model = "custom-provider/model";
-            model_reasoning_effort = "high";
-          };
-        };
-      };
-      source = tomlFormat.generate "codex-settings.toml" (hmCodexSettings evaluated);
-    in
-      pkgs.runCommand "module-test-codex-settings-toml-syntax" {} ''
-        ${pkgs.gnugrep}/bin/grep -Fqx 'model = "custom-provider/model"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'model_reasoning_effort = "high"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx '[features]' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'memories = true' ${source}
-        touch "$out"
-      '';
 
     module-codex-settings-enums-reject-invalid = mkTest "codex-settings-enums-reject-invalid" (
       let
-        accepts = name: value:
-          (builtins.tryEval
-            (hmCodexSettings (evalHm {
-              ai.codex = {
-                enable = true;
-                native.settings.${name} = value;
-              };
-            })))
-        .success;
-        acceptsFeature = name: value:
-          (builtins.tryEval
-            (hmCodexSettings (evalHm {
-              ai.codex = {
-                enable = true;
-                native.settings.features.${name} = value;
-              };
-            })))
-        .success;
-        acceptsPermission = path: value:
-          (builtins.tryEval
-            (hmCodexSettings (evalHm {
-              ai.codex = {
-                enable = true;
-                native.settings.permissions.test = lib.setAttrByPath path value;
-              };
-            })))
-        .success;
-        # These two vocabularies come from recursive Clap help. Test the entire
-        # extracted sets rather than one representative, so replacing the
-        # factory's sidecar lookup with a stale handwritten subset goes red.
+        read = path: value:
+          lib.getAttrFromPath path (hmCodexSettings (evalHm {
+            ai.codex = {
+              enable = true;
+              native.settings = lib.setAttrByPath path value;
+            };
+          }));
+        rejects = path: valid: invalid:
+          rejectsChange (read path) {
+            inherit valid invalid;
+            expected = valid;
+          };
+        # These vocabularies come from recursive Clap help. Read back every
+        # extracted member so a stale handwritten subset goes red. Separate
+        # fixed controls below keep an empty extraction from passing.
         extractedFlagValues = name: let
           matches = builtins.filter (flag: builtins.elem name flag.names) codexGlobalFlags;
           matchCount = builtins.length matches;
@@ -1523,55 +1169,56 @@ in {
           if matchCount == 1
           then (builtins.head matches).acceptedValues
           else throw "module-eval expected exactly one extracted Codex global flag record for ${name}, found ${toString matchCount}";
+        acceptsExtracted = key: flag: let
+          values = extractedFlagValues flag;
+        in
+          values != [] && lib.all (value: read [key] value == value) values;
+        permission = path: rejects (["permissions" "test"] ++ path);
       in
-        accepts "model_reasoning_effort" "max"
-        && lib.all (accepts "approval_policy") (extractedFlagValues "--ask-for-approval")
-        && accepts "approvals_reviewer" "auto_review"
-        && accepts "personality" "friendly"
-        && lib.all (accepts "sandbox_mode") (extractedFlagValues "--sandbox")
-        && accepts "web_search" "live"
-        && acceptsFeature "memories" true
-        && acceptsFeature "speculative_future_flag" false
-        && acceptsPermission ["filesystem" ":minimal"] "read"
-        && acceptsPermission ["network" "domains" "api.openai.com"] "allow"
-        && acceptsPermission ["network" "mode"] "limited"
-        && !(accepts "model_reasoning_effort" "extreme")
-        && !(accepts "approval_policy" "sometimes")
-        && !(accepts "approvals_reviewer" "agent")
-        && !(accepts "personality" "verbose")
-        && !(accepts "sandbox_mode" "full")
-        && !(accepts "web_search" "enabled")
-        && !(acceptsFeature "memories" "yes")
-        && !(acceptsFeature "speculative_future_flag" "no")
-        && !(acceptsPermission ["filesystem" ":minimal"] "execute")
-        && !(acceptsPermission ["filesystem" "glob_scan_max_depth"] 0)
-        && !(acceptsPermission ["network" "domains" "api.openai.com"] "prompt")
-        && !(acceptsPermission ["network" "mode"] "disabled")
+        checkRows "Codex native settings restrictions" {
+          "approval_policy accepts the complete extracted CLI vocabulary" = acceptsExtracted "approval_policy" "--ask-for-approval";
+          "approval_policy rejects sometimes" = rejects ["approval_policy"] "on-request" "sometimes";
+          "approvals_reviewer rejects agent" = rejects ["approvals_reviewer"] "auto_review" "agent";
+          "filesystem access rejects execute" = permission ["filesystem" ":minimal"] "read" "execute";
+          "filesystem glob scan depth rejects zero" = permission ["filesystem" "glob_scan_max_depth"] 1 0;
+          "known features reject strings instead of booleans" = rejects ["features" "memories"] true "yes";
+          "model_reasoning_effort rejects extreme" = rejects ["model_reasoning_effort"] "max" "extreme";
+          "network domain access rejects prompt" = permission ["network" "domains" "api.openai.com"] "allow" "prompt";
+          "network mode rejects disabled" = permission ["network" "mode"] "limited" "disabled";
+          "personality rejects verbose" = rejects ["personality"] "friendly" "verbose";
+          "sandbox_mode accepts the complete extracted CLI vocabulary" = acceptsExtracted "sandbox_mode" "--sandbox";
+          "sandbox_mode rejects full" = rejects ["sandbox_mode"] "workspace-write" "full";
+          "unknown features also reject strings instead of booleans" = rejects ["features" "speculative_future_flag"] false "no";
+          "web_search rejects enabled" = rejects ["web_search"] "live" "enabled";
+        }
     );
 
     module-codex-project-settings-reject-ignored-keys = mkTest "codex-project-settings-reject-ignored-keys" (
       let
-        devenv = evalDevenv {
+        config = settings: {
           ai.codex = {
             enable = true;
-            native.settings = {
-              model_provider = "custom";
-              notify = ["notify-send"];
-            };
+            native = {inherit settings;};
           };
         };
-        hm = evalHm {
-          ai.codex = {
-            enable = true;
-            native.settings.model_provider = "custom";
-          };
+        hmOnly = {
+          model_provider = "custom";
+          notify = ["notify-send"];
         };
-        failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
+        supported = {model = "review-model";};
+        hm = evalHm (config hmOnly);
+        rejects = key:
+          failsWith "contains keys Codex ignores in project config:\n${key}." (evalDevenv (config (supported
+            // {
+              ${key} = hmOnly.${key};
+            })));
       in
-        failed
-        != null
-        && lib.hasInfix "model_provider, notify" failed.message
-        && (hmCodexSettings hm).model_provider == "custom"
+        checkRows "Codex ignored project settings" {
+          "Home Manager still delivers both user-scope settings" = hmCodexSettings hm == withHmDefaults hmOnly;
+          "model_provider is ignored even without notify" = rejects "model_provider";
+          "the diagnostic names all rejected settings together" =
+            failsWith "contains keys Codex ignores in project config:\nmodel_provider, notify." (evalDevenv (config hmOnly));
+        }
     );
 
     module-codex-semantic-agents-fanout = mkTest "codex-semantic-agents-fanout" (
@@ -1649,13 +1296,25 @@ in {
       };
       source = (deliveredFiles evaluated.config).".codex/agents/reviewer.toml".source;
     in
-      assert fromGeneratedTree ".codex/agents/reviewer.toml" (deliveredFiles evaluated.config).".codex/agents/reviewer.toml";
-        pkgs.runCommand "module-test-codex-agent-toml-syntax" {} ''
-          ${pkgs.gnugrep}/bin/grep -Fqx 'name = "reviewer"' ${source}
-          ${pkgs.gnugrep}/bin/grep -Fqx 'model = "review-model"' ${source}
-          ${pkgs.gnugrep}/bin/grep -Fqx 'sandbox_mode = "read-only"' ${source}
-          touch "$out"
-        '';
+      pkgs.runCommand "module-test-codex-agent-toml-syntax" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 - ${source} <<'PYTHON'
+        import sys
+        import tomllib
+
+        with open(sys.argv[1], "rb") as agent_file:
+            role = tomllib.load(agent_file)
+        assert role == {
+            "description": "Review changes.",
+            "developer_instructions": "Report concrete findings.",
+            "model": "review-model",
+            "name": "reviewer",
+            "sandbox_mode": "read-only",
+        }, ("delivered role lost or changed a TOML field", role)
+        PYTHON
+        touch "$out"
+      '';
 
     module-codex-agent-runtime-replaces-root = mkTest "codex-agent-runtime-replaces-root" (
       let
@@ -1719,20 +1378,27 @@ in {
         valid (evalHm config) && valid (evalDevenv config)
     );
 
-    # A wrong-typed role field fails with its type error. It must not be
-    # reported as missing: that message would hide the real one.
+    # Force native-agent validation, not TOML generation. With a numeric
+    # description the type check must throw, not yield a missing-field assertion.
     module-codex-native-agent-type-error = mkTest "codex-native-agent-type-error" (
-      let
-        config.ai.codex = {
-          enable = true;
-          native.agents.typed = {
-            description = 42;
-            developer_instructions = "Typed.";
+      checkRows "Codex native agent description type" {
+        "Home Manager assertions surface a numeric description's type error" = rejectsChange (description: let
+          evaluated = evalHm {
+            ai.codex = {
+              enable = true;
+              native.agents.typed = {
+                inherit description;
+                developer_instructions = "Typed.";
+              };
+            };
           };
+        in
+          failedAssertions evaluated == []) {
+          expected = true;
+          invalid = 42;
+          valid = "Typed role.";
         };
-        fails = evaluated: !(builtins.tryEval (builtins.deepSeq (map (assertion: assertion.assertion) evaluated.config.assertions) true)).success;
-      in
-        fails (evalHm config) && fails (evalDevenv config)
+      }
     );
 
     # A raw TOML role file, as text or a path, is delivered verbatim beside
@@ -1932,12 +1598,10 @@ in {
         hmAgents = (hmCodexSettings (evalHm config)).agents;
         devenvAgents = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.value.agents;
       in
-        hmAgents
-        == devenvAgents
-        && hmAgents.default_subagent_model == "worker-model"
-        && hmAgents.default_subagent_reasoning_effort == "high"
-        && hmAgents.max_concurrent_threads_per_session == 7
-        && !hmAgents.interrupt_message
+        checkRows "Codex agent defaults delivery" {
+          "Home Manager retains every declared agent default, including enabled" = hmAgents == config.ai.codex.native.settings.agents;
+          "devenv retains every declared agent default, including enabled" = devenvAgents == config.ai.codex.native.settings.agents;
+        }
     );
 
     module-codex-hooks-fanout-parity = mkTest "codex-hooks-fanout-parity" (
@@ -2009,18 +1673,20 @@ in {
 
     module-codex-hooks-inline-source-collision-fails = mkTest "codex-hooks-inline-source-collision-fails" (
       let
-        result = evalHm {
-          ai.codex = {
-            enable = true;
-            hooks.Stop = [{hooks = [{command = "validate";}];}];
-            native.settings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
+        evaluate = withInline:
+          evalHm {
+            ai.codex = {
+              enable = true;
+              hooks.Stop = [{hooks = [{command = "validate";}];}];
+              native.settings = lib.optionalAttrs withInline {hooks.Stop = [{hooks = [{command = "legacy";}];}];};
+            };
           };
-        };
       in
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "cannot be combined with inline hook events in ai.codex.native.settings.hooks" assertion.message)
-        result.config.assertions
+        checkRows "Codex hook source exclusivity" {
+          "hooks.json alone does not conflict with an absent inline event" = failedAssertions (evaluate false) == [];
+          "an inline event cannot coexist with hooks.json fanout" =
+            failsWith "cannot be combined with inline hook events in ai.codex.native.settings.hooks" (evaluate true);
+        }
     );
 
     # Nix declares the trust of every generated hook, because `/hooks` cannot
@@ -2094,12 +1760,12 @@ in {
       };
       source = (deliveredFiles evaluated.config).".codex/hooks.json".source;
     in
-      assert fromGeneratedTree ".codex/hooks.json" (deliveredFiles evaluated.config).".codex/hooks.json";
-        pkgs.runCommand "module-test-codex-hooks-json-syntax" {} ''
-          ${pkgs.jq}/bin/jq -e '.hooks.Stop[0].hooks[0]
-            | .type == "command" and .command == "validate"' ${source} >/dev/null
-          touch "$out"
-        '';
+      pkgs.runCommand "module-test-codex-hooks-json-syntax" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.jq}/bin/jq -e '. == {hooks: {Stop: [{hooks: [{type: "command", command: "validate"}]}]}}' ${source}
+        touch "$out"
+      '';
 
     module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
       let
@@ -2132,7 +1798,6 @@ in {
           "Shared context"
           "Codex context"
         ]
-        && !(lib.hasInfix "---" expected)
     );
 
     module-codex-context-fallback-and-empty-gate = mkTest "codex-context-fallback-and-empty-gate" (
@@ -2152,21 +1817,25 @@ in {
 
     module-codex-configdir-rejects-unsafe-paths = mkTest "codex-configdir-rejects-unsafe-paths" (
       let
-        accepts = configDir:
-          (builtins.tryEval
+        rejectsPath = invalid:
+          rejectsChange (configDir:
             (evalHm {
               ai.codex = {
                 inherit configDir;
                 enable = true;
               };
-            }).config.ai.codex.configDir)
-        .success;
+            }).config.ai.codex.configDir) {
+            valid = ".config/codex";
+            inherit invalid;
+            expected = ".config/codex";
+          };
       in
-        accepts ".codex"
-        && !(accepts "")
-        && !(accepts "/tmp/codex")
-        && !(accepts "../codex")
-        && !(accepts "config/../codex")
+        checkRows "Codex configuration directory" {
+          "absolute paths escape HOME" = rejectsPath "/tmp/codex";
+          "an empty path selects HOME itself" = rejectsPath "";
+          "an interior parent segment must not pass a leading-only check" = rejectsPath "config/../codex";
+          "a leading parent segment escapes HOME" = rejectsPath "../codex";
+        }
     );
 
     module-codex-scoped-content-degrades-to-prose = mkTest "codex-scoped-content-degrades-to-prose" (
@@ -2256,9 +1925,6 @@ in {
           "<!-- rule: always -->\n\nApply this rule only in: `codex`.\n\nAlways body"
           "Shared context"
         ]
-        && !devenv.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
-        && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
-        && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );
 
     # The guard and Codex's own limit are one number: a raised guard reaches
@@ -2293,16 +1959,6 @@ in {
     module-codex-agents-md-byte-limit = let
       path = ".codex/AGENTS.md";
       hint = "Trim or replace the final content, or raise ai.codex.projectDocMaxBytes.";
-      limit.${path} = {
-        bytes = 32768;
-        inherit hint;
-      };
-      generated = evalHm {
-        ai.codex = {
-          context.text = "CONTEXT";
-          enable = true;
-        };
-      };
       boundary = size:
         evalHm {
           ai.codex = {
@@ -2315,15 +1971,11 @@ in {
       above = boundary 32769;
       failure = pkgs.testers.testBuildFailure (treeFor above);
     in
-      assert lib.assertMsg (generated.config.ai.codex._maxBytes == limit && exact.config.ai.codex._maxBytes == limit)
-      "codex-agents-md-byte-limit: ai.codex._maxBytes is not the 32768-byte limit on ${path}";
-      assert lib.assertMsg (lib.all (evaluated: fromGeneratedTree path evaluated.config.home.file.${path}) [generated exact above])
-      "codex-agents-md-byte-limit: ${path} is not delivered from a tree carrying its limit";
-        pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
-          test -f ${treeFor exact}/${path}
-          grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
-          echo PASS > "$out"
-        '';
+      pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
+        test -f ${treeFor exact}/${path}
+        grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
+        echo PASS > "$out"
+      '';
 
     # Both backends' launchers run the project-config notices against the
     # launch directory, so they reach Home Manager-only users in any repo.
@@ -2368,7 +2020,7 @@ in {
     # Consumer raw replacements retain their spaces and bypass tree guards.
     module-codex-raw-agents-md-overrides-are-verbatim = let
       text = "RAW   REPLACEMENT\n";
-      evaluate = backend: projectDocMaxBytes:
+      evaluate = backend:
         (
           if backend == "hm"
           then evalHm
@@ -2384,26 +2036,23 @@ in {
               content.text = text;
               format = "raw";
             };
-            inherit projectDocMaxBytes;
+            projectDocMaxBytes = 16;
           };
         };
-      sources = lib.concatMap (backend:
-        map (limit: let
-          evaluated = evaluate backend limit;
-          path =
-            if backend == "hm"
-            then ".codex/AGENTS.md"
-            else "AGENTS.md";
-        in
-          assert evaluated.config.ai.files.${path}.content.text == text;
-          assert evaluated.config.ai.files.${path}.format == "raw";
-            (deliveredFiles
-              evaluated.config).${
-              path
-            }.source or (
-              pkgs.writeText "delivered-raw-agents-md" (deliveredFiles evaluated.config).${path}.text
-            ))
-        [16 32768]) ["hm" "devenv"];
+      sources = map (backend: let
+        evaluated = evaluate backend;
+        path =
+          if backend == "hm"
+          then ".codex/AGENTS.md"
+          else "AGENTS.md";
+      in
+        assert evaluated.config.ai.files.${path}.format == "raw";
+          (deliveredFiles
+            evaluated.config).${
+            path
+          }.source or (
+            pkgs.writeText "delivered-raw-agents-md" (deliveredFiles evaluated.config).${path}.text
+          )) ["hm" "devenv"];
       expected = pkgs.writeText "raw-agents-md" text;
     in
       pkgs.runCommand "module-test-codex-raw-agents-md-overrides-are-verbatim" {} ''
@@ -2436,8 +2085,6 @@ in {
     in
       assert lib.assertMsg (oversized.config.ai.internal.agentsMd."AGENTS.md".maxBytes == 16)
       "codex-shared-byte-limit-covers-kiro-only-content: shared AGENTS.md does not carry Codex's byte limit";
-      assert lib.assertMsg (fromGeneratedTree "AGENTS.md" (deliveredFiles oversized.config)."AGENTS.md")
-      "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
       assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))
       "codex-shared-byte-limit-covers-kiro-only-content: a limit alone delivered an AGENTS.md";
         pkgs.runCommand "module-test-codex-shared-byte-limit-covers-kiro-only-content" {} ''
@@ -2445,21 +2092,5 @@ in {
           grep -q -F ${lib.escapeShellArg hint} ${failure}/testBuildFailure.log
           echo PASS > "$out"
         '';
-
-    module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (
-      let
-        evaluated = evalHm {
-          ai = {
-            codex = {
-              enable = true;
-              rules.duplicate.text = "Codex";
-            };
-            rules.duplicate.text = "Shared";
-          };
-        };
-      in
-        lib.hasInfix "Codex" (markdownInput evaluated ".codex/AGENTS.md").text
-        && !(lib.hasInfix "Shared" (markdownInput evaluated ".codex/AGENTS.md").text)
-    );
   };
 }

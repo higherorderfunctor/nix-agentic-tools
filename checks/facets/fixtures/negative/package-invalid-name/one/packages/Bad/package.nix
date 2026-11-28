@@ -1,2 +1,2 @@
-{runCommandLocal}:
-runCommandLocal "facet-invalid-package-name" {} "touch $out"
+{writeText}:
+writeText "facet-invalid-package-name" ""

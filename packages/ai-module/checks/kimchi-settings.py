@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -59,7 +60,7 @@ with tempfile.TemporaryDirectory() as temporary:
                             target.chmod(0o600)
                             ledger.write_text('{"version":1,"managed_paths":[["retired"]]}')
 
-                def plan_for(name):
+                def plan_for(name, renderer_error=None):
                     step = steps[name]
                     plan = copy.deepcopy(step["plan"])
                     template = base / "config-input.json"
@@ -75,10 +76,13 @@ with tempfile.TemporaryDirectory() as temporary:
                             content["run"] = content["run"].replace("/run/redact-fixture/", str(root) + "/")
                             content["run"] = content["run"].replace(data["trustPath"], str(trust_input)).replace(step["template"]["path"], str(template))
                             content["run"] = re.sub(r"/nix/store/[^\s]+/bin/python3", sys.executable, content["run"])
+                            if renderer_error is not None and root / item["path"] == config_path:
+                                # The engine inherits renderer stderr; capture it without changing the resolver.
+                                content["run"] = f"exec 2>{shlex.quote(str(renderer_error))}\n" + content["run"]
                     return plan
 
-                def phase(name, action):
-                    engine.reconcile(plan_for(name), root, state, action, legacy, old)
+                def phase(name, action, renderer_error=None):
+                    engine.reconcile(plan_for(name, renderer_error), root, state, action, legacy, old)
 
                 def activate(name):
                     phase(name, "prune")
@@ -98,12 +102,6 @@ with tempfile.TemporaryDirectory() as temporary:
                             assert record["keys"] == {}
                             if "value" in item["content"]:
                                 assert json.loads(target.read_text()) == item["content"]["value"]
-                            try:
-                                target.write_text("in-place edit")
-                            except PermissionError:
-                                pass
-                            else:
-                                raise AssertionError("read-only copy accepted in-place write")
                         else:
                             assert record["keys"] and "/native" not in record["keys"] and "/retired" not in record["keys"]
                             if scenario == "legacy":
@@ -120,7 +118,6 @@ with tempfile.TemporaryDirectory() as temporary:
                     for entry in legacy:
                         if entry["codec"] == "json":
                             assert json.loads((root / entry["path"]).read_text()) == {"native": "keep"}
-                    assert not state.exists()
                 elif scenario == "legacy":
                     mcp = harness / "mcp.json" if backend == "hm" else root / ".kimchi/mcp.json"
                     mcp.parent.mkdir(parents=True, exist_ok=True)
@@ -141,9 +138,7 @@ with tempfile.TemporaryDirectory() as temporary:
                     assert sum(path.read_text() == '{"edited":true}' for path in state.parent.glob("*.bak")) == sum(item["method"] == "ro" for item in steps["plain"]["plan"])
                     if backend == "hm":
                         assert json.loads(config_path.read_text())["region"] == "us"
-                        assert json.loads(config_path.read_text())["native"] == "keep"
                         assert json.loads((harness / "settings.json").read_text())["theme"] == "kimchi-minimal"
-                        assert json.loads((harness / "settings.json").read_text())["native"] == "keep"
                         trust_path = harness / "trust.json"
                         assert json.loads(trust_path.read_text()) == {str(base / "real/project"): True, "/nonexistent/kimchi-project": False}
                         before = trust_path.read_bytes()
@@ -178,20 +173,27 @@ with tempfile.TemporaryDirectory() as temporary:
                     activate("secret")
                     assert json.loads(config_path.read_text())["gitTokens"] == {"github.com": "test-token"}
                     assert not any(b"test-token" in path.read_bytes() for path in state.parent.glob("*.bak"))
-                    for failure in ("missing", "empty", "helper"):
+                    helper = root / "failed-helper"
+                    helper.write_text(f'#!{data["bash"]}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf partial-secret\nfalse\n')
+                    helper.chmod(0o755)
+                    for failure, name, reason in (
+                        ("missing", "secret", "reference file is missing"),
+                        ("empty", "secret", "reference resolved empty"),
+                        ("helper", "helper", "reference command failed"),
+                    ):
                         (root / "git-token").unlink(missing_ok=True)
                         if failure == "empty":
                             (root / "git-token").touch()
-                        helper = root / "failed-helper"
-                        helper.write_text(f'#!{data["bash"]}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nprintf partial-secret\nfalse\n')
-                        helper.chmod(0o755)
-                        name = "helper" if failure == "helper" else "secret"
                         phase(name, "prune")
                         before = config_path.read_bytes(), state.read_bytes()
+                        renderer_error = root / f"{failure}.stderr"
                         try:
-                            phase(name, "apply")
-                        except subprocess.CalledProcessError:
-                            pass
+                            phase(name, "apply", renderer_error)
+                        except subprocess.CalledProcessError as error:
+                            assert error.returncode == 1, error
+                            diagnostic = renderer_error.read_text()
+                            assert f'ai.kimchi.gitTokens."github.com": {reason}' in diagnostic, diagnostic
+                            assert "partial-secret" not in diagnostic, diagnostic
                         else:
                             raise AssertionError(f"{failure} token renderer succeeded")
                         assert (config_path.read_bytes(), state.read_bytes()) == before

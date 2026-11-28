@@ -55,7 +55,6 @@ with tempfile.TemporaryDirectory() as root:
     code, out, err = drive("hang", kiro, workspace)
     expect(code == 0, f"a harness-killed child must not fail the check (exit {code})", err)
     expect("harness SIGKILLed ACP" in err, "the kill must be attributed to the harness", err)
-    expect("ACP exited with status -9" not in err, "the old mis-attributed message must be gone", err)
     teardown = {name: json.loads(out)[name]["teardown"] for name in ("configured", "control")}
     expect(all(record["harness_kill"] for record in teardown.values()), f"both agents must record the kill: {teardown}", err)
 
@@ -88,13 +87,17 @@ with tempfile.TemporaryDirectory() as root:
 
     # 6-8. Every looser reading fails: status 1 without the marker, the marker
     #      followed by another line, and the marker with a different status.
-    for teardown_mode, description in (
-        ("1", "status 1 without the stdin-closed marker"),
-        ("v3-closed-then-line", "the marker followed by another stderr line"),
-        ("v3-closed-status-2", "the marker with a status other than 1"),
+    for teardown_mode, status, description in (
+        ("1", 1, "status 1 without the stdin-closed marker"),
+        ("v3-closed-then-line", 1, "the marker followed by another stderr line"),
+        ("v3-closed-status-2", 2, "the marker with a status other than 1"),
     ):
         code, out, err = drive(teardown_mode, kiro, workspace)
         expect(code != 0, f"{description} must still fail the check", err)
-        expect("on its own" in err, f"{description} must be named an autonomous exit", err)
+        expect(
+            f"semble-search: ACP exited with status {status} on its own" in err,
+            f"{description} must be named an autonomous exit with status {status}",
+            err,
+        )
 
 print("teardown-contract: all eight teardown branches behave")

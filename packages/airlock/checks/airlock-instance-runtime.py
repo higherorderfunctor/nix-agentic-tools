@@ -9,10 +9,9 @@ import time
 from pathlib import Path
 
 
-def readiness(launcher, listen):
+def readiness(backend, launcher, listen):
     host, port = listen.rsplit(":", 1)
     port = int(port)
-    assert port != 8318, "a default port would not prove the listen argument was read"
     with tempfile.TemporaryDirectory(prefix="airlock-launcher-") as directory:
         environment = os.environ | {"XDG_RUNTIME_DIR": directory}
         with (Path(directory) / "output").open("w+") as output:
@@ -20,16 +19,17 @@ def readiness(launcher, listen):
             try:
                 deadline = time.monotonic() + 10
                 while True:
-                    assert child.poll() is None, "service exited before readiness"
+                    assert child.poll() is None, f"{backend} service exited before readiness"
                     connection = http.client.HTTPConnection(host, port, timeout=0.5)
                     try:
                         connection.request("GET", "/health")
                         response = connection.getresponse()
-                        assert response.status == 200, response.status
-                        assert response.read() == b"ok\n"
+                        assert response.status == 200, (backend, response.status)
+                        body = response.read()
+                        assert body == b"ok\n", (backend, body)
                         break
                     except OSError:
-                        assert time.monotonic() < deadline, "service readiness timed out"
+                        assert time.monotonic() < deadline, f"{backend} service readiness timed out"
                         time.sleep(0.02)
                     finally:
                         connection.close()
@@ -45,10 +45,10 @@ def readiness(launcher, listen):
                     child.kill()
                     child.wait()
                     raise
-            assert child.returncode == 0, child.returncode
+            assert child.returncode == 0, (backend, child.returncode)
 
 
 if __name__ == "__main__":
-    listen = sys.argv[1]
-    for launcher in sys.argv[2:]:
-        readiness(launcher, listen)
+    listen, hm, devenv = sys.argv[1:]
+    for backend, launcher in [("hm", hm), ("devenv", devenv)]:
+        readiness(backend, launcher, listen)

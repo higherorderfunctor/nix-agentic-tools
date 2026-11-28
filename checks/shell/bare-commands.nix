@@ -178,42 +178,57 @@
 
         # Scan lib/ and packages/*/lib/ — these produce wrapper scripts and
         # activation scripts that may run without PATH.
-        SCAN_PATHS=""
-        for d in lib packages/*/lib; do
-          if [ -d "$d" ]; then
-            SCAN_PATHS="$SCAN_PATHS $d"
-          fi
-        done
+        SCAN_PATHS=(lib packages/*/lib)
 
         # Pattern 3 has its own, wider scan set: every .nix file under
         # packages/, recursively. It is safe to widen because the pattern
         # itself is scoped to lines mentioning versionCheck.cmd — see header.
-        WRAPPER_SCAN_PATHS=""
-        for d in packages; do
-          if [ -d "$d" ]; then
-            WRAPPER_SCAN_PATHS="$WRAPPER_SCAN_PATHS $d"
-          fi
-        done
+        WRAPPER_SCAN_PATHS=(packages)
+        NIX_FILES=(--glob '*.nix')
 
-        if [ -z "$SCAN_PATHS" ]; then
-          echo "No paths to scan."
-          ${pkgs.coreutils}/bin/mkdir -p "$out"
-          ${pkgs.coreutils}/bin/touch "$out/ok"
-          exit 0
-        fi
+        # Pin representatives of each scan scope: a clean result otherwise
+        # cannot distinguish no bare commands from the wrong file set.
+        require_scan_member() {
+          local expected="$1" files rc=0
+          shift
+          # An empty listing (status 1) still needs the missing member named.
+          files=$(rg --files "''${NIX_FILES[@]}" "$@") || rc=$?
+          if (( rc > 1 )); then return "$rc"; fi
+          if ! grep -Fx -- "$expected" <<<"$files" >/dev/null; then
+            printf 'ERROR: bare-commands scan did not select %s\n' "$expected" >&2
+            return 1
+          fi
+        }
+        require_scan_member lib/packaging.nix "''${SCAN_PATHS[@]}"
+        require_scan_member packages/kiro-cli/lib/wrapPackage.nix "''${SCAN_PATHS[@]}"
+        require_scan_member packages/dns-root-hints/packages/ai/generic/dns-root-hints/package.nix "''${WRAPPER_SCAN_PATHS[@]}"
+
+        # Exit status 1 means no matches; any other error must fail the check.
+        # Capture the search before filtering so a filter's no-match status
+        # cannot hide a failed search.
+        scan_bare_commands() {
+          local pattern="$1" exclude="$2" matches rc=0
+          shift 2
+          matches=$(rg --no-heading -n "$pattern" "''${NIX_FILES[@]}" "$@") || rc=$?
+          if (( rc == 1 )); then return 0; fi
+          if (( rc != 0 )); then return "$rc"; fi
+          rc=0
+          matches=$(grep -vE -- "$exclude" <<<"$matches") || rc=$?
+          if (( rc == 0 )); then
+            FAILURES="$FAILURES
+      $matches"
+          fi
+          (( rc <= 1 ))
+        }
+        SUPPRESSION='# bare-commands: ok'
+        COMMENT='^[^:]*:[0-9]+:[[:space:]]*#'
 
         # Pattern 1: $(bare-cmd) — command substitution with a bare command.
         # The trailing \b (word boundary) rather than a literal space is what
         # makes the ARGUMENT-LESS form visible: `tmp=$(mktemp)` closes the
         # substitution immediately, so a space-anchored pattern walked straight
         # past it while catching only `$(mktemp -d …)`.
-        if rg --no-heading -n "\\\$\(($BARE_CMDS)\b" \
-          --glob '*.nix' \
-          $SCAN_PATHS 2>/dev/null \
-          | grep -v '# bare-commands: ok' > /tmp/bare-cmd-hits 2>/dev/null; then
-          FAILURES="$FAILURES
-      $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits)"
-        fi
+        scan_bare_commands "\\\$\(($BARE_CMDS)\b" "$SUPPRESSION" "''${SCAN_PATHS[@]}"
 
         # Pattern 2: bare commands in shell strings, at any of the CMD_START
         # anchors — not just line start. A line-start-only anchor missed every
@@ -232,18 +247,8 @@
         # anchors above make a COMMENT containing a piped or AND-ed bare command
         # a live false positive with nothing left to filter it. The other
         # `grep -v` filters are plain substring filters and were never affected.
-        if rg --no-heading -n "$CMD_START($BARE_CMDS)\b" \
-          --glob '*.nix' \
-          $SCAN_PATHS 2>/dev/null \
-          | grep -v '# bare-commands: ok' \
-          | grep -v '/bin/' \
-          | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' \
-          | grep -v 'description' \
-          | grep -v 'type ' \
-          | grep -v 'mkOption' > /tmp/bare-cmd-hits2 2>/dev/null; then
-          FAILURES="$FAILURES
-      $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits2)"
-        fi
+        scan_bare_commands "$CMD_START($BARE_CMDS)\b" \
+          "$SUPPRESSION|$COMMENT|/bin/|description|mkOption|type " "''${SCAN_PATHS[@]}"
 
         # Pattern 3: bare commands inside a `versionCheck.cmd` string, anywhere
         # under packages/. mkUpdateScript interpolates that string into a
@@ -257,18 +262,11 @@
         # oversight and must not be "restored": it would subtract only true
         # positives here, because the anchors already exclude absolute
         # invocations structurally.
-        if [ -n "$WRAPPER_SCAN_PATHS" ] && rg --no-heading -n \
-          "versionCheck\.cmd.*$WRAPPER_CMD_START($WRAPPER_CMDS)\b" \
-          --glob '*.nix' \
-          $WRAPPER_SCAN_PATHS 2>/dev/null \
-          | grep -v '# bare-commands: ok' \
-          | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' > /tmp/bare-cmd-hits3 2>/dev/null; then
-          FAILURES="$FAILURES
-      $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits3)"
-        fi
+        scan_bare_commands "versionCheck\.cmd.*$WRAPPER_CMD_START($WRAPPER_CMDS)\b" \
+          "$SUPPRESSION|$COMMENT" "''${WRAPPER_SCAN_PATHS[@]}"
 
-        # Trim leading whitespace
-        FAILURES="$(echo "$FAILURES" | ${pkgs.coreutils}/bin/tr -s '\n' | sed '/^$/d')"
+        # Trim the leading blank line when a scan found matches.
+        FAILURES="$(printf '%s\n' "$FAILURES" | sed '/^$/d')"
 
         if [ -n "$FAILURES" ]; then
           echo "ERROR: Bare commands found in a wrapper-producing .nix file."

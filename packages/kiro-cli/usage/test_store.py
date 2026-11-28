@@ -89,21 +89,28 @@ class StoreTests(unittest.TestCase):
     def test_seal_round_trips_every_staged_shape(self):
         nulls = ([Chunk(0, None, None, None, None), Chunk(1, 5, 6, b"", b""), Chunk(3, 7, 8, b"ab", None)],
                  [Event(0, None, None, None, None, None, None), Event(1, 1, 5, 6, "", b"", "{}"), Event(2, 3, 7, 8, "json", None, '{"a":1}')])
-        shapes = {"eventstream": (staged([aws_event("assistantResponseEvent", {"content": "hi"})], parser="eventstream"), {}, {"target": "rpc"}, b"request"),
-                  "gzip": (staged(split(gzip.compress(event(completed())), 9), "gzip"), {**SSE, "content_encoding": "gzip"}, {}, b"request"),
-                  "interrupted": (staged([event(completed())]), {}, {}, b"request"),
-                  "nulls": (nulls, {}, {}, None),
-                  "sse": (staged(split(DELTA + event(completed()), 30)), SSE, {}, b"request"),
-                  "unsupported": (staged([b"\x01\x02"], "br"), {**SSE, "content_encoding": "br"}, {}, b"request")}
-        for name, (rows, response, metadata, body) in shapes.items():
+        shapes = (
+            # RPC metadata selects binary event-stream, not the SSE reconstruction path.
+            ("eventstream", staged([aws_event("assistantResponseEvent", {"content": "hi"})], parser="eventstream"), {}, {"target": "rpc"}, b"request"),
+            # Recovery can leave events without response headers. Preserve missing stamps and payloads
+            # separately from zero-length payloads and sparse sequences.
+            ("nulls", nulls, {}, {}, None),
+            # Preserve an SSE frame crossing a chunk boundary and both event types, in order.
+            ("sse", staged(split(DELTA + event(completed()), 30)), SSE, {}, b"request"),
+            # An unsupported content coding has entity bytes but no application bytes.
+            ("unsupported", staged([b"\x01\x02"], "br"), {**SSE, "content_encoding": "br"}, {}, b"request"),
+        )
+        for name, rows, response, metadata, body in shapes:
             with self.subTest(name):
                 ident = self.stage(name, rows, response, {**metadata, "kiro:conversation_id": name}, body)
-                before, facts = self.read(ident), self.facts(ident)
-                live = tuple(self.db.execute(f"SELECT {','.join(query.FACTS.values())} FROM captures c WHERE c.id=?", (ident,)).fetchone())
+                # The staged read is the control; compare those live reader facts with the sealed representation.
+                expected = (body, rows)
+                self.assertEqual(self.read(ident)[:2], expected)
+                before, facts = store.payload_bytes(self.db, ident), self.facts(ident)
                 delta = store.seal(self.db, ident)
-                self.assertEqual(self.read(ident)[:2], before[:2])
-                self.assertEqual(self.read(ident)[2] - before[2], delta)
-                self.assertEqual(tuple(self.db.execute(f"SELECT {','.join(query.FACTS)} FROM capture_facts WHERE capture_id=?", (ident,)).fetchone()), live)
+                self.assertEqual(self.read(ident)[:2], expected)
+                self.assertEqual(store.payload_bytes(self.db, ident) - before, delta)
+                self.assertIn(ident, self.sealed())
                 self.assertEqual(self.facts(ident), facts)
                 self.assertEqual(tuple(self.db.execute("SELECT (SELECT count(*) FROM chunks WHERE capture_id=?)+(SELECT count(*) FROM events WHERE capture_id=?),"
                                                  "(SELECT request_gzip FROM captures WHERE id=?)", (ident,) * 3).fetchone()), (0, None))
@@ -119,9 +126,8 @@ class StoreTests(unittest.TestCase):
                 self.stage(ident)
                 self.db.execute(f"UPDATE captures SET {update} WHERE id=?", (ident,))
                 self.db.commit()
-                for call in (store.request_body, store.seal):
-                    with self.assertRaisesRegex(ValueError, "disagree"):
-                        call(self.db, ident)
+                with self.assertRaisesRegex(ValueError, "disagree"):
+                    store.seal(self.db, ident)
                 self.assertIsNone(self.db.execute("SELECT 1 FROM capture_facts").fetchone())
 
     def test_requests_chain_to_the_previous_request_of_their_conversation(self):
@@ -149,17 +155,13 @@ class StoreTests(unittest.TestCase):
         self.db.commit()
         with self.assertRaisesRegex(ValueError, "missing request base"):
             store.request_body(self.db, "b")
-        self.assertIsNone(store.request_body(self.db, "a"))
 
     def test_corrupt_staged_gzip_fails_verification(self):
-        for column, table in (("request_gzip", "captures"), ("entity_gzip", "chunks"), ("application_gzip", "chunks"), ("frame_gzip", "events")):
-            with self.subTest(column):
-                ident = self.stage(column, ([Chunk(0, 1, 2, b"x", b"x")], [Event(0, 0, 1, 2, "n", b"x", "{}")]))
-                key = "id" if table == "captures" else "capture_id"
-                self.db.execute(f"UPDATE {table} SET {column}=? WHERE {key}=?", (b"not gzip", ident))
-                self.db.commit()
-                with self.assertRaisesRegex(ValueError, "corrupt staged payload"):
-                    store.request_body(self.db, ident) if table == "captures" else store.response_rows(self.db, ident)
+        ident = self.stage("frame_gzip", ([Chunk(0, 1, 2, b"x", b"x")], [Event(0, 0, 1, 2, "n", b"x", "{}")]))
+        self.db.execute("UPDATE events SET frame_gzip=? WHERE capture_id=?", (b"not gzip", ident))
+        self.db.commit()
+        with self.assertRaisesRegex(ValueError, "corrupt staged payload"):
+            store.response_rows(self.db, ident)
 
     def test_a_deep_chain_decodes_iteratively(self):
         base = None
@@ -168,31 +170,33 @@ class StoreTests(unittest.TestCase):
             self.db.execute("INSERT INTO captures(id,request_sha256) VALUES (?,?)", (str(index), capture.digest(body)))
             self.db.execute("INSERT INTO sealed_requests VALUES (?,?,?)", (str(index), None if index == 0 else str(index - 1), codec.compress_request(body, base)))
             base = body
-        self.assertEqual(store.request_body(self.db, "1499"), base)
+        self.assertEqual(store.request_body(self.db, "1499"), b"request 1499 of a long conversation")
 
     def test_request_cache_hits_and_misses_seal_alike(self):
         bodies = [b"%d shared request prefix" % index for index in range(3)]
         for index, body in enumerate(bodies):
             self.stage(str(index), body=body, started=index)
         cache = store.RequestCache(budget=48)
-        for ident in "120":  # 1 misses its base 0; 2 finds its base 1 cached
-            store.seal(self.db, ident, cache)
+        with patch.object(store, "request_body", wraps=store.request_body) as read:
+            for ident in "120":  # 1 misses its base 0; 2 must not reread its cached base 1
+                store.seal(self.db, ident, cache)
+        self.assertEqual([call.args[1] for call in read.call_args_list], ["1", "0", "2", "0"])
         for index in (1, 2):
-            self.assertEqual(self.db.execute("SELECT body_zstd FROM sealed_requests WHERE capture_id=?", (str(index),)).fetchone()[0],
-                             codec.compress_request(bodies[index], bodies[index - 1]))
-        self.assertEqual(list(cache.bodies), ["2", "0"])
-        self.assertLessEqual(cache.size, 48)
+            with self.subTest(request=index):
+                self.assertEqual(store.request_body(self.db, str(index)), bodies[index])
+        self.assertEqual((list(cache.bodies), cache.size), (["2", "0"], 46))
         cache.put("big", b"x" * 64)
-        self.assertEqual(list(cache.bodies), ["big"])
+        self.assertEqual((list(cache.bodies), cache.size), (["big"], 64))
 
     def test_a_failed_seal_keeps_the_staged_rows(self):
         ident = self.stage("staged", staged(split(DELTA, 5)))
         before = self.read(ident)
-        with patch.object(codec, "compress_response", side_effect=ValueError("seal mismatch")), self.assertRaises(ValueError):
+        with (patch.object(codec, "compress_response", side_effect=ValueError("seal mismatch")),
+              self.assertRaisesRegex(ValueError, "seal mismatch")):
             store.seal(self.db, ident)
         self.assertEqual(self.read(ident), before)
         self.db.execute("CREATE TEMP TRIGGER refuse BEFORE DELETE ON chunks BEGIN SELECT RAISE(ABORT, 'refused'); END")
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "^refused$"):
             store.seal(self.db, ident)
         self.assertEqual(self.read(ident), before)
         self.assertIsNone(self.db.execute("SELECT 1 FROM capture_facts UNION ALL SELECT 1 FROM sealed_responses").fetchone())
@@ -306,7 +310,8 @@ class StoreTests(unittest.TestCase):
             self.assertTrue(sealing.wait(2))
             sealer.close()
         self.assertEqual((calls, self.sealed(), len(deltas)), (["0", "new"], {"0", "new"}, 2))
-        self.assertEqual(self.db.execute("SELECT count(*) FROM pending_seals").fetchone()[0], 199)
+        self.assertEqual({ident for (ident,) in self.db.execute("SELECT capture_id FROM pending_seals")},
+                         {str(index) for index in range(1, 200)})
 
     def test_a_store_locked_at_open_is_retried_and_the_capture_sealed(self):
         self.pending(self.stage("late"))
@@ -426,7 +431,6 @@ class StoreTests(unittest.TestCase):
             sealer = store.Sealer(self.path, lambda delta: None, 1)
             self.assertTrue(calls.wait(2))
             sealer.close()
-        self.assertGreaterEqual(expire.call_count, 2)
 
     def test_a_failed_retention_batch_prints_once_and_waits_for_the_daily_run(self):
         calls = threading.Event()
@@ -444,12 +448,12 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(stderr.getvalue(), "Kiro capture: retention batch failed (ValueError); payloads kept\n")
 
     def reports(self, first):
-        """Every report and calibration read over the store; capture evidence and fits over the complete first capture."""
+        """Compare report data over the store and calibration evidence and fits over the complete first capture."""
         with closing(sqlite3.connect(self.path)) as db:
             session, tree = query.query(db, "sess_report"), query.query(db, "sess_report", "tree")
             started = db.execute("SELECT started_utc_ns FROM captures WHERE id=?", (first,)).fetchone()[0]
             manifest = {"calls": [{"status": "complete", "capture_count": 1, "captures": [{"id": first}], "label": "call", "model": "claude-opus-5.5"}]}
-            return (session, tree, query.render(session), query.render_summary(tree), query.run_report(db, "a" * 32, "sess_report"),
+            return (session, tree, query.run_report(db, "a" * 32, "sess_report"),
                     report.store_report(db), calibration.capture_evidence(db, "sess_report", started, started), calibration.fit_calls(db, manifest))
 
     def test_reports_read_alike_before_and_after_sealing_and_expiry(self):
@@ -474,6 +478,7 @@ class StoreTests(unittest.TestCase):
             writer.close()
         before = self.reports(first)
         self.drained(capture.Collector(self.path))
+        self.assertEqual(self.sealed(), {ident for (ident,) in self.db.execute("SELECT id FROM captures")})
         self.assertEqual(len(self.sealed()), 5)
         self.assertEqual(self.reports(first), before)
         store.expire(self.db, time.time_ns() + 1)

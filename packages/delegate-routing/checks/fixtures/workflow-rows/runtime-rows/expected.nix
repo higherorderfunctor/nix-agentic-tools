@@ -1,4 +1,4 @@
-# Handwritten complete output compared after the workflow-rows check composes runtime rows.
+# Handwritten output: Claude moves Added without dropping untouched rows or the portable header.
 ''
   ### Rows
 
@@ -9,8 +9,6 @@
      1. RUNTIME ADDED
      2. PORTABLE FIRST
         continued
-     3. RUNTIME SECOND
-     4. SOURCE
-        continued
-     5. RUNTIME REPLACED
+     3. SOURCE
+     4. PORTABLE REPLACED
 ''

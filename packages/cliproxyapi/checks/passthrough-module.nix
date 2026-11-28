@@ -62,13 +62,7 @@
     hm = harness.evalHm;
   };
   failures = result: map (entry: entry.message) (lib.filter (entry: !entry.assertion) result.config.assertions);
-  refuses = backend: change: let
-    result = evaluate backend change;
-    value = {inherit (result.config.ai.cliproxyapi.instances.main) credentials settings;};
-    attempt = builtins.tryEval (builtins.deepSeq value (failures result == []));
-  in
-    !attempt.success || !attempt.value;
-  expectedBlock = {
+  expectedCloudflare = {
     base-url = "https://api.cloudflare.com";
     keys = [{api-key = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_KEYS_0_API_KEY}";}];
     models = [
@@ -82,6 +76,19 @@
     priority = 30;
     unwrap = "result";
     usage-path = "result.usage";
+  };
+  expectedSystemOne = {
+    base-url = "https://api.systemone.ai";
+    keys = [{api-key = "{$CLIPROXYAPI_API_KEYS_PASSTHROUGH_1_KEYS_0_API_KEY}";}];
+    models = [
+      {
+        alias = "decision";
+        name = "jev";
+      }
+    ];
+    name = "system-one";
+    path = "/inference/v1/decision";
+    priority = 20;
   };
   expectedRules = [
     {
@@ -106,52 +113,53 @@
   moduleChecks = lib.mapAttrs (backendName: backend:
     harness.mkTest "passthrough-module-${backendName}" (let
       result = evaluate backend {};
-      settings = builtins.fromJSON (cliproxyapi.render result.config.ai.cliproxyapi.instances.main.settings).content;
-      narrowed = entries: {
-        settings.access.key-allowlist = [
-          {
-            api-key = secret "restricted-client";
-            credentials = [
-              {
-                base-urls = entries;
-                kind = "apikey";
-                provider = "passthrough-cloudflare";
-              }
-            ];
-          }
-        ];
-      };
-      shared = evaluate backend {credentials.system-one.apiKey.apis.passthrough.base-url = "https://api.cloudflare.com";};
-      sharedSettings = builtins.fromJSON (cliproxyapi.render shared.config.ai.cliproxyapi.instances.main.settings).content;
+      output = cliproxyapi.render result.config.ai.cliproxyapi.instances.main.settings;
+      settings = builtins.fromJSON output.content;
+      # Force only the declared URL restriction for the type refusal. The
+      # conditional element reaches the separate merged-value assertion.
+      narrowed = entries:
+        evaluate backend {
+          settings.access.key-allowlist = [
+            {
+              api-key = secret "restricted-client";
+              credentials = [
+                {
+                  base-urls = entries;
+                  kind = "apikey";
+                  provider = "passthrough-cloudflare";
+                }
+              ];
+            }
+          ];
+        };
+      readUrls = evaluated: let
+        entries = evaluated.config.ai.cliproxyapi.instances.main.settings.access.key-allowlist;
+        restricted = lib.findFirst (entry: entry.api-key == secret "restricted-client") null entries;
+      in
+        (lib.head restricted.credentials).base-urls;
+      urls = ["https://api.cloudflare.com"];
+      valid = narrowed urls;
       cases = {
-        "allowlist null URL refused" = refuses backend (narrowed [null]);
-        "allowlist URL restriction emptied by mkIf refused" = refuses backend (narrowed [(lib.mkIf false "https://api.cloudflare.com")]);
+        "allowlist URL restriction accepted" = failures valid == [] && readUrls valid == urls;
+        "allowlist accepts a null URL that the renderer would drop" = harness.rejectsChange readUrls {
+          inherit valid;
+          expected = urls;
+          invalid = narrowed [null];
+        };
+        "allowlist loses the assertion when mkIf removes its URL restriction" = let
+          empty = narrowed [(lib.mkIf false "https://api.cloudflare.com")];
+        in
+          readUrls empty
+          == []
+          && failures empty == ["ai.cliproxyapi.instances.main: settings.access.key-allowlist[].credentials[].base-urls merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value."];
         "client access retained" = settings.access.api-keys == ["{$CLIPROXYAPI_ACCESS_API_KEYS_0}"];
         "client routed credentials exclude passthrough" = result.config.ai.internal.inferenceInstances.main.clients.main.credentials == [];
         "literal rules retain distinct named identities" = (lib.head settings.access.key-allowlist).credentials == expectedRules;
-        "lowering preserves fields" = failures result == [] && lib.head settings.api-keys.passthrough == expectedBlock;
-        "named path references render with shared engine" = rendered.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
-        "shared URLs retain distinct named identities" =
-          failures shared
-          == []
-          && (lib.head sharedSettings.access.key-allowlist).credentials
-          == [
-            {
-              base-urls = ["https://api.cloudflare.com"];
-              kind = "apikey";
-              provider = "passthrough-cloudflare";
-            }
-            {
-              base-urls = ["https://api.cloudflare.com"];
-              kind = "apikey";
-              provider = "passthrough-system-one";
-            }
-          ];
-        "substitution fills concat path" = (lib.head (builtins.fromJSON nativeConfig).api-keys.passthrough).path == "/client/v4/accounts/synthetic-account/ai/run/@cf/cloudflare/clef";
+        "lowering loses a group, adds a group or alters its fields" = failures result == [] && settings.api-keys.passthrough == [expectedCloudflare expectedSystemOne];
+        "named path references render with shared engine" = output.secrets.CLIPROXYAPI_API_KEYS_PASSTHROUGH_0_PATH == path;
       };
-      problems = builtins.attrNames (lib.filterAttrs (_: holds: !holds) cases);
     in
-      lib.assertMsg (problems == []) "${backendName}: ${lib.concatStringsSep "; " problems}"))
+      harness.checkRows "${backendName}: passthrough module" cases))
   backends;
   native = (extractedLib {inherit pkgs;}).goTest {
     name = "cliproxyapi-passthrough-module-native";

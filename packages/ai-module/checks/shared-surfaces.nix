@@ -5,6 +5,7 @@
 # composer; files only sees its one emitted entry or none. Conflicting runtime
 # claims on one path are proven by runtime-forward.nix's "runtime collision".
 {
+  harness,
   lib,
   pkgs,
   ...
@@ -12,8 +13,6 @@
   fileLib = import ../lib/files/default.nix {inherit lib pkgs;};
   runtimeModule = import ../lib/runtime.nix;
   skill = ./fixtures/skill;
-  # Written independently of the walker: the fixture's leaves, nested dirs included.
-  skillLeaves = ["SKILL.md" "references/deep/guide.md"];
   runtimes = [
     {
       enabled = true;
@@ -36,7 +35,6 @@
       prefix = ".retired/skills";
     }
   ];
-  enabled = builtins.filter (runtime: runtime.enabled) runtimes;
   skillPath = runtime: "${runtime.prefix}/review";
   # Each runtime renders the shared skill pool under its own prefix at layer 1.
   producer = runtime: {
@@ -59,42 +57,48 @@
       specialArgs = {inherit pkgs;};
       modules = [../modules/common.nix] ++ map producer runtimes ++ modules;
     }).config;
-  plan = backend: config:
-    fileLib.normalize {
-      inherit backend;
-      files = config.ai.files;
-      namespace = "ai";
-    };
-  backends = ["devenv" "hm"];
   summary = item: {
     inherit (item) method path;
     content = lib.mapAttrs (_: toString) item.content;
   };
-  skillPlan = lib.concatMap (runtime:
-    map (leaf: {
-      content.source = "${toString skill}/${leaf}";
-      method = "symlink";
-      path = "${skillPath runtime}/${leaf}";
-    })
-    skillLeaves)
-  enabled;
-  check = text: let
-    config = evaluate [(composer text)];
-    expected = lib.sort (a: b: a.path < b.path) (skillPlan
-      ++ [
-        {
-          content.text = text;
-          method = "ro";
-          path = "AGENTS.md";
-        }
-      ]);
-  in
-    lib.optional (lib.any (path: lib.hasPrefix ".retired/" path) (builtins.attrNames config.ai.files)) "disabled runtime reached layer 2"
-    ++ lib.optional (config.ai.claims.path != lib.listToAttrs (map (runtime: lib.nameValuePair (skillPath runtime) [runtime.name]) enabled)) "owners"
-    ++ lib.concatMap (backend: lib.optional (map summary (plan backend config) != expected) "${backend}: plan") backends;
-  failures = check "A\nB";
+  link = path: leaf: {
+    inherit path;
+    content.source = toString (skill + "/${leaf}");
+    method = "symlink";
+  };
+  # Pin the runtime prefixes and both fixture leaves independently of the
+  # producers, so a missing runtime or leaf cannot shrink the expectation.
+  expected = [
+    (link ".agents/skills/review/SKILL.md" "SKILL.md")
+    (link ".agents/skills/review/references/deep/guide.md" "references/deep/guide.md")
+    (link ".claude/skills/review/SKILL.md" "SKILL.md")
+    (link ".claude/skills/review/references/deep/guide.md" "references/deep/guide.md")
+    (link ".kiro/skills/review/SKILL.md" "SKILL.md")
+    (link ".kiro/skills/review/references/deep/guide.md" "references/deep/guide.md")
+    {
+      content.text = "A\nB";
+      method = "ro";
+      path = "AGENTS.md";
+    }
+  ];
+  config = evaluate [(composer "A\nB")];
+  plan = fileLib.normalize {
+    backend = "devenv";
+    files = config.ai.files;
+    namespace = "ai";
+  };
+  holds = harness.checkRows "shared surfaces" {
+    "claims name each active runtime" =
+      config.ai.claims.path
+      == {
+        ".agents/skills/review" = ["codex"];
+        ".claude/skills/review" = ["claude"];
+        ".kiro/skills/review" = ["kiro"];
+      };
+    "devenv delivers only active runtimes' leaves and one root context" = map summary plan == expected;
+  };
 in {
-  checks.ai-module-shared-surfaces = assert lib.assertMsg (failures == []) "shared surfaces: ${lib.concatStringsSep ", " failures}";
+  checks.ai-module-shared-surfaces = assert holds;
     pkgs.runCommandLocal "ai-module-shared-surfaces" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :

@@ -1,14 +1,15 @@
-# `ai.jail` / `ai.<runtime>.jail` (lib/ai/jail): the root-to-runtime fold, the
-# in-place jail at the install seam, and the two warnings. bubblewrap is
-# Linux-only, so the lowering checks are absent on Darwin and the Darwin
-# warning contract is absent on Linux.
+# cspell:ignore unjailed
+# `ai.jail` / `ai.<runtime>.jail` (lib/ai/jail): the root-to-runtime fold,
+# exclusion restrictions, the in-place jail at the install seam, and the
+# platform warning. bubblewrap is Linux-only, so the lowering checks are absent on
+# Darwin and the Darwin warning contract is absent on Linux.
 {
   lib,
   pkgs,
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest mkWrapperGrepTest;
+  inherit (harness) checkRows evalDevenv evalHm mkTest mkWrapperGrepTest rejectsChange;
   inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux system;
 
   evalBackend = backend:
@@ -24,9 +25,10 @@
   warningsOf = backend: config: (evalBackend backend config).config.warnings;
   outPaths = map (package: package.outPath);
   jailOf = runtime: packages: lib.findFirst (package: package.name == "${runtime}-jail") null packages;
-  backends = ["devenv" "hm"];
+  forBackends = label: check: checkRows label (lib.genAttrs ["devenv" "hm"] check);
 
   excludePaths = ["/home/test/.claude/.credentials.json" "/home/test/.ssh"];
+  plainCodex.ai.codex.enable = true;
   claudeJail = {
     enable = true;
     exclude = {
@@ -34,12 +36,18 @@
       paths = excludePaths;
     };
   };
-  enabled = runtimes: lib.genAttrs runtimes (_: {enable = true;});
+  plainClaude.ai.claude.enable = true;
+  rootJail.ai = {
+    claude.enable = true;
+    codex.enable = true;
+    jail.enable = true;
+  };
   jailedClaude.ai.claude = {
     enable = true;
     jail = claudeJail;
   };
   bwrap = lib.getExe pkgs.bubblewrap;
+  codexPlainHm = builtins.head (installed "hm" plainCodex);
   codexJailed = jailOf "codex" (installed "hm" {
     ai.codex = {
       enable = true;
@@ -49,65 +57,54 @@
 in {
   checks =
     {
-      # Copilot ships no launcher, so it does not consume the surface: a root
-      # request warns through the standard delivery diagnostic.
-      module-ai-jail-copilot-warns = mkTest "ai-jail-copilot-warns" (
-        lib.all (backend:
-          builtins.elem
-          "ai.jail is set but ${backend} does not deliver it to copilot (reason: copilot's surfaceSupport does not consume this shared surface.)"
-          (warningsOf backend {
-            ai = {
-              copilot.enable = true;
-              jail.enable = true;
+      # Both backends import the same root option declaration.
+      module-ai-jail-exclusions = mkTest "ai-jail-exclusions" (
+        let
+          exclusions = input: (evalHm input).config.ai.jail.exclude;
+        in
+          checkRows "hm ai.jail.exclude" {
+            "environment rejects a name containing =" = rejectsChange (input: (exclusions input).environment) {
+              expected = ["SSH_AUTH_SOCK"];
+              invalid.ai.jail.exclude.environment = ["SSH_AUTH_SOCK=value"];
+              valid.ai.jail.exclude.environment = ["SSH_AUTH_SOCK"];
             };
-          }))
-        backends
+            "paths reject a relative path" = rejectsChange (input: (exclusions input).paths) {
+              expected = ["/home/test/.ssh"];
+              invalid.ai.jail.exclude.paths = [".ssh"];
+              valid.ai.jail.exclude.paths = ["/home/test/.ssh"];
+            };
+          }
       );
     }
     // lib.optionalAttrs isLinux {
       # Pure evaluation of the lowering, on both backends.
       module-ai-jail = mkTest "ai-jail" (
-        lib.all (backend: let
-          plain = installed backend {ai.claude.enable = true;};
+        forBackends "jail lowering" (backend: let
+          plain = outPaths (installed backend plainClaude);
+          plainLauncher =
+            if builtins.length plain == 1
+            then builtins.head plain
+            else null;
           jailedPackages = installed backend jailedClaude;
-          jailed = jailOf "claude" jailedPackages;
-          both = installed backend {ai = enabled ["claude" "codex"] // {jail.enable = true;};};
-          optedOut = installed backend {
-            ai = {
-              claude = {
-                enable = true;
-                jail.enable = false;
-              };
-              codex.enable = true;
-              jail.enable = true;
-            };
-          };
-          codexPlain = installed backend {ai.codex.enable = true;};
+          both = installed backend rootJail;
+          rootCodexJail = jailOf "codex" both;
+          optedOut = installed backend (lib.recursiveUpdate rootJail {ai.claude.jail.enable = false;});
+          exclusionsOnly = installed backend (lib.recursiveUpdate plainClaude {ai.jail.exclude.paths = excludePaths;});
         in
-          # The jailed package replaces the plain launcher. Installed bin
-          # names and arguments are checked on the actual built wrappers below.
-          jailed
-          != null
-          && outPaths jailedPackages != outPaths plain
-          && !(lib.any (lib.hasInfix "Linux-only") (warningsOf backend jailedClaude))
-          # The root enables every consuming runtime ...
-          && jailOf "claude" both != null
-          && jailOf "codex" both != null
-          # ... and a runtime `enable = false` keeps that one plain.
-          && jailOf "claude" optedOut == null
-          && jailOf "codex" optedOut != null
-          && lib.elem (builtins.head (outPaths plain)) (outPaths optedOut)
-          # Off everywhere, including a set exclude list without `enable`,
-          # installs exactly what it did before the surface existed.
-          && outPaths (installed backend {
-            ai = {
-              claude.enable = true;
-              jail.exclude.paths = excludePaths;
-            };
+          checkRows "${backend} Linux jail" {
+            # Installed bin names and arguments are checked on the actual
+            # built wrappers below.
+            "Claude's runtime jail replaces the plain launcher" =
+              builtins.length jailedPackages == 1 && jailOf "claude" jailedPackages != null;
+            "enabled Claude jail emits no platform warning" =
+              !(lib.any (lib.hasInfix "Linux-only") (warningsOf backend jailedClaude));
+            "excluding paths without enabling the jail keeps the plain install" = outPaths exclusionsOnly == [plainLauncher];
+            "root enable jails Claude" = jailOf "claude" both != null;
+            "runtime false keeps Claude plain while Codex stays jailed" =
+              rootCodexJail
+              != null
+              && lib.sort builtins.lessThan (outPaths optedOut) == lib.sort builtins.lessThan [plainLauncher rootCodexJail.outPath];
           })
-          == outPaths plain
-          && outPaths (installed backend {ai.codex.enable = true;}) == outPaths codexPlain)
-        backends
       );
 
       # Only the `codex` entry point is jailed; its helper keeps its bin
@@ -115,15 +112,16 @@ in {
       module-ai-jail-codex-bins = pkgs.runCommand "ai-jail-codex-bins" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        test -x ${codexJailed}/bin/codex
-        grep -qF -- ${lib.escapeShellArg bwrap} ${codexJailed}/bin/codex
-        helper=${codexJailed}/bin/codex-code-mode-host
-        test -L "$helper"
-        test -x "$helper"
-        if grep -qF -- ${lib.escapeShellArg bwrap} "$helper"; then
-          echo "FAIL: codex-code-mode-host has its own jail" >&2
+        fail() {
+          echo "FAIL: $1" >&2
           exit 1
-        fi
+        }
+        test -x ${codexJailed}/bin/codex || fail "jailed package is missing executable bin/codex"
+        grep -qF -- ${lib.escapeShellArg bwrap} ${codexJailed}/bin/codex || fail "bin/codex does not launch bubblewrap"
+        helper=${codexJailed}/bin/codex-code-mode-host
+        test -L "$helper" && test -x "$helper" || fail "codex-code-mode-host is not an executable link"
+        test "$helper" -ef ${codexPlainHm}/bin/codex-code-mode-host \
+          || fail "codex-code-mode-host does not resolve to the original executable"
         touch "$out"
       '';
 
@@ -140,12 +138,17 @@ in {
     }
     // lib.optionalAttrs isDarwin {
       module-ai-jail-darwin-warns = mkTest "ai-jail-darwin-warns" (
-        lib.all (backend:
-          builtins.elem
-          "ai.claude.jail is enabled but bubblewrap is Linux-only; nothing is jailed on ${system}."
-          (warningsOf backend jailedClaude)
-          && outPaths (installed backend jailedClaude) == outPaths (installed backend {ai.claude.enable = true;}))
-        backends
+        forBackends "Darwin jail fallback" (backend: let
+          plain = outPaths (installed backend plainClaude);
+        in
+          checkRows "${backend} Darwin jail" {
+            "enabled Claude jail leaves the installed package unchanged" =
+              builtins.length plain == 1 && outPaths (installed backend jailedClaude) == plain;
+            "enabled Claude jail names the unsupported platform" =
+              builtins.elem
+              "ai.claude.jail is enabled but bubblewrap is Linux-only; nothing is jailed on ${system}."
+              (warningsOf backend jailedClaude);
+          })
       );
     };
 }

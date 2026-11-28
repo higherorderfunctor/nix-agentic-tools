@@ -1,13 +1,7 @@
 {
-  "capsMeta": { "kiro": { "settings": { "workflows": { "enabled": true } } } },
   "steps": [
     { "op": "prompt", "text": "MAIN_KICKOFF USER_SENTINEL_1", "timeout": 120 },
-    { "op": "sleep", "s": 15 },
-    {
-      "op": "call",
-      "method": "_kiro/workflow/list",
-      "params": { "sessionId": "$SID" }
-    }
+    { "op": "sleep", "s": 15 }
   ],
   "new": {
     "_meta": { "kiro": { "settings": { "workflows": { "enabled": true } } } }

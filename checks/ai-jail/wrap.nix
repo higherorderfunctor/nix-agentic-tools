@@ -1,12 +1,12 @@
 # `ai.jail`'s `wrap` run for real: a probe jailed with the exclusion profile
-# reads a masked file, a masked directory and a symlink to a masked file, and
-# its environment, inside the build sandbox. Linux-only, like bubblewrap.
+# reads a masked file, a masked directory, and the target of a symlink named
+# in a mask request. It also reads its environment inside the build sandbox.
+# Linux-only, like bubblewrap.
 #
 # Unprivileged user namespaces are host policy, so the run is gated on an
 # independent bubblewrap positive control with the same namespace flags;
 # `$out` says which branch ran.
 {
-  harness,
   lib,
   pkgs,
   self,
@@ -14,116 +14,117 @@
 }: let
   jailLib = import ../../lib/ai/jail {inherit lib;};
   bwrap = lib.getExe pkgs.bubblewrap;
-  # Inspect direct per-executable derivations, without exposing test metadata
-  # on the installed profile or duplicating its base permissions.
-  combinatorJail = self.lib.ai.jail.extend {
-    inherit pkgs;
-    additionalCombinators = self.lib.ai.jail.combinators pkgs;
-    basePermissions = [];
-  };
-  environmentWrapper = explicit:
-    combinatorJail "environment-order" "${pkgs.coreutils}/bin/true" (c:
-      [c.strict-runtime c.restore-path (c.unset-env "PATH")]
-      ++ lib.optional explicit (c.set-env "PATH" "/jail-permissions-path"));
-  environmentOrder = explicit: let
-    text = builtins.unsafeDiscardStringContext (environmentWrapper explicit).text;
-    restoreUnset = builtins.unsafeDiscardStringContext ''--setenv PATH "''${PATH#${pkgs.coreutils}/bin:}" --unsetenv PATH'';
-    afterUnset = builtins.elemAt (lib.splitString "--unsetenv PATH" text) 1;
-  in
-    lib.hasInfix restoreUnset text
-    && !(lib.hasInfix "RUNTIME_ARGS+=(--setenv PATH" text)
-    && (!explicit || lib.hasInfix "--setenv PATH /jail-permissions-path" afterUnset);
+  strictShellApplication = import ../../lib/strict-shell-application.nix pkgs;
   probe = pkgs.writeShellScriptBin "jail-probe" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     root=$1
-    printf 'file=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/secret-file")"
-    printf 'dir=%s\n' "$("${pkgs.coreutils}/bin/ls" -A "$root/secret-dir")"
-    printf 'link=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/link")"
-    printf 'target=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/link-target")"
-    printf 'visible=%s\n' "$("${pkgs.coreutils}/bin/cat" "$root/visible")"
-    printf 'secret=%s\n' "''${JAIL_SECRET:-unset}"
+    read_fixture() {
+      local name=$1 value
+      shift
+      # A blocked read is not the same as successfully reading an empty mask.
+      if ! value=$("$@"); then
+        echo "FAIL: could not read the $name fixture" >&2
+        exit 1
+      fi
+      printf '%s=%s\n' "$name" "$value"
+    }
+    read_fixture file ${pkgs.coreutils}/bin/wc -c < "$root/secret-file"
+    read_fixture dir ${pkgs.coreutils}/bin/ls -A "$root/secret-dir"
+    read_fixture target ${pkgs.coreutils}/bin/wc -c < "$root/link-target"
+    read_fixture visible ${pkgs.coreutils}/bin/cat "$root/visible"
+    printf 'secret-present=%s\n' "''${JAIL_SECRET+yes}"
     printf 'kept=%s\n' "''${JAIL_KEPT:-unset}"
     if jail_probe_path="$(${pkgs.coreutils}/bin/printenv PATH)"; then
-      printf 'path=%s\n' "$jail_probe_path"
+      printf 'path=value:%s\n' "$jail_probe_path"
     else
       printf 'path=unset\n'
     fi
   '';
-  # The fixture lives under the build directory, known only at launch, so
-  # the masks go through `permissions` with an unescaped `$JAIL_ROOT`; they
-  # use the same `mask-path` combinator `exclude.paths` lowers to.
-  jailed = extraPermissions:
+  wrap = {
+    bubblewrap,
+    profile,
+  }:
     jailLib.wrap {
+      inherit profile;
+      package = probe;
       executables = ["jail-probe"];
       jail = self.lib.ai.jail;
       name = "jail-probe";
-      package = probe;
-      inherit pkgs;
+      pkgs = pkgs // {inherit bubblewrap;};
+    };
+  # The fixture lives under the build directory, known only at launch, so
+  # the masks go through `permissions` with an unescaped `$JAIL_ROOT`; they
+  # use the same `mask-path` combinator `exclude.paths` lowers to.
+  jailed = bubblewrap: restore:
+    wrap {
+      inherit bubblewrap;
       profile = {
         exclude = {
           environment = ["JAIL_SECRET" "PATH"];
           paths = ["/nonexistent/ai-jail-probe"];
         };
         permissions = c:
-          map (name: c.mask-path (c.noescape ''"$JAIL_ROOT"/${name}'')) ["secret-file" "secret-dir" "link"]
-          ++ extraPermissions c;
+          map (name: c.mask-path (c.noescape ''"$JAIL_ROOT"/${name}'')) ["link" "secret-dir" "secret-file"]
+          ++ lib.optional restore (c.set-env "PATH" "/jail-permissions-path");
       };
     };
-  # A launcher with a helper bin: only the entry point is jailed, and the
-  # helper is linked through from the package unchanged.
-  helper = pkgs.writeShellScriptBin "jail-helper" ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    echo helper
-  '';
-  withHelper = pkgs.symlinkJoin {
-    name = "jail-probe-with-helper";
-    paths = [probe helper];
-  };
-  helperWrapped = jailLib.wrap {
-    executables = ["jail-probe"];
-    jail = self.lib.ai.jail;
-    name = "jail-probe";
-    package = withHelper;
-    inherit pkgs;
-    profile = {
-      exclude = {
-        environment = null;
-        paths = null;
-      };
-      permissions = null;
-    };
-  };
-  helperPassThrough = let
-    postBuild = builtins.unsafeDiscardStringContext helperWrapped.buildCommand;
-  in
-    builtins.length helperWrapped.paths
-    == 1
-    # The one path is the jail, not the package it wraps.
-    && lib.hasSuffix "-jail-probe" (builtins.head helperWrapped.paths)
-    && builtins.head helperWrapped.paths != "${withHelper}"
-    && builtins.head helperWrapped.paths != "${probe}"
-    && lib.hasInfix (builtins.unsafeDiscardStringContext "for bin in ${withHelper}/bin/*; do") postBuild
-    && lib.hasInfix ''ln -s "$bin" "$target"'' postBuild;
   expected = path:
     pkgs.writeText "ai-jail-wrap-expected" ''
-      file=
+      file=0
       dir=
-      link=
-      target=
+      target=0
       visible=shown
-      secret=unset
+      secret-present=
       kept=kept
       path=${path}
     '';
+  # Observe only PATH operations, in order, up to the child command. This
+  # substitute reports what the wrapper passes, not what bubblewrap applies.
+  pathArguments = strictShellApplication {
+    name = "jail-path-arguments";
+    text = ''
+      while [ "$#" -gt 0 ]; do
+        case "$1:''${2-}" in
+          --:*) break ;;
+          --setenv:PATH) printf 'set PATH=%s\n' "$3"; shift 3 ;;
+          --unsetenv:PATH) printf 'unset PATH\n'; shift 2 ;;
+          *) shift ;;
+        esac
+      done
+    '';
+  };
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-    ai-jail-environment-order = harness.mkTest "ai-jail-environment-order" (
-      environmentOrder false && environmentOrder true
-    );
-
-    ai-jail-helper-pass-through = harness.mkTest "ai-jail-helper-pass-through" helperPassThrough;
+    # The build sandbox may block bubblewrap, but must still exercise actual
+    # argument expansion. A space in the caller PATH catches lost quoting;
+    # the exact sequence catches a missing, duplicate or late assignment.
+    ai-jail-environment-order = pkgs.runCommand "ai-jail-environment-order" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export JAIL_ROOT="$TMPDIR/no-fixture"
+      check_order() {
+        local label=$1 wrapper=$2
+        if ! PATH='/caller tools/bin' "$wrapper" > "$TMPDIR/actual"; then
+          echo "FAIL: $label wrapper did not deliver arguments to bubblewrap" >&2
+          exit 1
+        fi
+        if ! diff -u - "$TMPDIR/actual"; then
+          echo "FAIL: $label must restore the caller PATH before excluding it and apply explicit permissions last" >&2
+          exit 1
+        fi
+      }
+      check_order excluded ${jailed pathArguments false}/bin/jail-probe <<'EOF'
+      set PATH=/caller tools/bin
+      unset PATH
+      EOF
+      check_order restored ${jailed pathArguments true}/bin/jail-probe <<'EOF'
+      set PATH=/caller tools/bin
+      unset PATH
+      set PATH=/jail-permissions-path
+      EOF
+      touch "$out"
+    '';
 
     ai-jail-wrap-masks = pkgs.runCommand "ai-jail-wrap-masks" {} ''
       set -euETo pipefail
@@ -136,16 +137,20 @@ in {
       ln -s link-target "$JAIL_ROOT/link"
       echo shown > "$JAIL_ROOT/visible"
       if ${bwrap} --unshare-user --unshare-pid --dev-bind / / --proc /proc --dev /dev -- true 2>"$TMPDIR/control.log"; then
-        JAIL_SECRET=leaked JAIL_KEPT=kept ${jailed (_: [])}/bin/jail-probe "$JAIL_ROOT" > "$TMPDIR/actual"
-        if ! diff -u ${expected "unset"} "$TMPDIR/actual"; then
-          echo "FAIL: the jailed probe saw something it should not" >&2
-          exit 1
-        fi
-        JAIL_SECRET=leaked JAIL_KEPT=kept ${jailed (c: [(c.set-env "PATH" "/jail-permissions-path")])}/bin/jail-probe "$JAIL_ROOT" > "$TMPDIR/override"
-        if ! diff -u ${expected "/jail-permissions-path"} "$TMPDIR/override"; then
-          echo "FAIL: final permissions did not restore PATH" >&2
-          exit 1
-        fi
+        check_probe() {
+          local label=$1 wrapper=$2 expected=$3
+          if ! JAIL_SECRET=leaked JAIL_KEPT=kept "$wrapper" "$JAIL_ROOT" > "$TMPDIR/actual"; then
+            echo "FAIL: $label jailed probe could not run or read its fixtures" >&2
+            exit 1
+          fi
+          if ! diff -u "$expected" "$TMPDIR/actual"; then
+            echo "FAIL: $label jailed probe did not deliver the expected masks or environment" >&2
+            exit 1
+          fi
+        }
+        check_probe excluded ${jailed pkgs.bubblewrap false}/bin/jail-probe ${expected "unset"}
+        # Final permissions must restore PATH without undoing any earlier mask.
+        check_probe restored ${jailed pkgs.bubblewrap true}/bin/jail-probe ${expected "value:/jail-permissions-path"}
         echo "AI-JAIL-WRAP: masks, PATH exclusion and final override held inside the jail" | tee "$out"
       else
         cat "$TMPDIR/control.log" >&2

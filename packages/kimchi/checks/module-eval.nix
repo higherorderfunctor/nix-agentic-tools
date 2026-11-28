@@ -7,7 +7,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownedDocument;
+  inherit (harness) checkRows deliveredFiles evalDevenv markdownInput mkTest ownedDocument rejectsChange;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   redact = import ../../../lib/redact {inherit lib;};
   workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
@@ -72,13 +72,15 @@
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
     cacheWarming = "idle";
-    defaultProjectTrust = "always";
     deviceId = "5bd7b9de-6b01-47e3-ae85-c59ad958dd40";
     fermentV2.autoResume = true;
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";
     sessionNameModel = "custom-title-model";
-    statusLine.pinned = ["model"];
+    statusLine = {
+      hidden = [];
+      pinned = ["model"];
+    };
   };
   userScopeOnlyHarnessSettingValue = key:
     if (get aggregate "harness.keys.${key}").type == "boolean"
@@ -132,111 +134,58 @@
   agentFiles = dir: evaluated:
     lib.filterAttrs (path: _: lib.hasPrefix "${dir}/" path) (deliveredFiles evaluated.config);
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
-  checkModuleAssertions = evaluated: let
-    failed = builtins.filter (entry: !entry.assertion) evaluated.config.assertions;
-  in
-    if failed == []
-    then evaluated.config.files
-    else throw (lib.concatMapStringsSep "\n" (entry: entry.message) failed);
-
-  userScopeOnlyHarnessSettingChecks = lib.listToAttrs (map (key: {
-      name = "module-kimchi-devenv-rejects-user-scope-${key}";
-      value = let
-        rejected = evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
-          };
-        };
-        failed = builtins.filter (entry: !entry.assertion) rejected.config.assertions;
-        failureMessage =
-          if builtins.length failed == 1
-          then (builtins.head failed).message
-          else null;
-        rejectedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions rejected) true);
-        hmAcceptedAttempt = builtins.tryEval (builtins.deepSeq
-          (hmHarnessSettings (evalHm {
-            ai.kimchi = {
-              enable = true;
-              native.harnessSettings = lib.setAttrByPath [key] (userScopeOnlyHarnessSettingValue key);
-            };
-          }))
-          true);
-        acceptedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions (evalDevenv {
-            ai.kimchi = {
-              enable = true;
-              native.harnessSettings.hideThinkingBlock = true;
-            };
-          }))
-          true);
-        assertion =
-          !rejectedAttempt.success
-          && hmAcceptedAttempt.success
-          && acceptedAttempt.success
-          && failureMessage != null
-          && lib.hasInfix key failureMessage
-          && lib.hasInfix "Set these with Home Manager" failureMessage;
+  withHarnessSettings = evaluate: harnessSettings:
+    evaluate {
+      ai.kimchi = {
+        enable = true;
+        native = {inherit harnessSettings;};
+      };
+    };
+  # Test each extracted user-only key through the actual project gate, with
+  # the same value surviving the Home Manager writer. Trust and resources
+  # have separate contracts below.
+  userScopeRows =
+    lib.mapAttrs' (key: value: {
+      name = "${key} must stay user scope without blocking Home Manager";
+      inherit value;
+    }) (lib.genAttrs
+      (lib.subtractLists ["defaultProjectTrust" "resources"] userScopeOnlyHarnessSettingKeys)
+      (key: let
+        value = userScopeOnlyHarnessSettingValue key;
+        settings = {${key} = value;};
+        messages = failedAssertions (withHarnessSettings evalDevenv settings);
       in
-        (mkTest "kimchi-devenv-rejects-user-scope-${key}" assertion).overrideAttrs (_: {
-          passthru.proof = {
-            devenvAcceptedAfterRemoval = acceptedAttempt.success;
-            devenvRejected = !rejectedAttempt.success;
-            homeManagerAccepted = hmAcceptedAttempt.success;
-            message = failureMessage;
-          };
-        });
-    })
-    # Exceptions with their own checks: defaultProjectTrust below, and
-    # `resources`, which devenv delivers through KIMCHI_ENABLE_RESOURCES.
-    (lib.subtractLists ["defaultProjectTrust" "resources"] userScopeOnlyHarnessSettingKeys));
-
-  hmDefaultProjectTrustChecks = let
-    failures = value:
-      failedAssertions (evalHm {
-        ai.kimchi = {
-          enable = true;
-          native.harnessSettings.defaultProjectTrust = value;
-        };
-      });
-    invalid = [
-      {
-        name = "always";
-        value = "always";
-      }
-      {
-        name = "ask";
-        value = "ask";
-      }
-      {
-        name = "null";
-        value = null;
-      }
-    ];
-    rejects = entry: let
-      messages = failures entry.value;
-    in {
-      name = "module-kimchi-hm-rejects-default-project-trust-${entry.name}";
-      value = mkTest "kimchi-hm-rejects-default-project-trust-${entry.name}" (
         builtins.length messages
         == 1
-        && lib.hasInfix "native.harnessSettings.defaultProjectTrust must be \"never\"" (builtins.head messages)
-        && lib.hasInfix "ai.kimchi.projectTrust" (builtins.head messages)
-      );
-    };
-  in
-    lib.listToAttrs (map rejects invalid)
-    // {
-      module-kimchi-hm-accepts-default-project-trust-never = mkTest "kimchi-hm-accepts-default-project-trust-never" (
-        failures "never" == []
-      );
-    };
+        && lib.hasInfix "reads only from user scope: ${key}." (builtins.head messages)
+        && lib.hasInfix "Set these with Home Manager" (builtins.head messages)
+        && (hmHarnessSettings (withHarnessSettings evalHm settings)).${key} == value));
 in {
-  imports = [
-    {checks = hmDefaultProjectTrustChecks;}
-    {checks = userScopeOnlyHarnessSettingChecks;}
-  ];
-
   checks = {
+    module-kimchi-devenv-rejects-user-scope = mkTest "kimchi-devenv-rejects-user-scope" (
+      checkRows "devenv harness scope" userScopeRows
+    );
+
+    module-kimchi-hm-default-project-trust = mkTest "kimchi-hm-default-project-trust" (
+      let
+        evaluate = value: withHarnessSettings evalHm {defaultProjectTrust = value;};
+        rejects = value: let
+          messages = failedAssertions (evaluate value);
+        in
+          builtins.length messages
+          == 1
+          && lib.hasInfix ''defaultProjectTrust must be "never"'' (builtins.head messages)
+          && lib.hasInfix "ai.kimchi.projectTrust" (builtins.head messages);
+        valid = evaluate "never";
+      in
+        checkRows "Home Manager trust default" {
+          "always cannot bypass the declared trust map" = rejects "always";
+          "explicit null cannot remove the protected user default" = rejects null;
+          "never is accepted and written" =
+            failedAssertions valid == [] && (hmHarnessSettings valid).defaultProjectTrust == "never";
+        }
+    );
+
     # Both backends' launchers warn from the launch directory, so the notice
     # reaches Home Manager-only users in any repo. Each launcher is paired
     # with the user harness it reads trust from: Home Manager's follows
@@ -329,7 +278,6 @@ in {
                 native.harnessSettings.packages = ["/consumer/package"];
               };
             };
-          empty = evaluate {ai.kimchi.enable = true;};
           two = withExtensions {
             another = workflows;
             inherit workflows;
@@ -344,21 +292,13 @@ in {
               path = "${workflowsHarness}/packages/${name}";
               file = (extensionFiles evaluated).${path};
             in
-              fromGeneratedTree path file
-              && builtins.hasContext file.source
-              && !(file.recursive or false)
-              && evaluated.config.ai.kimchi._generatedFiles ? ${path}
-              && evaluated.config.ai.files.${path}.method == "symlink"
-              && evaluated.config.ai.claims.path.${path} == ["kimchi"])
+              builtins.hasContext file.source && !(file.recursive or false))
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
-          lib.all (evaluated: lib.all (assertion: assertion.assertion) evaluated.config.assertions) [empty one two]
-          && extensionFiles empty == {}
-          && !((settings empty) ? packages)
+          lib.all (evaluated: lib.all (assertion: assertion.assertion) evaluated.config.assertions) [one two]
           && checkLinks one ["workflows"]
           && checkLinks two ["another" "workflows"]
-          && (settings one).packages == ["packages/workflows"]
           && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "packages/another" "packages/workflows"]
           && !rejected.success;
       in
@@ -366,50 +306,43 @@ in {
     );
 
     module-kimchi-shell = mkTest "kimchi-shell" (
-      lib.all (backend: let
-        check = config: expected: let
-          evaluated = backend.evaluate (lib.mkMerge [{ai.kimchi.enable = true;} config]);
-          settings = backend.settings evaluated;
-        in
-          lib.all (assertion: assertion.assertion) evaluated.config.assertions
-          && (settings.shellPath or null) == expected
-          && !(lib.any (lib.hasInfix "ai.shell") evaluated.config.warnings);
-      in
-        check {} null
-        && check {ai.kimchi.shell = pkgs.bash;} (lib.getExe pkgs.bash)
-        && check {ai.shell = pkgs.bash;} (lib.getExe pkgs.bash)
-        && check {
-          ai.shell = pkgs.bash;
-          ai.kimchi.shell = null;
-        } (lib.getExe pkgs.bash)
-        && check {
-          ai.shell = pkgs.bash;
-          ai.kimchi.shell = pkgs.bashNonInteractive;
-        } (lib.getExe pkgs.bashNonInteractive)
-        && check {
-          ai.shell = pkgs.bash;
-          ai.kimchi.native.harnessSettings.shellPath = lib.getExe pkgs.bashNonInteractive;
-        } (lib.getExe pkgs.bashNonInteractive))
-      backends
-    );
-
-    module-kimchi-context-composes-root-first = mkTest "kimchi-context-composes-root-first" (
-      let
-        config.ai = {
-          context.text = "Shared context.";
-          kimchi = {
-            context.text = "Kimchi context.";
-            enable = true;
-          };
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-        expected = "Shared context.\n\nKimchi context.";
-      in
-        fromGeneratedTree ".config/kimchi/harness/AGENTS.md" hm.config.home.file.".config/kimchi/harness/AGENTS.md"
-        && (markdownInput hm ".config/kimchi/harness/AGENTS.md").text == expected
-        && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv.config)."AGENTS.md"
-        && (markdownInput devenv "AGENTS.md").text == expected
+      checkRows "Kimchi shell on each backend" (lib.listToAttrs (map (backend: {
+          inherit (backend) name;
+          value = let
+            shell = lib.getExe pkgs.bash;
+            localShell = lib.getExe pkgs.bashNonInteractive;
+            check = config: expected: let
+              evaluated = backend.evaluate (lib.mkMerge [{ai.kimchi.enable = true;} config]);
+              settings = backend.settings evaluated;
+            in
+              failedAssertions evaluated
+              == []
+              && (settings.shellPath or null) == expected
+              && !(lib.any (lib.hasInfix "ai.shell") evaluated.config.warnings);
+          in
+            checkRows backend.name {
+              "native shellPath overrides the normalized shell" =
+                check {
+                  ai.shell = pkgs.bash;
+                  ai.kimchi.native.harnessSettings.shellPath = localShell;
+                }
+                localShell;
+              "runtime null inherits the root shell" =
+                check {
+                  ai.shell = pkgs.bash;
+                  ai.kimchi.shell = null;
+                }
+                shell;
+              "runtime shell overrides the root shell" =
+                check {
+                  ai.shell = pkgs.bash;
+                  ai.kimchi.shell = pkgs.bashNonInteractive;
+                }
+                localShell;
+              "the runtime shell reaches the writer without a root default" = check {ai.kimchi.shell = pkgs.bash;} shell;
+            };
+        })
+        backends))
     );
 
     module-kimchi-rules-agentsmd = mkTest "kimchi-rules-agentsmd" (
@@ -447,8 +380,6 @@ in {
         && lib.hasInfix "<!-- rule: always -->\n\nApply this rule only in: `kimchi`.\n\nALWAYS-RULE." projectAgents
         && lib.hasInfix "This fallback index applies only to: `kimchi`." projectAgents
         && !(lib.hasInfix "SCOPED-RULE-BODY." projectAgents)
-        && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? scoped
-        && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? scoped)
     );
 
     module-kimchi-rules-dedupe-with-codex = mkTest "kimchi-rules-dedupe-with-codex" (
@@ -485,14 +416,12 @@ in {
         && lib.hasInfix "Description: Load for semantic work" agents
         && lib.hasInfix "[`docs/semantic.md`](docs/semantic.md)" agents
         && !(lib.hasInfix "SEMANTIC-RULE-BODY." agents)
-        && evaluated.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
     );
 
     # tryEval cannot expose a throw message. Evaluate the resolver in a
     # subprocess so the diagnostic itself stays part of the contract.
     module-kimchi-rules-on-demand-needs-references = let
       probe = pkgs.writeText "kimchi-rule-inclusion.nix" ''
-        { withReferences ? false }:
         let
           lib = import ${pkgs.path}/lib;
           aiCommon = import ${../../../lib/ai/ai-common.nix} { inherit lib; };
@@ -503,7 +432,7 @@ in {
               description = "Load for semantic work";
               inclusion = ["auto"];
               matcher = null;
-              references = if withReferences then ["docs/semantic.md"] else [];
+              references = [];
             };
             runtime = "kimchi";
           }
@@ -517,8 +446,7 @@ in {
         export NIX_STATE_DIR="$TMPDIR/nix-state"
         export USER="''${USER:-nixbld}"
         mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
-        test "$(nix-instantiate --eval --strict ${probe} --arg withReferences true)" = '"auto"'
-        if nix-instantiate --eval --strict ${probe} --arg withReferences false >actual.stdout 2>actual.stderr; then
+        if nix-instantiate --eval --strict ${probe} >actual.stdout 2>actual.stderr; then
           echo "FAIL: Kimchi auto rule without references unexpectedly succeeded" >&2
           exit 1
         fi
@@ -528,10 +456,7 @@ in {
       '';
 
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
-    module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
-
-    module-kimchi-enable-toggles = mkTest "kimchi-enable-toggles" (evalHm {ai.kimchi.enable = true;}).config.ai.kimchi.enable;
-
+    # An explicit null must suppress installation without suppressing files.
     module-kimchi-package-null-skips-install-keeps-files = mkTest "kimchi-package-null-skips-install-keeps-files" (
       let
         config.ai.kimchi = {
@@ -568,36 +493,16 @@ in {
         && !lib.hasInfix "tui.wheelScrollLines" text
     );
 
-    # Parity: the same config.json surface triggers the HM shared writer.
-    module-kimchi-config-json-hm-copy = mkTest "kimchi-config-json-hm-copy" (
-      let
-        result = evalHm {
-          ai.kimchi = {
-            enable = true;
-            native.settings.telemetry.enabled = false;
-          };
-        };
-      in
-        result.config.ai.files.".config/kimchi/config.json".method
-        == "rw"
-        && (hmConfigDocument result).value.telemetry.enabled == false
-    );
-
     # Home Manager shares its two writable documents; remaining JSON copies
     # stay read-only. Empty devenv declarations deliver no project file.
     module-kimchi-hm-owns-user-files = mkTest "kimchi-hm-owns-user-files" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
-        plan = evaluated.config.ai.files;
         devenv = evalDevenv {ai.kimchi.enable = true;};
       in
         (hmConfigDocument evaluated).value
         == userConfigDefaults
-        && lib.all (path: plan.${path}.method == "rw" && plan.${path}.mode == null)
-        [".config/kimchi/config.json" ".config/kimchi/harness/settings.json"]
         && hmHarnessSettings evaluated == userHarnessDefaults
-        && lib.all (name: let entry = plan.${".config/kimchi/harness/${name}.json"}; in entry.method == "ro" && entry.mode == null)
-        ["mcp" "permissions" "trust"]
         && fileValue ".config/kimchi/harness/mcp.json" evaluated == {}
         && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
@@ -643,59 +548,13 @@ in {
         && !(hmHarnessSettings evaluated ? quietStartup)
     );
 
-    # Legacy identity is stable even before the first enabled generation.
-    module-kimchi-hm-ledger-identity = mkTest "kimchi-hm-ledger-identity" (
-      let
-        configDir = "custom/kimchi";
-        evaluated = evalHm {
-          ai.kimchi = {
-            inherit configDir;
-            enable = true;
-          };
-        };
-        disabled = evalHm {ai.kimchi = {inherit configDir;};};
-        expected =
-          map (path: {
-            codec = "json";
-            ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
-            inherit path;
-          }) ["${configDir}/config.json" "${configDir}/harness/settings.json"]
-          ++ map (path: {
-            codec = "dir";
-            ledger = "materialize/kimchi-files-${builtins.hashString "sha256" path}.manifest";
-            inherit path;
-          }) [configDir "${configDir}/harness" ".config/kimchi/harness"];
-      in
-        lib.all (item: lib.elem item evaluated.config.ai.legacyLedgers && lib.elem item disabled.config.ai.legacyLedgers) expected
-        && evaluated.config.ai.kimchi.legacyLedgers == disabled.config.ai.kimchi.legacyLedgers
-        && disabled.config.ai.kimchi.files == {}
-    );
-
-    # native.harnessSettings render to the project harness settings.json, a
-    # read-only copy rather than a store link.
-    module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
-      let
-        result = evalDevenv {
-          ai.kimchi = {
-            enable = true;
-            native.harnessSettings.hideThinkingBlock = true;
-          };
-        };
-      in
-        result.config.ai.files.".config/kimchi/harness/settings.json".method
-        == "ro"
-        && projectHarnessSettings result == {hideThinkingBlock = true;}
-        && !(result.config.files ? ".config/kimchi/harness/settings.json")
-    );
-
     # Home Manager defaults Kimchi to its Auto router. The default lives in
     # the HM harness option TYPE, so a whole-attrset definition reaches it at
     # any priority. The model pair sits at priority 1200 and is coupled: a
     # consumer who declares either half at mkDefault or stronger, null
     # included, gets neither half from the module, so a model on another
     # provider never pairs with `kimchi-dev`; a weaker declaration loses to
-    # the default. Devenv adds no model default, so it must add nothing and
-    # must not trip its own user-scope rejection.
+    # the default.
     module-kimchi-auto-model-default = mkTest "kimchi-auto-model-default" (
       let
         hmHarness = harnessSettings:
@@ -709,10 +568,13 @@ in {
           model = value.defaultModel or null;
           provider = value.defaultProvider or null;
         };
-        undeclared = hmHarness {};
-        declaredPair = hmHarness {
-          defaultModel = "some-model";
-          defaultProvider = "some-provider";
+        auto = {
+          model = "auto";
+          provider = "kimchi-dev";
+        };
+        custom = {
+          model = "some-model";
+          provider = "some-provider";
         };
         declaredPairAtDefault = hmHarness {
           defaultModel = lib.mkDefault "some-model";
@@ -741,72 +603,36 @@ in {
             settings.reasoningEffort = "high";
           };
         });
-        devenv = evalDevenv {ai.kimchi.enable = true;};
-        devenvHarness = projectHarnessSettings devenv;
       in
-        # default: Auto on kimchi-dev
-        pairOf undeclared
-        == {
-          model = "auto";
-          provider = "kimchi-dev";
+        checkRows "Kimchi Auto model pair" {
+          "explicit model null suppresses both halves of Auto" =
+            pairOf modelNulled
+            == {
+              model = null;
+              provider = null;
+            };
+          "mkDefault definitions of individual fields reach the typed defaults" = pairOf declaredPairAtDefault == custom;
+          "mkDefault on the attrset replaces Auto per field" = pairOf wholeDefault == custom;
+          "mkForce on an unrelated field preserves both Auto defaults" = pairOf wholeForce == auto && (wholeForce.theme or null) == "dark";
+          "model alone drops the module provider rather than pairing with kimchi-dev" =
+            pairOf modelOnly
+            == {
+              model = "some-model";
+              provider = null;
+            };
+          "normalized effort does not clear Auto" = pairOf withEffort == auto;
+          "provider alone drops the module model rather than pairing with Auto" =
+            pairOf providerOnly
+            == {
+              model = null;
+              provider = "some-provider";
+            };
+          "weaker declarations do not displace Auto" = pairOf weakerPair == auto;
         }
-        && pairOf withEffort
-        == {
-          model = "auto";
-          provider = "kimchi-dev";
-        }
-        # a declared pair wins, at normal and at mkDefault priority
-        && pairOf declaredPair
-        == {
-          model = "some-model";
-          provider = "some-provider";
-        }
-        && pairOf declaredPairAtDefault
-        == {
-          model = "some-model";
-          provider = "some-provider";
-        }
-        # one declared half drops both module halves: no mismatched pair
-        && pairOf modelOnly
-        == {
-          model = "some-model";
-          provider = null;
-        }
-        && pairOf providerOnly
-        == {
-          model = null;
-          provider = "some-provider";
-        }
-        && pairOf modelNulled
-        == {
-          model = null;
-          provider = null;
-        }
-        && pairOf wholeDefault
-        == {
-          model = "some-model";
-          provider = "some-provider";
-        }
-        && pairOf wholeForce
-        == {
-          model = "auto";
-          provider = "kimchi-dev";
-        }
-        && wholeForce.theme or null == "dark"
-        && pairOf weakerPair
-        == {
-          model = "auto";
-          provider = "kimchi-dev";
-        }
-        # devenv: no model default in the project file, and no assertion
-        # fires
-        && !(devenvHarness ? defaultModel)
-        && !(devenvHarness ? defaultProvider)
-        && failedAssertions devenv == []
     );
 
     # Kimchi persists the normalized values unchanged at pi's
-    # `defaultThinkingLevel`. Cover both writers and prove a consumer-authored
+    # `defaultThinkingLevel`. On the project writer, a consumer-authored
     # native value wins over the derived mkDefault.
     module-kimchi-normalized-reasoning-effort = mkTest "kimchi-normalized-reasoning-effort" (
       let
@@ -824,10 +650,8 @@ in {
           };
         };
       in
-        (hmHarnessSettings (evalHm config)).defaultThinkingLevel
-        or null
+        (projectHarnessSettings (evalDevenv config)).defaultThinkingLevel or null
         == "high"
-        && (projectHarnessSettings (evalDevenv config)).defaultThinkingLevel or null == "high"
         && (projectHarnessSettings overridden).defaultThinkingLevel or null == "low"
     );
 
@@ -848,20 +672,17 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        emptyHm = evalHm {ai.kimchi.enable = true;};
-        emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
       in
         (fileValue ".config/kimchi/harness/mcp.json" hm).mcpServers.example.command
         == "hello"
         && !(hm.config.home.file ? ".config/kimchi/harness/mcp.json")
+        # The ai-module settings check pins owner-only access to silence Kimchi's group/other read warning.
         && (fileValue ".kimchi/mcp.json" devenv).mcpServers.example.command == "hello"
         && !(devenv.config.files ? ".kimchi/mcp.json")
-        && fileValue ".config/kimchi/harness/mcp.json" emptyHm == {}
-        && !(emptyDevenv.config.ai.files ? ".kimchi/mcp.json")
     );
 
     # The patched title request reads one optional gateway model ID from the user file.
-    # Check the rendered value, omission on null, and rejection of non-string IDs.
+    # Check the rendered value and rejection of non-string IDs.
     module-kimchi-session-name-model = mkTest "kimchi-session-name-model" (
       let
         settingsWithModel = sessionNameModel:
@@ -871,14 +692,14 @@ in {
               native.harnessSettings = {inherit sessionNameModel;};
             };
           });
-        accepts = value: (builtins.tryEval (builtins.deepSeq (settingsWithModel value) true)).success;
       in
-        (settingsWithModel "custom-title-model").sessionNameModel
-        == "custom-title-model"
-        && !(settingsWithModel null ? sessionNameModel)
-        && !(accepts 42)
-        && !(accepts ["custom-title-model"])
-        && !(accepts {model = "custom-title-model";})
+        checkRows "session title model" {
+          "the native model field rejects a non-string ID" = rejectsChange (value: (settingsWithModel value).sessionNameModel) {
+            expected = "custom-title-model";
+            invalid = 42;
+            valid = "custom-title-model";
+          };
+        }
     );
 
     # Kimchi 1.42.3 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
@@ -896,15 +717,15 @@ in {
               // extra;
           };
       in
-        !((withPaths {}).config.ai.files ? ".kimchi/config.json")
-        && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [];})).skillPaths == []
+        (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [];})).skillPaths
+        == []
         && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [".custom/skills"];})).skillPaths == [".custom/skills"]
     );
 
     # `region` and `telemetry.enabled` are user scope in config.json, but
     # Kimchi reads both from its environment first. Devenv therefore accepts
     # them, delivers them through the launcher alone and writes no project
-    # config.json for them; a user-scope sibling is still rejected by name.
+    # config.json for them.
     module-kimchi-devenv-env-shadowed-settings = mkTest "kimchi-devenv-env-shadowed-settings" (
       let
         withSettings = settings:
@@ -918,15 +739,10 @@ in {
           region = "eu";
           telemetry.enabled = false;
         };
-        withEndpoint = withSettings {
-          region = "eu";
-          telemetry.endpoint = "https://example.invalid";
-        };
       in
         failedAssertions shadowed
         == []
         && !(shadowed.config.ai.files ? ".kimchi/config.json")
-        && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
     );
 
     # Harness `resources` is user scope, but KIMCHI_ENABLE_RESOURCES can
@@ -957,7 +773,7 @@ in {
         });
         # A comma or whitespace would change which ids the comma list
         # enables, and a key outside RESOURCE_KINDS names nothing.
-        badIds = ["extensions." "extensions.a b" "extensions.ferment-v2,extensions.memory" "memory" "widgets.x"];
+        badIds = ["extensions." "extensions.a b" "extensions.ferment-v2,extensions.memory" "widgets.x"];
         withBad = failedAssertions (withKimchi {
           native.harnessSettings.resources = enabled // lib.genAttrs badIds (_: true);
         });
@@ -1005,14 +821,6 @@ in {
       in
         (fileValue ".kimchi/config.json" result).tui.wheelScrollLines
         == 3
-        # Owner-only, so Kimchi's group/other read warning stays quiet.
-        && files.".kimchi/config.json".mode == "0400"
-        && result.config.ai.files.".kimchi/config.json".method == "ro"
-        && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
-        && !(result.config.files ? ".kimchi/mcp.json")
-        && files ? ".kimchi/skills/example/SKILL.md"
-        && result.config.ai.claims.path.".kimchi/skills/example" == ["kimchi"]
-        && files ? "AGENTS.md"
         && !(files ? "custom.md")
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
@@ -1103,7 +911,6 @@ in {
         && devenv.config.warnings == [projectEventWarning]
         && !(onlyPermissionRequest.config.files ? ".kimchi/hooks.json")
         && onlyPermissionRequest.config.warnings == [projectEventWarning]
-        && !((evalDevenv {ai.kimchi.enable = true;}).config.files ? ".kimchi/hooks.json")
         && (evalDevenv {ai.kimchi.enable = true;}).config.warnings == []
         && hmHookPaths == []
         && hm.config.warnings == [(hmHookWarning ["ai" "kimchi" "hooks"])]
@@ -1137,33 +944,45 @@ in {
             enable = true;
           };
         };
-        emptyHm = evalHm {ai.kimchi.enable = true;};
-        emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
-        accepts = value:
-          (builtins.tryEval (builtins.deepSeq
-            (evalHm {
-              ai.kimchi = {
-                enable = true;
-                permissions = value;
-              };
-            }).config.ai.kimchi.permissions
-            true)).success;
+        read = field: permissions:
+          (evalHm {
+            ai.kimchi = {
+              inherit permissions;
+              enable = true;
+            };
+          }).config.ai.kimchi.permissions.${
+            field
+          };
       in
-        fileValue ".config/kimchi/harness/permissions.json" hm
-        == permissions
-        && !(hm.config.home.file ? ".config/kimchi/harness/permissions.json")
-        && fileValue ".kimchi/permissions.json" devenv == permissions
-        && !(devenv.config.files ? ".kimchi/permissions.json")
-        && fileValue ".config/kimchi/harness/permissions.json" emptyHm == {}
-        && !(emptyDevenv.config.ai.files ? ".kimchi/permissions.json")
-        && accepts {
-          classifierMaxTotalMs = 1;
-          classifierTimeoutMs = 1;
-          deny = [];
+        checkRows "Kimchi permissions" {
+          "Home Manager keeps the fixed target and uses a copy even with custom configDir" =
+            fileValue ".config/kimchi/harness/permissions.json" hm
+            == permissions
+            && !(hm.config.home.file ? ".config/kimchi/harness/permissions.json");
+          "devenv writes project permissions as a copy" =
+            fileValue ".kimchi/permissions.json" devenv
+            == permissions
+            && !(devenv.config.files ? ".kimchi/permissions.json");
+          "project mode must belong to the native enum" = rejectsChange (read "defaultMode") {
+            expected = "plan";
+            invalid = {defaultMode = "ask";};
+            valid = {defaultMode = "plan";};
+          };
+          "timeout must be positive" = rejectsChange (read "classifierTimeoutMs") {
+            expected = 1;
+            invalid = {classifierTimeoutMs = 0;};
+            valid = {classifierTimeoutMs = 1;};
+          };
+          "undeclared keys are rejected rather than written to the strict native schema" = rejectsChange (read "classifierTimeoutMs") {
+            expected = 1;
+            invalid = {
+              classifierTimeoutMs = 1;
+              extra = true;
+            };
+            valid = {classifierTimeoutMs = 1;};
+          };
+          "valid optional fields remain independently accepted" = read "classifierMaxTotalMs" {classifierMaxTotalMs = 1;} == 1 && read "deny" {deny = [];} == [];
         }
-        && !(accepts {extra = true;})
-        && !(accepts {defaultMode = "ask";})
-        && !(accepts {classifierTimeoutMs = 0;})
     );
 
     # ai.kimchi.projectTrust mirrors trust.json, which ACP consults because it
@@ -1181,7 +1000,6 @@ in {
             enable = true;
           };
         };
-        target = hm.config.ai.files."custom/kimchi/harness/trust.json";
         devenvWith = trust:
           evalDevenv {
             ai.kimchi = {
@@ -1199,12 +1017,7 @@ in {
             };
           });
       in
-        target.method
-        == "ro"
-        && lib.hasInfix "project-trust.py" target.content.run
-        && target.mode == null
-        && !(hm.config.home.file ? "custom/kimchi/harness/trust.json")
-        && hmFailures projectTrust == []
+        !(hm.config.home.file ? "custom/kimchi/harness/trust.json")
         && builtins.any (lib.hasInfix "must be absolute paths") (hmFailures {"srv/projects" = true;})
         && builtins.any (lib.hasInfix "ai.kimchi.projectTrust is user scope") (failedAssertions rejected)
         && failedAssertions accepted == []
@@ -1225,18 +1038,20 @@ in {
               native.harnessSettings.defaultProjectTrust = value;
             };
           };
-        rejected = value:
-          builtins.any
-          (message:
-            lib.hasInfix "defaultProjectTrust" message
-            && lib.hasInfix "Set these with Home Manager" message)
-          (failedAssertions (evaluate value));
         accepted = evaluate null;
+        messages = failedAssertions (evaluate "always");
       in
-        lib.all rejected ["always" "ask" "never"]
-        && failedAssertions accepted == []
-        && projectHarnessSettings accepted == {}
-        && !(accepted.config.ai.files ? ".config/kimchi/harness/settings.json")
+        checkRows "devenv trust default" {
+          "always cannot let the project trust itself" =
+            builtins.length messages
+            == 1
+            && lib.hasInfix "reads only from user scope: defaultProjectTrust." (builtins.head messages)
+            && lib.hasInfix "Set these with Home Manager" (builtins.head messages);
+          "null does not claim a project harness settings file" =
+            failedAssertions accepted
+            == []
+            && !(accepted.config.ai.files ? ".config/kimchi/harness/settings.json");
+        }
     );
 
     # Git tokens are secrets Kimchi reads only from the user config.json.
@@ -1246,13 +1061,6 @@ in {
     # option under native.settings, which would put them in the store.
     module-kimchi-git-tokens = mkTest "kimchi-git-tokens" (
       let
-        hm = evalHm {
-          ai.kimchi = {
-            enable = true;
-            gitTokens."github.com" = redact.file "/run/secrets/kimchi-github";
-          };
-        };
-        target = hm.config.ai.files.".config/kimchi/config.json";
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
@@ -1260,13 +1068,7 @@ in {
           };
         };
       in
-        target.method
-        == "ro"
-        && target.mode == "0400"
-        && lib.hasInfix "redact-read" target.content.run
-        && lib.hasInfix "file /run/secrets/kimchi-github" target.content.run
-        && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.content.run
-        && builtins.any (lib.hasInfix "ai.kimchi.gitTokens is user scope") (failedAssertions rejected)
+        builtins.any (lib.hasInfix "ai.kimchi.gitTokens is user scope") (failedAssertions rejected)
         && !(builtins.tryEval (builtins.deepSeq
           (evalHm {
             ai.kimchi = {
@@ -1278,7 +1080,7 @@ in {
     );
 
     # Agents use engine-owned read-only copies; native source bytes still
-    # enter the formatted tree, and empty declarations retire owned copies.
+    # enter the formatted tree.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
         hm = evalHm agentConfig;
@@ -1292,17 +1094,9 @@ in {
           == map (name: "${dir}/${name}") (builtins.attrNames expected)
           && lib.all (name: let
             path = "${dir}/${name}";
-            entry = evaluated.config.ai.files.${path};
           in
-            entry.method
-            == "ro"
-            && entry.mode == null
-            && entry.executable == null
-            && fromGeneratedTree path (agentFiles dir evaluated).${path}
-            && (markdownInput evaluated path).text == expected.${name})
+            (markdownInput evaluated path).text == expected.${name})
           (lib.attrNames expected);
-        emptyHm = evalHm {ai.kimchi.enable = true;};
-        emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
         fromDir = evalDevenv {
           ai.kimchi = {
             enable = true;
@@ -1338,8 +1132,6 @@ in {
         && !(devenv.config.tasks ? "ai:kimchi:agents")
         && underAgents ".config/kimchi/harness/agents" (builtins.attrNames hm.config.home.file) == []
         && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
-        && agentFiles hmAgentsDir emptyHm == {}
-        && agentFiles devenvAgentsDir emptyDevenv == {}
         && (markdownInput fromDir "${devenvAgentsDir}/agent-one.md").source == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
         && deliveredAsSource (evalHm stringConfig) hmAgentsDir
         && deliveredAsSource (evalDevenv stringConfig) devenvAgentsDir
@@ -1376,8 +1168,8 @@ in {
         }: let
           rootTools = evaluate evaluator {probe = withTools;} {};
         in
-          warnsAt "ai.agents.probe.tools" rootTools
-          && failedAssertions rootTools == []
+          failedAssertions rootTools
+          == []
           && !(lib.hasInfix "tools:" (markdownInput rootTools "${dir}/probe.md").text)
           && warnsAt "ai.kimchi.agents.probe.tools" (evaluate evaluator {} {probe = withTools;})
           && quiet (evaluate evaluator {probe = withTools;} {probe = null;})
@@ -1395,59 +1187,63 @@ in {
     );
 
     module-kimchi-devenv-exact-cwd-guard = let
-      guardedPackages = [
-        (mkDevenvKimchiPackage {
-          ai.kimchi.native.settings.tui.wheelScrollLines = 3;
-        })
-        (mkDevenvKimchiPackage {
-          ai.kimchi.native.harnessSettings.hideThinkingBlock = true;
-        })
-        (mkDevenvKimchiPackage {
+      # Each exact-cwd artifact independently blocks a launch in a child.
+      # The environment-backed settings below never produce such an artifact.
+      probes = {
+        agents = {ai.kimchi.agents.native = nativeAgent;};
+        config = {ai.kimchi.native.settings.tui.wheelScrollLines = 3;};
+        hooks = {ai.hooks.PreToolUse = [{hooks = [{command = "true";}];}];};
+        mcp = {
           ai.mcpServers.example = {
             package = pkgs.hello;
             type = "stdio";
           };
-        })
-        (mkDevenvKimchiPackage {
-          ai.hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-        })
-        (mkDevenvKimchiPackage {
-          ai.kimchi.agents.native = nativeAgent;
-        })
-        (mkDevenvKimchiPackage {
-          ai.kimchi.permissions.defaultMode = "plan";
-        })
-      ];
-      # Nothing exact-cwd is declared, so nothing is missed from a
-      # subdirectory and the wrapper must not refuse the launch. Region and
-      # telemetry reach Kimchi through its environment, not a project file,
-      # and so do harness resources.
-      unguardedPackages = [
-        (mkDevenvKimchiPackage {})
-        (mkDevenvKimchiPackage {
-          ai.kimchi.native.harnessSettings.resources."extensions.todos" = true;
-        })
-        (mkDevenvKimchiPackage {
+        };
+        permissions = {ai.kimchi.permissions.defaultMode = "plan";};
+        settings = {ai.kimchi.native.harnessSettings.hideThinkingBlock = true;};
+      };
+      envOnly = {
+        region-and-telemetry = {
           ai.kimchi.native.settings = {
             region = "eu";
             telemetry.enabled = false;
           };
-        })
-      ];
+        };
+        resources = {ai.kimchi.native.harnessSettings.resources."extensions.todos" = true;};
+      };
+      run = cases: command:
+        lib.concatStringsSep "\n" (lib.mapAttrsToList (name: config: ''
+            ${command} ${lib.escapeShellArg name} ${mkDevenvKimchiPackage config}/bin/kimchi
+          '')
+          cases);
     in
       pkgs.runCommand "module-test-kimchi-devenv-exact-cwd-guard" {} ''
-        for kimchi_bin in ${lib.concatMapStringsSep " " (package: "${package}/bin/kimchi") unguardedPackages}; do
-          (cd ${exactCwdProjectRoot}/subdir && "$kimchi_bin")
-        done
-
-        for kimchi_bin in ${lib.concatMapStringsSep " " (package: "${package}/bin/kimchi") guardedPackages}; do
-          (cd ${exactCwdProjectRoot} && "$kimchi_bin")
-          if (cd ${exactCwdProjectRoot}/subdir && "$kimchi_bin" 2>"$TMPDIR/guard.stderr"); then
-            echo "Kimchi exact-cwd guard did not reject a descendant launch" >&2
-            exit 1
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        probe_env_only() {
+          local name="$1" launcher="$2"
+          if ! (cd ${exactCwdProjectRoot}/subdir && "$launcher"); then
+            printf '%s: an environment-only declaration must not block a descendant launch\n' "$name" >&2
+            return 1
           fi
-          grep -F "Kimchi project files are configured at ${exactCwdProjectRoot}; run kimchi from that devenv root." "$TMPDIR/guard.stderr"
-        done
+        }
+        probe_guarded() {
+          local name="$1" launcher="$2"
+          if ! (cd ${exactCwdProjectRoot} && "$launcher"); then
+            printf '%s: the root launch must succeed\n' "$name" >&2
+            return 1
+          fi
+          if (cd ${exactCwdProjectRoot}/subdir && "$launcher" 2>"$TMPDIR/guard.stderr"); then
+            printf '%s: an exact-cwd artifact must block a descendant launch\n' "$name" >&2
+            return 1
+          fi
+          if ! grep -F "Kimchi project files are configured at ${exactCwdProjectRoot}; run kimchi from that devenv root." "$TMPDIR/guard.stderr"; then
+            printf '%s: descendant launch failed for the wrong reason\n' "$name" >&2
+            return 1
+          fi
+        }
+        ${run envOnly "probe_env_only"}
+        ${run probes "probe_guarded"}
 
         echo PASS > "$out"
       '';

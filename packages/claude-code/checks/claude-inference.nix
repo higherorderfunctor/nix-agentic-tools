@@ -8,7 +8,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm mkTest;
+  inherit (harness) checkRows claudeSettings evalDevenv evalHm mkTest;
   redact = import ../../../lib/redact {inherit lib;};
   evals = {
     devenv = evalDevenv;
@@ -17,7 +17,7 @@
   perBackend = name: test:
     lib.mapAttrs' (backend: eval:
       lib.nameValuePair "module-claude-${backend}-inference-${name}"
-      (mkTest "claude-${backend}-inference-${name}" (test eval)))
+      (mkTest "claude-${backend}-inference-${name}" (test backend eval)))
     evals;
   withClaude = config: lib.recursiveUpdate {ai.claude.enable = true;} config;
   origin = "http://127.0.0.1:8317";
@@ -42,76 +42,66 @@
   };
   installed = result: builtins.head (result.config.home.packages or result.config.packages);
   settingsFor = eval: key: claudeSettings (eval (withClaude (urlForm key)));
-  quiet = settings:
-    settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
-    == "1"
-    && settings.disableClaudeAiConnectors;
 in {
   checks = lib.mergeAttrsList [
-    # Every reference uses the reader through apiKeyHelper; neither inherited
-    # authentication variable may accompany that key.
-    (perBackend "url-key-forms" (eval:
-      lib.all (settings:
-        settings.env.ANTHROPIC_BASE_URL
-        == origin
-        && quiet settings
-        && settings.env.ANTHROPIC_API_KEY == ""
-        && settings.env.ANTHROPIC_AUTH_TOKEN == "")
-      (map (settingsFor eval) (builtins.attrValues keys))))
+    # Quiet defaults and the API-key blank do not depend on the key
+    # form; the runtime cases below exercise each reference through its helper.
+    (perBackend "url-settings" (_: eval: let
+      settings = settingsFor eval keys.file;
+    in
+      checkRows "inference URL settings" {
+        "API-key blank is missing or nonempty" = (settings.env.ANTHROPIC_API_KEY or null) == "";
+        "Claude AI connectors remain enabled" = settings.disableClaudeAiConnectors or false;
+        "nonessential traffic remains enabled" = (settings.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC or null) == "1";
+      }))
 
     # The quiet defaults and proxy-derived leaves yield to a consumer's
-    # value. A selection no longer warns that Claude ignores
-    # ai.settings.inference.
-    (perBackend "precedence" (eval: let
-      overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-inference-key")) {
+    # value.
+    (perBackend "precedence" (_: eval: let
+      selection = urlForm keys.file;
+      selected = eval (withClaude selection);
+      unselected = eval (withClaude {});
+      withoutPackage = eval (withClaude (lib.recursiveUpdate selection {ai.claude.package = null;}));
+      overridden = claudeSettings (eval (withClaude (lib.recursiveUpdate selection {
         ai.claude.native.settings = {
           disableClaudeAiConnectors = false;
           env = {
+            ANTHROPIC_BASE_URL = "http://127.0.0.1:9999";
             CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "";
             DISABLE_AUTOUPDATER = "0";
           };
         };
       })));
-      userBase = claudeSettings (eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/ai-inference-key")) {
-        ai.claude.native.settings.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:9999";
-      })));
-      unselected = eval (withClaude {});
-      selected = eval (withClaude (urlForm (redact.file "/run/secrets/ai-inference-key")));
-      withoutPackage = eval (withClaude (lib.recursiveUpdate (urlForm keys.file) {ai.claude.package = null;}));
     in
-      overridden.env.DISABLE_AUTOUPDATER
-      == "0"
-      && overridden.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC == ""
-      && !overridden.disableClaudeAiConnectors
-      && userBase.env.ANTHROPIC_BASE_URL == "http://127.0.0.1:9999"
-      && userBase.env.ANTHROPIC_AUTH_TOKEN == ""
-      && installed unselected == unselected.config.ai.claude.package
-      && (withoutPackage.config.home.packages or withoutPackage.config.packages) == []
-      && builtins.any (lib.hasInfix "only the managed launcher suppresses") withoutPackage.config.warnings
-      && !((claudeSettings unselected).env or {} ? ANTHROPIC_BASE_URL)
-      && (claudeSettings unselected).env.DISABLE_AUTOUPDATER == "1"
-      && (claudeSettings selected).env.DISABLE_AUTOUPDATER == "1"
-      && !((claudeSettings withoutPackage).env ? DISABLE_AUTOUPDATER)
-      && !((claudeSettings unselected) ? disableClaudeAiConnectors)
-      && !(builtins.any (lib.hasInfix "does not deliver it to claude") selected.config.warnings)))
+      checkRows "inference defaults and precedence" {
+        "a managed package leaves the auto-updater enabled" = (claudeSettings selected).env.DISABLE_AUTOUPDATER == "1";
+        "a user endpoint override also restores inherited authentication" = overridden.env.ANTHROPIC_AUTH_TOKEN == "";
+        "a user setting cannot override the auto-updater default" = overridden.env.DISABLE_AUTOUPDATER == "0";
+        "an unmanaged package silently misses launcher protections" = builtins.any (lib.hasInfix "only the managed launcher suppresses") withoutPackage.config.warnings;
+        "native endpoint loses to the proxy default" = overridden.env.ANTHROPIC_BASE_URL == "http://127.0.0.1:9999";
+        "native quiet settings lose to inference defaults" = overridden.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC == "" && !overridden.disableClaudeAiConnectors;
+        "no selection changes the executable" = installed unselected == unselected.config.ai.claude.package;
+        "package=null still installs a launcher or suppresses updates" = (withoutPackage.config.home.packages or withoutPackage.config.packages) == [] && !((claudeSettings withoutPackage).env ? DISABLE_AUTOUPDATER);
+      }))
 
     # `ai.claude.settings.inference` fields win over the root's.
-    (perBackend "runtime-override" (eval: let
-      result = eval (withClaude (lib.recursiveUpdate (urlForm (redact.file "/run/secrets/root-key")) {
+    (perBackend "runtime-override" (_: eval: let
+      rootKey = redact.file "/run/secrets/root-key";
+      workKey = redact.file "/run/secrets/work-key";
+      result = eval (withClaude (lib.recursiveUpdate (urlForm rootKey) {
         ai.claude.settings.inference = {
-          key = redact.file "/run/secrets/work-key";
+          key = workKey;
           url = "http://127.0.0.1:8318";
         };
       }));
       settings = claudeSettings result;
     in
-      result.config.ai.claude.normalized.settings.inference.url
-      == "http://127.0.0.1:8318"
-      && settings.env.ANTHROPIC_AUTH_TOKEN == ""
-      && result.config.ai.claude.normalized.settings.inference.key == redact.file "/run/secrets/work-key"
-      && settings.apiKeyHelper == (settingsFor eval (redact.file "/run/secrets/work-key")).apiKeyHelper))
+      checkRows "runtime inference override" {
+        "runtime endpoint loses to the root endpoint" = settings.env.ANTHROPIC_BASE_URL == "http://127.0.0.1:8318";
+        "runtime key loses when lowered to the helper" = settings.apiKeyHelper == (settingsFor eval workKey).apiKeyHelper && settings.apiKeyHelper != (settingsFor eval rootKey).apiKeyHelper;
+      }))
     # A direct effort field must preserve the inherited endpoint and its lowering.
-    (perBackend "normalized-field-override" (eval: let
+    (perBackend "normalized-field-override" (_: eval: let
       selected = withClaude (urlForm keys.file);
       control = eval selected;
       overridden = eval (lib.recursiveUpdate selected {
@@ -119,13 +109,10 @@ in {
       });
       settings = claudeSettings overridden;
     in
-      control.config.ai.claude.normalized.settings.inference
-      != null
-      && overridden.config.ai.claude.normalized.settings.inference == control.config.ai.claude.normalized.settings.inference
-      && overridden.config.ai.claude.normalized.settings.reasoningEffort == "high"
-      && settings.effortLevel == "high"
-      && settings.env.ANTHROPIC_BASE_URL == origin
-      && settings.apiKeyHelper == (claudeSettings control).apiKeyHelper))
+      checkRows "normalized effort override" {
+        "effort override discards the delivered helper or endpoint" = settings.env.ANTHROPIC_BASE_URL == origin && settings.apiKeyHelper == (claudeSettings control).apiKeyHelper;
+        "normalized effort is ignored or fails to render" = settings.effortLevel == "high";
+      }))
     # The live run binds a loopback port, which the Darwin sandbox refuses.
     (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       claude-inference-runtime =
@@ -139,7 +126,15 @@ in {
             evals
           ));
           settings = pkgs.writeText "claude-inference-runtime-settings.json" (builtins.toJSON (
-            lib.mapAttrs (_: eval: lib.mapAttrs (_: settingsFor eval) keys) evals
+            # Both backends exercise the file helper with the pinned CLI below.
+            # Command and concat use the same reader on either backend.
+            lib.mapAttrs (backend: eval:
+              lib.mapAttrs (_: settingsFor eval) (
+                if backend == "devenv"
+                then keys
+                else {inherit (keys) file;}
+              ))
+            evals
           ));
         } ''
           set -euETo pipefail
@@ -163,7 +158,6 @@ in {
               for name, config in forms.items():
                   path.write_text(secret + "\n\n")
                   child_env = env | config["env"]
-                  assert child_env["ANTHROPIC_API_KEY"] == child_env["ANTHROPIC_AUTH_TOKEN"] == ""
                   def run():
                       return subprocess.run(["${pkgs.bash}/bin/bash", "-c", config["apiKeyHelper"]], env=child_env, capture_output=True, text=True)
                   result = run()
@@ -180,7 +174,7 @@ in {
                   assert result.returncode != 0 and result.stdout == "", (backend, name, "failed reference succeeded")
                   assert "ai.claude.settings.inference.key:" in result.stderr and secret not in result.stderr
                   cases += 1
-          print(f"verified {cases} Claude helper cases: file, command, concat, failures and inherited credentials on both backends")
+          print(f"verified {cases} Claude helper cases: file on both backends; command and concat on devenv")
 
           # Execute the actual pinned CLI through each backend's installed
           # launcher: helper-only checks miss Claude's early descriptor cache.

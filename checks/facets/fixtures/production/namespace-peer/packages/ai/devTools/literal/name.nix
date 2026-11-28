@@ -1,5 +1,2 @@
-{runCommandLocal}:
-runCommandLocal "facet-nested" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+{writeText}:
+writeText "facet-nested" "nested-path\n"

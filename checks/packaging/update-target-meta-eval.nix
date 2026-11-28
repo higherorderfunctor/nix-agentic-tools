@@ -38,6 +38,7 @@
 # `meta.changelog`, which `tryEval` does catch, to prove the same evaluation
 # path reaches the field.
 {
+  harness,
   inputs,
   lib,
   pkgs,
@@ -67,7 +68,7 @@
 
     # Positive control: one real target with a throwing meta.changelog must
     # fail the same evaluation.
-    controlName = builtins.head (builtins.attrNames presentTargets);
+    controlName = "gh";
     controlPackages =
       packages
       // {
@@ -75,11 +76,15 @@
           meta = (prev.meta or {}) // {changelog = throw "positive control";};
         });
       };
-    controlCaught = !(builtins.tryEval (forced controlPackages controlName)).success;
   in
-    assert lib.assertMsg (presentTargets != {}) "update-target-meta-eval: no update target is in ciPackages.${system}";
-    assert lib.assertMsg controlCaught
-    "update-target-meta-eval: rigging ${controlName}.meta.changelog to throw did not fail nix-update's evaluation; the check cannot fail";
+    assert harness.checkRows "update-target-meta-eval" {
+      "gh is a present update target (its changelog once held back the lane)" = presentTargets ? ${controlName};
+      "nix-update must force gh.meta.changelog rather than silently skip a broken changelog" = harness.rejectsChange (set: builtins.seq (forced set controlName) true) {
+        valid = packages;
+        invalid = controlPackages;
+        expected = true;
+      };
+    };
       pkgs.writeText "update-target-meta-eval" (
         lib.concatMapStrings (name: "  ok  ${name}: ${forced packages name}\n") (builtins.attrNames presentTargets)
       );

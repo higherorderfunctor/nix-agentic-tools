@@ -5,6 +5,7 @@
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows mkTest;
   # Expected ids come from extraction, not the contribution under test.
   facts = import ../../../lib/extracted/facts.nix {inherit lib;};
   # Read the owner's aggregate separately from the backend module.
@@ -22,7 +23,7 @@
   };
   # Each runtime state must expose the same static contribution and accept user leaves.
   checks = lib.mapAttrs (backend: evaluate:
-    harness.mkTest "chatgpt-codex-catalog-${backend}" (lib.all (enable: let
+    mkTest "chatgpt-codex-catalog-${backend}" (lib.all (enable: let
       base = {ai.codex.enable = enable;};
       catalog = (evaluate [base]).config.ai.catalog;
       chosen = lib.head ids;
@@ -36,10 +37,6 @@
                   maker = "configured-maker";
                   source = ["configured evidence"];
                 };
-                catalog-test-added = {
-                  maker = "openai";
-                  source = ["synthetic addition"];
-                };
               };
             };
           }
@@ -51,38 +48,26 @@
             ai.catalog.vendors.codex.maker = "configured-maker";
           }
         ]).config.ai.catalog.vendors.codex;
-      cases = {
-        "discarded extracted ids or enable-gated facts" = lib.all (id:
-          builtins.hasAttr id catalog.models
-          && catalog.models.${id}.maker == "openai"
-          && lib.elem "chatgpt-codex:models" catalog.models.${id}.source)
-        ids;
-        "lost CPA overlap evidence" = lib.all (id:
-          lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
-        overlap;
-        "user addition lost or maker-wide offer narrowed" =
-          configured.models.catalog-test-added.maker
-          == "openai"
-          && configured.vendors.codex
-          == {
-            maker = "openai";
-            models = null;
-          };
-        "user leaf overrides lost" =
+      makerWideOffer = {
+        maker = "openai";
+        models = null;
+      };
+    in
+      checkRows "${backend}, enable=${lib.boolToString enable}" {
+        "Codex inventory changes with runtime enablement or loses attribution" =
+          lib.filter (id: lib.elem "chatgpt-codex:models" catalog.models.${id}.source) (builtins.attrNames catalog.models)
+          == lib.sort builtins.lessThan ids
+          && lib.all (id: catalog.models.${id}.maker == "openai") ids;
+        "configured model leaves are replaced by owner defaults" =
           configured.models.${chosen}.maker
           == "configured-maker"
           && configured.models.${chosen}.source == ["configured evidence"];
-        "vendor default cannot be overridden" = vendorOverride.maker == "configured-maker" && vendorOverride.models == null;
-        "vendor narrowed to extracted inventory" =
-          catalog.vendors.codex
-          == {
-            maker = "openai";
-            models = null;
-          };
-      };
-      failures = builtins.attrNames (lib.filterAttrs (_: ok: !ok) cases);
-    in
-      lib.assertMsg (failures == []) "${backend}, enable=${lib.boolToString enable}: ${lib.concatStringsSep "; " failures}") [false true]))
+        "CPA overlap loses its second evidence source" = lib.all (id:
+          lib.elem "cliproxyapi:opencodeGo.models.${id}" catalog.models.${id}.source)
+        overlap;
+        "vendor default maker is not overridden" = vendorOverride.maker == "configured-maker";
+        "vendor offer is narrowed to the extracted inventory" = catalog.vendors.codex == makerWideOffer;
+      }) [false true]))
   backends;
 in {
   # One owner check covers both backend imports without pinning model ids.

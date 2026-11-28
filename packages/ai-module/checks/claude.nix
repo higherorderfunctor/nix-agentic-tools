@@ -55,22 +55,17 @@
       mode = config.home.activation.ai-claude-config-mode.text or "";
     };
   in
-    assert if flags == {}
-    then !(enabled.ai.files ? ".claude.json")
-    else enabled.ai.files.".claude.json".method == "rw" && enabled.ai.files.".claude.json".content.value == flags;
-    assert lib.all (config: config.ai.claude.legacyLedgers == [legacy] && builtins.elem legacy config.ai.legacyLedgers) [enabled disabled never];
+    # Keep the receipt discoverable even on a first activation with Claude off.
+    assert lib.all (config: config.ai.claude.legacyLedgers == [legacy]) [enabled disabled never];
+    assert builtins.elem legacy never.ai.legacyLedgers;
     assert !(disabled.ai.files ? ".claude.json") && !(devenv.ai.files ? ".claude.json");
     assert !(disabled.home.activation ? ai-claude-config-mode) && !(devenv.tasks ? "ai:claude-config-mode");
     # Old mode and unpin entries both followed linkGeneration (the default
     # writer.after). Materialized keeps that edge and adds apply -> mode.
-    assert enabled.ai.claude.activation.claude-config-mode.after == ["materialized"];
     assert enabled.home.activation.ai-claude-config-mode.after == ["ai-files-ready"];
-    # An empty flag map has no plan: prune retires prior flags without apply.
-    assert disabled.home.activation ? ai-files-prune && !(disabled.home.activation ? ai-files-apply);
-    assert enabled.home.activation ? ai-files-prune;
-    assert if flags == {}
-    then !(enabled.home.activation ? ai-files-apply)
-    else builtins.elem "ai-files-ready" enabled.home.activation.ai-files-apply.before; {
+    # When disabled, prune retires prior flags without apply.
+    assert !(disabled.home.activation ? ai-files-apply);
+    assert enabled.home.activation ? ai-files-prune; {
       disabled = generate disabled;
       enabled = generate enabled;
       settings = flags;

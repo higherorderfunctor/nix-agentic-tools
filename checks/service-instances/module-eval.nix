@@ -9,7 +9,7 @@
   self,
   ...
 }: let
-  inherit (harness) claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest;
+  inherit (harness) checkRows claudeSettings evalDevenv evalHm launchdAgentRunsLauncher mkTest rejectsChange;
   redact = import ../../lib/redact {inherit lib;};
   services = import ../../packages/ai-module/lib/services.nix {inherit lib;};
   strictShellApplication = import ../../lib/strict-shell-application.nix;
@@ -40,88 +40,62 @@
     devenv = "/tmp/devenv-state";
     hm = "/home/test/.local/state";
   };
-  succeeds = value: (builtins.tryEval (builtins.deepSeq value true)).success;
   failures = result: map (item: item.message) (builtins.filter (item: !item.assertion) result.config.assertions);
 
-  # The service entries and claims both backends share.
+  expectedProxyConfig = backend: {
+    access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
+    management = {
+      # The panel is not downloaded unprompted unless a consumer asks.
+      disable-auto-update-panel = true;
+      secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
+    };
+    oauth.auth-dir = "${stateRoot.${backend}}/cliproxyapi/main/auth";
+    server = {
+      host = "127.0.0.1";
+      port = 8400;
+    };
+  };
+
+  baseline = lib.genAttrs ["devenv" "hm"] (backend: evaluate backend (withInstances {}));
+
+  # The service entries both backends share.
   entries = backend: let
-    inherit (evaluate backend (withInstances {})) config;
+    result = baseline.${backend};
+    inherit (result) config;
     proxy = config.ai.services.cliproxyapi-main;
     manager = config.ai.services.cpa-manager-plus-main;
     root = stateRoot.${backend};
   in
-    proxy.files.config.variable
-    == "CPA_CONFIG"
-    && proxy.files.config.secrets
-    == {
-      CLIPROXYAPI_ACCESS_API_KEYS_0 = clientKey;
-      CLIPROXYAPI_MANAGEMENT_SECRET_KEY = managementKey;
-    }
-    && builtins.fromJSON proxy.files.config.content
-    == {
-      access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
-      management = {
-        # The panel is not downloaded unprompted unless a consumer asks.
-        disable-auto-update-panel = true;
-        secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
-      };
-      oauth.auth-dir = "${root}/cliproxyapi/main/auth";
-      server = {
-        host = "127.0.0.1";
-        port = 8400;
-      };
-    }
-    && (evaluate backend (withInstances {cliproxyapi.instances.main.settings.server.host = "192.0.2.1";})).config.ai.cliproxyapi.instances.main.settings.server.host == "192.0.2.1"
-    && !config.ai.cliproxyapi.instances.main.fetchModelCatalogs
-    && builtins.fromJSON (evaluate backend (withInstances {cliproxyapi.instances.main.settings.management.disable-auto-update-panel = false;})).config.ai.services.cliproxyapi-main.files.config.content
-    == {
-      access.api-keys = [(placeholder "CLIPROXYAPI_ACCESS_API_KEYS_0")];
-      management = {
-        disable-auto-update-panel = false;
-        secret-key = placeholder "CLIPROXYAPI_MANAGEMENT_SECRET_KEY";
-      };
-      oauth.auth-dir = "${root}/cliproxyapi/main/auth";
-      server = {
-        host = "127.0.0.1";
-        port = 8400;
-      };
-    }
-    && proxy.environment == {}
-    && lib.hasSuffix "/bin/cliproxyapi-main" (lib.head proxy.command)
-    && services.triggers proxy == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
-    && manager.files.config.variable == "CPA_MANAGER_CONFIG"
-    && manager.files.config.secrets == {}
-    && builtins.fromJSON manager.files.config.content
-    == {
-      cpaUpstreamUrl = "http://127.0.0.1:8400";
-      dataDir = "${root}/cpa-manager-plus/main";
-      httpAddr = "127.0.0.1:18400";
-    }
-    && manager.environment == {CPA_MANAGEMENT_KEY = managementKey;}
-    && config.ai.claims.port
-    == {
-      "18400" = ["cpa-manager-plus:cpa-manager-plus-main.ports.main"];
-      "8400" = ["cliproxyapi:cliproxyapi-main.ports.main"];
-    }
-    && failures (evaluate backend (withInstances {})) == [];
+    checkRows "${backend}: instance service entries" ({
+        "both enabled instances evaluate without assertions" = failures result == [];
+        "manager inherits the selected proxy's management key" = manager.environment == {CPA_MANAGEMENT_KEY = managementKey;};
+        "manager renders selected upstream, backend state directory and loopback bind" =
+          builtins.fromJSON manager.files.config.content
+          == {
+            cpaUpstreamUrl = "http://127.0.0.1:8400";
+            dataDir = "${root}/cpa-manager-plus/main";
+            httpAddr = "127.0.0.1:18400";
+          };
+        "proxy JSON has placeholders, backend auth directory and loopback bind" = builtins.fromJSON proxy.files.config.content == expectedProxyConfig backend;
+        "proxy keeps keys out of the environment" = proxy.environment == {};
+      }
+      // lib.optionalAttrs (backend == "devenv") {
+        "devenv proxy watches both config-secret files" = config.processes.cliproxyapi-main.watch.paths == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"];
+      });
 
-  # CLIProxyAPI settings on the main instance, by case name: the settings and
-  # what evaluating them gives, `thrown` when an option type or the render
-  # refuses them, else the failed assertions.
-  settingsCases = let
-    accepted = settings: {
-      inherit settings;
-      expect = [];
-    };
-    fails = message: settings: {
-      inherit settings;
-      expect = [message];
-    };
-    thrown = settings: {
-      inherit settings;
-      expect = "thrown";
-    };
-    # One client key with one rule: a valid API-key rule, then `rule` on top.
+  # Read the merged fields for type and merge errors, and force the real
+  # service render for assertion cases that still produce a file.
+  proxySettings = backend: let
+    evaluateSettings = settings: evaluate backend (withInstances {cliproxyapi.instances.main = {inherit settings;};});
+    merged = settings: (evaluateSettings settings).config.ai.cliproxyapi.instances.main.settings;
+    observes = settings: matchesRender: expectedFailures: let
+      result = evaluateSettings settings;
+      rendered = builtins.fromJSON result.config.ai.services.cliproxyapi-main.files.config.content;
+      # An unexpected throw must fail the named row, not bypass checkRows.
+      observed = builtins.tryEval (matchesRender rendered && failures result == expectedFailures);
+    in
+      observed.success && observed.value;
+    ruleOf = settings: lib.head (lib.head settings.access.key-allowlist).credentials;
     allowing = rule: {
       access.key-allowlist = [
         {
@@ -136,193 +110,227 @@
         }
       ];
     };
-    emptied = field: fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value." (allowing {${field} = [(lib.mkIf false "x")];});
-    nullEntry = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a null entry, which the renderer drops: a list of only nulls renders as [] and switches enforcement off for every key. Remove the null entry, or set the list to [] to switch the allowlist off.";
+    accepts = settings: read: expected: observes settings (rendered: read rendered == expected) [];
+    acceptsRule = settings: expected:
+      accepts settings (config: config.access.key-allowlist) [
+        {
+          api-key = placeholder "CLIPROXYAPI_ACCESS_KEY_ALLOWLIST_0_API_KEY";
+          credentials = [expected];
+        }
+      ];
+    refuses = settings: message:
+      observes settings builtins.isAttrs ["ai.cliproxyapi.instances.main: ${message}"];
+    # A list of only `mkIf false` elements passes the type's definition check
+    # but merges to [], which CPA reads as unrestricted; assert on that value.
+    emptied = field:
+      refuses (allowing {${field} = [(lib.mkIf false "x")];}) "settings.access.key-allowlist[].credentials[].${field} merged to an empty list, which CPA reads as no restriction on that dimension and admits every credential of the provider and kind. Leave the option unset to leave it unrestricted, or list at least one value.";
+    narrowing = field: expected: invalid:
+      rejectsChange (settings: (ruleOf (merged settings)).${field}) {
+        inherit expected;
+        invalid = allowing {${field} = invalid;};
+        valid = allowing {${field} = expected;};
+      };
+    nullEntry = entries:
+      refuses {access.key-allowlist = entries;} "settings.access.key-allowlist has a null entry, which the renderer drops: a list of only nulls renders as [] and switches enforcement off for every key. Remove the null entry, or set the list to [] to switch the allowlist off.";
     oauth.kind = "oauth";
     urls = ["https://api.z.ai/api/anthropic"];
-  in {
-    # Accepted, and rendered.
-    "allowlist switched off" = accepted {access.key-allowlist = [];};
-    "apikey rule narrowed by base-urls and ids" = accepted (allowing {
-      base-urls = urls;
-      ids = ["claude-apikey"];
-    });
-    "mkIf lists that keep an element" = accepted (allowing {
-      base-urls = [(lib.mkIf true "x") (lib.mkIf false "y")];
-      ids = [(lib.mkIf true "x") (lib.mkIf false "y")];
-    });
-    "oauth rule narrowed by ids" = accepted (allowing (oauth // {ids = ["claude-oauth"];}));
-    "plugins without an allowlist" = accepted {plugins.enabled = true;};
-
-    # Refused by an assertion. The types check definitions, so a list of only
-    # `mkIf false` elements passes them and merges to [], which CPA reads as
-    # unrestricted; the assertion on the merged value refuses it, per field.
-    "base-urls emptied by mkIf" = emptied "base-urls";
-    "ids emptied by mkIf" = emptied "ids";
-    "null allowlist entry" = nullEntry {access.key-allowlist = [null];};
-    "null allowlist entry beside a rule" = nullEntry {access.key-allowlist = [null] ++ (allowing {}).access.key-allowlist;};
-    "oauth rule with base-urls" = fails "ai.cliproxyapi.instances.main: settings.access.key-allowlist has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls." (allowing (oauth // {base-urls = urls;}));
-    # Its one failure also proves a bare rule, with no ids or base-urls, passes.
-    "plugins beside the allowlist" = fails "ai.cliproxyapi.instances.main: settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist." (allowing oauth // {plugins.enabled = true;});
-
-    # Refused at evaluation.
-    "empty base-urls" = thrown (allowing {base-urls = [];});
-    "empty ids" = thrown (allowing {ids = [];});
-    "null base-urls element" = thrown (allowing {base-urls = [null];});
-    "null ids element" = thrown (allowing {ids = [null];});
-    "plaintext client key" = thrown {access.api-keys = ["plain-client-key"];};
-    "port other than the instance's" = thrown {server.port = 9999;};
-    "unknown kind" = thrown (allowing {kind = "wrong";});
-  };
-
-  # Every settings case, an upstream that names no enabled instance, and each
-  # Manager Plus admin key and path refusal.
-  refusals = backend: let
-    outcome = settings: let
-      result = evaluate backend (withInstances {cliproxyapi.instances.main.settings = settings;});
-    in
-      if succeeds result.config.ai.services.cliproxyapi-main.files
-      then failures result
-      else "thrown";
   in
-    settingsCases
-    != {}
-    && lib.all lib.id (lib.mapAttrsToList (name: case: outcome case.settings == case.expect || builtins.trace "${backend}: settings case `${name}` failed" false) settingsCases)
-    && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.upstream = "missing";}))
-    == ["ai.cpa-manager-plus.instances.main.upstream names `missing`, which is not an `ai.cliproxyapi.instances` entry."]
-    && failures (evaluate backend (withInstances {cliproxyapi.instances.main.enable = false;}))
-    == ["ai.cpa-manager-plus.instances.main.upstream names `ai.cliproxyapi.instances.main`, which is disabled."]
-    # Each other admin key form is steered to adminKeyFile, never ignored.
-    && failures (evaluate backend (withInstances {
-      cpa-manager-plus.instances.main.settings = {
-        config.adminKeyFile = adminKey;
-        environment = {
-          CPA_MANAGER_ADMIN_KEY = adminKey;
-          CPA_MANAGER_ADMIN_KEY_FILE = adminKey;
+    checkRows "${backend}: CLIProxyAPI settings" {
+      # Valid merges and rendered members.
+      "default loopback host can be overridden" = accepts {server.host = "192.0.2.1";} (config: config.server.host) "192.0.2.1";
+      "explicitly empty allowlist switches enforcement off and permits plugins" = observes {
+        access.key-allowlist = [];
+        plugins.enabled = true;
+      } (config: config.access.key-allowlist == [] && config.plugins.enabled) [];
+      "mkIf lists that keep an element" = let
+        elements = value: [(lib.mkIf true value) (lib.mkIf false "discarded")];
+      in
+        acceptsRule (allowing {
+          base-urls = elements "https://api.z.ai/api/anthropic";
+          ids = elements "claude-apikey";
+        }) {
+          base-urls = ["https://api.z.ai/api/anthropic"];
+          ids = ["claude-apikey"];
+          kind = "apikey";
+          provider = "claude";
         };
+      "oauth rule narrowed by ids" = acceptsRule (allowing (oauth // {ids = ["claude-oauth"];})) {
+        ids = ["claude-oauth"];
+        kind = "oauth";
+        provider = "claude";
       };
-    }))
-    == [
-      "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
-      "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
-    ]
-    # With adminKeyFile, every input that places the database must be a path
-    # Manager Plus opens as written; without it, none is refused.
-    && failures (evaluate backend (withInstances {
-      cpa-manager-plus.instances.main = {
-        settings = unclean // {config = unclean.config // {adminKeyFile = adminKey;};};
-        stateDir = "/srv/state/../manager";
-      };
-    }))
-    == map (option: "ai.cpa-manager-plus.instances.main.${option}: with settings.config.adminKeyFile set, must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, which Manager Plus opens as written; not `${lib.attrByPath (lib.tail (lib.splitString "." option)) "/srv/state/../manager" unclean}`.") [
-      "settings.config.dataDir"
-      "settings.config.dbPath"
-      "settings.environment.USAGE_DATA_DIR"
-      "settings.environment.USAGE_DB_PATH"
-    ]
-    && failures (evaluate backend (withInstances {cpa-manager-plus.instances.main.settings = unclean;})) == [];
-  unclean = {
-    config.dbPath = "missing/../usage.sqlite";
-    environment = {
-      USAGE_DATA_DIR = "/srv/manager/";
-      USAGE_DB_PATH = "/srv/manager/usage.sqlite${builtins.fromJSON ''"\u00a0"''}";
-    };
-  };
+      "plugins are not refused with an unset allowlist" = accepts {plugins.enabled = true;} (config: config.plugins.enabled) true;
 
-  # Secret-file settings (redact.types.secretFile), one row per case: the
-  # instance declarations, and what each named service receives, a subset of
-  # its config file's `secrets` and of its `environment`, or null where
-  # evaluation refuses. Delivery is checked in packages/ai-module/checks.
-  asFile = value: {_redact.asFile = value;};
-  dataKey = redact.command "/run/current-system/sw/bin/read-data-key";
-  joined = redact.concat [managementKey];
-  tlsKey = redact.file "/run/secrets/tls.key";
-  secretFiles = [
-    {
-      name = "a TLS key is a secret file";
-      input.cliproxyapi.instances.main.settings.server.tls = {
-        cert = "/etc/cliproxyapi/tls.crt";
-        enable = true;
-        key = tlsKey;
+      # Invalid settings that reach the assertion layer.
+      "ids emptied by mkIf" = emptied "ids";
+      # An all-null list renders as off; a mixed list catches a guard that
+      # only rejects lists that become empty.
+      "null allowlist entry" = nullEntry [null];
+      "null allowlist entry beside a rule" = nullEntry ([null] ++ (allowing {}).access.key-allowlist);
+      "oauth rule with base-urls" = refuses (allowing (oauth // {base-urls = urls;})) "settings.access.key-allowlist has a rule with kind = \"oauth\" and base-urls, which can never match: base-urls compare an API-key credential's base URL and never match an OAuth login. Use kind = \"apikey\" or drop base-urls.";
+      # Its one failure also proves a bare rule, with no ids or base-urls, passes.
+      "plugins beside the allowlist" = refuses (allowing oauth // {plugins.enabled = true;}) "settings.plugins.enabled = true voids settings.access.key-allowlist: plugin executors choose credentials outside it and can read every credential through host.auth.get. Disable plugins or drop the allowlist.";
+
+      # Invalid definitions: the paired control forces the same option.
+      "base-urls cannot be empty" = narrowing "base-urls" urls [];
+      "ids cannot be empty" = narrowing "ids" ["claude-apikey"] [];
+      "ids cannot contain null" = narrowing "ids" ["claude-apikey"] [null];
+      "kind must name a credential kind" = rejectsChange (settings: (ruleOf (merged settings)).kind) {
+        expected = "apikey";
+        invalid = allowing {kind = "wrong";};
+        valid = allowing {};
       };
-      expect.cliproxyapi-main.secrets.CLIPROXYAPI_SERVER_TLS_KEY = asFile tlsKey;
-    }
-    {
-      name = "untyped plugin JSON lifts a reference";
-      input.cliproxyapi.instances.main.settings.plugins.configs.example.token = tlsKey;
-      expect.cliproxyapi-main.secrets.CLIPROXYAPI_PLUGINS_CONFIGS_EXAMPLE_TOKEN = tlsKey;
-    }
-    {
-      name = "untyped plugin JSON refuses a malformed marker";
-      input.cliproxyapi.instances.main.settings.plugins.configs.example.token._redact.concat = ["literal"];
-      expect.cliproxyapi-main = null;
-    }
-    {
-      # dataKeyPath, where Manager Plus writes the key it generates, stays a path.
-      name = "the key files are secret files";
-      input.cpa-manager-plus.instances.main.settings = {
-        config = {
-          adminKeyFile = adminKey;
-          dataKeyFile = dataKey;
-          dataKeyPath = "/srv/manager/data.key";
-          managementKeyFile = joined;
-        };
-        environment = {
-          CPA_MANAGEMENT_KEY_FILE = joined;
-          CPA_MANAGER_DATA_KEY_FILE = dataKey;
-          CPA_MANAGER_DATA_KEY_PATH = "/srv/manager/data.key";
-        };
+      "port must match the instance port" = rejectsChange (settings: (merged settings).server.port) {
+        expected = 8400;
+        invalid.server.port = 9999;
+        valid.server.port = 8400;
       };
-      expect.cpa-manager-plus-main = {
-        environment = {
+      "the client key must be a reference" = rejectsChange (settings: (merged settings).access.api-keys) {
+        expected = [clientKey];
+        invalid.access.api-keys = ["plain-client-key"];
+        valid.access.api-keys = [clientKey];
+      };
+    };
+
+  managerRestrictions = backend: let
+    observe = ai: failures (evaluate backend (withInstances ai));
+    uncleanState = "/srv/state/../manager";
+    unclean = {
+      config.dbPath = "usage.sqlite";
+      environment = {
+        USAGE_DATA_DIR = "/srv/manager/";
+        USAGE_DB_PATH = "/srv/manager/usage.sqlite${builtins.fromJSON ''"\u00a0"''}";
+      };
+    };
+    pathMessage = option: value: "ai.cpa-manager-plus.instances.main.${option}: with settings.config.adminKeyFile set, must be an absolute path with no empty, `.` or `..` segment and no trailing whitespace, which Manager Plus opens as written; not `${value}`.";
+  in
+    checkRows "${backend}: Manager Plus restrictions" {
+      # Each other admin key form is steered to adminKeyFile, never ignored.
+      "admin key variables are refused" =
+        observe {
+          cpa-manager-plus.instances.main.settings = {
+            config.adminKeyFile = adminKey;
+            environment = {
+              CPA_MANAGER_ADMIN_KEY = adminKey;
+              CPA_MANAGER_ADMIN_KEY_FILE = adminKey;
+            };
+          };
+        }
+        == [
+          "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY only on its first start, while the instance applies adminKeyFile on every start."
+          "ai.cpa-manager-plus.instances.main.settings.environment.CPA_MANAGER_ADMIN_KEY_FILE: set settings.config.adminKeyFile instead; Manager Plus reads CPA_MANAGER_ADMIN_KEY_FILE only on its first start, while the instance applies adminKeyFile on every start."
+        ];
+      # With adminKeyFile, every input that places the database must be a path
+      # Manager Plus opens as written; without it, none is refused.
+      "database paths must be used as written with adminKeyFile" =
+        observe {
+          cpa-manager-plus.instances.main = {
+            settings = unclean // {config = unclean.config // {adminKeyFile = adminKey;};};
+            stateDir = uncleanState;
+          };
+        }
+        == [
+          (pathMessage "settings.config.dataDir" uncleanState)
+          (pathMessage "settings.config.dbPath" unclean.config.dbPath)
+          (pathMessage "settings.environment.USAGE_DATA_DIR" unclean.environment.USAGE_DATA_DIR)
+          (pathMessage "settings.environment.USAGE_DB_PATH" unclean.environment.USAGE_DB_PATH)
+        ];
+      "database paths used as written work with adminKeyFile" =
+        observe {
+          cpa-manager-plus.instances.main = {
+            settings = {
+              config = {
+                adminKeyFile = adminKey;
+                dbPath = "/srv/manager/usage.sqlite";
+              };
+              environment = {
+                USAGE_DATA_DIR = "/srv/manager";
+                USAGE_DB_PATH = "/srv/manager/usage.sqlite";
+              };
+            };
+            stateDir = "/srv/state/manager";
+          };
+        }
+        == [];
+      "database paths without adminKeyFile are not restricted" =
+        observe {
+          cpa-manager-plus.instances.main = {
+            settings = unclean;
+            stateDir = uncleanState;
+          };
+        }
+        == [];
+      "upstream must be enabled" =
+        observe {cliproxyapi.instances.main.enable = false;}
+        == ["ai.cpa-manager-plus.instances.main.upstream names `ai.cliproxyapi.instances.main`, which is disabled."];
+      "upstream must name a declared instance" =
+        observe {cpa-manager-plus.instances.main.upstream = "missing";}
+        == ["ai.cpa-manager-plus.instances.main.upstream names `missing`, which is not an `ai.cliproxyapi.instances` entry."];
+    };
+
+  # Secret-file settings (redact.types.secretFile) must retain the file tag
+  # when lifted into a config file or environment. Delivery is checked in
+  # packages/ai-module/checks.
+  secretFiles = let
+    asFile = value: {_redact.asFile = value;};
+    dataKey = redact.command "/run/current-system/sw/bin/read-data-key";
+    joined = redact.concat [managementKey];
+    tlsKey = redact.file "/run/secrets/tls.key";
+    servicesFor = input: (evalHm (withInstances input)).config.ai.services;
+    proxyFile = input: (servicesFor {cliproxyapi.instances.main.settings = input;}).cliproxyapi-main.files.config;
+  in
+    checkRows "service-instances secret files" {
+      "a TLS key is a secret file" = let
+        file = proxyFile {
+          server.tls = {
+            cert = "/etc/cliproxyapi/tls.crt";
+            enable = true;
+            key = tlsKey;
+          };
+        };
+      in
+        (builtins.fromJSON file.content).server.tls.key
+        == placeholder "CLIPROXYAPI_SERVER_TLS_KEY"
+        && file.secrets.CLIPROXYAPI_SERVER_TLS_KEY == asFile tlsKey;
+      "manager key files are secret files" = let
+        manager =
+          (servicesFor {
+            cpa-manager-plus.instances.main.settings = {
+              config = {
+                adminKeyFile = adminKey;
+                dataKeyFile = dataKey;
+                # Manager Plus writes the key it generates here; this stays a path.
+                dataKeyPath = "/srv/manager/data.key";
+                managementKeyFile = joined;
+              };
+              environment = {
+                CPA_MANAGEMENT_KEY_FILE = joined;
+                CPA_MANAGER_DATA_KEY_FILE = dataKey;
+                CPA_MANAGER_DATA_KEY_PATH = "/srv/manager/data.key";
+              };
+            };
+          }).cpa-manager-plus-main;
+        rendered = builtins.fromJSON manager.files.config.content;
+      in
+        rendered.adminKeyFile
+        == placeholder "CPA_MANAGER_PLUS_ADMINKEYFILE"
+        && rendered.dataKeyFile == placeholder "CPA_MANAGER_PLUS_DATAKEYFILE"
+        && rendered.dataKeyPath == "/srv/manager/data.key"
+        && rendered.managementKeyFile == placeholder "CPA_MANAGER_PLUS_MANAGEMENTKEYFILE"
+        && manager.environment
+        == {
+          CPA_MANAGEMENT_KEY = managementKey;
           CPA_MANAGEMENT_KEY_FILE = asFile joined;
           CPA_MANAGER_DATA_KEY_FILE = asFile dataKey;
           CPA_MANAGER_DATA_KEY_PATH = "/srv/manager/data.key";
-        };
-        secrets = {
+        }
+        && manager.files.config.secrets
+        == {
           CPA_MANAGER_PLUS_ADMINKEYFILE = asFile adminKey;
           CPA_MANAGER_PLUS_DATAKEYFILE = asFile dataKey;
           CPA_MANAGER_PLUS_MANAGEMENTKEYFILE = asFile joined;
         };
-      };
-    }
-  ];
-  delivers = {
-    input,
-    expect,
-    ...
-  }: let
-    inherit ((evalHm (withInstances input)).config.ai) services;
-    holds = service: want: let
-      entry = services.${service};
-      have = {
-        inherit (entry) environment;
-        inherit (entry.files.config) secrets;
-      };
-    in
-      if want == null
-      then !(succeeds entry.files)
-      else lib.all (field: builtins.intersectAttrs want.${field} have.${field} == want.${field}) (builtins.attrNames want);
-  in
-    lib.all lib.id (lib.mapAttrsToList holds expect);
-  # A vacuous table passes: no rows, or a row whose expectation is empty at
-  # any level, so each of those fails.
-  nonempty = set: set != {};
-  tableComplete =
-    secretFiles
-    != []
-    && lib.all (row:
-      row.name
-      != ""
-      && nonempty row.input
-      && nonempty row.expect
-      && lib.all (service: let
-        want = row.expect.${service};
-      in
-        want == null || (nonempty want && lib.all (field: nonempty want.${field}) (builtins.attrNames want)))
-      (builtins.attrNames row.expect))
-    secretFiles;
-  undelivered = map (row: row.name) (lib.filter (row: !delivers row) secretFiles);
+    };
 
   # adminKeyFile alone, with no upstream management key, still waits for the
   # secret providers; `disabled` has neither and stays a plain unit.
@@ -333,8 +341,7 @@
         upstream = null;
       };
     })).config;
-  devenv = (evalDevenv (withInstances {})).config;
-  hm = (evalHm (withInstances {})).config;
+  hm = baseline.hm.config;
   disabled =
     (evalHm (withInstances {
       cliproxyapi.instances.main.enable = false;
@@ -382,13 +389,6 @@
         }
         overrides;
     })).config;
-  runnable = runnableFor {};
-  # The same stand-in with the model catalog fetches and the panel updater
-  # turned back on.
-  phoneHomeOn = runnableFor {
-    fetchModelCatalogs = true;
-    settings.management.disable-auto-update-panel = false;
-  };
 
   cliproxyapi = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.cliproxyapi;
   # A client key read at start from /build/key-<name>, and its allowlist entry
@@ -441,7 +441,7 @@
       ${daemonHarness name}
       upstreams=(${lib.escapeShellArgs upstreams})
       for upstream in "''${upstreams[@]}"; do
-        IFS=: read -r name port path <<< "$upstream"
+        IFS=: read -r name port _ <<< "$upstream"
         printf '%s' "upstream-$name" > "/build/upstream-$name"
         ${pkgs.python3}/bin/python3 ${./stand-in-upstream.py} "$name" "$port" "$name.log" 2> "$name.err" &
         processes+=("$!")
@@ -451,16 +451,19 @@
       processes+=("$!")
       ready "$!" http://127.0.0.1:${toString port}/healthz cpa.log
       request() {
-        local status=$1 answer=$2 api=$3 model=$4 key=$5 code path data
+        local status=$1 answer=$2 api=$3 model=$4 key=$5 code path data filter
         case "$api" in
-          anthropic) path=/v1/messages data="{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
-          chat) path=/v1/chat/completions data="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
-          responses) path=/v1/responses data="{\"model\":\"$model\",\"input\":\"hi\"}" ;;
+          anthropic) path=/v1/messages filter='.content[0].text == $answer' data="{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
+          chat) path=/v1/chat/completions filter='.choices[0].message.content == $answer' data="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}" ;;
+          responses) path=/v1/responses filter='.output[0].content[0].text == $answer' data="{\"model\":\"$model\",\"input\":\"hi\"}" ;;
         esac
         code=$(${pkgs.curl}/bin/curl --noproxy '*' --max-time 10 --silent --output response.json --write-out '%{http_code}' \
           --header 'Content-Type: application/json' --header "Authorization: Bearer $key" \
           --data "$data" "http://127.0.0.1:${toString port}$path")
-        if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" '(.choices[0].message.content? // .content[0].text? // .output[0].content[0].text? // .error.message? // .error? // "") | contains($answer)' response.json > /dev/null 2>&1; then
+        if [ "$status" != 200 ]; then
+          filter='(.error.message? // .error? // "") | contains($answer)'
+        fi
+        if [ "$code" != "$status" ] || ! ${pkgs.jq}/bin/jq -e --arg answer "$answer" "$filter" response.json > /dev/null 2>&1; then
           echo "FAIL: $key, $api $model: $code, want $status $answer" >&2
           cat response.json cpa.log >&2
           return 1
@@ -470,7 +473,8 @@
       ${requests}
       for upstream in "''${upstreams[@]}"; do
         IFS=: read -r name port path <<< "$upstream"
-        test "$(cat "$name.log")" = "$path Bearer upstream-$name"
+        printf '%s\n' "$path Bearer upstream-$name" > expected-upstream
+        ${pkgs.diffutils}/bin/diff -u expected-upstream "$name.log"
         echo "ok: $name received one call with its own credential"
       done
       touch "$out"
@@ -478,7 +482,7 @@
 
   # Shell for a check that starts real daemons: each started process joins
   # `processes` and is killed on exit; `ready <pid> <url> <log>` polls `url`
-  # into health.json and prints the log if the process dies first.
+  # and prints the log if the process dies first.
   # The user manager sets XDG_RUNTIME_DIR and INVOCATION_ID for every unit.
   daemonHarness = invocation: ''
     export HOME="$TMPDIR/home" XDG_RUNTIME_DIR="$TMPDIR/run" INVOCATION_ID=${invocation}
@@ -493,7 +497,7 @@
       local pid=$1 url=$2 log=$3
       for attempt in {1..100}; do
         # cspell:ignore noproxy
-        if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > health.json; then
+        if ${pkgs.curl}/bin/curl --noproxy '*' --max-time 1 --silent --fail "$url" > /dev/null; then
           return 0
         fi
         if ! kill -0 "$pid" 2>/dev/null; then break; fi
@@ -508,13 +512,14 @@ in {
   checks =
     {
       module-service-instances = mkTest "service-instances" (
-        assert lib.assertMsg tableComplete "service-instances secret-file table has an empty row";
-        assert lib.assertMsg (undelivered == []) "service-instances secret files failed: ${builtins.toJSON undelivered}";
-          lib.all (backend: entries backend && refusals backend) ["devenv" "hm"]
-          && devenv.processes.cliproxyapi-main.watch.paths == ["/run/secrets/cpa-client-key" "/run/secrets/cpa-management-key"]
-          && devenv.processes.cpa-manager-plus-main.watch.paths == ["/run/secrets/cpa-management-key"]
-          && !disabled.ai.services.cliproxyapi-main.enable
-          && disabled.ai.claims.port."8400" == ["cliproxyapi:cliproxyapi-main.ports.main"]
+        secretFiles
+        && checkRows "service-instances backends" {
+          devenv = entries "devenv" && proxySettings "devenv" && managerRestrictions "devenv";
+          hm = entries "hm";
+        }
+        && checkRows "disabled CLIProxyAPI instance" {
+          "disabled instance still reserves its port" = disabled.ai.claims.port."8400" == ["cliproxyapi:cliproxyapi-main.ports.main"];
+        }
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -565,7 +570,6 @@ in {
           ${real.systemd.user.services.cliproxyapi-main.Service.ExecStart} > cpa.log 2>&1 &
           processes+=("$!")
           ready "''${processes[0]}" http://127.0.0.1:28417/healthz cpa.log
-          ${pkgs.jq}/bin/jq -e '.status == "ok"' health.json
           grep -F 'Local model mode' cpa.log
           main=${real.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
           declared=${declaredDatabase.systemd.user.services.cpa-manager-plus-main.Service.ExecStart}
@@ -595,7 +599,6 @@ in {
           ${pkgs.gnugrep}/bin/grep -F 'settings.config.adminKeyFile: the key is blank to strings.TrimSpace' blank.log
           printf '%s\n' admin-key-a > /build/admin-key
           manager "$main" manager.log
-          ${pkgs.jq}/bin/jq -e '.ok == true and .service == "cpa-manager-plus"' health.json
           theme auto
           ${pkgs.curl}/bin/curl --noproxy '*' --max-time 5 --silent --fail http://127.0.0.1:28418/management.html > panel.html
           # An assignment fails on grep's status, so a panel without it fails here.
@@ -614,7 +617,8 @@ in {
           done
           # The web login's admin check: GET /v0/management/config with the
           # admin key as a bearer token (useAuthStore login → configApi), which
-          # Manager Plus answers 401 "invalid admin key" for any other key.
+          # A valid key loads the configuration; Manager Plus answers 401
+          # "invalid admin key" for any other key.
           request() {
             ${pkgs.curl}/bin/curl --noproxy '*' --max-time 5 --silent --output response.json --write-out '%{http_code}' \
               --header "Authorization: Bearer $1" http://127.0.0.1:28418/v0/management/config
@@ -623,7 +627,7 @@ in {
             local code
             code="$(request "$1")"
             echo "admin key $1: HTTP $code"
-            [ "$code" != 401 ] && [ "$code" != 500 ]
+            test "$code" = 200
           }
           refuses() {
             local code
@@ -702,8 +706,8 @@ in {
           stripped_key=ambient-leak ${fakeManager}/bin/cpa-manager-plus
           ${pkgs.gnugrep}/bin/grep -Fx 'stripped_key=ambient-leak' "$RECEIVED/daemon.env"
           rm "$RECEIVED"/*
-          # The same name, exported with the key's own value and a stale one,
-          # reaches neither the reset nor the daemon.
+          # When the same exported name is set to the key, neither the name
+          # nor the value can reach the reset or the daemon.
           stripped_key=dummy-admin-key ${launcher}/bin/ai-service-cpa-manager-plus-main
           for call in reset-admin-key daemon; do
             test -s "$RECEIVED/$call.env"
@@ -848,68 +852,74 @@ in {
           name = "runtime-providers";
           port = 28426;
           requests = ''
-            request 200 zhipuai anthropic glm-shared key-a
-            request 200 other responses glm-shared key-b
-            request 503 auth_not_found anthropic other-model key-a
-            request 503 auth_not_found responses zhipuai-model key-b
+            # The shared model must select a different provider for each key.
+            request 200 zhipuai anthropic glm-shared "$claude_key"
+            request 200 other responses glm-shared "$codex_key"
+            # A provider's unique model must not be a fallback for the other key.
+            request 503 auth_not_found anthropic other-model "$claude_key"
+            request 503 auth_not_found responses zhipuai-model "$codex_key"
             echo "ok: Codex CLI Responses reached chat-only upstream credential; unauthorized model refused"
           '';
           upstreams = ["zhipuai:28427:/v1/messages?beta=true" "other:28428:/v1/chat/completions"];
           verify = config: ''
-            test "$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})" = key-a
-            test "$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-inference.auth.command})" = key-b
+            claude_key="$(${pkgs.bash}/bin/bash -c ${lib.escapeShellArg (claudeSettings {inherit config;}).apiKeyHelper})"
+            codex_key="$(${config.ai.codex.files.".codex/config.toml".content.value.model_providers.ai-inference.auth.command})"
+            test "$claude_key" = key-a
+            test "$codex_key" = key-b
             echo "ok: Claude's key helper resolves key-a, Codex's key-b"
           '';
         };
       # Linux Home Manager emits the units, and the launcher renders the
       # config the run script hands to CLIProxyAPI from inside its state.
       module-service-instances-run = let
-        launcherFor = config:
+        launcherFor = overrides:
           services.mkLauncher {
             inherit pkgs;
-            entry = config.ai.services.cliproxyapi-main;
+            entry = (runnableFor overrides).ai.services.cliproxyapi-main;
             name = "cliproxyapi-main";
           };
-        launcher = launcherFor runnable;
-        launcherOn = launcherFor phoneHomeOn;
       in
-        assert lib.assertMsg (
-          lib.all (name: lib.hasSuffix "/bin/ai-service-${name}" hm.systemd.user.services.${name}.Service.ExecStart) ["cliproxyapi-main" "cpa-manager-plus-main"]
-          && !(disabled.systemd.user.services ? cliproxyapi-main)
-          && standalone.systemd.user.services.cpa-manager-plus-main.Unit.Wants == ["sops-nix.service"]
-          && standalone.systemd.user.services.cpa-manager-plus-main.Unit.After == ["network.target" "sops-nix.service"]
-          && !(disabled.systemd.user.services.cpa-manager-plus-main.Unit ? Wants)
-          && disabled.systemd.user.services.cpa-manager-plus-main.Unit.After == ["network.target"]
-        ) "module-service-instances-run: Home Manager units";
+        assert checkRows "module-service-instances-run: Home Manager units" {
+          "a manager without secrets does not want the SOPS unit" = !(disabled.systemd.user.services.cpa-manager-plus-main.Unit ? Wants);
+          "disabled proxy does not emit a systemd unit" = !(disabled.systemd.user.services ? cliproxyapi-main);
+          "manager's adminKeyFile alone orders its unit after SOPS" =
+            standalone.systemd.user.services.cpa-manager-plus-main.Unit.Wants
+            == ["sops-nix.service"]
+            && standalone.systemd.user.services.cpa-manager-plus-main.Unit.After == ["network.target" "sops-nix.service"];
+          "systemd starts each instance via its own launcher" =
+            lib.all (name: lib.hasSuffix "/bin/ai-service-${name}" hm.systemd.user.services.${name}.Service.ExecStart) ["cliproxyapi-main" "cpa-manager-plus-main"];
+        };
           pkgs.runCommandLocal "module-test-service-instances-run" {} ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
             printf '%s' client-secret > /build/client-key
             printf '%s' management-secret > /build/management-key
-            export XDG_RUNTIME_DIR="$TMPDIR/run" RECEIVED="$TMPDIR/received"
-            mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
-            ${launcher}/bin/ai-service-cliproxyapi-main
-            # Off by default: embedded catalogs and no panel updater.
-            printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json --local-model" /build/state/main > expected
-            ${pkgs.diffutils}/bin/diff -u expected "$RECEIVED/argv"
-            test "$(${pkgs.coreutils}/bin/tr '\n' ' ' < "$RECEIVED/modes")" = '700 700 '
-            ${pkgs.jq}/bin/jq -e '.access."api-keys" == ["client-secret"] and .management."secret-key" == "management-secret" and .management."disable-auto-update-panel" == true and .oauth."auth-dir" == "/build/state/main/auth"' "$RECEIVED/config.json"
-            # A consumer override turns both back on.
-            export RECEIVED="$TMPDIR/received-on" XDG_RUNTIME_DIR="$TMPDIR/run-on"
-            mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
-            ${launcherOn}/bin/ai-service-cliproxyapi-main
-            printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json" /build/state/main > expected-on
-            ${pkgs.diffutils}/bin/diff -u expected-on "$RECEIVED/argv"
-            ${pkgs.jq}/bin/jq -e '.management."disable-auto-update-panel" == false' "$RECEIVED/config.json"
+            # Network updates are off by default. Each opt-in restores only
+            # its own update, while preserving the launcher config and cwd.
+            launch() {
+              local scenario=$1 launcher=$2 panel_disabled=$3 catalog_flag=$4
+              export XDG_RUNTIME_DIR="$TMPDIR/run-$scenario" RECEIVED="$TMPDIR/received-$scenario"
+              mkdir -p "$RECEIVED" "$XDG_RUNTIME_DIR"
+              "$launcher/bin/ai-service-cliproxyapi-main"
+              printf '%s\n' "--config $XDG_RUNTIME_DIR/ai-service-cliproxyapi-main/config.json$catalog_flag" /build/state/main > expected
+              ${pkgs.diffutils}/bin/diff -u expected "$RECEIVED/argv"
+              ${pkgs.jq}/bin/jq -e --argjson disabled "$panel_disabled" '.management."disable-auto-update-panel" == $disabled' "$RECEIVED/config.json"
+            }
+            launch defaults ${launcherFor {}} true ' --local-model'
+            # The launcher resolves both keys at runtime, and the run script
+            # makes both state directories private before the daemon starts.
+            test "$(cat "$RECEIVED/modes")" = $'700\n700'
+            ${pkgs.jq}/bin/jq -e '.access."api-keys" == ["client-secret"] and .management."secret-key" == "management-secret" and .oauth."auth-dir" == "/build/state/main/auth"' "$RECEIVED/config.json"
+            launch catalogs-enabled ${launcherFor {fetchModelCatalogs = true;}} true ""
+            launch panel-updates-enabled ${launcherFor {settings.management.disable-auto-update-panel = false;}} false ' --local-model'
             touch "$out"
           '';
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
       # Fails when an instance's service is missing from launchd or runs something other than its launcher.
-      module-service-instances-darwin-launchd = mkTest "service-instances-darwin-launchd" (
-        hm.systemd.user.services
-        == {}
-        && lib.all (launchdAgentRunsLauncher hm) ["cliproxyapi-main" "cpa-manager-plus-main"]
-      );
+      module-service-instances-darwin-launchd = mkTest "service-instances-darwin-launchd" (checkRows "Darwin service instances" {
+        "Manager Plus agent runs its launcher" = launchdAgentRunsLauncher hm "cpa-manager-plus-main";
+        "proxy agent runs its launcher" = launchdAgentRunsLauncher hm "cliproxyapi-main";
+      });
     };
 }

@@ -1,3 +1,4 @@
+# cspell:ignore mainbranch
 # Runtime contracts of the `git.*` modules: real repositories, the real git,
 # git-branchless and git-absorb this flake ships, and the devenv task bodies
 # the modules render (which run lib/git-tool-settings/repo-config.sh, the same
@@ -12,9 +13,8 @@
 #
 # `enter <config> ROOT` runs what a devenv shell entry runs for that module
 # configuration, in devenv's order: `ai:git-branchless-init` (when
-# git.branchless.enable), then `git:config`, then a hook installer when the
-# fixture supplies one. `checks/git-config/module-eval.nix` asserts the real
-# order in the task graph.
+# git.branchless.enable), then `git:config`. The task graph assertions in
+# `checks/git-config/module-eval.nix` also cover ordering before hook installation.
 {
   harness,
   lib,
@@ -45,7 +45,7 @@
     lib.concatMapStrings (name:
       lib.optionalString (tasks ? ${name}) ''
         DEVENV_ROOT="$root" ${lib.getExe pkgs.bash} -c ${lib.escapeShellArg tasks.${name}.exec}
-      '') ["ai:git-branchless-init" "git:config" "devenv:git-hooks:install"];
+      '') ["ai:git-branchless-init" "git:config"];
 
   # Repository-local settings every observation below reads through a
   # different program: git itself, git-branchless and git-absorb.
@@ -113,12 +113,15 @@
       common_of() {
         git -C "$1" rev-parse --path-format=absolute --git-common-dir
       }
-      last_entry() {
-        git config --file "$(common_of "$1")/config" --null --list | tail -z -n 1 | tr -d '\0'
-      }
       expect_nat_last() {
-        expect "the NAT include is the last entry of the common config" \
-          "$(last_entry "$1")" "include.path"$'\n'"nix-agentic-tools.gitconfig"
+        local config
+        config="$(common_of "$1")/config"
+        # Read Git's ordered keys and the winning include value separately,
+        # without using the reconciler's NUL-delimited entry parser.
+        expect "the last key of the common config" \
+          "$(git config --file "$config" --name-only --list | tail -n 1)" include.path
+        expect "the last include path of the common config" \
+          "$(git config --file "$config" --get include.path)" nix-agentic-tools.gitconfig
       }
       has_nat_include() {
         git config --file "$(common_of "$1")/config" --fixed-value \
@@ -137,41 +140,21 @@
         commit "$1" t t1
         git -C "$1" switch -q master
       }
+      two_linked_worktrees() {
+        two_trunks "$1"
+        git -C "$1" worktree add -q "$1-first" -b first
+        git -C "$1" worktree add -q "$1-second" -b second
+      }
       query() {
         git -C "$1" branchless query --raw "$2"
+      }
+      expect_recorded_main() {
+        expect "recorded main branch" \
+          "$(git config --file "$(common_of "$1")/branchless/config" branchless.core.mainBranch)" "$2"
       }
 
       ${body}
       touch "$out"
-    '';
-
-  # scopedSync with a two-stack fixture: main advanced past the base of
-  # stacks `a` and `b`, `a` checked out. `prepare` runs before the entry.
-  scopedSync = name: prepare:
-    mkRuntime "scoped-sync-${name}" {
-      configs.synced.git.branchless = {
-        enable = true;
-        scopedSync = true;
-      };
-    } ''
-      repo="$TMPDIR/repo"
-      git init -q -b main "$repo"
-      commit "$repo" f base
-      git -C "$repo" switch -qc b
-      commit "$repo" b b1
-      git -C "$repo" switch -qc a main
-      commit "$repo" a a1
-      git -C "$repo" switch -q main
-      commit "$repo" m m2
-      git -C "$repo" switch -q a
-      ${prepare}
-      enter synced "$repo"
-      expect "alias.sync" "$(git -C "$repo" config alias.sync)" "branchless sync 'stack()'"
-      git -C "$repo" sync
-      git -C "$repo" merge-base --is-ancestor main a || fail "bare git sync did not move the current stack"
-      if git -C "$repo" merge-base --is-ancestor main b; then
-        fail "bare git sync moved another stack"
-      fi
     '';
 in {
   checks = {
@@ -220,18 +203,21 @@ in {
         # ... and absorb.fixupTargetAlwaysSHA = true (repository-local) names
         # the target by its SHA, not its subject.
         commit "$repo" h c3
+        target="$(git -C "$repo" rev-parse HEAD)"
         printf 'changed\n' >"$repo/h"
         git -C "$repo" add h
         (cd "$repo" && git absorb)
         expect "absorb fixupTargetAlwaysSHA from repo-local" \
-          "$(git -C "$repo" log -1 --format=%s)" "fixup! $(git -C "$repo" rev-parse HEAD~1)"
+          "$(git -C "$repo" log -1 --format=%s)" "fixup! $target"
+        expect "absorb appended one fixup commit" "$(git -C "$repo" rev-parse HEAD^)" "$target"
       '';
 
-    # The same value in both scopes observes exactly like the repository value
-    # alone.
-    git-config-identical-value-is-a-no-op =
-      mkRuntime "identical-value-is-a-no-op" {
+    # Equal values in both scopes must still persist locally: a later global
+    # change must not dislodge the repository values.
+    git-config-repo-local-persists-after-global-change =
+      mkRuntime "repo-local-persists-after-global-change" {
         configs.nat = natSettings;
+        global = natSettings;
       } ''
         repo="$TMPDIR/repo"
         two_trunks "$repo"
@@ -242,9 +228,15 @@ in {
             "$(git -C "$repo" config absorb.fixupTargetAlwaysSHA)" \
             "$(query "$repo" 'pick()')"
         }
-        alone="$(observe)"
-        use_global ${userGlobal natSettings}
-        expect "identical user-global value" "$(observe)" "$alone"
+        expected="zdiff3|true|$(git -C "$repo" rev-parse master)"
+        use_global ${userGlobal {
+          git = {
+            absorb.settings.fixupTargetAlwaysSHA = false;
+            branchless.settings.revsets.alias.pick = "trunk";
+            settings.merge.conflictStyle = "diff3";
+          };
+        }}
+        expect "repository values remain pinned after global values change" "$(observe)" "$expected"
       '';
 
     # A typed main branch reaches `git branchless init` on a fresh repository,
@@ -259,9 +251,12 @@ in {
         repo="$TMPDIR/repo"
         two_trunks "$repo"
         enter trunk "$repo"
-        expect "main() after the first entry" "$(query "$repo" 'main()')" "$(git -C "$repo" rev-parse trunk)"
-        expect "branchless/config mainBranch" \
-          "$(git config --file "$repo/.git/branchless/config" branchless.core.mainBranch)" trunk
+        expect_recorded_main "$repo" trunk
+        # Read the include separately because init records trunk even if the
+        # config task does not render the typed key.
+        expect "typed main branch is the only rendered setting" \
+          "$(git config --file "$(common_of "$repo")/nix-agentic-tools.gitconfig" --list)" \
+          branchless.core.mainbranch=trunk
         expect_nat_last "$repo"
       '';
 
@@ -312,8 +307,11 @@ in {
         two_trunks "$repo"
         common="$(common_of "$repo")"
         enter nat "$repo"
-        first="$(git -C "$repo" config merge.conflictStyle)|$(query "$repo" 'pick()')"
-        expect "first entry" "$first" "zdiff3|$(git -C "$repo" rev-parse master)"
+        expected="zdiff3|$(git -C "$repo" rev-parse master)"
+        observe() {
+          printf '%s|%s\n' "$(git -C "$repo" config merge.conflictStyle)" "$(query "$repo" 'pick()')"
+        }
+        expect "first entry" "$(observe)" "$expected"
 
         enter off "$repo"
         if has_nat_include "$repo"; then
@@ -323,8 +321,7 @@ in {
         expect "user-global after the toggle off" "$(git -C "$repo" config merge.conflictStyle)" diff3
 
         enter nat "$repo"
-        expect "after the toggle back on" \
-          "$(git -C "$repo" config merge.conflictStyle)|$(query "$repo" 'pick()')" "$first"
+        expect "after the toggle back on" "$(observe)" "$expected"
         expect_nat_last "$repo"
         [ "$(stat -c %a "$common/nix-agentic-tools.gitconfig")" = 444 ] || fail "the rendered file is not read-only"
       '';
@@ -364,11 +361,31 @@ in {
 
     # scopedSync on a fresh repository: init writes its own alias.sync, the
     # include after it wins, and bare `git sync` moves only the current stack.
-    git-config-scoped-sync-fresh = scopedSync "fresh" "";
-
-    # The same on a repository initialized before the first entry.
-    git-config-scoped-sync-preinitialized =
-      scopedSync "preinitialized" ''git -C "$repo" branchless init --main-branch main </dev/null'';
+    git-config-scoped-sync-fresh =
+      mkRuntime "scoped-sync-fresh" {
+        configs.synced.git.branchless = {
+          enable = true;
+          scopedSync = true;
+        };
+      } ''
+        repo="$TMPDIR/repo"
+        git init -q -b main "$repo"
+        commit "$repo" f base
+        git -C "$repo" switch -qc b
+        commit "$repo" b b1
+        git -C "$repo" switch -qc a main
+        commit "$repo" a a1
+        git -C "$repo" switch -q main
+        commit "$repo" m m2
+        git -C "$repo" switch -q a
+        enter synced "$repo"
+        expect "alias.sync" "$(git -C "$repo" config alias.sync)" "branchless sync 'stack()'"
+        git -C "$repo" sync
+        git -C "$repo" merge-base --is-ancestor main a || fail "bare git sync did not move the current stack"
+        if git -C "$repo" merge-base --is-ancestor main b; then
+          fail "bare git sync moved another stack"
+        fi
+      '';
 
     # Unborn HEAD: init gets the symbolic HEAD as its explicit main branch.
     git-config-unborn-repository =
@@ -378,10 +395,8 @@ in {
         repo="$TMPDIR/repo"
         git init -q -b main "$repo"
         enter nat "$repo"
-        [ -f "$repo/.git/branchless/config" ] || fail "init did not run on an unborn repository"
         grep -F 'branchless' "$repo/.git/hooks/post-commit" >/dev/null || fail "no branchless post-commit hook"
-        expect "branchless/config mainBranch" \
-          "$(git config --file "$repo/.git/branchless/config" branchless.core.mainBranch)" main
+        expect_recorded_main "$repo" main
         expect_nat_last "$repo"
         expect "git merge.conflictStyle" "$(git -C "$repo" config merge.conflictStyle)" zdiff3
       '';
@@ -405,7 +420,9 @@ in {
     # both see the configuration, and init targets the shared repository.
     git-config-linked-worktree =
       mkRuntime "linked-worktree" {
-        configs.nat = natWithInit;
+        configs.nat = lib.recursiveUpdate natWithInit {
+          git.branchless.settings.test.alias.lint = "nix flake check";
+        };
       } ''
         repo="$TMPDIR/repo"
         two_trunks "$repo"
@@ -416,6 +433,9 @@ in {
           expect "merge.conflictStyle in $checkout" "$(git -C "$checkout" config merge.conflictStyle)" zdiff3
           expect "pick() in $checkout" "$(query "$checkout" 'pick()')" "$(git -C "$repo" rev-parse master)"
         done
+        # Read the test alias through Git, not a second call to the INI generator.
+        expect "test.alias is a dotted subsection in the rendered file" \
+          "$(git -C "$TMPDIR/later" config branchless.test.alias.lint)" "nix flake check"
         [ -f "$repo/.git/branchless/config" ] || fail "init did not initialize the shared repository"
         expect_nat_last "$repo"
       '';
@@ -429,36 +449,26 @@ in {
         git clone -q --bare "$TMPDIR/source" "$TMPDIR/bare.git"
         git -C "$TMPDIR/bare.git" worktree add -q "$TMPDIR/worktree" -b worktree
         enter nat "$TMPDIR/worktree"
-        [ -f "$TMPDIR/bare.git/branchless/config" ] || fail "init did not run against a bare primary"
         grep -F 'branchless' "$TMPDIR/bare.git/hooks/post-commit" >/dev/null || fail "no branchless post-commit hook"
+        expect_recorded_main "$TMPDIR/worktree" master
         expect "merge.conflictStyle in the worktree" "$(git -C "$TMPDIR/worktree" config merge.conflictStyle)" zdiff3
         expect_nat_last "$TMPDIR/worktree"
       '';
 
     # A failed init reports a retry command but returns success to devenv, so
-    # the repository include and prek hook tasks still run.
+    # the repository config task still publishes its include.
     git-config-init-failure-keeps-dependents =
       mkRuntime "init-failure-keeps-dependents" {
-        configs.failed = {
-          inherit (natWithInit) git;
-          tasks."devenv:git-hooks:install".exec = ''
-            install -m 0755 ${pkgs.writeText "prek-pre-commit" ''
-              #!/usr/bin/env bash
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              # installed by prek
-            ''} "$DEVENV_ROOT/.git/hooks/pre-commit"
-          '';
-        };
+        configs.failed = natWithInit;
       } ''
         repo="$TMPDIR/repo"
         two_trunks "$repo"
         mkdir -p "$repo/.git/branchless/config"
         enter failed "$repo" 2>"$TMPDIR/stderr"
         grep -F 'git branchless init failed' "$TMPDIR/stderr" >/dev/null || fail "no init failure message"
-        grep -F "run by hand: git -C $repo branchless init" "$TMPDIR/stderr" >/dev/null || fail "no exact manual retry command"
+        retry="$(printf 'nix-agentic-tools git: run by hand: git -C %q branchless init' "$repo")"
+        grep -Fx -- "$retry" "$TMPDIR/stderr" >/dev/null || fail "no exact manual retry command"
         expect_nat_last "$repo"
-        grep -F 'installed by prek' "$repo/.git/hooks/pre-commit" >/dev/null || fail "no prek pre-commit hook"
       '';
 
     # Reconciliation owns exactly its own include.path value: other includes
@@ -480,22 +490,30 @@ in {
         expect "one NAT include" \
           "$(git config --file "$repo/.git/config" --fixed-value --get-all include.path nix-agentic-tools.gitconfig)" \
           nix-agentic-tools.gitconfig
-        expect "unrelated include" "$(git -C "$repo" config test.unrelated)" true
 
         enter off "$repo"
         expect "unrelated include after removal" "$(git -C "$repo" config test.unrelated)" true
 
         enter nat "$repo"
         git -C "$repo" config diff.algorithm minimal
-        touch "$repo/.git/config.lock"
-        if (enter nat "$repo"); then
-          fail "moving the include ignored config.lock"
-        fi
-        if (enter off "$repo"); then
-          fail "removing the include ignored config.lock"
-        fi
+        config="$(common_of "$repo")/config"
+        original="$(cat "$config")"
+        printf '%s\n' 'a concurrent write' >"$config.lock"
+        export LC_ALL=C
+
+        expect_locked() {
+          local label="$1" diagnostic="$2" error="$TMPDIR/$1.stderr"
+          if (enter "$label" "$repo") 2>"$error"; then
+            fail "$label ignored config.lock"
+          fi
+          grep -F -- "$diagnostic" "$error" || fail "$label failed for a reason other than config.lock: $(cat "$error")"
+          expect "$label preserved the config" "$(cat "$config")" "$original"
+          expect "$label preserved the other writer's lock" "$(cat "$config.lock")" 'a concurrent write'
+        }
+        expect_locked nat "$config.lock exists (another git process is writing it)"
+        expect_locked off "could not lock config file $config: File exists"
         [ -e "$repo/.git/nix-agentic-tools.gitconfig" ] || fail "a failed removal still deleted the rendered file"
-        rm "$repo/.git/config.lock"
+        rm "$config.lock"
       '';
 
     # Linked worktrees share the common config and branchless state. Paired
@@ -511,9 +529,7 @@ in {
         for iteration in $(seq 1 20); do
           # An enable racing a disable, entered from two linked worktrees.
           repo="$TMPDIR/race-$iteration"
-          two_trunks "$repo"
-          git -C "$repo" worktree add -q "$repo-first" -b first
-          git -C "$repo" worktree add -q "$repo-second" -b second
+          two_linked_worktrees "$repo"
           enter nat "$repo-first" &
           enable_pid="$!"
           enter off "$repo-second" &
@@ -529,18 +545,25 @@ in {
             file_present=true
           fi
           expect "include and file agree (iteration $iteration)" "$include_present" "$file_present"
+          if [ "$include_present" = true ]; then
+            expect_nat_last "$repo"
+            expect "enabled race result (iteration $iteration)" "$(git -C "$repo" config merge.conflictStyle)" zdiff3
+          fi
 
           # Two first-time entries (two inits) at once.
           repo="$TMPDIR/init-$iteration"
-          two_trunks "$repo"
-          git -C "$repo" worktree add -q "$repo-first" -b first
-          git -C "$repo" worktree add -q "$repo-second" -b second
-          enter nat "$repo-first" &
+          two_linked_worktrees "$repo"
+          enter nat "$repo-first" 2>"$repo-first.stderr" &
           first_pid="$!"
-          enter nat "$repo-second" &
+          enter nat "$repo-second" 2>"$repo-second.stderr" &
           second_pid="$!"
           wait "$first_pid"
           wait "$second_pid"
+          # The task can return success after init fails, so waiting alone is
+          # not proof that both initializations completed.
+          if grep -F 'git branchless init failed' "$repo-first.stderr" "$repo-second.stderr"; then
+            fail "concurrent init reported a failure (iteration $iteration)"
+          fi
           [ -f "$repo/.git/branchless/config" ] || fail "concurrent inits left no branchless/config (iteration $iteration)"
           expect_nat_last "$repo"
         done

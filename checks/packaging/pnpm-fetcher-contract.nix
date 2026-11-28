@@ -54,31 +54,27 @@
       (n: builtins.match "pnpm_[0-9]+" n != null)
       (builtins.attrNames packageSet);
 
-    # The attribute `fetchPnpmDeps` actually reads. Checked by presence rather
-    # than by calling the fetcher: the failure being guarded against is an
-    # evaluation error, so evaluating the attribute IS the test, and doing it
-    # this way costs no build.
-    missing = builtins.filter (n: !(packageSet.${n} ? nodejs-slim)) pnpmNames;
+    # Read the same package argument as fetchPnpmDeps's fixup helper, without
+    # realizing a dependency store. Attribute presence alone would admit null.
+    missing = builtins.filter (n: !(lib.isDerivation (packageSet.${n}.nodejs-slim or null))) pnpmNames;
 
     # A check that silently matches nothing would pass forever while proving
     # nothing — the same "tripwire that can only pass" failure this repo guards
     # against elsewhere. The repo carries pnpm 10, 11 and 12 today.
-    tooFew = builtins.length pnpmNames < 3;
+    missingMajors = lib.subtractLists pnpmNames ["pnpm_10" "pnpm_11" "pnpm_12"];
   in {
     pnpm-fetcher-contract = pkgs.runCommand "pnpm-fetcher-contract" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${lib.optionalString tooFew ''
-        echo "FAIL: matched ${toString (builtins.length pnpmNames)} pnpm package(s) (${lib.concatStringsSep ", " pnpmNames}); expected at least 3." >&2
-        echo "" >&2
-        echo "Either the pnpm_<major> naming changed, or majors were retired. If they were" >&2
-        echo "retired deliberately, lower the floor in checks/packaging/pnpm-fetcher-contract.nix in" >&2
-        echo "the same commit. A discovery filter that matches nothing passes vacuously." >&2
+      ${lib.optionalString (missingMajors != []) ''
+        echo "FAIL: expected pnpm majors missing: ${lib.concatStringsSep ", " missingMajors}" >&2
+        echo "If a major was retired deliberately, update the expected majors in" >&2
+        echo "checks/packaging/pnpm-fetcher-contract.nix in the same commit." >&2
         exit 1
       ''}
       ${lib.optionalString (missing != []) ''
         echo "FAIL: ${toString (builtins.length missing)} pnpm package(s) cannot be passed to fetchPnpmDeps:" >&2
-        ${lib.concatMapStringsSep "\n" (n: ''echo "  - ${n}: no 'nodejs-slim' passthru" >&2'') missing}
+        ${lib.concatMapStringsSep "\n" (n: ''echo "  - ${n}: 'nodejs-slim' passthru is missing or not a package" >&2'') missing}
         echo "" >&2
         echo "fetchPnpmDeps evaluates 'pnpm-fixup-state-db.override {inherit (pnpm) nodejs-slim;}'," >&2
         echo "so passing one of these dies with a bare \"attribute 'nodejs-slim' missing\" that" >&2

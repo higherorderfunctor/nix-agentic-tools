@@ -67,75 +67,61 @@
           COND_ML='^\s*(if|elif|while|until)\s+!?\s*\(\s*(#.*)?$'
           COND_OL='^\s*(if|elif|while|until)\s+!?\s*\([^(].*;\s*(then|do)\b'
 
-            # ── Fixture self-test ─────────────────────────────────────────────
-            #
-            # A gate that silently stops discriminating is worse than no gate, so
-            # prove the pattern separates the two classes BEFORE trusting it on the
-            # real files. Both directions: it must catch every trap shape and must
-            # not fire on arithmetic or ordinary conditionals.
-            fixture_bad='if ! (
-          if ! (  # trailing comment
-        if ! ( set -euETo pipefail; false ); then
-      if ! ( true ); then :; fi
-      until ( false ); do :; done
-        while ! (
-        until (
-          elif ! ('
-            fixture_ok='if (( x > 1 )); then
-          while (( i-- )); do
-        if [ -n "$x" ]; then
-        foo() {
-          ((count++))
-                    if (match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) \&\& arr[1] != "")'
+            # List operators also consume the subshell's status and suppress errexit.
+            LIST_OP='^\s*\)\s*(\|\||&&)'
+            scan_traps() {
+              local rc=0
+              rg --no-filename -n -e "$COND_ML" -e "$COND_OL" -e "$LIST_OP" "$@" || rc=$?
+              # rg status 1 is a clean scan; scanner errors must fail the gate.
+              (( rc <= 1 ))
+            }
 
-            while IFS= read -r line; do
-              [ -n "$line" ] || continue
-              if ! printf '%s\n' "$line" | rg -q "$COND_ML" && ! printf '%s\n' "$line" | rg -q "$COND_OL"; then
-                failures="''${failures}FIXTURE: pattern missed a trap shape: $line
-        "
+            # Exercise the same scan as the real targets. Require the exact line hit
+            # for each unsafe shape and no hit for each safe shape. The real-target
+            # scan already sees the required bare opening and closing lines below,
+            # along with shell function declarations and bracket tests.
+            # The inline and trailing-comment cases caught the old end-of-line
+            # anchor. The embedded awk row preserves the old false-positive input
+            # from update-pkg.sh even if the marker scanner changes.
+            while IFS='|' read -r row outcome line; do
+              case "$outcome" in
+                trap) expected="1:$line" ;;
+                safe) expected="" ;;
+                *) printf 'ERROR: fixture %s has unknown outcome %s\n' "$row" "$outcome" >&2; exit 1 ;;
+              esac
+              hit=$(scan_traps <<<"$line")
+              if [[ $hit != "$expected" ]]; then
+                failures+="FIXTURE $row: expected $outcome (hit '$expected'), got '$hit' for '$line'"$'\n'
               fi
-            done <<<"$fixture_bad"
+            done <<'FIXTURES'
+      reject-and-list|trap|) && echo continued
+      reject-elif-condition|trap|    elif ! (
+      reject-inline-condition-before-then|trap|  if ! ( set -euETo pipefail; false ); then
+      reject-or-list|trap|) || target_rc=$?
+      reject-toplevel-condition|trap|if ! (
+      reject-trailing-comment-condition|trap|    if ! (  # trailing comment
+      reject-until-inline|trap|until ( false ); do :; done
+      reject-until-multiline|trap|  until (
+      reject-while-condition|trap|  while ! (
+      accept-arithmetic-if|safe|if (( x > 1 )); then
+      accept-embedded-awk|safe|              if (match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) && arr[1] != "" && arr[2] != "")
+      FIXTURES
 
-            while IFS= read -r line; do
-              [ -n "$line" ] || continue
-              if printf '%s\n' "$line" | rg -q "$COND_ML" || printf '%s\n' "$line" | rg -q "$COND_OL"; then
-                failures="''${failures}FIXTURE: pattern matched a safe line: $line
-        "
-              fi
-            done <<<"$fixture_ok"
-
-
-            # ── Negative scan: the trap shapes must not appear ──────────────────
-            #
-            # 1. `if ! (`  — a subshell as an `if` condition.
-            # 2. `while ! (` / `until (` — the same suppression, other keywords.
-            # 3. `) || <var>=` / `) && ` — a subshell whose status is consumed by a
-            #    list operator, which suppresses errexit exactly like `if !` does.
             for f in $TARGETS; do
-              if hits=$( (rg -n "$COND_ML" "$f" || true; rg -n "$COND_OL" "$f" || true) | sort -u ); [ -n "$hits" ]; then
-                failures="''${failures}$f: subshell used as a status-tested condition:
-          $hits
-          "
+              hits=$(scan_traps "$f")
+              if [ -n "$hits" ]; then
+                failures+="$f: subshell status is tested by a condition or list operator:"$'\n'"$hits"$'\n'
               fi
-              if hits=$(rg -n '^\s*\)\s*(\|\||&&)' "$f" || true); [ -n "$hits" ]; then
-                failures="''${failures}$f: subshell status consumed by a list operator:
-          $hits
-          "
-              fi
-            done
 
-            # ── Positive control: the safe shape must actually be present ───────
-            #
-            # Without this the negative scan passes vacuously the moment someone
-            # deletes or renames a target body, and the check would report clean on a
-            # file it no longer covers.
-            for f in $TARGETS; do
-              for needle in 'set \+e' '^\)$' 'target_rc=\$\?' '^set -e$'; do
-                if ! rg -q "$needle" "$f"; then
-                  failures="''${failures}$f: positive control FAILED — expected to find /$needle/, which is part of the standalone-subshell shape this check exists to preserve. Either the target body was restructured or this check is now scanning the wrong file.
-          "
-                fi
-              done
+              # Require both ordered boundaries of the standalone subshell.
+              # Without a positive control, a scan could pass after the target
+              # body moves, or match unrelated errexit toggles in the same file.
+              if ! rg -Uq '^set \+e\n\(\n[[:blank:]]+set -euETo pipefail$' "$f"; then
+                failures+="$f: expected set +e immediately before a standalone strict-mode subshell"$'\n'
+              fi
+              if ! rg -Uq '^\)\ntarget_rc=\$\?\nset -e$' "$f"; then
+                failures+="$f: expected standalone subshell status captured before restoring errexit"$'\n'
+              fi
             done
 
             if [ -n "$failures" ]; then

@@ -1,36 +1,26 @@
 {
-  "args": {
-    "scenario": "static",
-    "shell_scope": "none"
-  },
   "assertions": [
     {
-      "id": "SWI-0469",
-      "pattern": "git restack$",
+      "id": "no-executable-restack-repair",
+      "pattern": "^[ \\t]*git restack\\b",
       "present": false
     },
     {
-      "id": "SWI-0470",
-      "pattern": "bare `git restack`",
+      "id": "no-revise-replacement-for-guarded-split",
+      "pattern": "git revise -c\\b",
       "present": false
     },
     {
-      "id": "SWI-0472",
-      "pattern": "git revise -c <hash>",
-      "present": false
-    },
-    {
-      "id": "SWI-0473",
-      "pattern": "git restack cannot repair",
-      "present": false
+      "id": "stop-and-ask-before-repairing-abandoned-lines",
+      "pattern": "If one is, stop and\\s+ask the user\\. Do not\\s+repair it with a restack or subtree move",
+      "present": true
     }
   ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Split repairs stop instead of restacking or revising",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Split verification must stop when an abandoned branch remains, not repair another worktree"
   },
   "id": "R5-unclear-split",
   "kind": "static-set",

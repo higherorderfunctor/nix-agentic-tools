@@ -1,10 +1,52 @@
 {
+  "capture": {
+    "balances": [],
+    "bonuses": [],
+    "windows": {
+      "daily": {
+        "enforced": true,
+        "remainingPercent": 75,
+        "resetsAt": "2026-11-21T00:00:00Z",
+        "status": "ok",
+        "usedPercent": 25,
+        "windowSeconds": 86400
+      },
+      "weekly": {
+        "enforced": true,
+        "remainingPercent": 0,
+        "resetsAt": "2026-11-21T00:00:00Z",
+        "status": "ok",
+        "usedPercent": 100,
+        "windowSeconds": 86400
+      }
+    }
+  },
   "finished": { "first": "2026-11-20T00:00Z", "second": "2026-11-20T00:05Z" },
   "first": {
-    "contradictory pin": "{\"account\":{\"auth_index\":\"account-99\",\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"measured\",\"windows\":{\"daily\":{\"enforced\":true,\"remainingPercent\":75,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":25,\"windowSeconds\":86400},\"weekly\":{\"enforced\":true,\"remainingPercent\":0,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":100,\"windowSeconds\":86400}}}",
-    "matching pin": "{\"account\":{\"auth_index\":\"account-17\",\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"measured\",\"windows\":{\"daily\":{\"enforced\":true,\"remainingPercent\":75,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":25,\"windowSeconds\":86400},\"weekly\":{\"enforced\":true,\"remainingPercent\":0,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":100,\"windowSeconds\":86400}}}",
-    "nullable identity": "{\"account\":{\"auth_index\":null,\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"measured\",\"windows\":{\"daily\":{\"enforced\":true,\"remainingPercent\":75,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":25,\"windowSeconds\":86400},\"weekly\":{\"enforced\":true,\"remainingPercent\":0,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":100,\"windowSeconds\":86400}}}",
+    "contradictory pin": {
+      "account": {
+        "auth_index": "account-99",
+        "name": "fixture",
+        "plan": null
+      },
+      "pool": "measured"
+    },
+    "matching pin": {
+      "account": {
+        "auth_index": "account-17",
+        "name": "fixture",
+        "plan": null
+      },
+      "pool": "measured"
+    },
+    "nullable identity": {
+      "account": { "auth_index": null, "name": "fixture", "plan": null },
+      "pool": "measured"
+    },
     "request failure": null
   },
-  "second": "{\"account\":{\"auth_index\":\"account-42\",\"name\":\"fixture\",\"plan\":null},\"balances\":[],\"bonuses\":[],\"pool\":\"discovered\",\"windows\":{\"daily\":{\"enforced\":true,\"remainingPercent\":75,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":25,\"windowSeconds\":86400},\"weekly\":{\"enforced\":true,\"remainingPercent\":0,\"resetsAt\":\"2026-11-21T00:00:00Z\",\"status\":\"ok\",\"usedPercent\":100,\"windowSeconds\":86400}}}"
+  "second": {
+    "account": { "auth_index": "account-42", "name": "fixture", "plan": null },
+    "pool": "discovered"
+  }
 }

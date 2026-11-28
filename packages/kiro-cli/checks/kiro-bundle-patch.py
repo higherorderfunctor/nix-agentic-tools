@@ -1,7 +1,6 @@
 """Check exact matching, selected byte preservation, and strict build refusal."""
 
 import importlib.util
-import itertools
 from pathlib import Path
 import subprocess
 import sys
@@ -17,74 +16,77 @@ BUNDLE = (b"var steering='Before\\n\\n"
           + b" ".join(source for source, _ in patcher.FIXED["relativeFileCheckPaths"]) + b"';\n")
 
 
-def apply(data, names):
-    for name in names:
-        for source, replacement in patcher.FIXED[name]:
-            data = data.replace(source, replacement)
-    return data
+SELECTIONS = (
+    ("relative selection leaves vendor worktree guidance alone", ("relativeFileCheckPaths",), True, False),
+    ("strip selection leaves vendor file-check guidance alone", ("stripVendorWorktreeSteering",), False, True),
+    ("both selections compose rather than the last one winning",
+     ("relativeFileCheckPaths", "stripVendorWorktreeSteering"), True, True),
+)
 
 
 class PatchTests(unittest.TestCase):
-    def test_selected_patches_preserve_other_bytes_and_execute(self):
-        subsets = [names for r in range(len(patcher.FIXED) + 1) for names in itertools.combinations(patcher.FIXED, r)]
-        for names in subsets:
-            strip = "stripVendorWorktreeSteering" in names
-            relative = "relativeFileCheckPaths" in names
-            with self.subTest(names=names):
+    def test_selected_patches_execute_with_the_requested_guidance(self):
+        for regression, names, relative, strip in SELECTIONS:
+            with self.subTest(regression=regression):
                 result, errors = patcher.patch(BUNDLE, patcher.replacements(names))
                 self.assertEqual(errors, [])
-                self.assertEqual(result, apply(BUNDLE, names))
                 output = subprocess.check_output([
                     "node", "-e", result.decode() + "console.log(steering);console.log(workflow);"
                 ])
-                self.assertIn(b"After", output)
+                self.assertTrue(output.startswith(b"Before\n\n"))
+                self.assertIn(b"After\n", output)
                 self.assertEqual(b"Do not create the worktree yourself" in output, not strip)
-                # The stop-condition file is written and checked at one path.
+                # The written and checked paths must agree at all four example sites.
                 self.assertEqual(b"at the same relative path" in output, relative)
                 self.assertEqual(b"Every path is absolute**" in output, not relative)
-                self.assertEqual(patcher.GATE_FILE in output, not relative)
+                self.assertEqual(b"names the gate file's absolute path" in output, not relative)
+                self.assertEqual(b"names the gate file's workspace-relative path" in output, relative)
+                self.assertEqual(output.count(b"/repo/.agents/tasks/fix-throttle/review.json"), 0 if relative else 4)
+                if relative:
+                    self.assertEqual(output.count(b".agents/tasks/fix-throttle/review.json"), 4)
 
-    def test_drift_refuses_the_entire_selected_patch(self):
-        selected = patcher.replacements(patcher.FIXED)
-        for name, source, _ in selected:
-            for data, count in ((BUNDLE.replace(source, b"changed"), 0), (BUNDLE + source, 2)):
-                with self.subTest(name=name, count=count):
-                    result, errors = patcher.patch(data, selected)
-                    self.assertEqual(errors, [f"{name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}"])
-                    self.assertIsNone(result)
-        result, errors = patcher.patch(b"all changed", selected)
-        self.assertIsNone(result)
-        self.assertEqual(len(errors), len(selected))
+    def test_substitution_preserves_unselected_bytes_exactly(self):
+        # Substituting one anchor must not normalize line endings or touch a sibling.
+        result, errors = patcher.patch(b"before\r\nanchor\x00sibling", [("chosen", b"anchor", b"new")])
+        self.assertEqual(errors, [])
+        self.assertEqual(result, b"before\r\nnew\x00sibling")
 
-    def test_check_fails_closed_for_each_source(self):
-        selected = patcher.replacements(patcher.FIXED)
-        for name, source, _ in selected:
-            for count in (0, 1, 2):
-                with self.subTest(name=name, count=count), tempfile.TemporaryDirectory() as tmp:
-                    path = Path(tmp) / "bundle.js"
-                    data = BUNDLE.replace(source, b"changed") if count == 0 else BUNDLE + source if count == 2 else BUNDLE
-                    path.write_bytes(data)
-                    result = subprocess.run([sys.executable, PATCHER, str(path), "--check"], capture_output=True, text=True)
-                    self.assertEqual(result.returncode, 0 if count == 1 else 1, result.stderr)
-                    if count != 1:
-                        self.assertIn(f"FAIL: kiro-bundle-patch: {name}: expected exact source text once, found {count}", result.stderr)
+    def test_reports_all_failed_anchors(self):
+        selected = [("absent", b"missing", b"new"), ("repeated", b"twice", b"new")]
+        _, errors = patcher.patch(b"twice twice", selected)
+        self.assertEqual(errors, [
+            "absent: expected exact source text once, found 0; bundle drift: b'missing'",
+            "repeated: expected exact source text once, found 2; bundle drift: b'twice'",
+        ])
 
-    def test_application_fails_without_writing_partial_output(self):
+    def test_cli_refuses_each_missing_or_repeated_anchor(self):
         selected = patcher.replacements(patcher.FIXED)
-        for name, source, _ in selected:
-            for count in (0, 2):
-                with self.subTest(name=name, count=count), tempfile.TemporaryDirectory() as tmp:
-                    root = Path(tmp)
-                    src, dst = (root / n for n in ("in.js", "out.js"))
-                    src.write_bytes(BUNDLE.replace(source, b"changed") if count == 0 else BUNDLE + source)
-                    dst.write_bytes(b"untouched")
-                    args = [sys.executable, PATCHER, str(src), str(dst)]
-                    for key in patcher.FIXED:
-                        args += ["--replace", key]
-                    result = subprocess.run(args, capture_output=True, text=True)
-                    self.assertEqual(result.returncode, 1)
-                    self.assertIn(f"{name}: expected exact source text once, found {count}", result.stderr)
-                    self.assertEqual(dst.read_bytes(), b"untouched")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src, dst = root / "in.js", root / "out.js"
+            command = [sys.executable, PATCHER, str(src)]
+            apply = [str(dst), "--replace", "relativeFileCheckPaths", "--replace", "stripVendorWorktreeSteering"]
+            src.write_bytes(BUNDLE)
+            # The vendor check covers acceptance; this input is writable.
+            subprocess.run(command + ["--check"], capture_output=True)
+            self.assertEqual(src.read_bytes(), BUNDLE)
+            for name, source, _ in selected:
+                for regression, data, count in (
+                    ("missing anchor cannot be silently skipped", BUNDLE.replace(source, b"changed"), 0),
+                    ("repeated anchor cannot be resolved by patching the first", BUNDLE + source, 2),
+                ):
+                    src.write_bytes(data)
+                    diagnostic = f"FAIL: kiro-bundle-patch: {name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}"
+                    for mode, arguments in (("check", ["--check"]), ("apply without partial write", apply)):
+                        with self.subTest(mode=mode, regression=regression, name=name, source=source[:80]):
+                            if arguments == apply:
+                                dst.write_bytes(b"untouched")
+                            result = subprocess.run(command + arguments, capture_output=True, text=True)
+                            self.assertEqual(result.returncode, 1, result.stderr)
+                            self.assertIn(diagnostic, result.stderr.splitlines())
+                            if arguments == apply:
+                                self.assertEqual(dst.read_bytes(), b"untouched")
+                            self.assertEqual(src.read_bytes(), data)
 
 
 if __name__ == "__main__":

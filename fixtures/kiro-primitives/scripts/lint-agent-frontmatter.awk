@@ -34,10 +34,6 @@ function clean_value(v) {
   return v
 }
 
-function is_quoted(v) {
-  return (v ~ /^".*"$/ || v ~ /^'.*'$/)
-}
-
 # Count the leading whitespace without leaning on match() and its side-effect
 # globals: copy, strip, subtract.
 function indent_of(line, stripped) {
@@ -122,7 +118,7 @@ state == "fm" {
       awaiting_hooks_value = 0
     }
 
-    if (!is_quoted(value) && is_pseudo_boolean(value)) {
+    if (is_pseudo_boolean(value)) {
       finding("agent-pseudo-boolean", "`" key ": " value "` is NOT a boolean under js-yaml's CORE schema, it is the string \"" value "\"; write true or false literally")
     }
 
@@ -155,13 +151,12 @@ state == "fm" {
 
   # A block-sequence entry.
   if ($0 ~ /^[ \t]*-([ \t]|$)/) {
-    if (awaiting_hooks_value) {
-      awaiting_hooks_value = 0
-    }
+    # A sequence entry resolves a pending `hooks:` value.
+    awaiting_hooks_value = 0
     value = $0
     sub(/^[ \t]*-[ \t]*/, "", value)
     value = clean_value(value)
-    if (value != "" && !is_quoted(value) && is_pseudo_boolean(value)) {
+    if (is_pseudo_boolean(value)) {
       finding("agent-pseudo-boolean", "the sequence entry `" value "` is NOT a boolean under js-yaml's CORE schema, it is the string \"" value "\"; write true or false literally")
     }
     next
@@ -173,11 +168,8 @@ END {
     finding("agent-frontmatter-missing", "the file is empty; a .md profile needs a front-matter block that parses to at least one key")
     exit
   }
-  if (state == "fm" && !closed) {
+  if (state == "fm") {
     finding("agent-frontmatter-unterminated", "the front-matter block opened at line 1 is never closed by a `---` fence")
-  }
-  if (awaiting_hooks_value) {
-    finding("agent-hooks-not-array", "`hooks:` has no value; v3 requires an ARRAY of hook documents")
   }
   if (closed && keys == 0) {
     finding("agent-frontmatter-empty", "the front-matter block parses to ZERO keys; that throws at load and the profile is DROPPED, including the comment-only and blank cases")

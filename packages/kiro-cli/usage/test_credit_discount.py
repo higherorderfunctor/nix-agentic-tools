@@ -18,28 +18,27 @@ RETAINED = gzip.compress(b"retained")  # a real gzip payload, so the sealed subT
 
 
 class DiscountTests(unittest.TestCase):
-    def test_initial_numeric_run(self):
-        report = discount.aggregate()
-        for row in FIXTURE:
-            discount.add(report, discount.classify(row), row["label"])
-        self.assertEqual((report["requests"], report["eligible"], report["discount_like"], report["baseline"], report["excluded"]), (10, 8, 5, 3, 2))
-        self.assertEqual(report["percentage"], 62.5)
-        self.assertEqual(report["anomaly"], 0)
-
     def test_profile_refuses_unsupported_or_unproved_inputs(self):
-        for field, values in {"model": [None, "other"], "effort": [None, "high"],
-                              "complete": [False, None], "retained": [False], "terminal": [False],
-                              "text_only": [False], "no_reasoning_tools": [False], "chars": [None, 0, 6, True],
-                              "context": [None, float("nan"), .8, 4], "credits": [None, float("inf")]}.items():
-            for value in values:
-                with self.subTest(field=field, value=value):
-                    self.assertEqual(discount.classify({**FIXTURE[0], field: value})["classification"], "excluded")
-
-    def test_aggregate_assumptions_are_isolated(self):
-        first, second = discount.aggregate(), discount.aggregate()
-        first["assumptions"].append("local annotation")
-        self.assertNotIn("local annotation", second["assumptions"])
-        self.assertNotIn("local annotation", discount.ASSUMPTIONS)
+        # Each row changes only one fact, so its own restriction must reject it.
+        facts = FIXTURE[0]
+        self.assertEqual(discount.classify(facts)["classification"], "baseline")
+        for field, value, reason in (
+            ("chars", None, "unsupported_output_length"),  # missing count is not a comparison operand
+            ("chars", 0, "unsupported_output_length"),  # an empty response is not measured
+            ("chars", 6, "unsupported_output_length"),  # just above the fitted length
+            ("complete", False, "incomplete_capture"),
+            ("context", None, "invalid_context"),
+            ("context", .8, "context_outside_calibration"),  # do not extrapolate down
+            ("context", 4, "context_outside_calibration"),  # do not extrapolate up
+            ("credits", None, "invalid_credits"),
+            ("credits", float("inf"), "invalid_credits"),
+            ("effort", None, "unsupported_effort"),  # do not infer the effort
+            ("effort", "high", "unsupported_effort"),
+            ("model", None, "unsupported_model"),  # do not infer the model
+        ):
+            with self.subTest(field=field, value=value):
+                self.assertEqual(discount.classify({**facts, field: value}),
+                                 {"classification": "excluded", "reason": reason})
 
     def test_finite_extreme_credits_keep_derived_overflow_json_safe(self):
         for credits in (1e308, -1e308):
@@ -55,60 +54,55 @@ class DiscountTests(unittest.TestCase):
         json.dumps(normal, allow_nan=False)
 
     def test_curve_endpoints_numerical_tolerance_and_anomalies_are_not_clamped(self):
-        facts = FIXTURE[0]
-        baseline = (74 * facts["context"] + .5034) / 603
-        hit = (20 * facts["context"] + .5970) / 603
-        for credits, expected in ((baseline, "baseline"), (baseline + discount.EPSILON / 2, "baseline"),
-                                  (hit, "discount_like"), (hit - discount.EPSILON / 2, "discount_like"),
-                                  (hit - 2 * discount.EPSILON, "anomaly"), (baseline + 2 * discount.EPSILON, "anomaly")):
-            result = discount.classify({**facts, "credits": credits})
-            self.assertEqual(result["classification"], expected)
-            self.assertAlmostEqual(result["baseline_residual"], credits - baseline)
-        self.assertGreater(discount.classify({**facts, "credits": hit - 2 * discount.EPSILON})["raw_discount_score"], 1)
-        self.assertLess(discount.classify({**facts, "credits": baseline + 2 * discount.EPSILON})["raw_discount_score"], 0)
+        # Known full-hit and full-miss prices for 1.8% context; tolerance is one millionth of a credit.
+        hit, miss = .0606915422885572, .2217303482587065
+        for case, credits, expected, residual, score in (
+            ("hit", hit, "discount_like", -.1610388059701493, 1),
+            ("hit beyond tolerance", hit - .000002, "anomaly", -.1610408059701493, "above one"),
+            ("hit within tolerance", hit - .0000005, "discount_like", -.1610393059701493, None),
+            ("miss", miss, "baseline", 0, 0),
+            ("miss beyond tolerance", miss + .000002, "anomaly", .000002, None),
+            ("miss within tolerance", miss + .0000005, "baseline", .0000005, None),
+        ):
+            with self.subTest(case=case):
+                result = discount.classify({**FIXTURE[0], "context": 1.8, "credits": credits})
+                self.assertEqual(result["classification"], expected)
+                self.assertAlmostEqual(result["baseline_residual"], residual, places=12)
+                if score == "above one":
+                    self.assertGreater(result["raw_discount_score"], 1)
+                elif score is not None:
+                    self.assertAlmostEqual(result["raw_discount_score"], score)
 
 
 class ModelFactsTests(unittest.TestCase):
+    MODEL = "claude-sonnet-4.6"
+    # Synthetic prices keep these estimator checks independent of a rate refit.
+    RATES = {"fixed_per_call": .01, "hit_input": .000001, "miss_input": .000011, "output": .001}
+
     def test_windows_come_from_the_snapshot_without_routers(self):
         self.assertIn("auto", discount.FACTS["models"])
         self.assertNotIn("auto", discount.WINDOWS)
         self.assertEqual(discount.WINDOWS["claude-sonnet-4.5"], 200_000)
         self.assertIsNone(discount.estimate("auto", 3.0, 1, 8))
 
-    def test_cached_error_scales_the_fitted_credit_error_by_credits(self):
-        """A 10% credit error over the miss-hit spread; without credit_error the error is unknown."""
-        rates = {**discount.RATES["claude-opus-5.5"], "credit_error": .1}
-        with patch.dict(discount.RATES, {"claude-sonnet-4.6": rates}):
-            self.assertAlmostEqual(discount.estimate("claude-sonnet-4.6", 3.0, .2, 8)["cache_read_error"],
-                                   .1 * .2 / (rates["miss_input"] - rates["hit_input"]))
-        unknown = {key: value for key, value in rates.items() if key != "credit_error"}
-        with patch.dict(discount.RATES, {"claude-sonnet-4.6": unknown}):
-            self.assertIsNone(discount.estimate("claude-sonnet-4.6", 3.0, .2, 8)["cache_read_error"])
-
     def test_unbilled_tokens_are_never_cached(self):
         """A full hit on 29,998 input tokens, 2,400 of them unbilled, caches the 27,598 billed ones."""
-        rates = {**discount.RATES["claude-opus-5.5"], "chars_per_token": 4, "unbilled_tokens": 2400}
-        hit = discount.price(rates, 29_998, 2, 29_998)
-        self.assertAlmostEqual(hit, rates["fixed_per_call"] + rates["hit_input"] * 27_598 + rates["output"] * 2)
-        with patch.dict(discount.RATES, {"claude-sonnet-4.6": rates}):
-            self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, hit, 8)["cache_read_tokens"], 27_598)
-
-    def test_windowed_model_without_rates_has_no_cache_split(self):
-        self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, 1, 8),  # listed, never probed
-                         {"total_tokens": 30000, "input_tokens": 29998, "output_tokens": 2, "cache_read_tokens": None,
-                          "cache_read_error": None})
+        rates = {**self.RATES, "chars_per_token": 4, "unbilled_tokens": 2400}
+        self.assertAlmostEqual(discount.price(rates, 29_998, 2, 29_998), .039598)
+        with patch.dict(discount.RATES, {self.MODEL: rates}):
+            self.assertEqual(discount.estimate(self.MODEL, 3.0, .039598, 8)["cache_read_tokens"], 27_598)
 
     def test_output_guess_uses_the_fitted_chars_per_token_else_the_default(self):
-        """8 chars read 4 tokens at a fitted 2 chars per token and 2 at CHARS_PER_TOKEN; the cache split follows."""
-        rates = {key: value for key, value in discount.RATES["claude-opus-5.5"].items()
-                 if key not in ("chars_per_token", "credit_error")}
-        for fitted, output in ((2, 4), (None, 8 // discount.CHARS_PER_TOKEN)):
-            with self.subTest(fitted=fitted), patch.dict(discount.RATES, {"claude-sonnet-4.6": {
-                    **rates, **({"chars_per_token": fitted} if fitted else {})}}):
-                miss = discount.price(rates, 30_000 - output, output, 0)
-                self.assertEqual(discount.estimate("claude-sonnet-4.6", 3.0, miss, 8),
-                                 {"total_tokens": 30_000, "input_tokens": 30_000 - output, "output_tokens": output,
+        # For the same eight characters, a fitted ratio of two doubles the default output guess.
+        for rates, miss, input_tokens, output_tokens in (
+            (self.RATES, .341978, 29_998, 2),
+            ({**self.RATES, "chars_per_token": 2}, .343956, 29_996, 4),
+        ):
+            with self.subTest(output_tokens=output_tokens), patch.dict(discount.RATES, {self.MODEL: rates}):
+                self.assertEqual(discount.estimate(self.MODEL, 3.0, miss, 8),
+                                 {"total_tokens": 30_000, "input_tokens": input_tokens, "output_tokens": output_tokens,
                                   "cache_read_tokens": 0, "cache_read_error": None})
+
 
 class DiscountQueryTests(unittest.TestCase):
     def setUp(self):
@@ -138,30 +132,31 @@ class DiscountQueryTests(unittest.TestCase):
         statements = []
         self.db.set_trace_callback(statements.append)
         report = query.query(self.db, "sess_root")
-        self.assertEqual(report["captures"]["credit_discount"]["excluded"], 2)
+        self.assertEqual(report["captures"]["credit_discount"]["exclusion_reasons"],
+                         {"unsupported_model": 1, "unsupported_output_length": 1})
         self.assertFalse(any("AS no_reasoning_tools" in statement for statement in statements))
-
-    def test_missing_chunk_or_terminal_counts_refuse_profile(self):
-        ident = self.add(FIXTURE[0])
-        self.db.execute("DELETE FROM chunks")
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
-        self.db.execute("INSERT INTO chunks(capture_id,seq,application_gzip) VALUES (?,0,?)", (ident, RETAINED))
-        self.db.execute("UPDATE captures SET summary_json=?", (json.dumps({"output_text_chars": 5, "terminal": "response.completed", "output_count_source": "deltas"}),))
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_or_ambiguous_terminal": 1})
 
     def test_query_aggregation_preserves_unknown_tokens_and_separate_hit_counter(self):
         for index, facts in enumerate(FIXTURE):
             self.add(facts, "root" if index % 2 else "child")
         report = query.query(self.db, "sess_root", "tree")
         captures = report["captures"]
-        self.assertEqual(captures["credit_discount"]["percentage"], 62.5)
-        self.assertEqual(sum(pool["credit_discount"]["eligible"] for pool in captures["pools"].values()), 8)
+        diagnostic = captures["credit_discount"]
+        self.assertEqual({key: diagnostic[key] for key in ("requests", "eligible", "discount_like", "baseline", "excluded", "anomaly", "percentage")},
+                         {"anomaly": 0, "baseline": 3, "discount_like": 5, "eligible": 8, "excluded": 2,
+                          "percentage": 62.5, "requests": 10})
+        self.assertEqual({item["capture_id"]: item["classification"] for item in diagnostic["diagnostics"]}, {
+            "conversation_1": "discount_like", "conversation_2": "discount_like", "conversation_3": "discount_like",
+            "medium_cold": "baseline", "medium_delayed": "baseline", "medium_warm": "discount_like",
+            "size_long": "baseline", "size_short": "discount_like",
+        })
+        self.assertEqual({name: pool["credit_discount"]["eligible"] for name, pool in captures["pools"].items()},
+                         {"other_linked_conversations": 4, "root_conversation": 4, "unknown": 0})
         self.assertEqual(captures["models"][0]["credit_discount"]["percentage"], 62.5)
         for name in ("input_tokens", "output_tokens", "cache_read_tokens", "total_tokens"):
             self.assertIsNone(captures["metrics"][name]["observed_sum"])
         self.assertIsNone(captures["cache_hit_rate"]["percentage"])
         output = query.render(report)
-        self.assertIn("Discount %", output)
         self.assertIn("~62.5% (8/10)", output)
         self.assertIn("not observed cache hits", output)
         output = query.render_summary(report)
@@ -191,7 +186,6 @@ class DiscountQueryTests(unittest.TestCase):
         self.db.executescript("DROP TABLE events; DROP TABLE chunks;")
         report = query.query(self.db, "sess_root")
         self.assertEqual(report["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
-        self.assertNotIn("Discount", query.render_summary(report))
 
     def test_anomaly_is_visible_without_fabricating_a_rate(self):
         self.add({**FIXTURE[0], "label": "anomaly", "credits": 1})
@@ -208,22 +202,34 @@ class DiscountQueryTests(unittest.TestCase):
         self.assertRegex(query.render_summary(report), r"claude-opus-5.5\s+1\s+1.00\s+~18.0K\s+~2\s+~0\s+~0%\s+—\n")
 
     def test_retained_terminal_and_reasoning_proof_are_required(self):
-        ident = self.add(FIXTURE[0], extra_output={"type": "reasoning", "summary": []})
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["eligible"], 0)
-        self.db.execute("DELETE FROM captures")
-        self.db.execute("DELETE FROM events")
-        self.db.execute("DELETE FROM chunks")
-        ident = self.add(FIXTURE[0])
-        self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,'response.reasoning.delta',?,?)",
-                        (ident, RETAINED, '{"type":"response.reasoning.delta"}'))
-        report = query.query(self.db, "sess_root")
-        self.assertEqual(report["captures"]["credit_discount"]["eligible"], 0)
-        self.assertNotIn("Discount", query.render_summary(report))
-        self.db.execute("UPDATE events SET event_name=?,data_json=? WHERE seq=1", ("response.function_call_arguments.delta", json.dumps({"type": "response.function_call_arguments.delta"})))
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["eligible"], 0)
-        self.db.execute("DELETE FROM events WHERE seq=1")
-        self.db.execute("UPDATE events SET frame_gzip=NULL")
-        self.assertEqual(query.query(self.db, "sess_root")["captures"]["credit_discount"]["exclusion_reasons"], {"missing_retained_evidence": 1})
+        # One exact-scope capture per evidence failure; the same eligible capture with no changes is the control.
+        for case, reason, extra_output, mutation in (
+            ("control", None, None, None),
+            ("delta-count", "missing_or_ambiguous_terminal", None,
+             "UPDATE captures SET summary_json=json_set(summary_json,'$.output_count_source','deltas') WHERE id=?"),
+            ("missing-chunk", "missing_retained_evidence", None, "DELETE FROM chunks WHERE capture_id=?"),
+            ("missing-frame", "missing_retained_evidence", None, "UPDATE events SET frame_gzip=NULL WHERE capture_id=?"),
+            ("reasoning-delta", "reasoning_or_tool_output", None,
+             ("response.reasoning.delta", '{"type":"response.reasoning.delta"}')),
+            ("terminal-reasoning", "unproved_text_only_output", {"type": "reasoning", "summary": []}, None),
+            ("tool-delta", "reasoning_or_tool_output", None,
+             ("response.function_call_arguments.delta", '{"type":"response.function_call_arguments.delta"}')),
+        ):
+            with self.subTest(case=case):
+                self.add({**FIXTURE[0], "label": case}, conversation=case, extra_output=extra_output)
+                if isinstance(mutation, tuple):
+                    event, data = mutation
+                    self.db.execute("INSERT INTO events(capture_id,seq,event_name,frame_gzip,data_json) VALUES (?,1,?,?,?)",
+                                    (case, event, RETAINED, data))
+                elif mutation:
+                    self.db.execute(mutation, (case,))
+                report = query.query(self.db, "sess_" + case)
+                diagnostic = report["captures"]["credit_discount"]
+                if reason is None:
+                    self.assertEqual(diagnostic["baseline"], 1)
+                else:
+                    self.assertEqual(diagnostic["exclusion_reasons"], {reason: 1})
+                    self.assertNotIn("Discount", query.render_summary(report))
 
 
 if __name__ == "__main__":

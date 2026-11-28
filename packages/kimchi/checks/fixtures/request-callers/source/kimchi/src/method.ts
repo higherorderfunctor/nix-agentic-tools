@@ -4,9 +4,6 @@ const client = {
     return fetch("https://method.example");
   },
 };
-export function invoke() {
-  client.send();
-}
 export function maybe() {
   client?.send(); // Fails a resolver that drops optional member calls.
 }

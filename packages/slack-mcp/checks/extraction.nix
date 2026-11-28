@@ -9,6 +9,8 @@
 in {
   checks =
     {
+      # The drift check below already runs the extractor on the untouched pin
+      # and compares all output. This check exercises degraded copies only.
       slack-mcp-extract-guard = pkgs.runCommand "slack-mcp-extract-guard" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

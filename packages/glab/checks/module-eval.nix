@@ -1,193 +1,77 @@
+# cspell:ignore batchmode preflight sembleignore
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
 {
   lib,
   pkgs,
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
-  redact = import ../../../lib/redact {inherit lib;};
+  inherit (harness) checkRows evalDevenv evalHm mkTest rejectsChange;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  redact = import ../../../lib/redact {inherit lib;};
+
+  hmDefault = evalHm {};
+  devenvDefault = evalDevenv {};
+  publicHost = "gitlab.example.com";
+  enabled = {
+    enable = true;
+    host = publicHost;
+  };
+  tokenFile = redact.file "/run/secrets/gitlab-token";
+  linux = pkgs.stdenv.hostPlatform.isLinux;
+  nonLinuxMessage = "glab.keyringSync.enable currently requires Linux Secret Service and systemd user units.";
+
+  # These probes observe what the wrapper sends to the executable, not which
+  # arguments live glab accepts. An empty log cannot pass a successful call.
+  stub = (pkgs.writeShellScriptBin "glab" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    {
+      printf '<%s>' "$@"
+      printf '\n'
+    } >> "$GLAB_STUB_LOG"
+    if [ "$1" = environment ]; then
+      printf '%s\n' "''${GITLAB_HOST-}" "''${GITLAB_TOKEN-}" "''${GLAB_GIT_PROTOCOL-}" "''${BRAND_NEW_KEY-}"
+    fi
+  '').overrideAttrs (_: {version = "0-test";});
+  mkWrapped = configDir: host:
+    import ../lib/mkGlab.nix {
+      inherit lib pkgs;
+      cfg = {
+        inherit configDir host;
+        enable = true;
+        extraSettings = {};
+        package = stub;
+        settings = {};
+      };
+    };
+  mkRuntimeTest = name: probe:
+    pkgs.runCommand "module-test-glab-${name}" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      export HOME="$PWD/home"
+      export GLAB_STUB_LOG="$PWD/glab.log"
+      : > "$GLAB_STUB_LOG"
+
+      expect() {
+        local row=$1 expected=$2 actual=$3
+        if [ "$actual" != "$expected" ]; then
+          printf 'FAIL: %s\nexpected:\n%s\nactual:\n%s\n' "$row" "$expected" "$actual" >&2
+          exit 1
+        fi
+      }
+
+      ${probe}
+      echo PASS > "$out"
+    '';
+  # Build-relative paths are hermetic even on Darwin with no private /tmp.
+  # Keep each seed run in its own fresh directory so stale state can't pass.
+  ipv6Dir = "glab-ipv6-cfg";
+  preflightDir = "glab-preflight-cfg";
 in {
   checks =
     {
-      # ── glab ───────────────────────────────────────────────────────────
-      module-glab-default-disabled = mkTest "glab-default-disabled" (
-        !(evalHm {}).config.glab.enable && (evalHm {}).config.home.packages == []
-      );
-
-      # The settings surface is GENERATED from packages/glab/extracted/ facts.
-      # Assert the shape of what was generated rather than a count: a key that
-      # upstream renames must show up as a failure here, and an option tree that
-      # collapsed to nothing must not read as "fine".
-      module-glab-settings-generated-from-schema = mkTest "glab-settings-generated-from-schema" (
-        let
-          opts = (evalHm {}).options.glab;
-          settingNames =
-            builtins.attrNames
-            (lib.filterAttrs (n: _: n != "_module") (opts.settings.type.getSubOptions []));
-        in
-          builtins.elem "git_protocol" settingNames
-          && builtins.elem "check_update" settingNames
-          && builtins.elem "glamour_style" settingNames
-          # host/token/job_token are secret-capable and live at the top level,
-          # so they must NOT also appear as plain settings.
-          && !(builtins.elem "host" settingNames)
-          && !(builtins.elem "token" settingNames)
-          && !(builtins.elem "job_token" settingNames)
-          # custom_headers is list-typed and has no single-env-var spelling.
-          && !(builtins.elem "custom_headers" settingNames)
-          && builtins.length settingNames > 20
-      );
-
-      module-glab-redact-references-accepted = mkTest "glab-redact-references-accepted" (
-        let
-          ev = evalHm {
-            glab = {
-              enable = true;
-              host = "gitlab.example.com";
-              token = redact.file "/run/secrets/gitlab-token";
-              job_token = redact.command "/run/wrappers/bin/job-token";
-            };
-          };
-        in
-          ev.config.glab.host
-          == "gitlab.example.com"
-          && ev.config.glab.token == redact.file "/run/secrets/gitlab-token"
-          && ev.config.glab.job_token == redact.command "/run/wrappers/bin/job-token"
-          && builtins.length ev.config.home.packages == 1
-      );
-
-      module-glab-literal-credentials-rejected = mkTest "glab-literal-credentials-rejected" (
-        lib.all
-        (eval:
-          lib.all
-          (name: !(builtins.tryEval (builtins.deepSeq (eval {glab.${name} = "literal-token";}).config.glab.${name} true)).success)
-          ["job_token" "token"])
-        [evalDevenv evalHm]
-      );
-
-      # References name runtime sources; the launcher never reads their contents
-      # during evaluation.
-      module-glab-wrapper-reads-secrets-at-runtime = mkTest "glab-wrapper-reads-secrets-at-runtime" (
-        let
-          ev = evalHm {
-            glab = {
-              enable = true;
-              host = redact.file "/run/secrets/gitlab-url";
-              token = redact.file "/run/secrets/gitlab-token";
-              settings.git_protocol = "ssh";
-              extraSettings.brand_new_key = "value";
-            };
-          };
-          wrapped = builtins.head ev.config.home.packages;
-          # The script SOURCE — reading its store path back would be IFD
-          # inside `nix flake check`.
-          script = wrapped.passthru.wrapperText;
-        in
-          # Secrets: read at invocation, never baked.
-          lib.hasInfix ''GITLAB_HOST="$('' script
-          && lib.hasInfix "/run/secrets/gitlab-url" script
-          && lib.hasInfix ''GITLAB_TOKEN="$('' script
-          # Non-secret setting exports under its real env var. Asserting the
-          # assignment and the export, NOT the quoting: nixpkgs'
-          # `escapeShellArg` elides quotes for shell-safe values, so
-          # "GLAB_GIT_PROTOCOL='ssh'" would be an assertion about lib internals.
-          # glab 1.118.0 prefers the GLAB_ name over the legacy alias.
-          && lib.hasInfix "GLAB_GIT_PROTOCOL=" script
-          && lib.hasInfix "export GLAB_GIT_PROTOCOL" script
-          # extraSettings uses glab's uppercase fallback.
-          && lib.hasInfix "BRAND_NEW_KEY=" script
-          && lib.hasInfix "redact-read glab.host file /run/secrets/gitlab-url" script
-          && lib.hasInfix "redact-read glab.token file /run/secrets/gitlab-token" script
-          # Each env var is exported exactly once. A duplicated export is
-          # harmless at runtime but means the key partitioning has drifted
-          # between the options and the wrapper — which it once had.
-          && builtins.length
-          (builtins.filter (l: l == "export GITLAB_HOST")
-            (lib.splitString "\n" script))
-          == 1
-      );
-
-      module-glab-keyring-sync-boundaries = mkTest "glab-keyring-sync-boundaries" (
-        let
-          failedMessages = ev:
-            map (entry: entry.message)
-            (builtins.filter (entry: !entry.assertion) ev.config.assertions);
-          devenv = evalDevenv {
-            glab = {
-              enable = true;
-              host = "gitlab.example.com";
-              keyringSync.enable = true;
-              token = redact.file "/run/secrets/gitlab-token";
-            };
-          };
-          missingToken = evalHm {
-            glab = {
-              enable = true;
-              host = "gitlab.example.com";
-              keyringSync.enable = true;
-              token = null;
-            };
-          };
-          disabled = evalHm {glab.keyringSync.enable = true;};
-        in
-          builtins.elem
-          "glab.keyringSync.enable is Home Manager-only: devenv may consume a user's existing keyring, but a repository shell must not own login or graphical-session services."
-          (failedMessages devenv)
-          && builtins.elem
-          "glab.keyringSync.enable requires glab.token as a redact reference."
-          (failedMessages missingToken)
-          && builtins.elem
-          "glab.keyringSync.enable requires glab.enable."
-          (failedMessages disabled)
-      );
-
-      # HM and devenv must expose the SAME option tree — that is the whole
-      # reason the declarations are one shared file.
-      module-glab-hm-devenv-option-parity = mkTest "glab-hm-devenv-option-parity" (
-        let
-          names = ev: builtins.attrNames (lib.filterAttrs (n: _: n != "_module") ev.options.glab);
-        in
-          names (evalHm {}) == names (evalDevenv {})
-      );
-
-      module-glab-devenv-installs-wrapper = mkTest "glab-devenv-installs-wrapper" (
-        let
-          ev = evalDevenv {
-            glab = {
-              enable = true;
-              host = "gitlab.example.com";
-            };
-          };
-        in
-          builtins.length ev.config.packages == 1
-      );
-
-      # The ONE intentional HM/devenv difference: devenv defaults configDir to
-      # the project state dir, so a project-local glab does not mutate the
-      # user's global ~/.config/glab-cli. It is a `config` default and NOT a
-      # different option declaration, which is why the option-tree parity test
-      # still holds — assert both halves so a later edit cannot quietly turn
-      # this into a declaration difference.
-      module-glab-configdir-facet-defaults = mkTest "glab-configdir-facet-defaults" (
-        let
-          base = {
-            enable = true;
-            host = "gitlab.example.com";
-          };
-          hm = evalHm {glab = base;};
-          dv = evalDevenv {glab = base;};
-          overridden = evalDevenv {glab = base // {configDir = "/tmp/explicit";};};
-        in
-          hm.config.glab.configDir
-          == null
-          && dv.config.glab.configDir == "/tmp/devenv-state/glab-cli"
-          # mkDefault, so a project can still point it elsewhere.
-          && overridden.config.glab.configDir == "/tmp/explicit"
-      );
-
       module-glab-codex-sandbox-grants-effective-configdir = mkTest "glab-codex-sandbox-grants-effective-configdir" (
         let
           base = {
@@ -195,340 +79,227 @@ in {
               enable = true;
               native.settings.sandbox_mode = "workspace-write";
             };
-            glab = {
-              enable = true;
-              host = "gitlab.example.com";
-            };
+            glab = enabled;
           };
-          hmEval = evalHm base;
-          devenv =
-            (evalDevenv (lib.recursiveUpdate base {
-              glab.configDir = "/home/test/.config/glab-cli";
-            })).config;
+          hm = hmCodexSettings (evalHm base);
+          devenv = (evalDevenv (base // {glab = enabled // {configDir = "/tmp/explicit";};})).config;
         in
-          builtins.elem
-          "/home/test/.config/glab-cli"
-          (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots
-          && builtins.elem
-          "/home/test/.config/glab-cli"
-          devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots
+          checkRows "Glab config directory is writable in the Codex sandbox" {
+            "Home Manager grants the resolved global directory rather than null" =
+              builtins.elem "/home/test/.config/glab-cli" hm.sandbox_workspace_write.writable_roots;
+            "devenv grants the explicit directory rather than assuming the Home Manager path" =
+              builtins.elem "/tmp/explicit" devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots;
+          }
       );
 
-      # Runtime test of the preflight, with a STUB standing in for glab so the
-      # check needs no Go build. Covers what the wrapper does to the
-      # filesystem before exec: create the config dir 0700, seed the hosts:
-      # entry using the BARE hostname (scheme and path stripped), repair a
-      # too-permissive config.yml to 0600, and then NOT re-seed.
-      #
-      # Behavior, not emitted text: a grep proving the line exists says
-      # nothing about whether the shell actually does it.
-      #
-      # configDir is RELATIVE on purpose, so it lands in the build directory.
-      # An absolute `/tmp/…` is not hermetic: Nix's per-build private /tmp is
-      # a SANDBOX feature, and the sandbox is off by default on Darwin — one
-      # of this repo's two CI platforms — so the test would touch (and
-      # `rm -rf`) a shared host path. It also makes the `-d` assertions
-      # stronger, since a leftover directory from an earlier run cannot
-      # satisfy them.
-      module-glab-preflight-runtime = let
-        hostCommand = pkgs.writeShellScript "glab-test-host" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          printf '%s' "$GLAB_TEST_HOST"
-        '';
-        stub =
-          (pkgs.writeShellScriptBin "glab" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-          '')
-      .overrideAttrs (_: {version = "0-test";});
-        cfg = {
-          enable = true;
-          package = stub;
-          configDir = "glab-preflight-cfg";
-          host = redact.command "${hostCommand}";
-          token = null;
-          job_token = null;
-          settings = {};
-          extraSettings = {};
-        };
-        wrapped = import ../lib/mkGlab.nix {inherit lib pkgs cfg;};
+      # The one intentional configDir difference is a facet default, not an
+      # option declaration difference. A project must be able to override it.
+      module-glab-configdir-facet-defaults = mkTest "glab-configdir-facet-defaults" (
+        let
+          hm = (evalHm {glab = enabled;}).config.glab;
+          devenv = (evalDevenv {glab = enabled;}).config.glab;
+        in
+          checkRows "Glab config directory defaults" {
+            "Home Manager leaves the user-global default to glab" = hm.configDir == null;
+            "devenv isolates config from the user-global directory" = devenv.configDir == "/tmp/devenv-state/glab-cli";
+          }
+      );
+
+      module-glab-default-disabled = mkTest "glab-default-disabled" (checkRows "Glab opt-in" {
+        "Home Manager does not install glab when disabled" = hmDefault.config.home.packages == [];
+      });
+
+      module-glab-devenv-installs-wrapper = mkTest "glab-devenv-installs-wrapper" (
+        let
+          packages = (evalDevenv {glab = enabled // {package = stub;};}).config.packages;
+        in
+          # A single unwrapped executable must not pass as the installed wrapper.
+          map (package: package.name) packages == ["glab-wrapped-0-test"]
+      );
+
+      # Both facets deliberately share the same option declarations.
+      module-glab-hm-devenv-option-parity = mkTest "glab-hm-devenv-option-parity" (
+        let
+          names = ev: builtins.attrNames (builtins.removeAttrs ev.options.glab ["_module"]);
+        in
+          names hmDefault == names devenvDefault
+      );
+
+      module-glab-keyring-sync-boundaries = mkTest "glab-keyring-sync-boundaries" (
+        let
+          # Force the actual module assertions and select Glab's diagnostics,
+          # not unrelated assertions from other modules the harness imports.
+          failed = eval: glab:
+            map (entry: entry.message)
+            (builtins.filter (entry: !entry.assertion && lib.hasPrefix "glab." entry.message) (eval {inherit glab;}).config.assertions);
+          valid =
+            enabled
+            // {
+              keyringSync.enable = true;
+              token = tokenFile;
+            };
+          hmFailures = glab: extra:
+            lib.sort builtins.lessThan (failed evalHm glab)
+            == lib.sort builtins.lessThan (lib.optional (!linux) nonLinuxMessage ++ extra);
+        in
+          checkRows "Glab keyring synchronization boundaries" {
+            "Home Manager accepts configured keyring sync on Linux only" = hmFailures valid [];
+            "Home Manager rejects keyring sync without an enabled wrapper" =
+              hmFailures (valid // {enable = false;}) ["glab.keyringSync.enable requires glab.enable."];
+            "Home Manager rejects keyring sync without a host to associate with the token" =
+              hmFailures (valid // {host = null;}) ["glab.keyringSync.enable requires glab.host so the token cannot be stored for the wrong instance."];
+            "Home Manager rejects keyring sync without a token reference" =
+              hmFailures (valid // {token = null;}) ["glab.keyringSync.enable requires glab.token as a redact reference."];
+            "devenv rejects owning the graphical-session service" =
+              failed evalDevenv valid
+              == ["glab.keyringSync.enable is Home Manager-only: devenv may consume a user's existing keyring, but a repository shell must not own login or graphical-session services."];
+          }
+      );
+
+      module-glab-literal-credentials-rejected = mkTest "glab-literal-credentials-rejected" (
+        let
+          # Force only the option under test, changing only its value from a
+          # working redact reference so an unrelated failure cannot pass.
+          rejectsLiteral = name: reference:
+            rejectsChange (value: (evalHm {glab.${name} = value;}).config.glab.${name}) {
+              valid = reference;
+              invalid = "literal-token";
+              expected = reference;
+            };
+          jobCommand = redact.command "/run/wrappers/bin/job-token";
+        in
+          checkRows "Glab credential value types" {
+            "Home Manager accepts a literal public host, unlike credentials" =
+              (evalHm {glab.host = publicHost;}).config.glab.host == publicHost;
+            "Home Manager refuses a literal job token in place of a command" = rejectsLiteral "job_token" jobCommand;
+            "Home Manager refuses a literal token in place of a file" = rejectsLiteral "token" tokenFile;
+          }
+      );
+
+      # With all three environment paths absent, the strict wrapper must not
+      # die on bash's bare unbound-variable error or reach the executable.
+      module-glab-preflight-no-home = let
+        wrapped = mkWrapped null publicHost;
       in
-        pkgs.runCommand "module-test-glab-preflight-runtime" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
+        mkRuntimeTest "preflight-no-home" ''
+          status=0
+          got=$(env -u HOME -u XDG_CONFIG_HOME -u GLAB_CONFIG_DIR \
+            ${wrapped}/bin/glab version 2>&1) || status=$?
+          expect 'unset config paths are rejected' 1 "$status"
+          expect 'unset config paths get the actionable diagnostic, not nounset' \
+            'glab: cannot locate a config directory — HOME, XDG_CONFIG_HOME and GLAB_CONFIG_DIR are all unset; set glab.configDir to name one explicitly' "$got"
+          expect 'config directory guard stops before exec' "" "$(cat "$GLAB_STUB_LOG")"
+        '';
 
-          export HOME="$PWD/home"
-          export GLAB_TEST_HOST=https://gitlab.example.com/some/path
-          # Matches cfg.configDir above; the wrapper resolves it against the
-          # build directory, which is this script's cwd.
-          cfg=glab-preflight-cfg
-          rm -rf "$cfg"
-          export GLAB_STUB_LOG="$PWD/seed.log"
-          : > "$GLAB_STUB_LOG"
-
-          [ ! -d "$cfg" ] || {
-            echo "FAIL: precondition — config dir already exists" >&2
-            exit 1
+      module-glab-preflight-runtime = let
+        wrapped = mkWrapped preflightDir "https://gitlab.example.com/some/path";
+        ipv6 = mkWrapped ipv6Dir "http://[2001:db8::1]/gitlab";
+      in
+        mkRuntimeTest "preflight-runtime" ''
+          run() {
+            local wrapper=$1
+            : > "$GLAB_STUB_LOG"
+            "$wrapper/bin/glab" version >/dev/null
           }
+          calls() { cat "$GLAB_STUB_LOG"; }
+          mode() { ${pkgs.coreutils}/bin/stat -c '%a' "$1"; }
+          cfg=${preflightDir}
 
-          ${wrapped}/bin/glab version >/dev/null
-
-          mode=$(${pkgs.coreutils}/bin/stat -c '%a' "$cfg")
-          [ "$mode" = "700" ] || {
-            echo "FAIL: config dir mode $mode, expected 700" >&2
-            exit 1
-          }
-
-          grep -qxF -- 'config set --host gitlab.example.com api_protocol https' "$GLAB_STUB_LOG" || {
-            echo "FAIL: seeding not invoked with the bare host + https. log:" >&2
-            cat "$GLAB_STUB_LOG" >&2
-            exit 1
-          }
+          run ${wrapped}
+          expect 'new config directory is private' 700 "$(mode "$cfg")"
+          seed=$'<config><set><--host><gitlab.example.com><api_protocol><https>\n<version>'
 
           printf 'hosts:\n  gitlab.example.com:\n' > "$cfg/config.yml"
           chmod 664 "$cfg/config.yml"
-          ${wrapped}/bin/glab version >/dev/null
-          mode=$(${pkgs.coreutils}/bin/stat -c '%a' "$cfg/config.yml")
-          [ "$mode" = "600" ] || {
-            echo "FAIL: config.yml mode $mode after repair, expected 600" >&2
-            exit 1
-          }
+          run ${wrapped}
+          expect 'existing group-readable config is repaired even on the fast path' 600 "$(mode "$cfg/config.yml")"
+          expect 'the existing exact hostname prevents a repeated seed' '<version>' "$(calls)"
 
-          : > "$GLAB_STUB_LOG"
-          ${wrapped}/bin/glab version >/dev/null
-          if grep -q 'config set' "$GLAB_STUB_LOG"; then
-            echo "FAIL: re-seeded although the hosts: entry was already present" >&2
-            exit 1
-          fi
-
-          # The fast path must not FALSE-POSITIVE on a host differing only
-          # where the dots are. This is the regression test for the pattern
-          # matching the preflight must NOT go back to: as an ERE,
-          # `gitlab.example.com` also matches `gitlab-example-com:`, so
-          # seeding would be skipped while the real entry is absent — this
-          # preflight's own bug, one layer down. The current implementation
-          # compares fixed strings and has no such failure mode; this guards
-          # against a future edit reintroducing pattern matching. A false
-          # NEGATIVE is harmless here; a false positive is not.
-          : > "$GLAB_STUB_LOG"
+          # A regex would treat the dots as wildcards, skipping a missing entry.
           printf 'hosts:\n  gitlab-example-com:\n' > "$cfg/config.yml"
-          chmod 600 "$cfg/config.yml"
-          ${wrapped}/bin/glab version >/dev/null
-          grep -qF -- 'config set --host gitlab.example.com ' "$GLAB_STUB_LOG" || {
-            echo "FAIL: a near-miss host suppressed seeding — the fast path is matching patterns, not fixed strings" >&2
-            exit 1
-          }
+          run ${wrapped}
+          expect 'hyphens are not a match for the dots in the real hostname' "$seed" "$(calls)"
 
-          echo PASS > "$out"
+          # Keep the historical bracket regression: an ERE with only dots
+          # escaped did not find a literal bracketed IPv6 entry on a later run.
+          run ${ipv6}
+          expect 'HTTP IPv6 URL preserves brackets and selects http rather than hardcoded https' \
+            $'<config><set><--host><[2001:db8::1]><api_protocol><http>\n<version>' "$(calls)"
+          printf 'hosts:\n    [2001:db8::1]:\n' > ${ipv6Dir}/config.yml
+          run ${ipv6}
+          expect 'IPv6 host brackets are literal on the fast path' '<version>' "$(calls)"
         '';
 
-      # A bracketed IPv6 host must round-trip. The fast path used to be an
-      # ERE with only `.` escaped, on the claim that hostnames are
-      # [A-Za-z0-9.-]; `[` and `]` in an IPv6 literal either change the match
-      # or make grep error, so the entry was never found and the wrapper
-      # reseeded on every invocation. Now a fixed-string compare, which has no
-      # escaping question at all.
-      module-glab-ipv6-host-fast-path = let
-        stub =
-          (pkgs.writeShellScriptBin "glab" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-          '')
-      .overrideAttrs (_: {version = "0-test";});
-        wrapped = import ../lib/mkGlab.nix {
-          inherit lib pkgs;
-          cfg = {
-            enable = true;
-            package = stub;
-            # Build-relative, for the reason given on
-            # module-glab-preflight-runtime.
-            configDir = "glab-ipv6-cfg";
-            host = "http://[2001:db8::1]/gitlab";
-            token = null;
-            job_token = null;
-            settings = {};
-            extraSettings = {};
-          };
-        };
-      in
-        pkgs.runCommand "module-test-glab-ipv6-host-fast-path" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          export HOME="$PWD/home"
-          export GLAB_STUB_LOG="$PWD/seed.log"
-          # Bound once; must match cfg.configDir above.
-          cfg=glab-ipv6-cfg
-          rm -rf "$cfg"
-          : > "$GLAB_STUB_LOG"
-
-          # First run seeds, with the bracket host intact and http from scheme.
-          ${wrapped}/bin/glab version >/dev/null
-          grep -qF -- 'config set --host [2001:db8::1] api_protocol http' "$GLAB_STUB_LOG" || {
-            echo "FAIL: IPv6 host not seeded correctly. log:" >&2
-            cat "$GLAB_STUB_LOG" >&2
-            exit 1
-          }
-          [ -d "$cfg" ] || {
-            echo "FAIL: configDir $cfg was not created" >&2
-            exit 1
-          }
-
-          # With the entry present, the fast path must MATCH and not reseed.
-          # A pattern match could not: `[`/`]` are regex metacharacters.
-          printf 'hosts:\n    [2001:db8::1]:\n' > "$cfg/config.yml"
-          chmod 600 "$cfg/config.yml"
-          : > "$GLAB_STUB_LOG"
-          ${wrapped}/bin/glab version >/dev/null
-          if grep -q 'config set' "$GLAB_STUB_LOG"; then
-            echo "FAIL: reseeded despite the IPv6 entry being present" >&2
-            cat "$GLAB_STUB_LOG" >&2
-            exit 1
-          fi
-
-          echo PASS > "$out"
-        '';
-
-      # With configDir unset AND no HOME/XDG_CONFIG_HOME, the wrapper must
-      # report what to set rather than dying on bash's bare
-      # `HOME: unbound variable` from `set -u`. Reachable in practice: a tool
-      # that REPLACES the environment (Claude Code's MCP `env` field) can
-      # spawn this with no HOME at all.
-      module-glab-preflight-no-home = let
-        stub =
-          (pkgs.writeShellScriptBin "glab" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            echo "REACHED-PROGRAM"
-          '')
-      .overrideAttrs (_: {version = "0-test";});
-        wrapped = import ../lib/mkGlab.nix {
-          inherit lib pkgs;
-          cfg = {
-            enable = true;
-            package = stub;
-            configDir = null;
-            host = "gitlab.example.com";
-            token = null;
-            job_token = null;
-            settings = {};
-            extraSettings = {};
-          };
-        };
-      in
-        pkgs.runCommand "module-test-glab-preflight-no-home" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          if got=$(env -u HOME -u XDG_CONFIG_HOME -u GLAB_CONFIG_DIR \
-                     ${wrapped}/bin/glab version 2>&1); then
-            echo "FAIL: expected a non-zero exit with no HOME (got: $got)" >&2
-            exit 1
-          fi
-          case "$got" in
-            *"unbound variable"*)
-              echo "FAIL: died on bash's unbound-variable error, not the guard: $got" >&2
-              exit 1 ;;
-            *"cannot locate a config directory"*) : ;;
-            *)
-              echo "FAIL: aborted, but not via the guard (got: $got)" >&2
-              exit 1 ;;
-          esac
-
-          # The stub prints REACHED-PROGRAM, so assert it did not. The
-          # non-zero check above already rules out "warned, then exec'd
-          # successfully" — the stub exits 0, so that path would have made the
-          # `if` fire. This closes the remaining gap: a guard that warns and
-          # then reaches a program which itself fails. Without it the stub's
-          # marker is a control nothing reads.
-          case "$got" in
-            *REACHED-PROGRAM*)
-              echo "FAIL: guard fired but the program was still reached: $got" >&2
-              exit 1 ;;
-          esac
-
-          echo PASS > "$out"
-        '';
-
-      # `api_protocol` must follow the scheme on the configured host rather
-      # than being hardcoded https, or an http:// instance gets a config entry
-      # contradicting how it is actually reached. Separate test because it
-      # needs a differently-configured wrapper.
-      module-glab-seeds-http-protocol = let
-        stub =
-          (pkgs.writeShellScriptBin "glab" ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-          '')
-      .overrideAttrs (_: {version = "0-test";});
-        mkWrapped = cfgDir: hostValue:
-          import ../lib/mkGlab.nix {
-            inherit lib pkgs;
-            cfg = {
-              enable = true;
-              package = stub;
-              configDir = cfgDir;
-              host = hostValue;
-              token = null;
-              job_token = null;
-              settings = {};
-              extraSettings = {};
+      # Extraction establishes the upstream schema; this checks the module's
+      # lowering, including a boolean and the categories that must stay out.
+      module-glab-settings-generated-from-schema = mkTest "glab-settings-generated-from-schema" (
+        let
+          settings = hmDefault.options.glab.settings.type.getSubOptions [];
+        in
+          checkRows "Glab generated settings" {
+            "a boolean setting is not lowered as a string" = rejectsChange (value: (evalHm {glab.settings.check_update = value;}).config.glab.settings.check_update) {
+              valid = false;
+              invalid = "false";
+              expected = false;
             };
-          };
-        # Build-relative, for the reason given on
-        # module-glab-preflight-runtime.
-        httpWrapped = mkWrapped "glab-proto-http" "http://gitlab.internal";
-        bareWrapped = mkWrapped "glab-proto-bare" "gitlab.internal";
+            "custom headers are not offered as a single environment setting" = !(settings ? custom_headers);
+            "glamour style is available outside the core host and protocol settings" = settings ? glamour_style;
+            "host is not duplicated among plain settings" = !(settings ? host);
+            "job token is not available as a plain setting" = !(settings ? job_token);
+            "personal token is not available as a plain setting" = !(settings ? token);
+            "schema lowering keeps more than the defaulted subset" = builtins.length (builtins.attrNames (builtins.removeAttrs settings ["_module"])) > 20;
+          }
+      );
+
+      module-glab-wrapper-reads-secrets-at-runtime = let
+        # A command reference keeps the test hermetic: redact.file requires an
+        # absolute non-store path, while this fixture only owns its build dir.
+        readEnv = name:
+          redact.command "${pkgs.writeShellScript "read-glab-${name}" ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            variable=${lib.escapeShellArg name}
+            printf '%s' "''${!variable}"
+          ''}";
+        packagesFor = host: token:
+          (evalHm {
+            glab = {
+              inherit host token;
+              configDir = "glab-env-cfg";
+              enable = true;
+              extraSettings.brand_new_key = "value with spaces";
+              package = stub;
+              settings.git_protocol = "ssh";
+            };
+          }).config.home.packages;
+        packages = packagesFor (readEnv "GLAB_TEST_HOST") (readEnv "GLAB_TEST_TOKEN");
+        wrapped = builtins.head packages;
+        # Read the source, not the store path (which would cause IFD), for
+        # stable absolute file references and the historical duplicate export.
+        exports = builtins.filter (line: line == "export GITLAB_HOST") (lib.splitString "\n" wrapped.passthru.wrapperText);
+        fileScript = (builtins.head (packagesFor (redact.file "/run/secrets/gitlab-url") tokenFile)).passthru.wrapperText;
       in
-        pkgs.runCommand "module-test-glab-seeds-http-protocol" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          export HOME="$PWD/home"
-          export GLAB_STUB_LOG="$PWD/seed.log"
-
-          # Must match the configDirs passed to mkWrapped above.
-          httpCfg=glab-proto-http
-          bareCfg=glab-proto-bare
-
-          rm -rf "$httpCfg" "$bareCfg"
-          : > "$GLAB_STUB_LOG"
-          ${httpWrapped}/bin/glab version >/dev/null
-          grep -qxF -- 'config set --host gitlab.internal api_protocol http' "$GLAB_STUB_LOG" || {
-            echo "FAIL: http:// host was not seeded with api_protocol http. log:" >&2
-            cat "$GLAB_STUB_LOG" >&2
-            exit 1
-          }
-          # The configured dir must be the one actually created. Without this
-          # a wrong configDir (e.g. a literal "$cfg" left by a bad refactor)
-          # still satisfies the grep above, so the test would pass while
-          # exercising the wrong path — which is exactly what deadnix caught.
-          [ -d "$httpCfg" ] || {
-            echo "FAIL: configDir $httpCfg was not created" >&2
-            exit 1
-          }
-
-          # No scheme falls back to https, matching glab's own default.
-          : > "$GLAB_STUB_LOG"
-          ${bareWrapped}/bin/glab version >/dev/null
-          grep -qxF -- 'config set --host gitlab.internal api_protocol https' "$GLAB_STUB_LOG" || {
-            echo "FAIL: scheme-less host did not fall back to https. log:" >&2
-            cat "$GLAB_STUB_LOG" >&2
-            exit 1
-          }
-          [ -d "$bareCfg" ] || {
-            echo "FAIL: configDir $bareCfg was not created" >&2
-            exit 1
-          }
-
-          echo PASS > "$out"
-        '';
+        assert checkRows "Glab wrapper wiring" {
+          "Home Manager installs only the wrapped executable" = map (package: package.name) packages == ["glab-wrapped-0-test"];
+          "normal invocations resolve the host file at launch" = lib.hasInfix ''GITLAB_HOST="$('' fileScript && lib.hasInfix "redact-read glab.host file /run/secrets/gitlab-url" fileScript;
+          "normal invocations resolve the token file at launch" = lib.hasInfix ''GITLAB_TOKEN="$('' fileScript && lib.hasInfix "redact-read glab.token file /run/secrets/gitlab-token" fileScript;
+          "the secret and plain settings do not both export the host" = exports == ["export GITLAB_HOST"];
+        };
+          mkRuntimeTest "wrapper-reads-secrets-at-runtime" ''
+            export GLAB_TEST_HOST=gitlab.example.com GLAB_TEST_TOKEN=first-test-token
+            got=$(${wrapped}/bin/glab environment)
+            expect 'seeding uses the host resolved at launch' \
+              $'<config><set><--host><gitlab.example.com><api_protocol><https>\n<environment>' "$(cat "$GLAB_STUB_LOG")"
+            # The wrapper exports the preferred GLAB_ spelling.
+            expect 'the executable receives the runtime host, token, preferred protocol and extra setting' \
+              $'gitlab.example.com\nfirst-test-token\nssh\nvalue with spaces' "$got"
+            export GLAB_TEST_TOKEN=rotated-test-token
+            got=$(${wrapped}/bin/glab environment)
+            expect 'the same wrapper resolves a rotated reference on the next invocation' \
+              $'gitlab.example.com\nrotated-test-token\nssh\nvalue with spaces' "$got"
+          '';
     }
-    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+    // lib.optionalAttrs linux {
       module-glab-keyring-sync-hm-wiring = mkTest "glab-keyring-sync-hm-wiring" (
         let
           ev = evalHm {
@@ -537,42 +308,50 @@ in {
               host = redact.file "/run/secrets/gitlab-url";
               keyringSync.enable = true;
               settings.git_protocol = "ssh";
-              token = redact.file "/run/secrets/gitlab-token";
+              token = tokenFile;
             };
           };
           pendingFile = "/home/test/.local/state/glab/keyring-sync-pending";
           sync = import ../lib/mkKeyringSync.nix {
             cfg = ev.config.glab;
             configDir = "/home/test/.config/glab-cli";
-            inherit lib pkgs;
-            inherit pendingFile;
+            inherit lib pendingFile pkgs;
           };
           activation = ev.config.home.activation.ai-glab-keyring-sync.text;
           pathUnit = ev.config.systemd.user.paths.glab-keyring-sync;
           service = ev.config.systemd.user.services.glab-keyring-sync;
           wrapper = (builtins.head ev.config.home.packages).passthru.wrapperText;
-          scriptAfterProbe = builtins.elemAt (lib.splitString "secret-tool store" sync.scriptText) 1;
+          # Inspect the generated source without realizing it during evaluation.
+          # Pin both reader calls after (and absent before) the Secret Service probe.
+          probeParts = lib.splitString "secret-tool store" sync.scriptText;
+          readsAfterProbe = read:
+            builtins.length probeParts
+            == 2
+            && !lib.hasInfix read (builtins.head probeParts)
+            && lib.hasInfix read (builtins.elemAt probeParts 1);
         in
-          service.Service.Type
-          == "oneshot"
-          && service.Service.Restart == "no"
-          && service.Service.TimeoutStartSec == "5min"
-          && pathUnit.Path.PathExists == pendingFile
-          && pathUnit.Install.WantedBy == ["graphical-session.target"]
-          && lib.hasInfix pendingFile activation
-          # Splitting after the only probe invocation proves both runtime secret
-          # paths occur later in the generated script, not merely somewhere in it.
-          && lib.hasInfix "secret-tool store" sync.scriptText
-          && lib.hasInfix "/run/secrets/gitlab-url" scriptAfterProbe
-          && lib.hasInfix "/run/secrets/gitlab-token" scriptAfterProbe
-          && lib.hasInfix "--stdin" sync.scriptText
-          && lib.hasInfix "--use-keyring" sync.scriptText
-          && !(lib.hasInfix "--insecure-storage" sync.scriptText)
-          # The synchronized token flows over stdin and is no longer exported by
-          # the ordinary wrapper, where it would override keyring storage.
-          && !(lib.hasInfix "export glab_sync_token" sync.scriptText)
-          && !(lib.hasInfix "export GITLAB_TOKEN" wrapper)
-          && lib.hasInfix "export GITLAB_HOST" wrapper
+          checkRows "Glab keyring synchronization wiring" {
+            "activation and path unit use the same pending marker" =
+              lib.hasInfix pendingFile activation && pathUnit.Path.PathExists == pendingFile;
+            "login receives the token over stdin rather than inheriting it in the environment" =
+              lib.hasInfix ''printf '%s' "$glab_sync_token"'' sync.scriptText
+              && lib.hasInfix "--stdin" sync.scriptText
+              && !lib.hasInfix "export glab_sync_token" sync.scriptText;
+            "login requests keyring storage instead of plaintext config" =
+              lib.hasInfix "--use-keyring" sync.scriptText && !lib.hasInfix "--insecure-storage" sync.scriptText;
+            "ordinary invocations retain the host but do not override the synchronized token" =
+              !lib.hasInfix "export GITLAB_TOKEN" wrapper && lib.hasInfix "export GITLAB_HOST" wrapper;
+            "path unit starts the synchronization service only in the graphical session" =
+              pathUnit.Install.WantedBy == ["graphical-session.target"] && pathUnit.Path.Unit == "glab-keyring-sync.service";
+            "service runs the synchronizer once without retries and bounds a stalled prompt" =
+              toString service.Service.ExecStart
+              == toString sync.script
+              && service.Service.Type == "oneshot"
+              && service.Service.Restart == "no"
+              && service.Service.TimeoutStartSec == "5min";
+            "service probes the keyring before reading the host secret" = readsAfterProbe "redact-read glab.host file /run/secrets/gitlab-url";
+            "service probes the keyring before reading the token secret" = readsAfterProbe "redact-read glab.token file /run/secrets/gitlab-token";
+          }
       );
     };
 }

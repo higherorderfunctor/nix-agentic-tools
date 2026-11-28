@@ -19,10 +19,10 @@ extractor = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(extractor)
 
 
-def archive(extra=()):
+def archive(extra=(), server=extractor.SERVER, script=b"export const stock = true;"):
     output = io.BytesIO()
     files = [(extractor.PACKAGE, json.dumps({"name": "@kiro/agent", "type": "module", "version": "fixture"}).encode()),
-             (extractor.SERVER, b"export const stock = true;"), ("node_modules/solver.wasm", b"wasm")]
+             (server, script), ("node_modules/solver.wasm", b"wasm")]
     with tarfile.open(fileobj=output, mode="w") as tar:
         for name, data in files + list(extra):
             member = tarfile.TarInfo(name)
@@ -37,7 +37,7 @@ def archive(extra=()):
 
 
 def frame(data):
-    compressed = subprocess.check_output([zstd, "-q", "-c"], input=data)
+    compressed = subprocess.check_output([zstd, "-q", "-c", "--check"], input=data)
     return compressed + hashlib.sha256(compressed).hexdigest().encode()
 
 
@@ -58,40 +58,48 @@ class ExtractionTests(unittest.TestCase):
             return (destination / extractor.SERVER).read_bytes()
 
     def test_unrelated_frame_and_valid_archive(self):
+        # Scanning only the first frame would miss the actual KAS payload.
         self.assertEqual(self.run_extract(elf(frame(b"other resource") + frame(archive()))), b"export const stock = true;")
 
-    def test_missing_duplicate_and_corrupt_candidates(self):
+    def test_refuses_invalid_archives(self):
         valid = frame(archive())
-        corrupt = bytearray(valid)
-        corrupt[len(corrupt) // 2] ^= 1
-        for payload in (frame(b"other resource"), valid + valid, corrupt):
-            with self.subTest(size=len(payload)), self.assertRaises(ValueError):
+        # Damage the zstd checksum without changing the frame's structure.
+        corrupt = bytearray(valid[:-64])
+        corrupt[-1] ^= 1
+        cases = (
+            ("absolute member is rejected rather than sanitized", frame(archive((("/escape", b"bad"),))),
+             ValueError, "unsafe archive path: /escape"),
+            ("duplicate archives are not resolved by picking one", valid + valid,
+             ValueError, "expected one valid KAS archive, found 2"),
+            ("duplicate server member cannot shadow the first", frame(archive(((extractor.SERVER, b"duplicate"),))),
+             ValueError, "duplicate archive member:"),
+            ("link targets cannot leave the destination", frame(archive((("node_modules/link", "../../escape"),))),
+             tarfile.LinkOutsideDestinationError, "which is outside the destination"),
+            ("missing checksum cannot authorize an otherwise valid archive", valid[:-64] + b"0" * 64,
+             ValueError, "does not match an embedded checksum"),
+            ("missing server cannot pass on other agent files alone", frame(archive(server="not-server.js")),
+             ValueError, "missing regular KAS runtime file:"),
+            ("parent traversal cannot leave the destination", frame(archive((("../escape", b"bad"),))),
+             ValueError, r"unsafe archive path: \../escape"),
+            ("recognized frame that fails decompression is skipped", bytes(corrupt),
+             ValueError, "expected one valid KAS archive, found 0"),
+            ("truncated compressed frame is not a candidate", valid[:10],
+             ValueError, "expected one valid KAS archive, found 0"),
+        )
+        for regression, payload, exception, diagnostic in cases:
+            with self.subTest(regression=regression), self.assertRaisesRegex(exception, diagnostic):
                 self.run_extract(elf(payload))
 
-    def test_checksum_is_required(self):
-        payload = frame(archive())[:-64] + b"0" * 64
-        with self.assertRaisesRegex(ValueError, "checksum"):
-            self.run_extract(elf(payload))
-
-    def test_archive_layout_and_path_refusals(self):
-        for extra in ((("../escape", b"bad"),), (("/escape", b"bad"),),
-                      (("node_modules/link", "../../escape"),), ((extractor.SERVER, b"duplicate"),)):
-            with self.subTest(extra=extra), self.assertRaises((ValueError, tarfile.FilterError)):
-                self.run_extract(elf(frame(archive(extra))))
-        payload = archive().replace(b"dist/server/acp-server.js", b"dist/server/not-server.js")
-        # Replacing a tar header also invalidates its checksum; either malformed
-        # archive or missing runtime structure must refuse the release.
-        with self.assertRaises((ValueError, tarfile.ReadError)):
-            self.run_extract(elf(frame(payload)))
-
     def test_fat_binary_selects_target_architecture_before_uniqueness(self):
-        x86, arm = frame(archive()), frame(archive())
+        # Returning the first slice would produce the Intel marker.
+        x86, arm = frame(archive(script=b"// Intel")), frame(archive())
         header_size = 48
         header = struct.pack(">II", 0xCAFEBABE, 2)
-        header += struct.pack(">IIIII", extractor.CPUS["x86_64"], 3, header_size, len(x86), 0)
-        header += struct.pack(">IIIII", extractor.CPUS["aarch64"], 0, header_size + len(x86), len(arm), 0)
+        header += struct.pack(">IIIII", 0x01000007, 3, header_size, len(x86), 0)
+        header += struct.pack(">IIIII", 0x0100000C, 0, header_size + len(x86), len(arm), 0)
         self.assertEqual(self.run_extract(header + x86 + arm, "aarch64"), b"export const stock = true;")
-        with self.assertRaisesRegex(ValueError, "bounds"):
+        # A truncated target slice cannot be read or silently skipped.
+        with self.assertRaisesRegex(ValueError, "invalid Mach-O architecture bounds"):
             self.run_extract(header + x86, "aarch64")
 
 

@@ -28,21 +28,17 @@ def guarded_loop(guard, extra=""):
     return f"for(const [k,v] of Object.entries(w))if({guard})e[k]=v{extra}"
 
 
-def merge_with_guard(guard, extra=""):
-    return merge_fn("globalLoad()", guarded_loop(guard, extra))
-
-
-def merge_with_empty_seed(guard, extra=""):
-    return merge_fn("{}", guarded_loop(guard, extra))
+def merge_with_guard(guard, extra="", *, seed="globalLoad()"):
+    return merge_fn(seed, guarded_loop(guard, extra))
 
 
 composer = "function compose(){return{...globalLoad(),...merge()}}"
-empty_seed = merge_with_empty_seed("Cq.has(k)")
+empty_seed = merge_with_guard("Cq.has(k)", seed="{}")
 explicit_path = empty_seed.replace("merge()", "merge(p=path())", 1).replace(
     "readWorkspace(path())", "readWorkspace(p)", 1
 )
 extra_copy = ';if("chat.surprise" in w)e["chat.surprise"]=w["chat.surprise"]'
-probe_mismatch = "does not apply exactly"
+probe_mismatch = "workspace merge does not apply exactly the extracted allowlist"
 
 
 def bundle(*, registry=None, allowlist=None, merge=None):
@@ -59,63 +55,63 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
         source.write_text(text)
         return subprocess.run([extractor, str(source)], capture_output=True, text=True)
 
-    happy = run(bundle())
-    assert happy.returncode == 0, happy.stderr
-    result = json.loads(happy.stdout)
-    assert len(result["settingKeys"]) == 45, result
-    assert len(result["workspaceOverridableSettings"]) == 11, result
-    assert "chat.defaultModel" in result["workspaceOverridableSettings"]
+    # The input has both symbolic and literal allowlist entries. Most registry
+    # entries are deliberately not overridable; the allowlist has keys absent
+    # from the registry. Exact membership catches a same-size substitution.
+    expected = {
+        "settingKeys": ["chat.defaultModel", "chat.modelDefaults"]
+        + [f"chat.fixture{index}" for index in range(43)],
+        "workspaceOverridableSettings": [
+            "chat.defaultModel",
+            "chat.enableTangentMode",
+            "chat.modelDefaults",
+        ]
+        + [f"chat.allowed{index}" for index in range(8)],
+    }
 
-    # 3.1.0 seeds the merge with {} and a separate composer adds the globals.
-    modern = run(bundle(merge=empty_seed + composer))
-    assert modern.returncode == 0, modern.stderr
-    modern_result = json.loads(modern.stdout)
-    assert len(modern_result["settingKeys"]) == 45, modern_result
-    assert len(modern_result["workspaceOverridableSettings"]) == 11, modern_result
-    assert "chat.defaultModel" in modern_result["workspaceOverridableSettings"]
+    expected = {key: sorted(keys) for key, keys in expected.items()}
 
-    # 3.6.2 supports both the default workspace path and an explicit one.
-    parameterized = run(bundle(merge=explicit_path + composer + 'merge("other");'))
-    assert parameterized.returncode == 0, parameterized.stderr
-    assert json.loads(parameterized.stdout) == modern_result
-
-    argument_property = run(
-        bundle(
+    # A property key, member name, or label that only shares the merge's or the
+    # composer's spelling is not a use of it.
+    unrelated_names = {
+        "accessor names do not read the loader bindings": "const o={get compose(){return 1},set merge(v){}};",
+        "break labels do not read the merge binding": "merge:for(;;)break merge;",
+        "class field names do not read the composer binding": "class D{compose=2};",
+        "object method names do not read the merge binding": "const o={merge(){return 1}};",
+        "property access does not read the merge binding": "const o={x:1};o.merge;",
+        "property keys do not read the merge binding": "const o={merge:1};",
+    }
+    accepted = {
+        # 3.6.2 supports both the default workspace path and an explicit one.
+        "defaulted path forwarded to the reader is not an unsupported parameter": bundle(
+            merge=explicit_path + composer + 'merge("other");'
+        ),
+        "global-loader seed is still accepted without a composer": bundle(),
+        "property spelled arguments is not a read of the call arguments": bundle(
             merge=explicit_path.replace(
                 "Cq.has(k)", "Cq.has(k)&&({arguments:true}).arguments"
             )
             + composer
-        )
-    )
-    assert argument_property.returncode == 0, argument_property.stderr
-    assert json.loads(argument_property.stdout) == modern_result
-
-    # A property key or member name that only shares the merge's or the
-    # composer's spelling is not a use of it.
-    for member in [
-        "const o={merge:1};o.merge;",
-        "const o={merge(){return 1}};",
-        "class C{merge(){return 1}};",
-        "class D{compose=2};",
-        "const o={get compose(){return 1},set merge(v){}};",
-        "merge:for(;;)break merge;",
-        "compose:for(;;)continue compose;",
-    ]:
-        unrelated = run(bundle(merge=empty_seed + composer + member))
-        assert unrelated.returncode == 0, (member, unrelated.stderr)
-
-    cases = {
-        "accept all": (
-            bundle(merge=merge_with_guard("Cq.has(k)||true")),
-            probe_mismatch,
         ),
-        "accept sentinel": (
-            bundle(merge=merge_with_guard('Cq.has(k)||k==="kiro.extractor.unknown"')),
+        # 3.1.0 seeds the merge with {} and a separate composer adds the globals.
+        **{
+            name: bundle(merge=empty_seed + composer + member)
+            for name, member in unrelated_names.items()
+        },
+    }
+    rejected = {
+        "allowlist key deleted for boolean": (
+            bundle(
+                merge=merge_with_guard(
+                    "Cq.has(k)",
+                    ';if(typeof w["chat.defaultModel"]==="boolean")delete e["chat.defaultModel"]',
+                )
+            ),
             probe_mismatch,
         ),
         "ambiguous registry": (
             bundle(registry=registry_assignment * 2),
-            "ambiguous or absent",
+            "settings anchors are ambiguous or absent (registry 2, allowlist 1, merge 1)",
         ),
         "argument count read by the copy guard": (
             bundle(
@@ -133,12 +129,95 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             ),
             "unsupported loader shape",
         ),
+        "composer redeclared": (
+            bundle(merge=empty_seed + composer + "function compose(){return globalLoad()}"),
+            "composer name is mutated, shadowed, or escapes",
+        ),
+        "composer with a parameter": (
+            bundle(merge=empty_seed + "function compose(a){return{...globalLoad(),...merge()}}"),
+            "unsupported loader shape",
+        ),
+        "compound guard beside composer": (
+            bundle(merge=merge_with_guard('Cq.has(k)||k.startsWith("mcp.")', seed="{}") + composer),
+            probe_mismatch,
+        ),
+        "computed allowlist member": (
+            bundle(allowlist=f'Cq=new Set([{",".join(members)},pn["CHAT_TEST_00"]]);'),
+            "unresolved or computed member",
+        ),
+        "computed merge key": (
+            bundle(merge=empty_seed + composer + "const o={[merge](){return 1}};"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "derived copy key": (
+            bundle(merge=merge_fn("{}", 'for(const [k,v] of Object.entries(w))if(Cq.has(k)){e[k]=v;e[k+".copy"]=v}') + composer),
+            probe_mismatch,
+        ),
+        "duplicate registry key": (
+            bundle(registry=f'pn={{{",".join(properties + [properties[0]])}}};'),
+            "repeats CHAT_DEFAULT_MODEL",
+        ),
+        "extra copy after the loop (3.0.0)": (
+            bundle(merge=merge_with_guard("Cq.has(k)", extra_copy)),
+            probe_mismatch,
+        ),
+        "extra copy after the loop (3.1.0)": (
+            bundle(merge=merge_with_guard("Cq.has(k)", extra_copy, seed="{}") + composer),
+            probe_mismatch,
+        ),
+        "extra copy for boolean true": (
+            bundle(
+                merge=merge_with_guard(
+                    "Cq.has(k)", ';if(w["chat.surprise"]===true)e["chat.surprise"]=true'
+                )
+            ),
+            probe_mismatch,
+        ),
         "forwarded parameter without a default": (
             bundle(merge=explicit_path.replace("p=path()", "p") + composer),
             "unsupported loader shape",
         ),
-        "merge with a parameter": (
-            bundle(merge=merge_with_guard("Cq.has(k)").replace("merge()", "merge(skip)", 1)),
+        "merge assigned by destructuring": (
+            bundle(merge=empty_seed + composer + "({merge}=globalLoad());"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "merge assigned": (
+            bundle(merge=empty_seed + composer + "merge=function(){return{}};"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "merge nested beside top-level composer": (
+            bundle(
+                merge="function outer(){"
+                + empty_seed
+                + "}"
+                + composer
+            ),
+            "unsupported loader shape",
+        ),
+        "merge rebound by var destructuring": (
+            bundle(merge=empty_seed + composer + "var {merge}=globalLoad();"),
+            "merge name is mutated, shadowed, or escapes",
+        ),
+        "missing merge warning": (
+            bundle(merge="function merge(){}"),
+            "settings anchors are ambiguous or absent (registry 1, allowlist 1, merge 0)",
+        ),
+        "missing registry control": (
+            bundle(registry=f'pn={{{",".join(properties[1:])}}};'),
+            "settings anchors are ambiguous or absent (registry 0, allowlist 1, merge 1)",
+        ),
+        "missing set": (
+            'var pn,Cq;' + registry_assignment + merge_with_guard("Cq.has(k)"),
+            "settings anchors are ambiguous or absent (registry 1, allowlist 0, merge 1)",
+        ),
+        "mutated allowlist": (bundle() + 'Cq.add("chat.unknown");', "mutated, shadowed, or escapes"),
+        "nested composer shadowing merge": (
+            bundle(
+                merge=empty_seed
+                + "function outer(){function merge(){return{}}"
+                + composer
+                + "}"
+            ),
             "unsupported loader shape",
         ),
         "non-call default path": (
@@ -160,188 +239,34 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             ),
             "unsupported loader shape",
         ),
-        "second parameter": (
-            bundle(merge=explicit_path.replace("p=path()", "p=path(),q") + composer),
-            "unsupported loader shape",
-        ),
-        "truthiness guard": (
-            bundle(merge=merge_with_guard("Cq.has(k)&&v")),
-            probe_mismatch,
-        ),
-        "type guard": (
-            bundle(merge=merge_with_guard('Cq.has(k)&&typeof v==="string"')),
-            probe_mismatch,
-        ),
-        "extra copy for boolean true": (
-            bundle(
-                merge=merge_with_guard(
-                    "Cq.has(k)", ';if(w["chat.surprise"]===true)e["chat.surprise"]=true'
-                )
-            ),
-            probe_mismatch,
-        ),
-        "allowlist key deleted for boolean": (
-            bundle(
-                merge=merge_with_guard(
-                    "Cq.has(k)",
-                    ';if(typeof w["chat.defaultModel"]==="boolean")delete e["chat.defaultModel"]',
-                )
-            ),
-            probe_mismatch,
-        ),
-        "composer with a parameter": (
-            bundle(merge=empty_seed + "function compose(a){return{...globalLoad(),...merge()}}"),
-            "unsupported loader shape",
-        ),
-        "composer assigned": (
-            bundle(merge=empty_seed + composer + "compose=function(){return{}};"),
-            "composer name is mutated, shadowed, or escapes",
-        ),
-        "composer redeclared": (
-            bundle(merge=empty_seed + composer + "function compose(){return globalLoad()}"),
-            "composer name is mutated, shadowed, or escapes",
-        ),
-        "compound guard beside composer": (
-            bundle(merge=merge_with_empty_seed('Cq.has(k)||k.startsWith("mcp.")') + composer),
-            probe_mismatch,
-        ),
-        "extra copy after the loop (3.0.0)": (
-            bundle(merge=merge_with_guard("Cq.has(k)", extra_copy)),
-            probe_mismatch,
-        ),
-        "extra copy after the loop (3.1.0)": (
-            bundle(merge=merge_with_empty_seed("Cq.has(k)", extra_copy) + composer),
-            probe_mismatch,
-        ),
-        "second inline gate": (
-            bundle(
-                merge=merge_with_empty_seed('Cq.has(k)||new Set(["chat.surprise"]).has(k)')
-                + composer
-            ),
-            probe_mismatch,
-        ),
-        "second set statement": (
-            bundle(
-                merge=merge_fn(
-                    "{}",
-                    'const extra=new Set(["chat.surprise"]);for(const [k,v] of Object.entries(w))if(Cq.has(k)||extra.has(k))e[k]=v;',
-                )
-                + composer
-            ),
-            probe_mismatch,
-        ),
-        "assign whole workspace": (
-            bundle(merge=merge_fn("{}", "for(const [k,v] of Object.entries(w))if(Cq.has(k))Object.assign(e,w)") + composer),
-            probe_mismatch,
-        ),
-        "block copy beside guarded copy (3.0.0)": (
-            bundle(
-                merge=merge_fn(
-                    "globalLoad()",
-                    'for(const [k,v] of Object.entries(w)){if(Cq.has(k))e[k]=v;e["chat.surprise"]=w["chat.surprise"]}',
-                )
-            ),
-            probe_mismatch,
-        ),
-        "block copy beside guarded copy (3.1.0)": (
-            bundle(
-                merge=merge_fn(
-                    "{}",
-                    'for(const [k,v] of Object.entries(w))if(Cq.has(k)){e[k]=v;e["chat.surprise"]=w["chat.surprise"]}',
-                )
-                + composer
-            ),
-            probe_mismatch,
-        ),
-        "comma copy beside guarded copy (3.0.0)": (
-            bundle(merge=merge_with_guard("Cq.has(k)", ',e["chat.surprise"]=w["chat.surprise"]')),
-            probe_mismatch,
-        ),
-        "derived copy key": (
-            bundle(merge=merge_fn("{}", 'for(const [k,v] of Object.entries(w))if(Cq.has(k)){e[k]=v;e[k+".copy"]=v}') + composer),
-            probe_mismatch,
-        ),
-        "swapped loop binding (3.0.0)": (
-            bundle(merge=merge_fn("globalLoad()", "for(const [v,k] of Object.entries(w))if(Cq.has(v))e[k]=v")),
-            probe_mismatch,
-        ),
-        "computed allowlist member": (
-            bundle(allowlist=f'Cq=new Set([{",".join(members)},pn["CHAT_TEST_00"]]);'),
-            "unresolved or computed member",
-        ),
-        "duplicate registry key": (
-            bundle(registry=f'pn={{{",".join(properties + [properties[0]])}}};'),
-            "repeats CHAT_DEFAULT_MODEL",
-        ),
-        "empty seed without composer": (
-            bundle(merge=empty_seed),
-            "unsupported loader shape",
-        ),
-        "missing merge warning": (bundle(merge="function merge(){}"), "ambiguous or absent"),
-        "missing set": ('var pn,Cq;' + registry_assignment + merge_with_guard("Cq.has(k)"), "ambiguous or absent"),
-        "mutated allowlist": (bundle() + 'Cq.add("chat.unknown");', "mutated, shadowed, or escapes"),
-        "negated guard": (
-            bundle(merge=merge_with_guard("!Cq.has(k)")),
-            probe_mismatch,
-        ),
-        "missing registry control": (
-            bundle(registry=f'pn={{{",".join(properties[1:])}}};'),
-            "ambiguous or absent",
-        ),
         "parse error": (bundle() + "function (", "not valid JavaScript"),
-        "nested composer shadowing merge": (
-            bundle(
-                merge=empty_seed
-                + "function outer(){function merge(){return{}}"
-                + composer
-                + "}"
-            ),
-            "unsupported loader shape",
-        ),
-        "merge assigned": (
-            bundle(merge=empty_seed + composer + "merge=function(){return{}};"),
-            "merge name is mutated, shadowed, or escapes",
-        ),
-        "merge assigned by destructuring": (
-            bundle(merge=empty_seed + composer + "({merge}=globalLoad());"),
-            "merge name is mutated, shadowed, or escapes",
-        ),
-        "merge nested beside top-level composer": (
-            bundle(
-                merge="function outer(){"
-                + empty_seed
-                + "}"
-                + composer
-            ),
-            "unsupported loader shape",
-        ),
-        "merge rebound by var destructuring": (
-            bundle(merge=empty_seed + composer + "var {merge}=globalLoad();"),
-            "merge name is mutated, shadowed, or escapes",
-        ),
-        "redeclared merge": (
-            bundle(merge=empty_seed + composer + "function merge(){return{...globalLoad()}}"),
-            "merge name is mutated, shadowed, or escapes",
-        ),
         "reversed composer spread": (
             bundle(merge=empty_seed + "function compose(){return{...merge(),...globalLoad()}}"),
             "unsupported loader shape",
         ),
-        "computed merge key": (
-            bundle(merge=empty_seed + composer + "const o={[merge](){return 1}};"),
-            "merge name is mutated, shadowed, or escapes",
-        ),
-        "computed composer class field": (
-            bundle(merge=empty_seed + composer + "class D{[compose]=1};"),
-            "composer name is mutated, shadowed, or escapes",
+        "second parameter": (
+            bundle(merge=explicit_path.replace("p=path()", "p=path(),q") + composer),
+            "unsupported loader shape",
         ),
         "shadowed merge beside composer": (
             bundle(merge=empty_seed + composer + "function outer(){let merge=1}"),
             "merge name is mutated, shadowed, or escapes",
         ),
+        "swapped loop binding (3.0.0)": (
+            bundle(merge=merge_fn("globalLoad()", "for(const [v,k] of Object.entries(w))if(Cq.has(v))e[k]=v")),
+            probe_mismatch,
+        ),
+        "truthiness guard": (
+            bundle(merge=merge_with_guard("Cq.has(k)&&v")),
+            probe_mismatch,
+        ),
         "two composers": (
             bundle(merge=empty_seed + composer + composer.replace("compose", "composeAgain")),
             "unsupported loader shape",
+        ),
+        "type guard": (
+            bundle(merge=merge_with_guard('Cq.has(k)&&typeof v==="string"')),
+            probe_mismatch,
         ),
         "unknown allowlist symbol": (
             bundle(allowlist=f'Cq=new Set([{",".join(members)},pn.CHAT_UNKNOWN]);'),
@@ -352,8 +277,14 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             "no longer consults",
         ),
     }
-    for name, (text, message) in cases.items():
+    cases = {**{name: (text, None) for name, text in accepted.items()}, **rejected}
+    for name, (text, diagnostic) in sorted(cases.items()):
         result = run(text)
-        assert result.returncode != 0, f"{name}: unexpectedly accepted"
-        assert message in result.stderr, f"{name}: {result.stderr}"
+        if diagnostic is None:
+            assert result.returncode == 0, f"{name}: {result.stderr}"
+            facts = json.loads(result.stdout)
+            assert facts == expected, (name, facts)
+        else:
+            assert result.returncode != 0, f"{name}: unexpectedly accepted"
+            assert diagnostic in result.stderr, f"{name}: expected {diagnostic!r}; got {result.stderr}"
         print(f"ok [{name}]")

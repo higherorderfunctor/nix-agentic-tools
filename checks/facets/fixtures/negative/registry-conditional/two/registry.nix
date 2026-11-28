@@ -1,3 +1,4 @@
+# The second owner reads the first owner's activation; isolated settings would hide its claim.
 {
   config,
   facetOwner,

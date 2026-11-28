@@ -10,7 +10,7 @@
   "block_roles": ["selection", "guard"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Stop submission of a stack with a merge from upstream before the move can leave the merge and tip behind",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R3-S1",
