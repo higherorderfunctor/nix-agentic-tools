@@ -68,43 +68,64 @@ function canonical(path) {
 // One answer per request object, because Kiro derives the same session's paths
 // several times and a settings edit between two calls must not split them.
 const derived = new WeakMap();
+// The configured identities of each array `withConfiguredRoots` returned, so the
+// MCP seam learns which roots are configured from the derivation that made
+// them, not from settings read again later.
+const configuredOf = new WeakMap();
 
 // `[cwd, ...host roots]` followed by each configured root the list does not
 // already hold; the first spelling of a root wins and host roots are untouched.
 export function withConfiguredRoots(request, paths) {
   if (!derived.has(request)) {
+    const configured = configuredRoots(paths[0]);
     const seen = new Set(paths.map(canonical));
     const added = [];
-    for (const root of configuredRoots(paths[0])) {
+    for (const root of configured) {
       const key = canonical(root);
       if (!seen.has(key)) {
         seen.add(key);
         added.push(root);
       }
     }
-    derived.set(request, [...paths, ...added]);
+    const roots = [...paths, ...added];
+    configuredOf.set(roots, new Set(configured.map(canonical)));
+    derived.set(request, roots);
   }
   return derived.get(request);
 }
 
 // A session's roots minus the configured ones, except its cwd, for the MCP
 // reader: a configured root is not a place to take server definitions from.
+// An array this module did not derive carries no provenance, so only then are
+// the settings read for it.
 export function mcpRoots(paths) {
   if (paths.length === 0) return paths;
-  const configured = new Set(configuredRoots(paths[0]).map(canonical));
+  const configured =
+    configuredOf.get(paths) ??
+    new Set(configuredRoots(paths[0]).map(canonical));
   return paths.filter(
     (root, at) => at === 0 || !configured.has(canonical(root)),
   );
 }
 
-// The extra roots a workflow step may start with: those its owning session
-// holds. A step whose owner is named but not loaded refuses, because its saved
-// roots would otherwise stand in for the authority the owner has to give.
-export function stepRoots(extras, owner, ownerPaths) {
-  if (!extras?.length || owner === undefined) return extras;
+// A workflow step's options with the roots its owner holds. The step's cwd must
+// be one of them; its extra roots are kept only when the owner holds them. A
+// step whose owner is absent or not loaded refuses, because its saved roots
+// would otherwise stand in for the authority the owner has to give.
+export function stepOptions(workspacePath, options, host) {
+  const owner = options?.ownerSessionId;
+  const ownerPaths =
+    owner === undefined ? undefined : host.getSession(owner)?.workspacePaths;
   if (!ownerPaths) fail(`workflow owner ${owner} is not loaded`);
   const held = new Set(ownerPaths.map(canonical));
-  return extras.filter((root) => held.has(canonical(root)));
+  if (typeof workspacePath !== "string" || !held.has(canonical(workspacePath)))
+    fail(`workflow cwd ${workspacePath} is not held by owner ${owner}`);
+  return {
+    ...options,
+    additionalDirectories: (options.additionalDirectories ?? []).filter(
+      (root) => held.has(canonical(root)),
+    ),
+  };
 }
 
 // The roots an on-demand load may take from a session's saved record. Nothing

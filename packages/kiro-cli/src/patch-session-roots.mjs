@@ -96,18 +96,56 @@ const mcp = only(
 const [paths] = mcp.parameters.map(text);
 insert(mcp.body.getStart(file) + 1, `${paths}=__nixRoots.mcpRoots(${paths});`);
 
-// A step's saved roots go through its owner: `create` reads them from the run (`e`), `load` from `o`.
-const create = hostFunction("createWorkflowStepSession");
-insert(
-  create.body.getStart(file) + 1,
-  "e={...e,additionalDirectories:__nixRoots.stepRoots(e.additionalDirectories,e.ownerSessionId,this.host.getSession(e.ownerSessionId)?.workspacePaths)};",
-);
-const load = hostFunction("loadStepSession");
-const options = text(load.parameters[4]);
-insert(
-  load.body.getStart(file) + 1,
-  `${options}=${options}&&{...${options},additionalDirectories:__nixRoots.stepRoots(${options}.additionalDirectories,${options}.ownerSessionId,this.host.getSession(${options}.ownerSessionId)?.workspacePaths)};`,
-);
+// A step's saved roots go through its owner. `create` reads its run from the
+// one parameter and `load` its cwd and options from the second and fifth; each
+// must be an arrow function (so `this` is the host's) that reads the fields the
+// helper replaces, or the release moved the shape and the build refuses.
+const readsFields = (fn, param, names) => {
+  const read = new Set();
+  const visit = (n) => {
+    if (ts.isPropertyAccessExpression(n) && text(n.expression) === param)
+      read.add(text(n.name));
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isObjectBindingPattern(n.name) &&
+      n.initializer &&
+      text(n.initializer).replace(/\?\?\{\}$/, "") === param
+    )
+      for (const element of n.name.elements)
+        read.add(text(element.propertyName ?? element.name));
+    ts.forEachChild(n, visit);
+  };
+  visit(fn.body);
+  return names.every((name) => read.has(name));
+};
+const stepFunction = (name, count, ...reads) => {
+  const fn = hostFunction(name);
+  const params = fn.parameters;
+  if (
+    !ts.isArrowFunction(fn) ||
+    !ts.isBlock(fn.body) ||
+    params.length !== count ||
+    !params.every((p) => ts.isIdentifier(p.name)) ||
+    !reads.every(([at, names]) => readsFields(fn, text(params[at]), names))
+  )
+    throw new Error(`session-roots: unexpected shape of ${name}`);
+  return { body: fn.body, params: params.map(text) };
+};
+const stepPatch = (body, cwd, options) =>
+  insert(
+    body.getStart(file) + 1,
+    `${options}=__nixRoots.stepOptions(${cwd},${options},this.host);`,
+  );
+const create = stepFunction("createWorkflowStepSession", 1, [
+  0,
+  ["additionalDirectories", "ownerSessionId", "workspacePath"],
+]);
+stepPatch(create.body, `${create.params[0]}.workspacePath`, create.params[0]);
+const load = stepFunction("loadStepSession", 5, [
+  4,
+  ["additionalDirectories", "ownerSessionId"],
+]);
+stepPatch(load.body, load.params[1], load.params[4]);
 
 // An on-demand load starts from the roots saved with the session.
 const onDemand = only(

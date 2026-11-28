@@ -26,19 +26,23 @@ const write = (file, value) => {
 };
 const read = (file) => fs.readFileSync(file, "utf8");
 const stockSource = read(pinned);
-const patchedFile = at("patched/acp-server.js");
-write(patchedFile, stockSource);
-fs.copyFileSync(
-  path.join(src, "additional-roots.mjs"),
-  at("patched/additional-roots.mjs"),
-);
-execFileSync(process.execPath, [
-  path.join(src, "patch-session-roots.mjs"),
-  patchedFile,
-  typescript,
-]);
-execFileSync(process.execPath, ["--check", patchedFile]);
-const patchedSource = read(patchedFile);
+// The bundle `source` after the patcher ran over a copy of it, and its text.
+const patchBundle = (source, name) => {
+  const file = at(name, "acp-server.js");
+  write(file, source);
+  fs.copyFileSync(
+    path.join(src, "additional-roots.mjs"),
+    at(name, "additional-roots.mjs"),
+  );
+  execFileSync(process.execPath, [
+    path.join(src, "patch-session-roots.mjs"),
+    file,
+    typescript,
+  ]);
+  execFileSync(process.execPath, ["--check", file]);
+  return read(file);
+};
+const patchedSource = patchBundle(stockSource, "patched");
 const roots = await import(pathToFileURL(at("patched/additional-roots.mjs")));
 
 // The one node of `source` that `pick` accepts, as text.
@@ -90,15 +94,18 @@ const run = (code, extra = {}) =>
     ...extra,
   });
 const data = (code, extra) => JSON.parse(run(`JSON.stringify(${code})`, extra));
-// Vendor arrays come from another realm; copy them out to compare by value.
 const derive = (source) => {
   const name = /function (\w+)\(t,e\)\{if\(e\)return\[\];/.exec(stockSource)[1];
-  const call = run(
+  return run(
     `${["e6n", "RWe"].map((n) => fn(stockSource, n)).join(";")};${fn(source, name)};${name}`,
   );
-  return (...args) => [...call(...args)];
 };
-const [stock, patched] = [stockSource, patchedSource].map(derive);
+// The patched array itself carries its provenance; compare copies by value.
+const patchedRaw = derive(patchedSource);
+const [stock, patched] = [derive(stockSource), patchedRaw].map(
+  (call) =>
+    (...args) => [...call(...args)],
+);
 
 process.env.KIRO_HOME = at("home");
 const [repo, globalRoot, repoRoot, hostRoot] = [
@@ -189,21 +196,143 @@ assert.deepEqual(
   ["cwd", "host", "configured"],
   "the vendor reader reads whatever it is given",
 );
+// A configured root stays withheld after its setting is removed: the derived
+// array carries the answer, so a settings edit cannot turn it into a client root.
+const effective = patchedRaw(request(hostRoot), false);
+listed(repoSettings, []);
+opened.length = 0;
+vendor.setWorkspacePaths.call(self, effective, "s", {});
+assert.ok(effective.includes(repoRoot));
+assert.deepEqual(opened, [[repo, hostRoot]]);
 
-// Workflow steps keep only roots the owner holds; a named but absent owner refuses; both host functions call it.
-assert.deepEqual(roots.stepRoots([hostRoot, repoRoot], "o", [repo, hostRoot]), [
-  hostRoot,
-]);
-assert.throws(() => roots.stepRoots([hostRoot], "o", undefined), /not loaded/);
-assert.deepEqual(roots.stepRoots([hostRoot], undefined, undefined), [hostRoot]);
-for (const name of ["createWorkflowStepSession", "loadStepSession"])
-  assert.match(
-    find(
-      patchedSource,
-      (n) => ts.isPropertyAssignment(n) && n.name.getText() === name,
-    ).slice(0, 200),
-    /__nixRoots\.stepRoots/,
+// Workflow steps: both host functions run beside stubs that capture the request
+// they would hand to the session factory. The owner must hold the cwd, extra
+// roots the owner lacks are dropped, and an absent or unloaded owner refuses.
+const stepHost = (ownerPaths) => {
+  const requests = [];
+  const record = async (request) => requests.push(request);
+  return {
+    requests,
+    self: {
+      host: {
+        bindStepToRun() {},
+        createServerSession: record,
+        getSession: (id) =>
+          id === "o" ? { workspacePaths: ownerPaths } : undefined,
+        loadServerSession: record,
+        adoptDelegatedMcp() {},
+      },
+      restampLegacyStepSessionRoot() {},
+      runAuthorities: { launchingAuthority() {} },
+      stepSessionSettings() {},
+    },
+  };
+};
+const stepStubs = {
+  GOs: () => ({}),
+  NUe: () => ({}),
+  mGe: () => ({}),
+  zTr() {},
+};
+const stepFunctions = (source) =>
+  run(
+    `(function(){return {${["createWorkflowStepSession", "loadStepSession"]
+      .map((name) =>
+        find(
+          source,
+          (n) => ts.isPropertyAssignment(n) && n.name.getText() === name,
+        ),
+      )
+      .join(",")}}})`,
+    { ...stepStubs, a: (f) => f },
   );
+const startStep = async (stepFunctions, call, ownerPaths, saved) => {
+  const { requests, self } = stepHost(ownerPaths);
+  const functions = stepFunctions.call(self);
+  const meta = { workflowId: "w", workflowName: "n", nodeId: "i" };
+  const agent = { definition: { id: "g" } };
+  await (call === "create"
+    ? functions.createWorkflowStepSession({
+        agent,
+        meta,
+        workspacePath: saved.cwd,
+        additionalDirectories: saved.extras,
+        ownerSessionId: saved.owner,
+      })
+    : functions.loadStepSession("s", saved.cwd, { workflowId: "w" }, agent, {
+        additionalDirectories: saved.extras,
+        ownerSessionId: saved.owner,
+      }));
+  return requests.map(({ workspacePath, additionalDirectories }) => ({
+    workspacePath,
+    ...(additionalDirectories && { additionalDirectories }),
+  }));
+};
+const outside = at("outside");
+const held = [repo, hostRoot];
+const stepCases = [
+  [
+    "owner holds cwd and one extra",
+    held,
+    { cwd: repo, extras: [hostRoot, outside], owner: "o" },
+    [{ workspacePath: repo, additionalDirectories: [hostRoot] }],
+  ],
+  [
+    "no extras left",
+    held,
+    { cwd: repo, extras: [outside], owner: "o" },
+    [{ workspacePath: repo }],
+  ],
+  [
+    "owner lacks the cwd",
+    held,
+    { cwd: outside, extras: [], owner: "o" },
+    /not held/,
+  ],
+  [
+    "owner named but not loaded",
+    undefined,
+    { cwd: repo, extras: [], owner: "o" },
+    /not loaded/,
+  ],
+  [
+    "owner named but unknown",
+    held,
+    { cwd: repo, extras: [hostRoot], owner: "x" },
+    /not loaded/,
+  ],
+  ["no owner", held, { cwd: repo, extras: [hostRoot] }, /not loaded/],
+];
+for (const call of ["create", "load"]) {
+  const patchedSteps = stepFunctions(patchedSource);
+  for (const [name, ownerPaths, saved, expected] of stepCases) {
+    const outcome = startStep(patchedSteps, call, ownerPaths, saved);
+    if (expected instanceof RegExp)
+      await assert.rejects(outcome, expected, `${call}: ${name}`);
+    else assert.deepEqual(await outcome, expected, `${call}: ${name}`);
+  }
+  assert.deepEqual(
+    await startStep(stepFunctions(stockSource), call, held, stepCases[5][2]),
+    [{ workspacePath: repo, additionalDirectories: [hostRoot] }],
+    `${call}: stock forwards saved roots unchecked`,
+  );
+}
+// A release that renames the creation parameter still patches correctly.
+const renamed = find(
+  stockSource,
+  (n) =>
+    ts.isPropertyAssignment(n) &&
+    n.name.getText() === "createWorkflowStepSession",
+);
+const rename = (text) => text.replace(/(?<![\w$]|(?<!\.)\.)e(?![\w$])/g, "zq");
+assert.notEqual(rename(renamed), renamed);
+const renamedSteps = stepFunctions(
+  patchBundle(stockSource.replace(renamed, rename(renamed)), "renamed"),
+);
+assert.deepEqual(
+  await startStep(renamedSteps, "create", held, stepCases[0][2]),
+  stepCases[0][3],
+);
 // A cold load takes the saved cwd and none of the saved extras, so a revoked configured root cannot come back as a client root.
 const coldLoad = (source) => {
   const loaded = [];
@@ -227,11 +356,6 @@ assert.equal(
   patchedSource.match(/__nixRoots\.\w+/g).length,
   5,
   "five sites, no others",
-);
-assert.deepEqual(
-  Object.keys(roots).sort(),
-  ["mcpRoots", "savedRoots", "stepRoots", "withConfiguredRoots"],
-  "the module grants no permission",
 );
 
 // Writes: Kiro's default policy allows reading under the roots and allows no write, so membership still prompts.

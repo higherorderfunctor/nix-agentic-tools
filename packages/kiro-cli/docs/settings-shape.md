@@ -70,8 +70,10 @@ A configured root is membership and nothing else. Kiro's default policy allows
 `fs_read ./**` and allows no write, so writes there still prompt. Its
 `.kiro/settings/mcp.json` is not read: the MCP reader receives the cwd and the
 client's roots only (a root that is both configured and sent by the client is
-treated as configured). A workflow step keeps only the extra roots its owning
-session holds, and refuses to start when its owner is named but not loaded.
+treated as configured; the derivation that adds the roots also records which are
+configured, so a later settings edit cannot reclassify them). A workflow step
+must have its cwd held by its owning session and keeps only the extra roots that
+session holds; it refuses to start when its owner is absent or not loaded.
 `src/patch-session-roots.mjs` finds these sites by AST and refuses the build
 when a release moves one; `kiro-additional-roots` runs the vendor functions
 involved. A session loaded on demand (a workflow wake or a send-message to a
