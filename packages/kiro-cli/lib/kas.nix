@@ -27,10 +27,12 @@ in
       chat=$(python3 ${vu.kiroLocateChatScript pkgs} .)
       python3 ${../extract/embedded-kas.py} "$chat" "$out" ${vu.kiroEmbeddedArgs pkgs pkgs.stdenv.hostPlatform.parsed.cpu.name}
       server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
-      ${lib.optionalString selected ''
-        python3 ${./kiro-bundle-patch.py} "$server" "$server" \
-          ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
-      ''}
+      # Facts come from the ORIGINAL bytes: the patcher validates every edit against
+      # them, then splices once. The original prompts ship under share/ whatever is selected.
+      ${vu.kiroPromptFactsExtractScript pkgs} "$server" > "$TMPDIR/prompt-leaves.json"
+      python3 ${./kiro-bundle-patch.py} "$server" "$TMPDIR/prompt-leaves.json" "$server" \
+        --export-leaves "$out/share/kiro/vendorSteering" \
+        ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       node --check "$server"
       runHook postInstall
     '';
