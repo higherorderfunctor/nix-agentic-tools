@@ -1535,14 +1535,10 @@ is unmeasured until an opted-in sibling-worktree run. And `stopWhen`'s
 inherits the empty-capture hazard wholesale — under a cheap model the condition
 can never match and the loop silently runs to `maxIterations` (ledger §7.6).
 
-The repository no longer injects per-turn workflow reminders or decodes the
-vendor steering. The separate opt-in
-`ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
-assigning worktree setup and a fast-forward of the checked-out base branch to
-workflows, leaving git workflow to repository instructions. Selected
-replacements are applied when the KAS is built: any selected exact source that
-is missing or duplicated fails the build. With every tweak off, the stock bundle
-is used.
+Delegate routing lets the orchestrator create the worktree by removing only the
+sentence forbidding it. The default is the named
+`ai.kiro.cli.prompts.allowWorktreeCreation` edit on a reached managed workflow
+CLI. It does not change the rest of the worktree or close-out guidance.
 
 ### Small things that save a run
 

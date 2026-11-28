@@ -834,10 +834,10 @@ configuration only as below. Kiro's managed wrapper always launches the v3
 engine, which the skill's Kiro evidence covers. Every reached runtime must be
 enabled. A consumer without the Kiro module is untouched.
 
-The reach test defaults `cli.tweaks.relativeFileCheckPaths` and
-`cli.tweaks.stripVendorWorktreeSteering` to true only when
-`cli.workflows.enable` is true and the CLI package is managed. Explicit false
-wins.
+On a reached managed CLI with `cli.workflows.enable`, delegate routing defaults
+`cli.tweaks.relativeFileCheckPaths` to true and removes only the prohibition on
+the orchestrator creating the worktree. Set the tweak to false or override
+`cli.prompts.allowWorktreeCreation` independently.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable` and no explicit
 false for `cli.native.settings.chat.enableWorkflows`. Devenv's null setting

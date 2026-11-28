@@ -907,7 +907,7 @@
   # patcher's TWEAKS keys), `prompts` (`ai.kiro.cli.prompts` entries,
   # placeholders filled per session) and/or `sessionRoots` (a nonempty
   # `chat.additionalDirectories`, delivered by the session-roots patch).
-  tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  tweakNames = ["relativeFileCheckPaths"];
   bundlePatchesOf = cfg:
     packaging.normalizeBundlePatches {
       prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) cfg.cli.prompts;
@@ -1485,16 +1485,6 @@ in
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
               ${tweakPatchNote}
-            '';
-          };
-          stripVendorWorktreeSteering = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = ''
-              Remove the vendor workflow worktree paragraph (worktrees under
-              `.worktrees/`, rebased onto and fast-forwarding the checked-out base
-              branch), for repositories whose own instructions supply the git
-              workflow. ${tweakPatchNote}
             '';
           };
         };

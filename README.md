@@ -562,9 +562,10 @@ exposes every extracted rollout name, while
 `cli.native.settings.chat.keybindings` types the extracted key bindings. Home
 Manager implies workflows and Code-to-Spec's global chat settings; devenv
 requires those settings in the user's global config and warns when a friendly
-switch requests a setting that is missing. Delegate routing defaults the two
-workflow tweaks when it reaches that managed CLI, and advertises `run_workflow`
-only when workflows are enabled.
+switch requests a setting that is missing. Delegate routing defaults the
+relative gate-file tweak and its own worktree-creation prompt edit when it
+reaches that managed CLI, and advertises `run_workflow` only when workflows are
+enabled.
 
 > **Kiro steering-copy upgrade:** when upgrading from a release that
 > materialized steering as real copies, keep the previous `ai.kiro.configDir`

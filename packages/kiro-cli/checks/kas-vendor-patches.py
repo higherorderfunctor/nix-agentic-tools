@@ -1,14 +1,12 @@
-"""Check the four tweak selections on the real release against expectations the patcher does not supply.
+"""Check the stock and creator-only selections on the real release against expectations the patcher does not supply.
 
 Each selection is patched in process, re-extracted by the real extractor, and compared with the
-original prompts under rules written here: which lines may differ, what must disappear, and how
-much text is removed. The selected edits themselves are never the oracle. Failure messages carry
-no vendor text.
+original prompts under rules written here: which lines may differ and what must disappear.
+The selected edits themselves are never the oracle. Failure messages carry no vendor text.
 Usage: `kas-vendor-patches.py <patcher> <stock acp-server.js> <stock facts.json> <extractor> <stock kas> <patched kas>`.
 """
 
 import importlib.util
-import itertools
 import json
 from pathlib import Path
 import subprocess
@@ -25,7 +23,6 @@ server = "node_modules/@kiro/agent/dist/server/acp-server.js"
 text = {name: fact["text"] for name, fact in original.items()}
 planner, creator, orchestration = "agents.workflow.planner", "agents.workflow.creator", "workflow.orchestration"
 gate, relative_gate = "/repo/.agents/tasks/fix-throttle/review.json", ".agents/tasks/fix-throttle/review.json"
-paragraph_start, paragraph_end = "When a task should run in a worktree", "Do not create the worktree yourself.\n\n"
 # Authored replacement instructions, written here so a weaker rewrite of either cannot pass.
 GATE_SENTENCE = "names the gate file's workspace-relative path, the one `fileCheck.path` checks, in its prompt"
 PATH_RULE = (
@@ -38,8 +35,8 @@ PATH_RULE = (
     "Step agents' cwd is that root, so the writing step and the check agree. "
     "A `fileCheck.path` that never resolves spins the loop to `maxIterations`."
 )
-# Measured on the pinned release: gate-file sites, whole removed paragraph length, and lines the creator tweak may touch.
-GATE_SITES, PARAGRAPH_LENGTH, REWRITTEN_LINES = 4, 663, 2
+# Measured on the pinned release: gate-file sites and lines the creator tweak may touch.
+GATE_SITES, REWRITTEN_LINES = 4, 2
 
 
 def outside_literals(bundle, facts):
@@ -58,8 +55,8 @@ for kas in (stock_kas, patched_kas):
         assert shipped == body.encode(), f"{kas} does not ship the original {name}"
 with tempfile.TemporaryDirectory() as tmp:
     path = Path(tmp) / "server.js"
-    for rewrite, strip in itertools.product((False, True), repeat=2):
-        names = [name for name, on in (("relativeFileCheckPaths", rewrite), ("stripVendorWorktreeSteering", strip)) if on]
+    for rewrite in (False, True):
+        names = ["relativeFileCheckPaths"] if rewrite else []
         label = ",".join(names) or "no tweaks"
         result, errors = patcher.patch(stock, original, [edit for name in names for edit in patcher.TWEAKS[name]])
         assert not errors, errors
@@ -82,13 +79,7 @@ with tempfile.TemporaryDirectory() as tmp:
             assert now[creator].count("\n") == text[creator].count("\n") and gate not in now[creator], label
         else:
             assert now[creator] == text[creator], f"{label}: the creator changed"
-        if strip:
-            head, _, rest = text[orchestration].partition(paragraph_start)
-            removed, _, tail = rest.partition(paragraph_end)
-            assert len(paragraph_start) + len(removed) + len(paragraph_end) == PARAGRAPH_LENGTH, f"{label}: removed paragraph has another length"
-            assert now[orchestration] == head + tail, f"{label}: the orchestration lost more than the paragraph"
-        else:
-            assert now[orchestration] == text[orchestration], f"{label}: the orchestration changed"
+        assert now[orchestration] == text[orchestration], f"{label}: the orchestration changed"
         assert (result == stock) == (not names), f"{label}: stock bytes must stay identical only with no tweaks"
-    assert Path(patched_kas, server).read_bytes() == result, "packaged selection differs from the two selected tweaks"
-print("PASS: four vendor selections match independent expectations; real patched package matches")
+    assert Path(patched_kas, server).read_bytes() == result, "packaged selection differs from the creator-only selection"
+print("PASS: stock and creator-only selections match independent expectations; real patched package matches")

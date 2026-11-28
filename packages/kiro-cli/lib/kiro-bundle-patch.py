@@ -106,16 +106,6 @@ TWEAKS = {
             for name, site in GATE_SITES.items()
         ),
     ), key=lambda edit: edit.id)),
-    "stripVendorWorktreeSteering": (
-        Edit(
-            "stripVendorWorktreeSteering.worktree-paragraph",
-            ORCHESTRATION,
-            "When a task should run in a worktree, say so",
-            "",
-            until="Do not create the worktree yourself.\n\n",
-            sha256="79084f434d7078db84ce489c5b06756effd0fffa5014dc8ddbe45e20e64467b6",
-        ),
-    ),
 }
 
 def occurrences(text, needle):

@@ -12,7 +12,7 @@
     kiro-fhs-contract = let
       kiroPackage = pkgs.ai.kiro-cli;
       selectedKiroPackage = (kiroPackage.withBundlePatches {
-        replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+        replace = ["relativeFileCheckPaths"];
       }).withRolloutFeatures ["background_execution"];
     in
       pkgs.runCommandLocal "kiro-fhs-contract-check" {} ''

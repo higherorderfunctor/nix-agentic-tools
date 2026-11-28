@@ -696,7 +696,7 @@ in {
       in
         builtins.all (
           eval:
-            builtins.all (warns eval) ["relativeFileCheckPaths" "stripVendorWorktreeSteering"]
+            warns eval "relativeFileCheckPaths"
         ) [evalHm evalDevenv]
     );
 
@@ -1598,7 +1598,7 @@ in {
     # defect to route around.
     module-kiro-workspace-allowlist-from-sidecar = mkTest "kiro-workspace-allowlist-from-sidecar" (!(lib.elem "chat.enableWorkflows" (kiroFact "workspaceOverridableSettings")));
 
-    # Both tweaks default off and select package-bound patches on either backend.
+    # The creator tweak defaults off and selects a package-bound patch on either backend.
     module-kiro-tweaks-default-off-and-parity = mkTest "kiro-tweaks-default-off-and-parity" (
       let
         forks = eval: select: name: let
@@ -1619,10 +1619,9 @@ in {
           };
         in
           !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
-        names = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       in
-        builtins.all (forks evalHm (v: v.config.home.packages)) names
-        && builtins.all (forks evalDevenv (v: v.config.packages)) names
+        forks evalHm (v: v.config.home.packages) "relativeFileCheckPaths"
+        && forks evalDevenv (v: v.config.packages) "relativeFileCheckPaths"
     );
 
     # One `ai.kiro.cli.prompts` definition serves the lib factory, Home Manager and

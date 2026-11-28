@@ -399,9 +399,8 @@ string, which JavaScript reads as the same value. Unedited prompts and every
 byte outside the literals stay as they were, so a stock bundle is
 byte-identical. Every KAS output, patched or not, also ships the three original
 prompts as `share/kiro/vendorSteering/<leaf>.txt`; nothing reads them at
-evaluation. The independent CI drift check requires every built-in edit to match
-real vendor data on each platform even when a consumer disables it, and compares
-each of the four selections with expectations written in the check.
+evaluation. The independent CI drift check compares the stock and creator-only
+selections against the pinned release on each platform.
 
 `ai.kiro.cli.prompts` holds the consumer's own edits: an attribute set of
 `{ target; match; replace; }` entries. `target` is one of the three promoted
@@ -429,11 +428,9 @@ trimmed, after the other entries are applied. The build refuses it otherwise,
 and refuses one whose `replace` also contains a Mustache delimiter change
 (`{{=`, with or without spaces after the braces).
 
-All tweaks still default off. Delegate routing supplies `mkDefault true` for
-workflow tweaks only on its reached managed workflow CLI; explicit false wins.
-The workflow tweaks retain the existing relative file-check guidance and
-deletion of vendor worktree ownership/merge guidance. Prompt files, additional
-roots and engine-default changes are separate work.
+The creator tweak defaults off. On a reached managed workflow CLI, delegate
+routing defaults it on and supplies the overridable `allowWorktreeCreation`
+prompt edit. That edit removes only the prohibition on creating the worktree.
 
 Inherited overrides have deliberate precedence: all-off uses `--set-default` for
 the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
@@ -452,13 +449,13 @@ at evaluation from a derivation output.
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
 refusals. `kiro-bundle-patch` covers edit matching, intersection and digest
 refusal, literal replacement and its round trip through Node on a synthetic
-bundle. `kiro-bundle-patch-drift` checks every vendor selection, the real native
-ONNX module, WASM solving, shipped ripgrep, and ACP initialization.
-`kiro-kas-dispatch` exercises the real wrapped `kiro-cli`, CLI/ACP, fresh/stale
-homes, override precedence and a client on the binary's v2 list, plus the raw
-`acp --agent-engine=v3` measurement on the stock binary. The FHS contract check
-separately inspects the command paths inside the synthesized root; nested
-bubblewrap execution is not portable inside a Nix build sandbox.
+bundle. `kiro-bundle-patch-drift` checks the stock and creator-only selections,
+the real native ONNX module, WASM solving, shipped ripgrep, and ACP
+initialization. `kiro-kas-dispatch` exercises the real wrapped `kiro-cli`,
+CLI/ACP, fresh/stale homes, override precedence and a client on the binary's v2
+list, plus the raw `acp --agent-engine=v3` measurement on the stock binary. The
+FHS contract check separately inspects the command paths inside the synthesized
+root; nested bubblewrap execution is not portable inside a Nix build sandbox.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 

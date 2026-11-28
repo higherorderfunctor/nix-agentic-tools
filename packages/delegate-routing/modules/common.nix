@@ -104,7 +104,7 @@
   usageEnvironment = runtime:
     lib.foldl' (environment: target: environment // usageFor target) {}
     (lib.filter (target: builtins.elem target ["claude" "codex"]) (lib.unique (requiredTargets runtime ++ poolReaders)));
-  # Workflow tweaks default on only when ai.kiro.cli.package != null: the
+  # Workflow prompt changes need ai.kiro.cli.package != null: the
   # managed package is what carries the patched KAS bundle.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
@@ -465,15 +465,17 @@ in {
           techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
         });
       }
-      # Guarded on the declaration: a consumer without the Kiro module has no
-      # ai.kiro.cli.tweaks to set.
       (lib.optionalAttrs kiroTweaksDeclared {
-        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
-          tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
-            relativeFileCheckPaths = lib.mkDefault true;
-            stripVendorWorktreeSteering = lib.mkDefault true;
-          };
-        };
+        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null && config.ai.kiro.cli.workflows.enable) (
+          {tweaks.relativeFileCheckPaths = lib.mkDefault true;}
+          // lib.optionalAttrs (lib.hasAttrByPath ["ai" "kiro" "cli" "prompts"] options) {
+            prompts.allowWorktreeCreation = lib.mapAttrs (_: lib.mkDefault) {
+              match = "Do not create the worktree yourself.";
+              replace = "";
+              target = "workflow.orchestration";
+            };
+          }
+        );
       })
       (lib.genAttrs reminderRuntimes (runtime:
         lib.mkIf (reminderHookEnabled runtime)

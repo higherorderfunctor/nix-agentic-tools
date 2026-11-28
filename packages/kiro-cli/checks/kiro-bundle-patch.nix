@@ -1,7 +1,7 @@
 {pkgs, ...}: let
   package = pkgs.ai.kiro-cli;
-  replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
-  # The drift check compares the packaged bundle with the two tweaks alone.
+  replace = ["relativeFileCheckPaths"];
+  # The drift check compares the packaged bundle with the creator tweak alone.
   tweaked = package.withBundlePatches {inherit replace;};
   patched = package.withBundlePatches {
     inherit replace;
