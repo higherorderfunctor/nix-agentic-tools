@@ -282,19 +282,22 @@ try {
 
   // Install/remove persistence deliberately uses path matching, rather than
   // the loading identity. Removing one source cannot remove a same-name copy.
+  const persistedPaths = payloads.map((path) =>
+    relative(pm.getBaseDirForScope("user"), path),
+  );
   globalSettings = { packages: [] };
   pm.addSourceToSettings(payloads[0]);
   pm.addSourceToSettings(payloads[1]);
   pm.addSourceToSettings(`npm:${name}`);
   assert.deepEqual(
     [...globalSettings.packages].sort(),
-    [...payloads, `npm:${name}`].sort(),
+    [...persistedPaths, `npm:${name}`].sort(),
     "adding a same-name source must preserve every source",
   );
   assert.equal(pm.removeSourceFromSettings(payloads[0]), true);
   assert.deepEqual(
     [...globalSettings.packages].sort(),
-    [payloads[1], `npm:${name}`].sort(),
+    [persistedPaths[1], `npm:${name}`].sort(),
     "removing one path must preserve the other path and npm source",
   );
   assert.equal(pm.removeSourceFromSettings(payloads[0]), false);
