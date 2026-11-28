@@ -123,6 +123,14 @@ class PatchTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("relativeFileCheckPaths.paragraph: unknown leaf agents.workflow.creator", result.stderr)
             self.assertEqual((root / "kept.js").read_bytes(), b"untouched")
+            entries = root / "prompts.json"
+            entries.write_text(json.dumps({"mine": {"target": "u", "match": "only", "replace": ""}}), encoding="utf-8")
+            self.assertEqual(cli(str(root / "custom.js"), "--prompts", str(entries)).returncode, 0)
+            self.assertEqual(self.evaluate((root / "custom.js").read_bytes())[2], 'joined "u" -u')
+            entries.write_text(json.dumps({"bad": {"target": "none", "match": "x", "replace": ""}}), encoding="utf-8")
+            result = cli(str(root / "kept.js"), "--prompts", str(entries))
+            self.assertEqual((result.returncode, (root / "kept.js").read_bytes()), (1, b"untouched"))
+            self.assertIn("prompts.bad: unknown leaf none", result.stderr)
 
     def test_builtin_ids_are_namespaced_by_their_tweak(self):
         for tweak, edits in patcher.TWEAKS.items():

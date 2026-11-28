@@ -891,20 +891,26 @@
     else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
   resolvePackage = cfg: let
     package = resolveRolloutPackage cfg;
+    patches = bundlePatchesOf cfg;
   in
-    if enabledTweaks cfg == [] || package == null
+    if patches == {} || package == null
     then package
     else if !(package ? withBundlePatches)
-    then throw "ai.kiro.cli.tweaks requires a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
-    else
-      package.withBundlePatches {
-        replace = enabledTweaks cfg;
-      };
+    then throw "ai.kiro.cli.tweaks and ai.kiro.cli.prompts require a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
+    else package.withBundlePatches patches;
 
-  # `ai.kiro.cli.tweaks` each select one fixed-text bundle replacement; the
-  # names are the patcher's TWEAKS keys.
+  # The one manifest of KAS prompt edits, read by the package selector, the
+  # managed-dispatch decision, the null-package warning and the passthru
+  # assertion: `{}` when nothing is edited (an empty `prompts` counts as
+  # nothing), else `replace` (enabled `ai.kiro.cli.tweaks`, named as the
+  # patcher's TWEAKS keys) and/or `prompts` (`ai.kiro.cli.prompts` entries,
+  # placeholders left for the session to fill).
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
-  enabledTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
+  bundlePatchesOf = cfg:
+    lib.filterAttrs (_: value: value != [] && value != {}) {
+      prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) cfg.cli.prompts;
+      replace = lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
+    };
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -1392,6 +1398,43 @@ in
             so it tracks version bumps instead of being curated here.
           '';
         };
+        # Typed edits to the vendor workflow prompts, lowered with the tweaks
+        # into one build-time KAS patch selection on Home Manager and devenv.
+        prompts = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.submodule {
+            options = {
+              match = lib.mkOption {
+                type = lib.types.nonEmptyStr;
+                description = "Text to find, exactly once, in the target prompt's original text.";
+              };
+              replace = lib.mkOption {
+                type = lib.types.str;
+                description = "Text that takes its place; an empty string deletes the match.";
+              };
+              target = lib.mkOption {
+                type = lib.types.enum ["agents.workflow.creator" "agents.workflow.planner" "workflow.orchestration"];
+                description = "The promoted prompt to edit.";
+              };
+            };
+          });
+          default = {};
+          example.heading = {
+            match = "# Workflow Orchestration";
+            replace = "# Workflow Orchestration\n\nPrimary checkout: {{primary}}";
+            target = "workflow.orchestration";
+          };
+          description = ''
+            Named find-and-replace edits to the vendor workflow prompts. Every
+            `match` must occur exactly once in its target's original text and no
+            two entries on one target may overlap, or the build fails naming the
+            entry, never the vendor text. Entries are checked against the
+            original text, so one edit never sees another's replacement. An
+            empty set changes nothing and keeps the stock bundle. `{{primary}}`
+            and `{{repo}}` are not resolved by the build or evaluation and stay
+            in the text as written; filling them per session is separate work.
+            Enabling any entry overrides an inherited `KIRO_KAS_SERVER_PATH`.
+          '';
+        };
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
@@ -1642,6 +1685,13 @@ in
           name = "ai.kiro.cli.tweaks.${name}";
         })
         tweakNames
+        ++ [
+          {
+            active = cfg.cli.prompts != {};
+            explicit = explicitAt [["ai" "kiro" "cli" "prompts"]];
+            name = "ai.kiro.cli.prompts";
+          }
+        ]
         ++ [
           {
             active = resolvedShell != null;

@@ -44,7 +44,7 @@
 
   mkKiroCliWithPayload = rawFeatures: bundlePatches: let
     kas = mkKas bundlePatches;
-    managedKas = (bundlePatches.replace or []) != [];
+    managedKas = bundlePatches != {};
     # Defaults updates off and normalizes an explicit opt-in. Each packaged
     # command is a direct last hop to the binary, so the guard runs once per
     # launch and needs no state passed to another guard.

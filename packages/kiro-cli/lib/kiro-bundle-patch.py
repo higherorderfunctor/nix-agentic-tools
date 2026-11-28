@@ -1,7 +1,8 @@
 """Compile named edits to Kiro's workflow prompts and splice them into the KAS bundle.
 
 Input: the bundle, the extractor's text-mode facts (`extract/prompts.mjs`, run once on
-the ORIGINAL bytes), and the selected tweak names. Output: the bundle with each
+the ORIGINAL bytes), the selected tweak names, and optionally a consumer's `prompts`
+entries (`{key: {target, match, replace}}`, edit id `prompts.<key>`). Output: the bundle with each
 edited prompt's literal replaced, and optionally the three original prompts as
 plain text files. `lib/kas.nix` calls it at build time.
 
@@ -174,16 +175,21 @@ def main():
     parser.add_argument("destination", nargs="?", type=Path)
     parser.add_argument("--check", action="store_true", help="validate every built-in edit; write nothing")
     parser.add_argument("--export-leaves", type=Path, help="directory for the original prompts as text")
+    parser.add_argument("--prompts", type=Path, help="JSON object of consumer edits: {key: {target, match, replace}}")
     parser.add_argument("--replace", action="append", choices=TWEAKS, default=[])
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
     if args.check and args.export_leaves:
         parser.error("--check writes nothing, so it cannot be combined with --export-leaves")
+    if args.check and args.prompts:
+        parser.error("--check validates the built-in edits only, so it cannot be combined with --prompts")
     names = list(TWEAKS) if args.check else sorted(set(args.replace))
     try:
         facts = json.loads(args.facts.read_text(encoding="utf-8"))
-        result, errors = patch(args.source.read_bytes(), facts, [edit for name in names for edit in TWEAKS[name]])
+        entries = json.loads(args.prompts.read_text(encoding="utf-8")) if args.prompts else {}
+        custom = [Edit(f"prompts.{key}", entry["target"], entry["match"], entry["replace"]) for key, entry in sorted(entries.items())]
+        result, errors = patch(args.source.read_bytes(), facts, [edit for name in names for edit in TWEAKS[name]] + custom)
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
         if errors:
@@ -194,7 +200,7 @@ def main():
             print("PASS: " + ", ".join(names) + " edits each select one unchanged span")
         else:
             args.destination.write_bytes(result)
-    except (OSError, ValueError) as exc:
+    except (KeyError, OSError, TypeError, ValueError) as exc:
         print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)
         return 1
     return 0
