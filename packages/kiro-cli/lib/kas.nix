@@ -9,7 +9,8 @@
   inherit (pkgs) lib;
   vu = import ./packaging.nix;
   # `patches` is the manifest `lib/mkKiro.nix` builds: `{}` when nothing is edited,
-  # else `replace` (built-in tweak names) and/or `prompts` (consumer entries).
+  # else `replace` (built-in tweak names) and/or `prompts` (consumer entries). Entries
+  # that name `{{primary}}` or `{{repo}}` install the per-session fill from `../src`.
   selected = patches != {};
   prompts = patches.prompts or {};
   replace = patches.replace or [];
@@ -37,7 +38,7 @@ in
       ${vu.kiroPromptFactsExtractScript pkgs} "$server" > "$TMPDIR/prompt-leaves.json"
       python3 ${./kiro-bundle-patch.py} "$server" "$TMPDIR/prompt-leaves.json" "$server" \
         --export-leaves "$out/share/kiro/vendorSteering" \
-        ${lib.optionalString (prompts != {}) "--prompts ${promptsFile}"} \
+        ${lib.optionalString (prompts != {}) "--prompts ${promptsFile} --session-fill ${../src}"} \
         ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       node --check "$server"
       runHook postInstall

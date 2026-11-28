@@ -12,6 +12,12 @@ digest drift, no two edits intersecting); any failure refuses the whole build an
 names the edits, never the vendor text. An edited prompt's whole literal is then
 rewritten as a double-quoted JSON string, which JavaScript reads as the same
 value; unedited prompts and every byte outside the literals stay as they were.
+
+A replacement that names `{{primary}}` or `{{repo}}` cannot be settled at build
+time, because those come from each session's checkout. Its edit is validated like
+the rest, but instead of being spliced it becomes an `[original, replacement]`
+fragment in `prompt-fragments.json`, and the two readers of the prompts call
+`src/session-prompts.mjs` to apply it per session before Kiro renders the text.
 """
 
 import argparse
@@ -20,10 +26,20 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+import re
+import shutil
 import sys
 
 CREATOR = "agents.workflow.creator"
 ORCHESTRATION = "workflow.orchestration"
+PLANNER = "agents.workflow.planner"
+# What the session fill looks a prompt up by: the agent id Kiro registers it under,
+# or the leaf name for the steering block.
+SESSION_KEYS = {CREATOR: "wf-workflow-creator", PLANNER: "wf-planner", ORCHESTRATION: ORCHESTRATION}
+PLACEHOLDER = re.compile(r"\{\{(?:primary|repo)\}\}")
+SESSION_MODULES = ("repo-root.mjs", "session-prompts.mjs")
+# Static imports hoist, so the line sits below the bundle's shebang.
+SESSION_IMPORT = b'import{fillAgentDefinition as __kiroFillAgent,fillPrompt as __kiroFillPrompt}from"./session-prompts.mjs";\n'
 
 
 @dataclass(frozen=True)
@@ -40,6 +56,11 @@ class Edit:
     replace: str
     until: str = ""
     sha256: str = ""
+
+    @property
+    def per_session(self):
+        """True when the replacement can only be completed from a session's checkout."""
+        return PLACEHOLDER.search(self.replace) is not None
 
 
 GATE_FILE = "/repo/.agents/tasks/fix-throttle/review.json"
@@ -148,17 +169,102 @@ def patch(bundle, facts, edits):
     for (a, a_start, a_end), (b, b_start, b_end) in itertools.combinations(chosen, 2):
         if a.leaf == b.leaf and a_start < b_end and b_start < a_end:
             errors.append(f"{a.id} and {b.id}: selections intersect in {a.leaf}")
-    if errors:
-        return None, errors
     texts = {}
     for edit, start, end in sorted(chosen, key=lambda item: item[1], reverse=True):
-        text = texts.get(edit.leaf, facts[edit.leaf]["text"])
-        texts[edit.leaf] = text[:start] + edit.replace + text[end:]
+        if not edit.per_session:
+            text = texts.get(edit.leaf, facts[edit.leaf]["text"])
+            texts[edit.leaf] = text[:start] + edit.replace + text[end:]
+    for edit, start, end in chosen:
+        if edit.per_session:
+            original = facts[edit.leaf]["text"]
+            errors += session_refusals(edit, original[start:end], texts.get(edit.leaf, original))
+    if errors:
+        return None, errors
     patched = bundle
     for name in sorted(texts, key=lambda name: facts[name]["start"], reverse=True):
         fact = facts[name]
         patched = patched[: fact["start"]] + json.dumps(texts[name], ensure_ascii=True).encode() + patched[fact["end"] :]
     return patched, []
+
+
+def front_matter(text):
+    """The leading `---` block of an agent prompt, or an empty string."""
+    end = text.find("\n---\n", 4) if text.startswith("---\n") else -1
+    return text[: end + 5] if end >= 0 else ""
+
+
+# What JavaScript's `String.prototype.trim` strips; Python's `str.strip()` differs at the margins.
+JS_SPACE = "".join(map(chr, (*range(9, 14), 32, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF)))
+
+
+def reader_text(leaf, text):
+    """The text the readers search: steering as written, an agent prompt as Kiro registers it (front matter removed, trimmed)."""
+    return text if leaf == ORCHESTRATION else text[len(front_matter(text)) :].strip(JS_SPACE)
+
+
+# Mustache skips JavaScript whitespace after `{{`, so `{{ =<% %>=}}` changes delimiters too.
+SET_DELIMITERS = re.compile(r"\{\{[" + re.escape(JS_SPACE) + "]*=")
+
+
+def session_refusals(edit, selected, text):
+    """Errors for a per-session edit the readers could not find again.
+
+    `text` is the leaf after the build-time edits; the readers must find the match once in `reader_text`.
+    """
+    if SET_DELIMITERS.search(edit.replace):
+        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement cannot also change Mustache delimiters ({{{{=)"]
+    if len(occurrences(reader_text(edit.leaf, text), selected)) != 1:
+        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]
+    return []
+
+
+def session_fragments(facts, edits):
+    """`{reader key: [[original text, replacement], ...]}` for the per-session edits `patch` validated."""
+    table = {}
+    for edit in sorted((edit for edit in edits if edit.per_session), key=lambda edit: edit.id):
+        start, end = select(edit, facts[edit.leaf]["text"])
+        table.setdefault(SESSION_KEYS[edit.leaf], []).append([facts[edit.leaf]["text"][start:end], edit.replace])
+    return table
+
+
+def once(bundle, pattern, what):
+    """The only match of `pattern` in the bundle; a Kiro release that moved it refuses the build."""
+    found = list(re.finditer(pattern, bundle))
+    if len(found) != 1:
+        raise ValueError(f"expected exactly one {what} in the bundle, found {len(found)}")
+    return found[0]
+
+
+def hook_readers(bundle, orchestration_binding, table):
+    """Route the readers of the prompts through `src/session-prompts.mjs`; return the new bundle.
+
+    Agent prompts are read by Kiro's `subagentPrompt`, which the session and the
+    subagent paths both call with the session's workspace. The orchestration
+    steering is read where the conversation's blocks are assembled, with the
+    session state in hand. Variable names are minified and change per release; the
+    registered function name and the async method name do not, so they locate the sites.
+    """
+    top = bundle.index(b"\n") + 1
+    splices = [(top, top, SESSION_IMPORT)]
+    if any(key != ORCHESTRATION for key in table):
+        registered = once(bundle, rb'[\w$]+\(([\w$]+),"subagentPrompt"\)', "subagentPrompt registration")
+        header = once(bundle, rb"async function " + re.escape(registered[1]) + rb"\(([\w$]+),[\w$]+,([\w$]+)\)\{", "subagentPrompt function")
+        splices.append((header.end(), header.end(), b"%s=await __kiroFillAgent(%s,%s);" % (header[1], header[1], header[2])))
+    if ORCHESTRATION in table:
+        site = once(bundle, rb"\{text:" + re.escape(orchestration_binding) + rb',kind:"kiro"\}', "orchestration steering block")
+        method = once(bundle, rb"async createDefinitionForMode\(([\w$]+)[,)]", "createDefinitionForMode")
+        if not 0 < site.start() - method.end() < 2048:
+            raise ValueError("the orchestration steering block is not inside createDefinitionForMode")
+        code = b'{text:await __kiroFillPrompt("%s",%s,%s.workspacePaths[0]),kind:"kiro"}'
+        splices.append((site.start(), site.end(), code % (ORCHESTRATION.encode(), orchestration_binding, method[1])))
+    for start, end, code in sorted(splices, reverse=True):
+        bundle = bundle[:start] + code + bundle[end:]
+    return bundle
+
+
+def binding_name(bundle, fact):
+    """The variable a leaf's literal is assigned to, read from the bytes before it."""
+    return once(bundle[max(0, fact["start"] - 64) : fact["start"]], rb"([\w$]+)=$", "assignment of a prompt literal")[1]
 
 
 def export_leaves(facts, directory):
@@ -177,6 +283,7 @@ def main():
     parser.add_argument("--export-leaves", type=Path, help="directory for the original prompts as text")
     parser.add_argument("--prompts", type=Path, help="JSON object of consumer edits: {key: {target, match, replace}}")
     parser.add_argument("--replace", action="append", choices=TWEAKS, default=[])
+    parser.add_argument("--session-fill", type=Path, help="directory of the session fill modules, installed beside the destination when an entry needs them")
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
@@ -189,7 +296,12 @@ def main():
         facts = json.loads(args.facts.read_text(encoding="utf-8"))
         entries = json.loads(args.prompts.read_text(encoding="utf-8")) if args.prompts else {}
         custom = [Edit(f"prompts.{key}", entry["target"], entry["match"], entry["replace"]) for key, entry in sorted(entries.items())]
-        result, errors = patch(args.source.read_bytes(), facts, [edit for name in names for edit in TWEAKS[name]] + custom)
+        source = args.source.read_bytes()
+        edits = [edit for name in names for edit in TWEAKS[name]] + custom
+        result, errors = patch(source, facts, edits)
+        table = {} if errors else session_fragments(facts, edits)
+        if table and not args.check and args.session_fill is None:
+            errors.append("--session-fill is required when an entry uses {{primary}} or {{repo}}")
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
         if errors:
@@ -199,6 +311,12 @@ def main():
         if args.check:
             print("PASS: " + ", ".join(names) + " edits each select one unchanged span")
         else:
+            if table:
+                binding = binding_name(source, facts[ORCHESTRATION]) if ORCHESTRATION in table else None
+                result = hook_readers(result, binding, table)
+                for module in SESSION_MODULES:
+                    shutil.copy(args.session_fill / module, args.destination.parent / module)
+                (args.destination.parent / "prompt-fragments.json").write_text(json.dumps(table), encoding="utf-8")
             args.destination.write_bytes(result)
     except (KeyError, OSError, TypeError, ValueError) as exc:
         print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)

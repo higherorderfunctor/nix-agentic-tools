@@ -67,6 +67,17 @@ in {
         node ${./prompt-extract.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript ${server package.kas} ${../extract/prompts.mjs}
         touch "$out"
       '';
+    # The per-session fill on the pinned bundle: both readers, several checkouts.
+    kiro-session-prompts =
+      pkgs.runCommandLocal "kiro-cli-session-prompts-check" {
+        nativeBuildInputs = [pkgs.git pkgs.nodejs pkgs.python3];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        node ${./session-prompts.mjs} ${server package.kas} ${pkgs.typescript_5}/lib/node_modules/typescript \
+          ${../lib/kiro-bundle-patch.py} ${../extract/prompts.mjs} ${../src}
+        touch "$out"
+      '';
     # Real release data on BOTH native builders, never a user cache or final
     # native output dependency. The selected installed tree has no stock-tree
     # reference; the check may compare both as independent build inputs.

@@ -905,7 +905,7 @@
   # assertion: `{}` when nothing is edited (an empty `prompts` counts as
   # nothing), else `replace` (enabled `ai.kiro.cli.tweaks`, named as the
   # patcher's TWEAKS keys) and/or `prompts` (`ai.kiro.cli.prompts` entries,
-  # placeholders left for the session to fill).
+  # placeholders filled per session).
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   bundlePatchesOf = cfg:
     packaging.normalizeBundlePatches {
@@ -1431,8 +1431,12 @@ in
             entry, never the vendor text. Entries are checked against the
             original text, so one edit never sees another's replacement. An
             empty set changes nothing and keeps the stock bundle. `{{primary}}`
-            and `{{repo}}` are not resolved by the build or evaluation and stay
-            in the text as written; filling them per session is separate work.
+            and `{{repo}}` are filled per session from the session's working
+            directory, before Kiro renders the prompt: the primary checkout
+            (also from a linked worktree) and its name. A session outside one
+            ordinary repository keeps the original text for each entry that
+            uses them. Such an entry must select an agent's body, not its
+            front matter, and its `replace` must not change Mustache delimiters (`{{=`).
             Enabling any entry overrides an inherited `KIRO_KAS_SERVER_PATH`.
           '';
         };
