@@ -400,6 +400,17 @@ try {
       "prompts.x",
     ],
     [
+      "BOM-spaced delimiter change beside a placeholder",
+      {
+        x: {
+          target: orchestration,
+          match: entries[`${orchestration}-session`].match,
+          replace: "{{\uFEFF=<% %>=}}{{repo}}",
+        },
+      },
+      "prompts.x",
+    ],
+    [
       "match touching the trimmed end",
       {
         x: {

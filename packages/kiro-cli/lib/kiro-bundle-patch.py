@@ -202,8 +202,8 @@ def reader_text(leaf, text):
     return text if leaf == ORCHESTRATION else text[len(front_matter(text)) :].strip(JS_SPACE)
 
 
-# Mustache reads `{{ =<% %>=}}` as a delimiter change too, so whitespace after the braces counts.
-SET_DELIMITERS = re.compile(r"\{\{\s*=")
+# Mustache skips JavaScript whitespace after `{{`, so `{{ =<% %>=}}` changes delimiters too.
+SET_DELIMITERS = re.compile(r"\{\{[" + re.escape(JS_SPACE) + "]*=")
 
 
 def session_refusals(edit, selected, text):
