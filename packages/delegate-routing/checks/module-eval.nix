@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest setEnable;
+  inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroWrappedDrvs soleSame;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
   shipped.ai = {
     catalog.models = lib.genAttrs ["fixture-model" "proxy-opus-123" "test-flash-1" "test-glm-1" "test-native-opus-1"] (_: {
@@ -1551,7 +1552,8 @@
       enabledSkill = readSkill enabled "kiro";
       edit = result: result.config.ai.kiro.cli.prompts.allowWorktreeCreation or null;
       expectedEdit = {
-        match = "Do not create the worktree yourself.";
+        enable = true;
+        match = " Do not create the worktree yourself.";
         replace = "";
         target = "workflow.orchestration";
       };
@@ -1559,6 +1561,13 @@
       tweaksOn = result: relativePaths result && edit result == expectedEdit;
       tweaksOff = result: !relativePaths result && result.config.ai.kiro.cli.prompts == {};
       workflowChange = config: change (lib.recursiveUpdate {ai.kiro.cli.workflows.enable = true;} config);
+      skipEdit.prompts.allowWorktreeCreation.enable = false;
+      cliWrapper = result:
+        kiroWrappedDrvs (
+          if name == "hm"
+          then result.config.home.packages
+          else result.config.packages
+        );
       hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
       effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
     in
@@ -1590,6 +1599,12 @@
       && edit (workflowChange {ai.kiro.cli.tweaks.relativeFileCheckPaths = false;}) == expectedEdit
       && edit (workflowChange {ai.kiro.cli.prompts.allowWorktreeCreation.replace = "Keep the existing worktree.";})
       == expectedEdit // {replace = "Keep the existing worktree.";}
+      && soleSame
+      (cliWrapper (workflowChange {ai.kiro.cli = skipEdit;}))
+      (cliWrapper (workflowChange {ai.kiro.cli.prompts = lib.mkForce {};}))
+      && soleSame
+      (cliWrapper (workflowChange {ai.kiro.cli = skipEdit // {tweaks.relativeFileCheckPaths = false;};}))
+      (cliWrapper result)
       && !(lib.hasInfix "`run_workflow`" kiro)
       && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
       && lib.hasInfix "kiro: `run_workflow` with modelId the highest id matching `claude-opus-*`" enabledSkill

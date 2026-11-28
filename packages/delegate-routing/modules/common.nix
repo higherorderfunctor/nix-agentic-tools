@@ -110,7 +110,7 @@
     sourceEnabled runtime
     && builtins.elem "kiro" (requiredTargets runtime))
   supportedRuntimes;
-  kiroTweaksDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "tweaks"] options;
+  kiroPromptOptionsDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "tweaks"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
   agentFiles = import ../lib/agent-files.nix {inherit lib;};
@@ -465,17 +465,16 @@ in {
           techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
         });
       }
-      (lib.optionalAttrs kiroTweaksDeclared {
-        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null && config.ai.kiro.cli.workflows.enable) (
-          {tweaks.relativeFileCheckPaths = lib.mkDefault true;}
-          // lib.optionalAttrs (lib.hasAttrByPath ["ai" "kiro" "cli" "prompts"] options) {
-            prompts.allowWorktreeCreation = lib.mapAttrs (_: lib.mkDefault) {
-              match = "Do not create the worktree yourself.";
-              replace = "";
-              target = "workflow.orchestration";
-            };
-          }
-        );
+      (lib.optionalAttrs kiroPromptOptionsDeclared {
+        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null && config.ai.kiro.cli.workflows.enable) {
+          prompts.allowWorktreeCreation = lib.mapAttrs (_: lib.mkDefault) {
+            enable = true;
+            match = " Do not create the worktree yourself.";
+            replace = "";
+            target = "workflow.orchestration";
+          };
+          tweaks.relativeFileCheckPaths = lib.mkDefault true;
+        };
       })
       (lib.genAttrs reminderRuntimes (runtime:
         lib.mkIf (reminderHookEnabled runtime)

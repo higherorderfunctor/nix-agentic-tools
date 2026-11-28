@@ -1,8 +1,29 @@
-{pkgs, ...}: let
+{
+  harness,
+  pkgs,
+  ...
+}: let
   package = pkgs.ai.kiro-cli;
   replace = ["relativeFileCheckPaths"];
-  # The drift check compares the packaged bundle with the creator tweak alone.
-  tweaked = package.withBundlePatches {inherit replace;};
+  # Read the routing module's production edit, not a fixture copy.
+  routed =
+    (harness.evalHm {
+      ai.kiro.cli = {
+        enable = true;
+        inherit package;
+        workflows.enable = true;
+      };
+      ai.programs.delegate-routing = {
+        enable = true;
+        runtimes.kiro.models = [{vendors = ["anthropic"];}];
+      };
+    }).config.ai.kiro.cli;
+  routingEdit = routed.prompts.allowWorktreeCreation;
+  routedKas =
+    (package.withBundlePatches {
+      inherit replace;
+      prompts.allowWorktreeCreation = assert routingEdit.enable; removeAttrs routingEdit ["enable"];
+    }).kas;
   patched = package.withBundlePatches {
     inherit replace;
     sessionRoots = ["additionalDirectories"];
@@ -105,8 +126,8 @@ in {
         ${extractPrompts} ${server package.kas} > stock-leaves.json
         python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json --check
         python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json \
-          ${extractPrompts} ${package.kas} ${tweaked.kas}
-        python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server tweaked.kas}
+          ${extractPrompts} ${package.kas} ${routedKas}
+        python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server routedKas}
         touch "$out"
       '';
   };

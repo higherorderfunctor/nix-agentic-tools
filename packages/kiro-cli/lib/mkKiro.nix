@@ -902,15 +902,17 @@
 
   # The one manifest of KAS prompt edits, read by the package selector, the
   # managed-dispatch decision, the null-package warning and the passthru
-  # assertion: `{}` when nothing is edited (an empty `prompts` counts as
-  # nothing), else `replace` (enabled `ai.kiro.cli.tweaks`, named as the
-  # patcher's TWEAKS keys), `prompts` (`ai.kiro.cli.prompts` entries,
-  # placeholders filled per session) and/or `sessionRoots` (a nonempty
+  # assertion: `{}` when nothing is edited, else `replace` (enabled
+  # `ai.kiro.cli.tweaks`, named as the patcher's TWEAKS keys), `prompts`
+  # (enabled `ai.kiro.cli.prompts` entries with placeholders filled per
+  # session) and/or `sessionRoots` (a nonempty
   # `chat.additionalDirectories`, delivered by the session-roots patch).
   tweakNames = ["relativeFileCheckPaths"];
-  bundlePatchesOf = cfg:
+  bundlePatchesOf = cfg: let
+    activePrompts = lib.filterAttrs (_: entry: entry.enable) cfg.cli.prompts;
+  in
     packaging.normalizeBundlePatches {
-      prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) cfg.cli.prompts;
+      prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) activePrompts;
       replace = lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
       sessionRoots = lib.optional (hasAdditionalDirectories cfg) "additionalDirectories";
     };
@@ -1429,6 +1431,11 @@ in
         prompts = lib.mkOption {
           type = lib.types.attrsOf (lib.types.submodule {
             options = {
+              enable = lib.mkOption {
+                type = lib.types.bool;
+                default = true;
+                description = "Whether to apply this prompt edit. Set to false to skip a named edit supplied by another module.";
+              };
               match = lib.mkOption {
                 type = lib.types.nonEmptyStr;
                 description = "Text to find, exactly once, in the target prompt's original text.";
@@ -1455,7 +1462,8 @@ in
             two entries on one target may overlap, or the build fails naming the
             entry, never the vendor text. Entries are checked against the
             original text, so one edit never sees another's replacement. An
-            empty set changes nothing and keeps the stock bundle. `{{primary}}`
+            empty selection changes nothing and keeps the stock bundle. Set an
+            entry's `enable` to false to omit it. `{{primary}}`
             and `{{repo}}` are filled per session from the session's working
             directory, before Kiro renders the prompt: the primary checkout
             (also from a linked worktree) and its name. A session outside one
@@ -1468,14 +1476,7 @@ in
         # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
         # off, and with none enabled the managed install launches the stock
         # bundle from the pinned release, without changing its prompt bytes.
-        tweaks = let
-          tweakPatchNote = ''
-            Uses the shared build-time KAS patch selection on Home Manager and
-            devenv. Missing or duplicate selected source text fails the build.
-            Enabling any tweak overrides an inherited `KIRO_KAS_SERVER_PATH`;
-            with every tweak off, an explicit `KIRO_KAS_SERVER_PATH` is kept.
-          '';
-        in {
+        tweaks = {
           relativeFileCheckPaths = lib.mkOption {
             type = lib.types.bool;
             default = false;
@@ -1484,7 +1485,10 @@ in
               absolute stop-condition paths: the step writes the stop-condition file, and `fileCheck.path`
               checks it, at the same plain workspace-relative path, without
               templates. Absolute worktree paths can be rejected for sibling worktrees.
-              ${tweakPatchNote}
+              Uses the shared build-time KAS patch selection on Home Manager and
+              devenv. Missing or duplicate selected source text fails the build.
+              Enabling any tweak overrides an inherited `KIRO_KAS_SERVER_PATH`;
+              with no edits selected, an explicit `KIRO_KAS_SERVER_PATH` is kept.
             '';
           };
         };
@@ -1707,7 +1711,7 @@ in
         tweakNames
         ++ [
           {
-            active = cfg.cli.prompts != {};
+            active = (bundlePatchesOf cfg) ? prompts;
             explicit = explicitAt [["ai" "kiro" "cli" "prompts"]];
             name = "ai.kiro.cli.prompts";
           }

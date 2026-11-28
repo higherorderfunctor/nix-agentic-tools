@@ -1649,6 +1649,8 @@ in {
         soleSame (drv {inherit prompts;}) (drv {package = patched;})
         && soleFork (drv {inherit prompts;}) (drv {})
         && soleSame (drv {prompts = {};}) (drv {})
+        && soleSame (drv {prompts.heading.enable = false;}) (drv {})
+        && soleSame (drv {prompts = prompts // {skip.enable = false;};}) (drv {inherit prompts;})
         && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts = {};};}) (drv {})
         && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {replace = [];};}) (drv {})
         && soleSame (drv {prompts.x = entry "";}) (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts.x = entry "";};})
@@ -1666,7 +1668,7 @@ in {
           ai.kiro.cli = {
             enable = true;
             package = null;
-            prompts = {};
+            prompts.heading.enable = false;
           };
         }).config.warnings
         == [];

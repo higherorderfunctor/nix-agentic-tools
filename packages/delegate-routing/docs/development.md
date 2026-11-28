@@ -836,8 +836,10 @@ enabled. A consumer without the Kiro module is untouched.
 
 On a reached managed CLI with `cli.workflows.enable`, delegate routing defaults
 `cli.tweaks.relativeFileCheckPaths` to true and removes only the prohibition on
-the orchestrator creating the worktree. Set the tweak to false or override
-`cli.prompts.allowWorktreeCreation` independently.
+the orchestrator creating the worktree. To keep that prohibition, set
+`ai.kiro.cli.prompts.allowWorktreeCreation.enable = false`. To turn off the
+creator tweak independently, set
+`ai.kiro.cli.tweaks.relativeFileCheckPaths = false`.
 
 Kiro's `run_workflow` appears only with `cli.workflows.enable` and no explicit
 false for `cli.native.settings.chat.enableWorkflows`. Devenv's null setting

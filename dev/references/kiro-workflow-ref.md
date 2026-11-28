@@ -1538,7 +1538,9 @@ can never match and the loop silently runs to `maxIterations` (ledger §7.6).
 Delegate routing lets the orchestrator create the worktree by removing only the
 sentence forbidding it. The default is the named
 `ai.kiro.cli.prompts.allowWorktreeCreation` edit on a reached managed workflow
-CLI. It does not change the rest of the worktree or close-out guidance.
+CLI. It does not change the rest of the worktree or close-out guidance. Edits
+apply when KAS is built. Missing or duplicated selected source text fails the
+build. With nothing selected, Kiro uses the stock bundle.
 
 ### Small things that save a run
 

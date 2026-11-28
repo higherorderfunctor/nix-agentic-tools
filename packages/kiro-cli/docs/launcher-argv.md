@@ -406,13 +406,14 @@ selections against the pinned release on each platform.
 `{ target; match; replace; }` entries. `target` is one of the three promoted
 prompts (`agents.workflow.creator`, `agents.workflow.planner`,
 `workflow.orchestration`), `match` is non-empty, and an empty `replace` deletes
-the match. The lib factory, Home Manager and devenv take the same entries. An
-empty `prompts` set, or an empty selection passed straight to
-`withBundlePatches`, equals stock: the stock server stays selected, the package
-keeps its stock name and nothing warns. A refused entry names itself, and an
-entry with no managed package warns. A custom selection dispatches to its own
-server with `--set`, so an inherited server path cannot override it. Entries
-obey the tweaks' checks, including no overlap with a tweak's edit.
+the match. The lib factory, Home Manager and devenv take the same entries. Set
+an entry's `enable` to false to omit it. If no edits are selected, including
+when all entries are disabled or `withBundlePatches` receives an empty
+selection, Kiro keeps the stock server and package name without warning. A
+refused entry names itself, and an entry with no managed package warns. A custom
+selection dispatches to its own server with `--set`, so an inherited server path
+cannot override it. Entries obey the tweaks' checks, including no overlap with a
+tweak's edit.
 
 `{{primary}}` and `{{repo}}` in a `replace` are filled once per session, from
 the session's working directory, before Kiro renders the prompt. `{{primary}}`
@@ -431,6 +432,8 @@ and refuses one whose `replace` also contains a Mustache delimiter change
 The creator tweak defaults off. On a reached managed workflow CLI, delegate
 routing defaults it on and supplies the overridable `allowWorktreeCreation`
 prompt edit. That edit removes only the prohibition on creating the worktree.
+Keep the prohibition with
+`ai.kiro.cli.prompts.allowWorktreeCreation.enable = false`.
 
 Inherited overrides have deliberate precedence: all-off uses `--set-default` for
 the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
@@ -449,13 +452,14 @@ at evaluation from a derivation output.
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
 refusals. `kiro-bundle-patch` covers edit matching, intersection and digest
 refusal, literal replacement and its round trip through Node on a synthetic
-bundle. `kiro-bundle-patch-drift` checks the stock and creator-only selections,
-the real native ONNX module, WASM solving, shipped ripgrep, and ACP
-initialization. `kiro-kas-dispatch` exercises the real wrapped `kiro-cli`,
-CLI/ACP, fresh/stale homes, override precedence and a client on the binary's v2
-list, plus the raw `acp --agent-engine=v3` measurement on the stock binary. The
-FHS contract check separately inspects the command paths inside the synthesized
-root; nested bubblewrap execution is not portable inside a Nix build sandbox.
+bundle. `kiro-bundle-patch-drift` checks stock, the creator tweak alone and the
+delegate-routing edits, the real native ONNX module, WASM solving, shipped
+ripgrep, and ACP initialization. `kiro-kas-dispatch` exercises the real wrapped
+`kiro-cli`, CLI/ACP, fresh/stale homes, override precedence and a client on the
+binary's v2 list, plus the raw `acp --agent-engine=v3` measurement on the stock
+binary. The FHS contract check separately inspects the command paths inside the
+synthesized root; nested bubblewrap execution is not portable inside a Nix build
+sandbox.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 
