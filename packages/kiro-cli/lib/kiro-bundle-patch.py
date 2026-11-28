@@ -193,16 +193,22 @@ def front_matter(text):
     return text[: end + 5] if end >= 0 else ""
 
 
+# What JavaScript's `String.prototype.trim` strips; Python's `str.strip()` differs at the margins.
+JS_SPACE = "".join(map(chr, (*range(9, 14), 32, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF)))
+
+
+def reader_text(leaf, text):
+    """The text the readers search: steering as written, an agent prompt as Kiro registers it (front matter removed, trimmed)."""
+    return text if leaf == ORCHESTRATION else text[len(front_matter(text)) :].strip(JS_SPACE)
+
+
 def session_refusals(edit, selected, text):
     """Errors for a per-session edit the readers could not find again.
 
-    `text` is the leaf after the build-time edits. The readers see an agent's body
-    without its front matter, so a selection there would never apply.
+    `text` is the leaf after the build-time edits; the readers must find the match once in `reader_text`.
     """
-    if len(occurrences(text, selected)) != 1:
-        return [f"{edit.id}: another edit makes its match appear more than once in {edit.leaf}"]
-    if edit.leaf != ORCHESTRATION and text.find(selected) < len(front_matter(text)):
-        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select the body of {edit.leaf}, not its front matter"]
+    if len(occurrences(reader_text(edit.leaf, text), selected)) != 1:
+        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]
     return []
 
 

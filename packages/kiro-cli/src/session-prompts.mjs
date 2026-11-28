@@ -15,8 +15,8 @@ const fragments = JSON.parse(
 // A session without a repository root keeps the original text for every
 // fragment. Fragments are located first and spliced from the end, so a
 // replacement is never searched for the next original.
-export async function fillPrompt(key, text, cwd, table = fragments) {
-  const entries = table[key] ?? [];
+export async function fillPrompt(key, text, cwd, templated = false) {
+  const entries = fragments[key] ?? [];
   const root = cwd && entries.length ? await repoRoot(cwd) : undefined;
   if (!root) return text;
   return entries
@@ -30,22 +30,27 @@ export async function fillPrompt(key, text, cwd, table = fragments) {
     .reduce(
       (filled, { original, replacement, at }) =>
         filled.slice(0, at) +
-        fillPlaceholders(replacement, root) +
+        fillPlaceholders(replacement, root, templated) +
         filled.slice(at + original.length),
       text,
     );
 }
 
 // An agent definition whose prompt is filled for the session behind `context`
-// (Kiro's `subagentPrompt` argument, which names the session workspace).
-export async function fillAgentDefinition(
-  definition,
-  context,
-  table = fragments,
-) {
-  if (!table[definition.id]) return definition;
+// (Kiro's `subagentPrompt` argument, which names the session workspace). Kiro
+// then renders the prompt as a template only when the agent supports it.
+export async function fillAgentDefinition(definition, context) {
+  if (!fragments[definition.id]) return definition;
   const cwd = context.defaultPromptWorkspace().listWorkspaceFolders().folders[0]
     ?.uri.fsPath;
-  const prompt = await fillPrompt(definition.id, definition.prompt, cwd, table);
+  const templated = Boolean(
+    definition.supportsTemplating && context.promptContext,
+  );
+  const prompt = await fillPrompt(
+    definition.id,
+    definition.prompt,
+    cwd,
+    templated,
+  );
   return { ...definition, prompt };
 }

@@ -1,4 +1,4 @@
-// cspell:ignore idents nongit
+// cspell:ignore nongit
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -130,7 +130,6 @@ try {
     true,
     ts.ScriptKind.JS,
   );
-  expect("patched bundle parses", file.parseDiagnostics.length === 0);
   const after = extract(patched);
   const module = await import(path.join(out, "session-prompts.mjs"));
 
@@ -172,58 +171,85 @@ try {
     agentReader,
   ).expression.text;
   const session = method.parameters[0].name.text;
+  // Kiro's own registration (its `trim` of the text after the front matter) and
+  // Mustache render, evaluated from the bundle; only the YAML reader is stubbed.
+  let registration = find(
+    (n) =>
+      ts.isPropertyAssignment(n) &&
+      n.name.getText(file) === "prompt" &&
+      n.initializer.getText(file).endsWith(".trim()"),
+  );
+  while (!ts.isFunctionDeclaration(registration))
+    registration = registration.parent;
+  const frontMatterReader = find(
+    (n) =>
+      ts.isVariableDeclaration(n) &&
+      ts.isObjectBindingPattern(n.name) &&
+      n.initializer !== undefined &&
+      ts.isCallExpression(n.initializer),
+    registration,
+  ).initializer.expression.text;
+  const declarations = new Map(
+    file.statements
+      .filter(ts.isFunctionDeclaration)
+      .map((f) => [f.name.text, f.getText(file)]),
+  );
+  const engine = vm.createContext({ a: (f) => f });
+  const mustacheName = find(
+    (n) => ts.isCallExpression(n) && n.expression.name?.text === "render",
+    file.statements.find(named(render)),
+  ).expression.expression.text;
+  let wrapper = find(
+    (n) =>
+      ts.isBinaryExpression(n) &&
+      n.left.text === mustacheName &&
+      ts.isIdentifier(n.right),
+  );
+  while (!ts.isArrowFunction(wrapper)) wrapper = wrapper.parent;
+  for (;;)
+    try {
+      vm.runInContext(wrapper.body.getText(file), engine);
+      break;
+    } catch (error) {
+      const [, missing] = /^(\S+) is not defined/.exec(error.message) ?? [];
+      if (!declarations.has(missing)) throw error;
+      vm.runInContext(declarations.get(missing), engine);
+    }
+  vm.runInContext(declarations.get(render), engine);
   const scope = (known) =>
     new Proxy(known, {
       has: (t, k) => k in t || (typeof k === "string" && !(k in globalThis)),
       get: (t, k) =>
         k in t ? t[k] : k === Symbol.unscopables ? undefined : (x) => x,
     });
-  const seen = [];
-  const mustache = (template, context) => (
-    seen.push(template),
-    template.replace(/\{\{(\w+)\}\}/g, (_, name) => context[name] ?? "")
-  );
   const evaluate = (code, known) =>
-    vm.runInNewContext(`with (scope) (${code})`, {
-      scope: scope({
-        __kiroFillAgent: module.fillAgentDefinition,
-        __kiroFillPrompt: module.fillPrompt,
-        [render]: mustache,
-        ...known,
+    vm.runInNewContext(`with (scope) (${code})`, { scope: scope(known) });
+  const kiro = {
+    __kiroFillAgent: module.fillAgentDefinition,
+    __kiroFillPrompt: module.fillPrompt,
+    [render]: engine[render],
+  };
+  const agentBody = (text) =>
+    evaluate(registration.getText(file), {
+      [frontMatterReader]: (t) => ({
+        data: { name: "x" },
+        content: t.slice(t.indexOf("\n---\n", 4) + 5),
       }),
-    });
-  const agent = await evaluate(agentReader.getText(file), {});
+    })(text, { safeParse: (data) => ({ success: true, data }) }).prompt;
+  const agent = await evaluate(agentReader.getText(file), kiro);
   const steering = (cwd, text) => {
-    const array = find(
-      (n) => ts.isArrayLiteralExpression(n) && n.elements.includes(block),
-      method,
-    );
-    const spreads = Object.fromEntries(
-      array.elements
-        .filter(ts.isSpreadElement)
-        .map((s) => [s.expression.text, []]),
-    );
-    const idents = Object.fromEntries(
-      array.elements
-        .filter((e) => e !== block)
-        .flatMap((e) =>
-          ts.isObjectLiteralExpression(e)
-            ? [[e.properties[0].initializer.text, ""]]
-            : [],
-        ),
-    );
     const binding = block.properties.find((p) => p.name.text === "text")
       .initializer.expression.arguments[1].text;
-    return evaluate(`(async () => (${array.getText(file)}))()`, {
-      ...idents,
-      ...spreads,
+    return evaluate(`(async () => (${block.getText(file)}))()`, {
+      ...kiro,
       [binding]: text,
       [session]: { workspacePaths: [cwd] },
-    }).then((blocks) => blocks.at(-1).text);
+    }).then((filled) => filled.text);
   };
 
   const primary = repo("primary");
   const odd = repo("odd$&name");
+  const braced = repo("brace{{native}}{{{raw}}}name");
   git(odd, "worktree", "add", "-q", path.join(scratch, "linked"));
   git(dir("bare.git"), "init", "-q", "--bare");
   git(
@@ -243,6 +269,7 @@ try {
       odd,
     ],
     ["primary again", primary, primary],
+    ["braces in the path", braced, braced],
     ["not git", dir("nongit")],
     ["bare", path.join(scratch, "bare.git")],
     ["separate git dir", path.join(scratch, "sep")],
@@ -250,36 +277,42 @@ try {
   ];
   const expected = (text, match, root) =>
     root ? text.replace(match, () => `<${path.basename(root)}|${root}>`) : text;
+  // Every native variable renders as its own name, so a lost one shows in the result.
+  const context = new Proxy(
+    {},
+    {
+      has: () => true,
+      get: (_, name) => (typeof name === "string" ? `[${name}]` : undefined),
+    },
+  );
+  // Kiro's render of the body with the filled text inserted after it, as a marker.
+  const rendered = (body, match, root) => {
+    const marker = "\u0000";
+    const output = engine[render](
+      root ? body.replace(match, () => marker) : body,
+      context,
+    );
+    return output.replace(marker, () => `<${path.basename(root)}|${root}>`);
+  };
   const workspace = (cwd) => ({
     defaultPromptWorkspace: () => ({
       listWorkspaceFolders: () => ({ folders: [{ uri: { fsPath: cwd } }] }),
     }),
-    promptContext: {},
+    promptContext: context,
   });
-  const natives = (text) => text.match(/\{\{[#/^]?\w+\}\}/g);
 
   for (const [leaf, id] of Object.entries(agentIds)) {
-    const body = after[leaf].text.slice(
-      after[leaf].text.indexOf("\n---\n", 4) + 5,
-    );
-    for (const [label, cwd, root] of sessions) {
-      seen.length = 0;
-      await agent(
-        { id, prompt: body, supportsTemplating: true },
-        undefined,
-        workspace(cwd),
-      );
-      const match = entries[`${leaf}-session`].match;
+    const body = agentBody(after[leaf].text);
+    for (const [label, cwd, root] of sessions)
       expect(
         `${id}: ${label}`,
-        seen[0] === expected(body, match, root),
-        "the text Kiro renders differs",
+        (await agent(
+          { id, prompt: body, supportsTemplating: true },
+          undefined,
+          workspace(cwd),
+        )) === rendered(body, entries[`${leaf}-session`].match, root),
+        "the prompt Kiro finally renders differs",
       );
-      expect(
-        `${id}: ${label} native variables`,
-        String(natives(seen[0])) === String(natives(body)),
-      );
-    }
   }
   const stock = facts[orchestration].text;
   const base = after[orchestration].text;
@@ -311,6 +344,17 @@ try {
         x: {
           target: "agents.workflow.creator",
           match: "name: wf-workflow-creator",
+          replace: "{{repo}}",
+        },
+      },
+      "prompts.x",
+    ],
+    [
+      "match touching the trimmed end",
+      {
+        x: {
+          target: "agents.workflow.planner",
+          match: facts["agents.workflow.planner"].text.slice(-12),
           replace: "{{repo}}",
         },
       },

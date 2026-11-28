@@ -56,8 +56,14 @@ export async function repoRoot(cwd) {
   }
 }
 
-// One pass over authored text: inserted values are never scanned again.
-export const fillPlaceholders = (text, { primary, repo }) =>
-  text.replace(/\{\{(primary|repo)\}\}/g, (_, name) =>
-    name === "repo" ? repo : primary,
-  );
+// Mustache has no escape for `{{`, so each inserted `{` is printed by swapping
+// the delimiters around it: `{{=<% %>=}}` then the brace then `<%={{ }}=%>`.
+const literalBrace = "{{=<% %>=}}{<%={{ }}=%>";
+
+// One pass over authored text: inserted values are never scanned again. With
+// `templated`, values stay literal through Kiro's Mustache render of the text.
+export const fillPlaceholders = (text, { primary, repo }, templated = false) =>
+  text.replace(/\{\{(primary|repo)\}\}/g, (_, name) => {
+    const value = name === "repo" ? repo : primary;
+    return templated ? value.replaceAll("{", literalBrace) : value;
+  });

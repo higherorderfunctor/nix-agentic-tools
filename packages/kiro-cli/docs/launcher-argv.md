@@ -422,9 +422,10 @@ directory name. A session with no such checkout (not a git directory, a bare
 repository, a separate Git directory or a submodule) keeps the original text for
 every entry that uses a placeholder; entries without placeholders always apply.
 Nothing is remembered between sessions, and Kiro's own `{{...}}` variables in
-the prompt are left for Kiro. A `{{primary}}` or `{{repo}}` entry must select an
-agent's body, not its front matter, and must stay unique once the other entries
-are applied; the build refuses it otherwise.
+the prompt are left for Kiro, and inserted paths stay literal even when they
+contain braces. A `{{primary}}` or `{{repo}}` entry must select text that
+appears once in what Kiro reads: an agent's body without front matter and
+trimmed, after the other entries are applied. The build refuses it otherwise.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
