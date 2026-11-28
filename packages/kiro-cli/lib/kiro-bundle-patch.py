@@ -207,6 +207,8 @@ def session_refusals(edit, selected, text):
 
     `text` is the leaf after the build-time edits; the readers must find the match once in `reader_text`.
     """
+    if "{{=" in edit.replace:
+        return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement cannot also change Mustache delimiters ({{{{=)"]
     if len(occurrences(reader_text(edit.leaf, text), selected)) != 1:
         return [f"{edit.id}: a {{{{primary}}}} or {{{{repo}}}} replacement must select text that appears once in what Kiro reads of {edit.leaf} (an agent's trimmed body, after the other edits)"]
     return []

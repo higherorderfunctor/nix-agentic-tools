@@ -425,7 +425,9 @@ Nothing is remembered between sessions, and Kiro's own `{{...}}` variables in
 the prompt are left for Kiro, and inserted paths stay literal even when they
 contain braces. A `{{primary}}` or `{{repo}}` entry must select text that
 appears once in what Kiro reads: an agent's body without front matter and
-trimmed, after the other entries are applied. The build refuses it otherwise.
+trimmed, after the other entries are applied. The build refuses it otherwise,
+and refuses one whose `replace` also contains a Mustache delimiter change
+(`{{=`).
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.

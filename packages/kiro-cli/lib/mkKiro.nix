@@ -1436,7 +1436,7 @@ in
             (also from a linked worktree) and its name. A session outside one
             ordinary repository keeps the original text for each entry that
             uses them. Such an entry must select an agent's body, not its
-            front matter.
+            front matter, and its `replace` must not contain `{{=`.
             Enabling any entry overrides an inherited `KIRO_KAS_SERVER_PATH`.
           '';
         };

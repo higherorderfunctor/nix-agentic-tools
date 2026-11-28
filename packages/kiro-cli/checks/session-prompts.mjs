@@ -1,4 +1,4 @@
-// cspell:ignore nongit
+// cspell:ignore nongit untemplated
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -314,6 +314,34 @@ try {
         "the prompt Kiro finally renders differs",
       );
   }
+  // Without templating, inserted braces reach the prompt as written, unescaped.
+  const bracedBody = agentBody(after["agents.workflow.creator"].text);
+  const bracedMatch = entries["agents.workflow.creator-session"].match;
+  for (const [label, definition, context] of [
+    [
+      "supportsTemplating false",
+      { supportsTemplating: false },
+      workspace(braced),
+    ],
+    [
+      "no promptContext",
+      { supportsTemplating: true },
+      { ...workspace(braced), promptContext: undefined },
+    ],
+  ])
+    expect(
+      `untemplated braces: ${label}`,
+      (await agent(
+        { id: "wf-workflow-creator", prompt: bracedBody, ...definition },
+        undefined,
+        context,
+      )) ===
+        bracedBody.replace(
+          bracedMatch,
+          () => `<${path.basename(braced)}|${braced}>`,
+        ),
+      "inserted braces were escaped or rendered",
+    );
   const stock = facts[orchestration].text;
   const base = after[orchestration].text;
   for (const [label, cwd, root] of sessions)
@@ -345,6 +373,17 @@ try {
           target: "agents.workflow.creator",
           match: "name: wf-workflow-creator",
           replace: "{{repo}}",
+        },
+      },
+      "prompts.x",
+    ],
+    [
+      "delimiter change beside a placeholder",
+      {
+        x: {
+          target: orchestration,
+          match: entries[`${orchestration}-session`].match,
+          replace: "{{=<% %>=}}{{repo}}",
         },
       },
       "prompts.x",
