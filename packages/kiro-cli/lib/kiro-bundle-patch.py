@@ -1,89 +1,200 @@
-"""Apply named exact-byte replacements to Kiro's extracted KAS bundle.
+"""Compile named edits to Kiro's workflow prompts and splice them into the KAS bundle.
 
-Each selected source must occur exactly once; any drift refuses the entire
-build before writing output. No JavaScript parsing or steering decoding is
-needed: the sources below are the pinned bundle's literal bytes.
+Input: the bundle, the extractor's text-mode facts (`extract/prompts.mjs`, run once on
+the ORIGINAL bytes), and the selected tweak names. Output: the bundle with each
+edited prompt's literal replaced, and optionally the three original prompts as
+plain text files. `lib/kas.nix` calls it at build time.
+
+An edit selects text in ONE prompt's decoded body, so equal text in another
+prompt never satisfies it. Every edit is validated first (one non-empty match, no
+digest drift, no two edits intersecting); any failure refuses the whole build and
+names the edits, never the vendor text. An edited prompt's whole literal is then
+rewritten as a double-quoted JSON string, which JavaScript reads as the same
+value; unedited prompts and every byte outside the literals stay as they were.
 """
 
 import argparse
+from dataclasses import dataclass
+import hashlib
+import itertools
+import json
 from pathlib import Path
 import sys
 
-WORKTREE_PARAGRAPH = rb"""When a task should run in a worktree, say so in the brief and name the base: what the user\'s repo has checked out (`git -C <repo> rev-parse HEAD`, and the branch when it is on one), not a default branch you assume. The workflow\'s first step creates `.worktrees/<name>` on a branch named from the task, off that base; its last step rebases onto the base (the branch\'s current tip when there is one) and fast-forwards the user\'s checkout, branch or detached HEAD (`git -C <repo> merge --ff-only <branch>`, since git will not move a branch checked out in another worktree), and you remove the worktree and branch after the run. Do not create the worktree yourself.\n\n"""
-FILE_CHECK_PARAGRAPH = rb"""5. **Every path is absolute**, in prompts and in `fileCheck.path`: step agents run in the parent session\'s workspace, not in a worktree, and a `fileCheck.path` that never resolves spins the loop to `maxIterations`. Tell worktree steps to use `git -C <absolute worktree>`."""
-# Our authored replacement, spelled out so the text Kiro receives is readable
-# here. The stop-condition file is the exception to absolute paths: the
-# step writes it and `fileCheck.path` checks it at one workspace-relative path.
-RELATIVE_FILE_CHECK_PARAGRAPH = (
-    rb"""5. **Every path in a step prompt is absolute, except the stop-condition file.** """
-    rb"""Step agents run in the parent session\'s workspace, not in a worktree, so write every other file a step reads, writes, or commits as a literal absolute path, and tell worktree steps to use `git -C <absolute worktree>`. """
-    rb"""The file a `stopCondition` or `completion` checks is written by the step and checked by `fileCheck.path` at the same relative path: a plain path relative to the workflow workspace root (e.g. `.agents/tasks/review.json`), without templates or an absolute worktree prefix. """
-    rb"""Step agents\' cwd is that root, so the writing step and the check agree. """
-    rb"""A `fileCheck.path` that never resolves spins the loop to `maxIterations`."""
+CREATOR = "agents.workflow.creator"
+ORCHESTRATION = "workflow.orchestration"
+
+
+@dataclass(frozen=True)
+class Edit:
+    """Replace the one `match` in `leaf`, or with `until` the text from `match` through `until`.
+
+    A span edit pins the SHA-256 of the whole selected text, so vendor wording
+    changing inside two short anchors still refuses the build.
+    """
+
+    id: str
+    leaf: str
+    match: str
+    replace: str
+    until: str = ""
+    sha256: str = ""
+
+
+GATE_FILE = "/repo/.agents/tasks/fix-throttle/review.json"
+RELATIVE_GATE_FILE = ".agents/tasks/fix-throttle/review.json"
+# The creator's worked example names its gate file at each site; the tweak moves
+# all four so the example obeys the rule above it.
+GATE_SITES = {
+    "artifact-map": '"artifacts": { "review": "%s" }',
+    "exists-sentence": "If %s exists",
+    "stop-condition": '"stopCondition": { "fileCheck": { "path": "%s"',
+    "then-sentence": "then %s as",
+}
+# Our authored text; the stop-condition file is the one path that stays relative.
+RELATIVE_PARAGRAPH = (
+    "5. **Every path in a step prompt is absolute, except the stop-condition file.** "
+    "Step agents run in the parent session's workspace, not in a worktree, so write every other file a step "
+    "reads, writes, or commits as a literal absolute path, and tell worktree steps to use "
+    "`git -C <absolute worktree>`. The file a `stopCondition` or `completion` checks is written by the step "
+    "and checked by `fileCheck.path` at the same relative path: a plain path relative to the workflow "
+    "workspace root (e.g. `.agents/tasks/review.json`), without templates or an absolute worktree prefix. "
+    "Step agents' cwd is that root, so the writing step and the check agree. "
+    "A `fileCheck.path` that never resolves spins the loop to `maxIterations`."
 )
-# The creator prompt's worked example names its gate file at each of these
-# sites; the tweak rewrites all four so the example obeys the rules above it.
-GATE_FILE = b"/repo/.agents/tasks/fix-throttle/review.json"
-RELATIVE_GATE_FILE = b".agents/tasks/fix-throttle/review.json"
-EXAMPLE_GATE_FILE_SITES = (
-    rb'"stopCondition": { "fileCheck": { "path": "%s"',
-    rb"If %s exists",
-    rb"then %s as",
-    rb'"artifacts": { "review": "%s" }',
-)
-# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name. Each
-# tweak is a tuple of (source, replacement) pairs; every source must match.
-FIXED = {
-    "relativeFileCheckPaths": (
-        (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
-        (
-            rb"names the gate file\'s absolute path in its prompt",
-            rb"names the gate file\'s workspace-relative path, the one `fileCheck.path` checks, in its prompt",
+# Built-in edits keyed by their `ai.kiro.cli.tweaks` option name; each id is `<tweak>.<edit>`.
+TWEAKS = {
+    "relativeFileCheckPaths": tuple(sorted((
+        Edit(
+            "relativeFileCheckPaths.gate-sentence",
+            CREATOR,
+            "names the gate file's absolute path in its prompt",
+            "names the gate file's workspace-relative path, the one `fileCheck.path` checks, in its prompt",
         ),
-        *((site % GATE_FILE, site % RELATIVE_GATE_FILE) for site in EXAMPLE_GATE_FILE_SITES),
+        Edit(
+            "relativeFileCheckPaths.paragraph",
+            CREATOR,
+            "5. **Every path is absolute**",
+            RELATIVE_PARAGRAPH,
+            until="Tell worktree steps to use `git -C <absolute worktree>`.",
+            sha256="c4db123d14e3eeb577edcc007c45d69fcc04ecd225534abd119db4b6ce703719",
+        ),
+        *(
+            Edit(f"relativeFileCheckPaths.{name}", CREATOR, site % GATE_FILE, site % RELATIVE_GATE_FILE)
+            for name, site in GATE_SITES.items()
+        ),
+    ), key=lambda edit: edit.id)),
+    "stripVendorWorktreeSteering": (
+        Edit(
+            "stripVendorWorktreeSteering.worktree-paragraph",
+            ORCHESTRATION,
+            "When a task should run in a worktree, say so",
+            "",
+            until="Do not create the worktree yourself.\n\n",
+            sha256="79084f434d7078db84ce489c5b06756effd0fffa5014dc8ddbe45e20e64467b6",
+        ),
     ),
-    "stripVendorWorktreeSteering": ((WORKTREE_PARAGRAPH, b""),),
 }
 
+def occurrences(text, needle):
+    """Start offsets of every occurrence of a non-empty needle, overlapping ones included."""
+    found, at = [], text.find(needle) if needle else -1
+    while at >= 0:
+        found.append(at)
+        at = text.find(needle, at + 1)
+    return found
 
-def replacements(names):
-    return [(name, source, replacement) for name in names for source, replacement in FIXED[name]]
+
+def select(edit, text):
+    """Return the edit's (start, end) in the decoded text, or an error naming the edit."""
+    def miscount(what, found):
+        return f"{edit.id}: expected exactly one {what} in {edit.leaf}, found {found}"
+
+    starts = occurrences(text, edit.match)
+    if len(starts) != 1:
+        return miscount("match", len(starts))
+    start = starts[0]
+    if not edit.until:
+        return start, start + len(edit.match)
+    ends = occurrences(text, edit.until)
+    if len(ends) != 1:
+        return miscount("end anchor", len(ends))
+    end = ends[0] + len(edit.until)
+    if ends[0] < start + len(edit.match):
+        return f"{edit.id}: the end anchor does not follow the match"
+    if hashlib.sha256(text[start:end].encode()).hexdigest() != edit.sha256:
+        return f"{edit.id}: the selected text differs from its pinned digest"
+    return start, end
 
 
-def patch(data, items):
-    """Return patched bytes, or no output if any selected source drifted."""
+def patch(bundle, facts, edits):
+    """Return (patched bytes, []) or (None, errors); validation completes before any splice."""
     errors = []
-    result = data
-    for name, source, replacement in items:
-        count = data.count(source)
-        if count != 1:
-            errors.append(f"{name}: expected exact source text once, found {count}; bundle drift: {source[:80]!r}")
+    for name, fact in facts.items():
+        literal = bundle[fact["start"] : fact["end"]]
+        if literal[:1] not in (b'"', b"'", b"`") or literal[-1:] != literal[:1]:
+            errors.append(f"leaf {name}: the extracted fact does not match the bundle")
+    ids = [edit.id for edit in edits]
+    errors += [f"{name}: named by more than one edit" for name in sorted(set(ids)) if ids.count(name) > 1]
+    chosen = []
+    for edit in edits:
+        fact = facts.get(edit.leaf)
+        selection = select(edit, fact["text"]) if fact else f"{edit.id}: unknown leaf {edit.leaf}"
+        if isinstance(selection, str):
+            errors.append(selection)
         else:
-            result = result.replace(source, replacement, 1)
-    return (None if errors else result), errors
+            chosen.append((edit, *selection))
+    for (a, a_start, a_end), (b, b_start, b_end) in itertools.combinations(chosen, 2):
+        if a.leaf == b.leaf and a_start < b_end and b_start < a_end:
+            errors.append(f"{a.id} and {b.id}: selections intersect in {a.leaf}")
+    if errors:
+        return None, errors
+    texts = {}
+    for edit, start, end in sorted(chosen, key=lambda item: item[1], reverse=True):
+        text = texts.get(edit.leaf, facts[edit.leaf]["text"])
+        texts[edit.leaf] = text[:start] + edit.replace + text[end:]
+    patched = bundle
+    for name in sorted(texts, key=lambda name: facts[name]["start"], reverse=True):
+        fact = facts[name]
+        patched = patched[: fact["start"]] + json.dumps(texts[name], ensure_ascii=True).encode() + patched[fact["end"] :]
+    return patched, []
+
+
+def export_leaves(facts, directory):
+    """Write each original prompt, unescaped, to `<directory>/<leaf>.txt`."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, fact in facts.items():
+        (directory / f"{name}.txt").write_text(fact["text"], encoding="utf-8")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
+    parser.add_argument("facts", type=Path, help="text-mode output of extract/prompts.mjs for the source")
     parser.add_argument("destination", nargs="?", type=Path)
-    parser.add_argument("--check", action="store_true")
-    parser.add_argument("--replace", action="append", choices=FIXED, default=[])
+    parser.add_argument("--check", action="store_true", help="validate every built-in edit; write nothing")
+    parser.add_argument("--export-leaves", type=Path, help="directory for the original prompts as text")
+    parser.add_argument("--replace", action="append", choices=TWEAKS, default=[])
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
+    if args.check and args.export_leaves:
+        parser.error("--check writes nothing, so it cannot be combined with --export-leaves")
+    names = list(TWEAKS) if args.check else sorted(set(args.replace))
     try:
-        items = replacements(list(FIXED) if args.check else args.replace)
-        result, errors = patch(args.source.read_bytes(), items)
+        facts = json.loads(args.facts.read_text(encoding="utf-8"))
+        result, errors = patch(args.source.read_bytes(), facts, [edit for name in names for edit in TWEAKS[name]])
         for error in errors:
             print(f"FAIL: kiro-bundle-patch: {error}", file=sys.stderr)
         if errors:
             return 1
+        if args.export_leaves:
+            export_leaves(facts, args.export_leaves)
         if args.check:
-            print("PASS: " + ", ".join(dict.fromkeys(name for name, _, _ in items)) + " exact sources each occur once")
+            print("PASS: " + ", ".join(names) + " edits each select one unchanged span")
         else:
             args.destination.write_bytes(result)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"FAIL: kiro-bundle-patch: {exc}", file=sys.stderr)
         return 1
     return 0

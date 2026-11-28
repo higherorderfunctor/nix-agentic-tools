@@ -384,10 +384,23 @@ cross-release deduplication merely because two releases contain equal payloads.
 
 `passthru.withBundlePatches { replace; }` selects the existing tweaks at build
 time; `withRolloutFeatures` and `unwrapped` preserve that selection. The factory
-uses the same selector on both backends. Every selected exact source must occur
-once or the entire build fails before writing patched output. Unselected prompt
-bytes remain unchanged. The independent CI drift check requires both supported
-anchors in real vendor data on each platform even when a consumer disables them.
+uses the same selector on both backends. `lib/kas.nix` runs the extractor once
+on the original bytes, and `lib/kiro-bundle-patch.py` turns each selected tweak
+into named edits on one prompt's decoded text, ids like
+`relativeFileCheckPaths.paragraph`. Every edit must match exactly once in its
+own prompt (overlapping occurrences count), whole-paragraph edits also pin the
+digest of the selected text, and no two edits may intersect. Any failure refuses
+the whole build before output is written and names the edits, never vendor text.
+The extractor already decoded each prompt, so edits apply to that text and the
+bundle bytes of each edited prompt's literal, quotes included, are replaced by
+the new text as a double-quoted JSON string, which JavaScript reads as the same
+value. Unedited prompts and every byte outside the literals stay as they were,
+so a stock bundle is byte-identical. Every KAS output, patched or not, also
+ships the three original prompts as `share/kiro/vendorSteering/<leaf>.txt`;
+nothing reads them at evaluation. The independent CI drift check requires every
+built-in edit to match real vendor data on each platform even when a consumer
+disables it, and compares each of the four selections with expectations written
+in the check.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
@@ -410,14 +423,15 @@ cache exclusion check includes KAS. Neither the package nor its facts are read
 at evaluation from a derivation output.
 
 `kiro-kas-extraction` covers discovery/architecture/checksum and unsafe archive
-refusals. `kiro-bundle-patch` covers strict selected-anchor refusal and decoded
-synthetic JavaScript behavior. `kiro-bundle-patch-drift` checks every vendor
-selection, the real native ONNX module, WASM solving, shipped ripgrep, and ACP
-initialization. `kiro-kas-dispatch` exercises the real wrapped `kiro-cli`,
-CLI/ACP, fresh/stale homes, override precedence and a client on the binary's v2
-list, plus the raw `acp --agent-engine=v3` measurement on the stock binary. The
-FHS contract check separately inspects the command paths inside the synthesized
-root; nested bubblewrap execution is not portable inside a Nix build sandbox.
+refusals. `kiro-bundle-patch` covers edit matching, intersection and digest
+refusal, literal replacement and its round trip through Node on a synthetic
+bundle. `kiro-bundle-patch-drift` checks every vendor selection, the real native
+ONNX module, WASM solving, shipped ripgrep, and ACP initialization.
+`kiro-kas-dispatch` exercises the real wrapped `kiro-cli`, CLI/ACP, fresh/stale
+homes, override precedence and a client on the binary's v2 list, plus the raw
+`acp --agent-engine=v3` measurement on the stock binary. The FHS contract check
+separately inspects the command paths inside the synthesized root; nested
+bubblewrap execution is not portable inside a Nix build sandbox.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 

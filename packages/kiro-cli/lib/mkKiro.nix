@@ -902,7 +902,7 @@
       };
 
   # `ai.kiro.cli.tweaks` each select one fixed-text bundle replacement; the
-  # names are the patcher's FIXED keys.
+  # names are the patcher's TWEAKS keys.
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   enabledTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
 

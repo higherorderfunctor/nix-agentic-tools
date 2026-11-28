@@ -26,6 +26,7 @@
     };
   });
   server = kas: "${kas}/node_modules/@kiro/agent/dist/server/acp-server.js";
+  extractPrompts = (import ../lib/packaging.nix).kiroPromptFactsExtractScript pkgs;
 in {
   checks = {
     kiro-bundle-patch =
@@ -75,8 +76,10 @@ in {
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} --check
-        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} ${server patched.kas}
+        ${extractPrompts} ${server package.kas} > stock-leaves.json
+        python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json --check
+        python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json \
+          ${extractPrompts} ${package.kas} ${patched.kas}
         python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server patched.kas}
         touch "$out"
       '';
