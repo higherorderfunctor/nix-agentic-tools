@@ -254,14 +254,16 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/hook-triggers.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
-  # TypeScript locates the three workflow prompts in the engine bundle; emits
-  # `{ <fact key>: { end, kind, sha256, start } }`. Digests and byte spans only:
-  # the vendor text is never written to a fact (see docs/launcher-argv.md).
+  # TypeScript locates the three workflow prompts in the engine bundle: `$1` is
+  # the bundle, further arguments reach the extractor. With `--digest` it emits
+  # `{ <fact key>: { end, kind, sha256, start } }`, the only form a fact may
+  # take (the vendor text is never written to one; see docs/launcher-argv.md).
+  # Without it the output carries the text, for build-time consumers only.
   kiroPromptFactsExtractScript = pkgs:
     pkgs.writeShellScript "kiro-prompt-facts-extract" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      exec ${pkgs.nodejs}/bin/node ${../extract/prompts.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript --digest
+      exec ${pkgs.nodejs}/bin/node ${../extract/prompts.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript "''${@:2}"
     '';
 
   # embedded-kas.py's flags for a release whose CPU is `architecture`; shared
@@ -294,7 +296,7 @@ rec {
 
     "$python3" ${../extract/embedded-kas.py} "$kiroChatBin" kas ${embedded}
     hookTriggersJson=$(${kiroHookTriggersExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js")
-    promptsJson=$(${kiroPromptFactsExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js")
+    promptsJson=$(${kiroPromptFactsExtractScript pkgs} "$PWD/kas/node_modules/@kiro/agent/dist/server/acp-server.js" --digest)
     rolloutJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
     # Both settings fields come from the TUI JavaScript the chat binary
     # embeds; it has not been plaintext in the binary since 2.23.0.
