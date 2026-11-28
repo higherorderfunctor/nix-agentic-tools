@@ -58,8 +58,10 @@ requirement it breaks, evidence, whether it holds, and a proposed severity; if
 uncertain, return the open question that would settle it.
 
 The reviewer, not the writer, searches for dead code: removed names, dead
-branches, checks pinning removed behavior, stale prose and shims. It lists what
-it searched, so an empty result differs from not looking.
+branches, checks pinning removed behavior, stale prose and shims, and kept
+checks or table rows that name no regression only they catch. Each kept check it
+finds is a proposed cut with its evidence, judged like any other cut at any
+size. It lists what it searched, so an empty result differs from not looking.
 
 **Second check:** gets each issue that holds, its location and its rubric row or
 requirement, without the first check's reasoning, evidence or severity.
