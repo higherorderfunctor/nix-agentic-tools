@@ -33,6 +33,8 @@
       "exit",
       "ferment",
       "ferment-v2",
+      "fork-test-compact",
+      "fork-test-select",
       "help",
       "hooks",
       "idle-probe",
@@ -309,8 +311,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-dM3bfY+CA8ESAYgPFTzO8yYFng4ylCtQH+mP61xtD28=",
-      "kimchiVersion": "1.42.3",
+      "kimchiSourceHash": "sha256-ZDGjDZ4AHEqkPI4otGHbulDhsW0pKPg24XmD0fBM2As=",
+      "kimchiVersion": "1.42.4",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -328,8 +330,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-dM3bfY+CA8ESAYgPFTzO8yYFng4ylCtQH+mP61xtD28=",
-      "kimchiVersion": "1.42.3",
+      "kimchiSourceHash": "sha256-ZDGjDZ4AHEqkPI4otGHbulDhsW0pKPg24XmD0fBM2As=",
+      "kimchiVersion": "1.42.4",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -4011,43 +4013,43 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1332",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1336",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1346",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1350",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:617",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:620",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:657",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:660",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:708",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:711",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:758",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:761",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:802",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:805",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
