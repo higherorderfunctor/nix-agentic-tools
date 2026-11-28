@@ -9,11 +9,14 @@
   inherit (pkgs) lib;
   vu = import ./packaging.nix;
   # `patches` is the manifest `lib/mkKiro.nix` builds: `{}` when nothing is edited,
-  # else `replace` (built-in tweak names) and/or `prompts` (consumer entries). Entries
-  # that name `{{primary}}` or `{{repo}}` install the per-session fill from `../src`.
+  # else `replace` (built-in tweak names), `prompts` (consumer entries) and/or
+  # `sessionRoots` (`["additionalDirectories"]`). Entries that name `{{primary}}` or
+  # `{{repo}}` install the per-session fill from `../src`; `sessionRoots` installs
+  # the session-roots patch and its runtime module from there.
   selected = patches != {};
   prompts = patches.prompts or {};
   replace = patches.replace or [];
+  sessionRoots = patches.sessionRoots or [];
   promptsFile = pkgs.writeText "kiro-prompt-edits.json" (builtins.toJSON prompts);
 in
   pkgs.stdenvNoCC.mkDerivation {
@@ -40,6 +43,10 @@ in
         --export-leaves "$out/share/kiro/vendorSteering" \
         ${lib.optionalString (prompts != {}) "--prompts ${promptsFile} --session-fill ${../src}"} \
         ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
+      ${lib.optionalString (sessionRoots != []) ''
+        node ${../src/patch-session-roots.mjs} "$server" ${pkgs.typescript_5}/lib/node_modules/typescript
+        cp ${../src/additional-roots.mjs} "$(dirname "$server")/additional-roots.mjs"
+      ''}
       node --check "$server"
       runHook postInstall
     '';

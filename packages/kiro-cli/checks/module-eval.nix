@@ -1685,6 +1685,29 @@ in {
         absentNeedles = ["KIRO_KAS_SERVER_PATH-"];
       };
 
+    # `chat.additionalDirectories` on both backends: the listed strings reach
+    # cli.json, a nonempty list forks the wrapper (the patched bundle), unset or
+    # `[]` leaves the stock one, a Nix path is refused, and devenv's project-file
+    # guard admits the key it would refuse for a global-only setting.
+    module-kiro-additional-directories = mkTest "kiro-additional-directories" (
+      let
+        listed = ["/srv/shared" "../sibling"];
+        config = native: {ai.kiro.cli = {enable = true;} // native;};
+        withRoots = roots: config {native.settings.chat.additionalDirectories = roots;};
+        rows = evaluate: packages: let
+          drv = value: kiroWrappedDrvs (packages (evaluate value));
+        in
+          (kiroCliSettings (evaluate (withRoots listed)))."chat.additionalDirectories"
+          == listed
+          && soleFork (drv (withRoots listed)) (drv (config {}))
+          && soleSame (drv (withRoots [])) (drv (config {}))
+          && !(builtins.tryEval (builtins.deepSeq (evaluate (withRoots [./relative])).config.ai.kiro.cli.native.settings.chat.additionalDirectories true)).success;
+      in
+        rows evalHm (v: v.config.home.packages)
+        && rows evalDevenv (v: v.config.packages)
+        && builtins.all (a: a.assertion) (evalDevenv (withRoots listed)).config.assertions
+    );
+
     # The launcher carries the v3 selectors, so even a config with no other
     # wrapper reason installs it, on both backends. The Git SSH default is
     # off so that its environment export cannot be what produced the wrapper.

@@ -54,6 +54,42 @@ which kiro never matches — it compares the literal key it reads. Nothing error
 the setting simply does not exist. That held on BOTH backends, so the option was
 not a devenv-scope problem, it was unusable.
 
+### Additional directories
+
+`ai.kiro.cli.native.settings.chat.additionalDirectories` is a list of strings,
+not Nix paths. Kiro 3.6.2 has no such key, so a patched KAS bundle reads it from
+the global `cli.json` and the project one, on both backends, and adds each entry
+to the session's roots after the ones the client sends. A relative global entry
+resolves beside the global file, a project entry from the session's cwd. A root
+already in the list under another spelling is skipped, first spelling first.
+Settings are read again for each new request, so a cold load sees edits and one
+request never sees two answers. A non-array, empty or non-string entry refuses
+the session; a relative root from the client is still refused by Kiro.
+
+A configured root is membership and nothing else. Kiro's default policy allows
+`fs_read ./**` and allows no write, so writes there still prompt. Its
+`.kiro/settings/mcp.json` is not read: the MCP reader receives the cwd and the
+client's roots only (a root that is both configured and sent by the client is
+treated as configured; the derivation that adds the roots also records which are
+configured, so a later settings edit cannot reclassify them; an array the
+derivation did not make, such as a copy, withholds every root ever configured in
+the process and every root configured now). A workflow step must have its cwd
+held by its owning session and keeps only the extra roots that session holds; it
+refuses to start when its owner is absent or not loaded.
+`src/patch-session-roots.mjs` finds these sites by AST and refuses the build
+when a release moves one; `kiro-additional-roots` runs the vendor functions
+involved. A session loaded on demand (a workflow wake or a send-message to a
+cold session) keeps only its saved cwd, so a root since removed from the
+settings cannot return as a client root; the roots the settings still list are
+added afresh, and extra roots a client sent are not restored on that path. Fork
+takes its roots from the request or the live parent, never from the saved
+record, so it needs no check. Not measured: how the vendor applies the relative
+read allow under an added root. With the key unset the stock bundle runs.
+
+A project's `.kiro/settings/cli.json` may add any directory, and no guard checks
+it: entries in a repository's own settings file are trusted like the rest of
+that file, and isolating an untrusted repository is a sandbox's job.
+
 ### The boundary is extracted, not guessed
 
 `aiCommon.flattenDotKeysUntil` takes a list of dotted paths that are complete
@@ -105,8 +141,9 @@ The generic `lib/open-keys` inspector checks the flattened file as one struct
 level. Every dotted key stays one literal name, and each known value is opaque:
 `chat.modelDefaults` accepts arbitrary model names and fields without treating
 them as setting keys. The known names come from `kiroSettingKeys`, plus the
-known key `app.disableAutoupdates` and the typed `telemetry.enabled` option that
-neither extracted list names. These facts are not a complete nested schema.
+known keys `app.disableAutoupdates` and `chat.additionalDirectories` and the
+typed `telemetry.enabled` option that no extracted list names. These facts are
+not a complete nested schema.
 
 An unknown key such as `chat.defautModel` warns with a suggestion for
 `chat.defaultModel` on Home Manager and devenv. Home Manager writes it

@@ -897,21 +897,25 @@
     if patches == {} || package == null
     then package
     else if !(package ? withBundlePatches)
-    then throw "ai.kiro.cli.tweaks and ai.kiro.cli.prompts require a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
+    then throw "ai.kiro.cli.tweaks, ai.kiro.cli.prompts and chat.additionalDirectories require a package exposing passthru.withBundlePatches (use this flake's kiro-cli package)."
     else package.withBundlePatches patches;
 
   # The one manifest of KAS prompt edits, read by the package selector, the
   # managed-dispatch decision, the null-package warning and the passthru
   # assertion: `{}` when nothing is edited (an empty `prompts` counts as
   # nothing), else `replace` (enabled `ai.kiro.cli.tweaks`, named as the
-  # patcher's TWEAKS keys) and/or `prompts` (`ai.kiro.cli.prompts` entries,
-  # placeholders filled per session).
+  # patcher's TWEAKS keys), `prompts` (`ai.kiro.cli.prompts` entries,
+  # placeholders filled per session) and/or `sessionRoots` (a nonempty
+  # `chat.additionalDirectories`, delivered by the session-roots patch).
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   bundlePatchesOf = cfg:
     packaging.normalizeBundlePatches {
       prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) cfg.cli.prompts;
       replace = lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
+      sessionRoots = lib.optional (hasAdditionalDirectories cfg) "additionalDirectories";
     };
+  additionalDirectoriesKey = "chat.additionalDirectories";
+  hasAdditionalDirectories = cfg: ((flatNativeSettings cfg).${additionalDirectoriesKey} or []) != [];
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -937,9 +941,14 @@
   flattenKiroSettings = aiCommon.flattenDotKeysUntil kiroSettingKeys;
   flatNativeSettings = cfg: flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings);
 
-  # The extracted lists omit these Rust-side global settings. These are
-  # complete literal file keys; object-valued settings remain opaque below them.
-  knownNativeSettingKeys = lib.unique (kiroSettingKeys ++ ["app.disableAutoupdates" "telemetry.enabled"]);
+  # The extracted lists omit these Rust-side global settings and the key the
+  # session-roots patch reads. These are complete literal file keys;
+  # object-valued settings remain opaque below them.
+  knownNativeSettingKeys = lib.unique (kiroSettingKeys ++ ["app.disableAutoupdates" additionalDirectoriesKey "telemetry.enabled"]);
+
+  # The patch reads the project file itself, so devenv delivers this key
+  # beyond the TUI's allowlist.
+  workspaceHonoredSettings = workspaceOverridableSettings ++ [additionalDirectoriesKey];
   nativeSettingsKnown = openKeys.fromPaths {
     names = knownNativeSettingKeys;
     paths = [];
@@ -961,7 +970,7 @@
   # keys are correct, and asserting there would reject a working config.
   mkDevenvWorkspaceSettingsAssertions = cfg: let
     written = nativeSettingKeys cfg;
-    dropped = builtins.filter (k: !(builtins.elem k workspaceOverridableSettings)) written;
+    dropped = builtins.filter (k: !(builtins.elem k workspaceHonoredSettings)) written;
     listed = lib.concatStringsSep ", " dropped;
   in
     lib.optional (dropped != []) {
@@ -973,7 +982,7 @@
         silently discarded at runtime: ${listed}
 
         Workspace-overridable keys for the pinned kiro:
-        ${lib.concatStringsSep ", " workspaceOverridableSettings}
+        ${lib.concatStringsSep ", " workspaceHonoredSettings}
 
         Keys outside that list cannot be delivered at project scope. Configure
         global-only settings under home-manager (`ai.kiro.cli.native.settings`, which owns the global
@@ -1295,6 +1304,22 @@ in
                         Default chat model. Suggestions are generated from Kiro's
                         authenticated CLI model catalog in kiro-model-catalog.
                         Availability depends on your account; any string is accepted.
+                      '';
+                    };
+                    additionalDirectories = lib.mkOption {
+                      type = lib.types.nullOr (lib.types.listOf lib.types.nonEmptyStr);
+                      default = null;
+                      description = ''
+                        Directories added to every session's roots, so Kiro may read
+                        them and its tools see them as workspace roots. Strings, not
+                        Nix paths. The global and the project file both contribute;
+                        lists add to the roots the client sends. A relative global
+                        entry resolves beside `settings/cli.json` under `KIRO_HOME`
+                        (or `~/.kiro`), a project entry from the session's cwd.
+                        Membership grants no write and the root's `.kiro/settings/mcp.json`
+                        is not read. A nonempty list installs a patched KAS bundle on
+                        both backends and overrides an inherited `KIRO_KAS_SERVER_PATH`;
+                        unset, the stock bundle runs.
                       '';
                     };
                     enableC2s = lib.mkOption {
@@ -1695,6 +1720,11 @@ in
             active = cfg.cli.prompts != {};
             explicit = explicitAt [["ai" "kiro" "cli" "prompts"]];
             name = "ai.kiro.cli.prompts";
+          }
+          {
+            active = hasAdditionalDirectories cfg;
+            explicit = explicitAt [["ai" "kiro" "cli" "native" "settings" "chat" "additionalDirectories"]];
+            name = "ai.kiro.cli.native.settings.chat.additionalDirectories";
           }
         ]
         ++ [
