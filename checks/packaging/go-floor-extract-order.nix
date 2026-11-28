@@ -153,18 +153,10 @@
     checks = lib.mapAttrs' (name: p: lib.nameValuePair (drvName name) (mkCheck name p)) subjects;
 
     # ── Positive control ─────────────────────────────────────────────
-    # Without this, "every subject passed" is equally consistent with the
-    # assertion never having run. It calls `assert_chain_order` — the SAME
-    # function the real checks call — on a deliberately mis-ordered chain
-    # and requires it to FAIL. Flip the shared `-ge` to `-lt` and this goes
-    # red, which is the property a re-implemented control did not have.
-    misordered = pkgs.writeText "go-update-extract-MISORDERED" ''
-      /nix/store/0000000000000000000000000000000-fix-vendor-fixture
-      /nix/store/0000000000000000000000000000000-fix-go-floor-fixture
-    '';
-
-    # Second fixture: src AFTER the floor, which the real subjects cannot
-    # exercise (only glab carries a src fixer, and it is ordered correctly).
+    # Call the same assertion as the real subjects, with src AFTER the floor.
+    # Real subjects cannot exercise this rejection: only glab carries a src
+    # fixer, and it is ordered correctly. rust-toolchain-drift.nix exercises
+    # the shared dependency-before-version rejection.
     misorderedSrc = pkgs.writeText "go-update-extract-MISORDERED-SRC" ''
       /nix/store/0000000000000000000000000000000-fix-go-floor-fixture
       /nix/store/0000000000000000000000000000000-fix-src-fixture
@@ -176,9 +168,6 @@
       shopt -s inherit_errexit 2>/dev/null || :
 
       ${orderAssertFn}
-
-      printf '%s\n' /fixture-fix-go-floor-test /fixture-fix-vendor-test >ordered
-      assert_chain_order ordered control-ordered
 
       reject_order() {
         local file="$1" label="$2" expected="$3" diagnostic
@@ -193,9 +182,8 @@
       }
       reject_order "${misorderedSrc}" control-src-after-floor \
         'control-src-after-floor: source hash repair must precede go-floor extraction'
-      reject_order "${misordered}" control-vendor-first 'does not precede the vendor fixer'
 
-      echo "ok — the invariant rejects both a floor-after-vendor and a src-after-floor chain" > "$out"
+      echo "ok — the invariant rejects a src-after-floor chain" > "$out"
     '';
   in
     checks // {go-floor-extract-order-positive-control = positiveControl;};

@@ -6,12 +6,13 @@ exactly once; every LATE-PROPOSED item is worked too (the property waves get by
 accident and a drain must get on purpose); the run terminates with every item in
 a legal state; and no item is worked twice.
 
-TWO DELIBERATE DUPLICATIONS, because sharing the code would make the check
-vacuous:
+Two independent expectations keep the checks from accepting the queue's own
+mistakes:
 
-1. :func:`predict_items` re-derives the whole expected item forest from the
-   profile without importing ``queue_init.expand_seed`` or ``queuelib.push``.
-   A shared expander would predict exactly the tree a bug in it produced.
+1. :func:`predict_items` projects each descendant directly from its seed and
+   depth, rather than following the parent-to-child pushes the queue made.
+   Do not import ``queue_init.expand_seed`` or ``queuelib.push`` for prediction:
+   a shared expander would predict the same wrong tree it produced.
 2. :func:`closed_form_sum` uses the Gauss closed form where ``queuelib``
    iterates the range. Two formulas that agree are evidence; one formula
    agreeing with itself is not.
@@ -36,10 +37,9 @@ def closed_form_sum(a, b):
 
 
 def predict_items(profile, cap):
-    """Predict the full item forest: id -> {depth, parent, state, units, a, b}.
+    """Predict item fields by id: a, b, depth, units, and state for descendants.
 
-    Independently written. Mirrors nothing; derived from the profile's declared
-    contract only:
+    Derived from the profile's declared contract:
 
     * a seeded item is ``<id_prefix><1-based index, 2 digits>`` at depth 0;
     * a proposer with ``chain: C`` mints one child per link, each named
@@ -55,32 +55,25 @@ def predict_items(profile, cap):
             "a": start,
             "b": start + int(units) + 2,
             "depth": 0,
-            "parent": None,
-            "state": "done",
             "units": int(units),
         }
     for spec in profile.get("proposers", []):
-        parent = f"{prefix}{int(spec['seed_index']):02d}"
-        depth = 0
-        remaining = int(spec.get("chain", 1))
+        seed = f"{prefix}{int(spec['seed_index']):02d}"
+        chain = int(spec.get("chain", 1))
         units = int(spec.get("duration_units", 1))
-        while remaining > 0:
-            child = f"{parent}.c1"
-            depth += 1
-            start = predicted[parent]["b"] + 100
-            over_cap = depth > cap
-            predicted[child] = {
+        # The first over-cap child still gets a record, even when cap < 1.
+        links = min(chain, max(1, cap + 1))
+        width = units + 2
+        first_start = predicted[seed]["b"] + 100
+        for depth in range(1, links + 1):
+            start = first_start + (depth - 1) * (100 + width)
+            predicted[seed + ".c1" * depth] = {
                 "a": start,
-                "b": start + units + 2,
+                "b": start + width,
                 "depth": depth,
-                "parent": parent,
-                "state": "dead" if over_cap else "done",
+                "state": "dead" if depth > cap else "done",
                 "units": units,
             }
-            if over_cap:
-                break
-            remaining -= 1
-            parent = child
     return predicted
 
 
@@ -183,16 +176,21 @@ def main(argv=None):  # noqa: C901 - a checklist reads better flat than split
             not missing and not extra,
             f"missing={missing} extra={extra} predicted={len(predicted)}",
         )
+        # A dead in-cap child could pass the terminal-state check without
+        # having been worked. Other checks cover missing items, unfinished
+        # items, and over-cap items that were not dead-lettered.
         late = sorted(name for name, spec in predicted.items() if spec["depth"] > 0)
-        worked_late = sorted(
-            name
+        wrong_late = [
+            f"{name}: state=dead expected=done"
             for name in late
-            if name in items and items[name].get("state") == predicted[name]["state"]
-        )
+            if predicted[name]["state"] == "done"
+            and name in items
+            and items[name].get("state") == "dead"
+        ]
         check(
             "late-proposed-items-worked",
-            bool(late) and worked_late == late,
-            f"{len(worked_late)}/{len(late)} late-proposed items in the predicted state",
+            bool(late) and not wrong_late,
+            f"wrong states={wrong_late}" if late else "profile predicts no late proposals",
         )
         # The prediction covers the payload and the depth, not just the id set.
         # Without this, `queue_push` could derive every child's range wrongly and

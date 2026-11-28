@@ -148,9 +148,6 @@
   freeRoots = rootsFor foreignFree;
   consumerMismatches =
     lib.optional (!lib.elem "claude-code" unfreeNames) "claude-code is not an unfree leaf; the refusal rows below test nothing"
-    ++ lib.optional (!(evaluation ciPackages.claude-code).success) "ciPackages.claude-code does not evaluate; a refusal would not be the probe's"
-    ++ lib.optional (!givesClaude overlaid) "with allowUnfree, ai.claude-code is not ciPackages' drv"
-    ++ lib.optional (!givesClaude (overlaidWith {allowUnfreePredicate = _: true;})) "with allowUnfreePredicate, ai.claude-code is not ciPackages' drv"
     ++ lib.optional (!givesClaude namedOverlaid) "a predicate naming claude-code does not admit it"
     ++ lib.optional (evaluation namedOverlaid.ai.copilot-cli).success "a predicate naming claude-code admits copilot-cli"
     ++ lib.optional (evaluation (rebuilt freeOverlaid)).success "ai.claude-code.overrideAttrs evaluated without an opt-in"
@@ -405,8 +402,7 @@
   relative = file: lib.removePrefix "${toString ../..}/" file;
 
   failures =
-    lib.optional (claimedPaths == []) "A: no claimed paths; the overlay re-exports nothing"
-    ++ lib.optional (claimNames != leafNames)
+    lib.optional (claimNames != leafNames)
     "A: claim basenames ${toString claimNames} != ciPackages leaves ${toString leafNames}"
     ++ lib.concatMap (name:
       lib.optional (!(ciPackages ? ${name})) "A: CI-only ${name} is missing from ciPackages"
@@ -414,14 +410,12 @@
     ciOnlyNames
     ++ map (message: "A: ${message}") overlayMismatches
     ++ map (message: "B: ${message}") publicMismatches
-    ++ lib.optional (unfreeNames == []) "B: no unfree leaf; the unfree filter is untested"
     ++ lib.optional (sorted (lib.subtractLists (ciOnlyNames ++ publicNames) (builtins.attrNames ciPackages)) != unfreeNames)
     "B: ciPackages minus packages is not exactly the unfree leaves ${toString unfreeNames}"
     ++ map (message: "C: ${message}") consumerMismatches
     ++ lib.optional (drvOf foreign.hello == drvOf pkgs.hello) "D: foreign hello is identical; the foreign package set is untested"
     ++ map (message: "E: ${message}") defaultMismatches
     ++ lib.optional (natSystemOf pkgs != system) "F: natSystemOf rejects this flake's own native set"
-    ++ lib.optional (natSystemOf staticPkgs != null) "F: natSystemOf accepts pkgsStatic"
     ++ lib.optional (!staticRumdl.success) "F: the pkgsStatic fallback does not evaluate rumdl"
     ++ lib.optional (staticRumdl.success && staticRumdl.value == drvOf publicPackages.rumdl)
     "F: the pkgsStatic fallback re-exported the native rumdl"

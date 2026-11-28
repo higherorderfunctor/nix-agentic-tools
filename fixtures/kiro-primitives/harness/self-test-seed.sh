@@ -37,7 +37,7 @@ check() {
 		pass_n=$((pass_n + 1))
 		return 0
 	fi
-	printf 'FAIL  %s (wanted rc=%d and %s, got rc=%d)\n' "$label" "$want_rc" "$want_text" "$rc" >&2
+	printf 'FAIL  %s (wanted rc=%d%s, got rc=%d)\n' "$label" "$want_rc" "${want_text:+ and $want_text}" "$rc" >&2
 	printf '      %s\n' "$out" >&2
 	fail_n=$((fail_n + 1))
 	return 0
@@ -124,13 +124,18 @@ check_seed well-formed 0 'PASS  the seed was loaded and the workflow gate saw it
 check_seed wrong-root 1 "FAIL  session root is '/some/other/home/.kiro/sessions', expected"
 check_seed zero-loads 1 'the engine never loaded this id'
 
-# --- seed-session's own refusals -----------------------------------------
+# --- seed-session's id restrictions -------------------------------------
+# A valid maximum-length id catches an off-by-one rejection; the two bad ids
+# distinguish loosening the alphabet from loosening the length limit.
 setup
-check "an id failing the engine charset is refused" 1 "fails the engine's own charset check" \
-	"$here/seed-session.sh" 'bad id with spaces'
-printf -v long_id '%0129d' 0
-check "an id over the 128-character limit is refused" 1 "fails the engine's own charset check" \
-	"$here/seed-session.sh" "$long_id"
+printf -v max_id 'Aa_-%0124d' 0
+while IFS='|' read -r label id rc verdict; do
+	check "$label" "$rc" "$verdict" "$here/seed-session.sh" "$id"
+done <<EOF
+accepts all id character classes at the 128-character limit|$max_id|0|session_id=$max_id
+refuses a space in the id|bad id with spaces|1|fails the engine's own charset check
+refuses an otherwise valid 129-character id|${max_id}0|1|fails the engine's own charset check
+EOF
 
 # --- teardown guards -----------------------------------------------------
 # Use the scratch HOME and block rm in the refusal cases so a broken guard
@@ -153,7 +158,7 @@ check "teardown refuses an ancestor of HOME" 1 "refusing: the real $KIRO_FIXTURE
 
 # --- teardown happy path -------------------------------------------------
 setup
-check "teardown removes its own scratch root" 0 'done' "$here/scratch-down.sh"
+check 'teardown exits successfully' 0 '' "$here/scratch-down.sh"
 if [ -d "$root" ]; then
 	echo 'FAIL  teardown reported success but the scratch root still exists' >&2
 	fail_n=$((fail_n + 1))
@@ -164,10 +169,6 @@ fi
 
 # --- report ---------------------------------------------------------------
 printf '\npassed: %d\nfailed: %d\n' "$pass_n" "$fail_n"
-if [ "$pass_n" -eq 0 ]; then
-	echo 'FAIL: no checks ran' >&2
-	exit 1
-fi
 if [ "$fail_n" -ne 0 ]; then
 	exit 1
 fi

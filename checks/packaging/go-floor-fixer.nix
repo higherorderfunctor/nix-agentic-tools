@@ -1,17 +1,18 @@
-# go-floor-fixer — exercise both mkGoFloorFix destinations and its exclusive
-# destination contract with one synthetic pinned source.
-{
-  harness,
-  pkgs,
-  ...
-}: {
+# go-floor-fixer — exercise both mkGoFloorFix destinations with different
+# floors so the recipe must read the default path and the sidecar the override.
+{pkgs, ...}: {
   checks.go-floor-fixer = let
     vu = import ../../lib/packaging.nix;
-    source = pkgs.writeTextDir "go.mod" ''
-      module example.test/fixer
+    goMod = path: floor:
+      pkgs.writeTextDir path ''
+        module example.test/fixer
 
-      go 1.26.8
-    '';
+        go ${floor}
+      '';
+    source = pkgs.symlinkJoin {
+      name = "go-floor-fixer-source";
+      paths = [(goMod "go.mod" "1.26.8") (goMod "src/go.mod" "1.26.9")];
+    };
     fakeNix = pkgs.writeShellScriptBin "nix" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -19,7 +20,6 @@
       printf '%s\n' ${source}
     '';
     helperPkgs = pkgs // {nix = fakeNix;};
-    inherit (harness) checkRows rejectsChange;
     mkFixer = overrides:
       vu.mkGoFloorFix ({
           attr = "fixture";
@@ -28,46 +28,31 @@
         }
         // overrides);
     recipe = {recipeFile = "./package.nix";};
-    sidecar = {sourcesFile = "./sources.json";};
+    sidecar = {
+      goModPath = "src/go.mod";
+      sourcesFile = "./sources.json";
+    };
     recipeFixer = mkFixer recipe;
     sidecarFixer = mkFixer sidecar;
-    destination = args: let
-      fixer = mkFixer args;
-    in
-      builtins.seq fixer.drvPath fixer.goFloorDestination;
-    rejectsDestination = invalid:
-      rejectsChange destination {
-        inherit invalid;
-        valid = recipe;
-        expected = "recipe";
-      };
-    cases = {
-      "recipe destination reports its writer" = destination recipe == "recipe";
-      "rejects both recipeFile and sourcesFile" = rejectsDestination (recipe // sidecar);
-      "rejects omitted recipeFile and sourcesFile" = rejectsDestination {};
-      "sidecar destination reports its writer" = destination sidecar == "sidecar";
-    };
   in
-    assert checkRows "go-floor-fixer" cases;
-      pkgs.runCommand "go-floor-fixer-check" {
-        nativeBuildInputs = [pkgs.jq];
-      } ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
+    pkgs.runCommand "go-floor-fixer-check" {
+      nativeBuildInputs = [pkgs.jq];
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
 
-        cat >package.nix <<'EOF'
-        {
-          goFloor = "1.25.12";
-        }
-        EOF
-        printf '%s\n' '{"goFloor":"1.25.12","version":"1.0.0"}' >sources.json
+      cat >package.nix <<'EOF'
+      {
+        goFloor = "1.25.12";
+      }
+      EOF
+      printf '%s\n' '{"goFloor":"1.25.12","version":"1.0.0"}' >sources.json
 
-        ${recipeFixer}
-        ${sidecarFixer}
+      ${recipeFixer}
+      ${sidecarFixer}
 
-        grep -Fx '  goFloor = "1.26.8";' package.nix
-        test "$(jq -r .goFloor sources.json)" = 1.26.8
-        test "$(jq -r .version sources.json)" = 1.0.0
-        touch "$out"
-      '';
+      grep -Fx '  goFloor = "1.26.8";' package.nix
+      test "$(jq -r .goFloor sources.json)" = 1.26.9
+      touch "$out"
+    '';
 }

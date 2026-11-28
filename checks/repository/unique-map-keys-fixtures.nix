@@ -25,42 +25,44 @@
       # An indented --- inside a block scalar is content, not a closing fence;
       # the duplicate after it must still be found.
       frontmatter-block-scalar.expected = "frontmatter-block-scalar.md: duplicate key /nested/a (line 7)";
-      frontmatter-duplicate.expected = "frontmatter-duplicate.md: duplicate key /nested/a (line 4)";
-      json-array-duplicate.expected = "json-array-duplicate.json: duplicate key /0/a";
-      json-duplicate.expected = "json-duplicate.json: duplicate key /nested/a";
+      # Do not stop scanning a document after the first finding.
       json-multiple-findings.expected = "json-multiple-findings.json: duplicate key /first/a\njson-multiple-findings.json: duplicate key /second/b";
+      # A malformed value must produce a parse diagnostic, not a duplicate diagnostic.
       json-parse-error.expected = "json-parse-error.json: parse error: Expecting value: line 1 column 6 (char 5)";
+      # Literal slashes and tildes in a key must not change the pointer's meaning.
       json-pointer-escape.expected = "json-pointer-escape.json: duplicate key /nested/a~1b~0c";
-      json-sibling-mappings.expected = "";
+      # JSON5 unquoted keys must reach the duplicate scan rather than the JSON parser.
       json5-duplicate.expected = "json5-duplicate.json5: duplicate key /nested/a";
+      # JSONC comments and trailing commas must not prevent duplicate detection.
       jsonc-duplicate.expected = "jsonc-duplicate.jsonc: duplicate key /nested/a";
+      # A duplicate in the second record must keep its physical line number.
       jsonl-duplicate.expected = "jsonl-duplicate.jsonl: duplicate key /0/a (line 2)";
+      # JSON and TOML lock files share an extension but need different parsers.
       lock-json.expected = "lock-json.lock: duplicate key /nested/a";
       lock-toml.expected = "lock-toml.lock: Cannot overwrite a value (at line 3, column 6)";
-      markdown-no-frontmatter.expected = "";
+      # An opening thematic break without a closing fence is not frontmatter.
       markdown-thematic-break.expected = "";
       nix-batch = {
+        # The fallback must find both errors after a clean file, not stop at the duplicate.
         files = ["nix-batch-clean" "nix-batch-duplicate" "nix-batch-syntax"];
         # Nix's own first two diagnostic lines, path rewritten to the given filename.
         expected = "error: attribute 'a' already defined at nix-batch-duplicate.nix:1:3\n       at nix-batch-duplicate.nix:1:10:\nerror: syntax error, unexpected end of file, expecting '.' or '='\n       at nix-batch-syntax.nix:2:1:";
       };
-      # Exercise the successful parser path without the batch fallback above.
-      nix-batch-clean.expected = "";
-      toml-array-tables.expected = "";
-      toml-direct.expected = "toml-direct.toml: Cannot overwrite a value (at line 2, column 6)";
-      toml-dotted.expected = "toml-dotted.toml: Cannot overwrite a value (at line 2, column 8)";
+      # Redeclaring a table fails even when no value is overwritten.
       toml-table.expected = "toml-table.toml: Cannot declare ('table',) twice (at line 3, column 7)";
+      # Reusing an anchor must not report the same source duplicate at each alias.
       yaml-alias-duplicate.expected = "yaml-alias-duplicate.yaml: duplicate key /base/a (line 1)";
+      # An explicit key may override a key from an anchor without duplicating it.
       yaml-merge.expected = "";
       # A key shared by separate merge sources is not a duplicate in the recipient.
       yaml-merge-sequence.expected = "";
+      # Reading just the first YAML document would miss the second one's repeat.
       yaml-multi-document.expected = "yaml-multi-document.yaml: duplicate key /nested/a (line 5)";
+      # Spelling a key with quotes must not change its identity, and all repeats count.
       yaml-quoted-key.expected = "yaml-quoted-key.yaml: duplicate key /nested/a (line 3)\nyaml-quoted-key.yaml: duplicate key /nested/a (line 4)";
-      yaml-sibling-mappings.expected = "";
     };
 
-    # The clean Nix input serves in two rows but needs to be staged only once.
-    fixtureTargets = lib.unique (lib.concatLists (lib.mapAttrsToList targetsFor cases));
+    fixtureTargets = lib.concatLists (lib.mapAttrsToList targetsFor cases);
     copyFixture = target: ''
       cp --no-preserve=mode,ownership "${fixtures}/${target}.fixture" "$TMPDIR/${target}"
     '';

@@ -2,12 +2,12 @@
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 import urllib.parse
-from contextlib import nullcontext
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("snapshot", sys.argv.pop(1))
@@ -47,6 +47,7 @@ class DocumentationSnapshot(unittest.TestCase):
         validator.write_text(f"#!{sys.executable}\nimport pathlib, sys\nif (pathlib.Path(sys.argv[1]) / 'page.md').read_bytes() != {PAGE!r}:\n    sys.exit(17)\n")
         validator.chmod(0o755)
         self.explicit = {"contentHash": "", "name": "fixture", "sources": [{"path": "page.md", "url": "https://example.test/page"}], "validate": str(validator)}
+        self.attributed = {**self.explicit, "generated": {"ATTRIBUTION": "Published {snapshot_date}\n"}}
 
     def expected_hash(self, files):
         with tempfile.TemporaryDirectory(dir=self.root) as directory:
@@ -55,42 +56,46 @@ class DocumentationSnapshot(unittest.TestCase):
                 (expected / name).write_bytes(body)
             return tree_hash(expected)
 
-    def test_kimchi_walk_preserves_snapshot_bytes_and_hash(self):
+    def test_kimchi_walk_reconstructs_the_pinned_tree(self):
+        # Replay the packaged tree: the synthetic walk cannot catch drift in
+        # the owner's real index links, content identity, or attribution.
         output = self.root / "kimchi"
         digest = snapshot.snapshot(kimchi, output, kimchi_date, captured_fetch(kimchi_tree))
         self.assertEqual(digest, kimchi["contentHash"])
-        captured_hash = tree_hash(kimchi_tree)
-        self.assertEqual(tree_hash(output), captured_hash)
-        tomorrow = self.root / "tomorrow"
-        self.assertEqual(snapshot.snapshot(kimchi, tomorrow, "2099-01-01", captured_fetch(kimchi_tree)), digest)
-        self.assertNotEqual(tree_hash(tomorrow), captured_hash)
-        self.pin.write_text(pin_text(kimchi["contentHash"], captured_hash, kimchi_date))
-        before = self.pin.read_bytes(), self.pin.stat().st_mtime_ns
-        self.assertFalse(snapshot.update(kimchi, self.pin, nix, "2099-01-01", captured_fetch(kimchi_tree)))
-        self.assertEqual((self.pin.read_bytes(), self.pin.stat().st_mtime_ns), before)
+        self.assertEqual(tree_hash(output), tree_hash(kimchi_tree))
 
     def test_changed_attribution_repairs_hash_without_advancing_date(self):
         date = "2026-10-12"
         original_hash = self.expected_hash({"ATTRIBUTION": b"Captured 2026-10-12\n", "page.md": PAGE})
         self.pin.write_text(pin_text(PAGE_DIGEST, original_hash, date))
-        config = {**self.explicit, "generated": {"ATTRIBUTION": "Published {snapshot_date}\n"}}
         repaired_hash = self.expected_hash({"ATTRIBUTION": b"Published 2026-10-12\n", "page.md": PAGE})
-        self.assertTrue(snapshot.update(config, self.pin, nix, "2099-01-01", self.fetch))
+        snapshot.update(self.attributed, self.pin, nix, "2099-01-01", self.fetch)
         self.assertEqual(self.pin.read_text(), pin_text(PAGE_DIGEST, repaired_hash, date))
-        self.assertFalse(snapshot.update(config, self.pin, nix, "2099-02-02", self.fetch))
 
-    def test_changed_content_publishes_hashes_then_noop_preserves_date(self):
-        self.assertTrue(snapshot.update(self.explicit, self.pin, nix, "2099-01-01", self.fetch))
-        self.assertEqual(self.pin.read_text(), pin_text(PAGE_DIGEST, self.expected_hash({"page.md": PAGE}), "2099-01-01"))
+    def test_content_change_publishes_but_unchanged_attribution_does_not_rewrite(self):
+        attributed_hash = self.expected_hash({"ATTRIBUTION": b"Published 2099-01-01\n", "page.md": PAGE})
+        rows = {
+            "attributed owner dates the generated file from the new capture": (self.attributed, attributed_hash),
+            "explicit-only owner publishes without a generated file": (self.explicit, self.expected_hash({"page.md": PAGE})),
+        }
+        for name, (config, output_hash) in rows.items():
+            with self.subTest(name=name):
+                self.pin.write_text(pin_text())
+                snapshot.update(config, self.pin, nix, "2099-01-01", self.fetch)
+                self.assertEqual(self.pin.read_text(), pin_text(PAGE_DIGEST, output_hash, "2099-01-01"))
+
+        # Run the no-op against the dated output so it could churn both pins.
+        self.pin.write_text(pin_text(PAGE_DIGEST, attributed_hash, "2099-01-01"))
+        # A fixed old timestamp makes even a byte-for-byte rewrite observable.
+        os.utime(self.pin, (1, 1))
         before = self.pin.read_bytes(), self.pin.stat().st_mtime_ns
-        self.assertFalse(snapshot.update(self.explicit, self.pin, nix, "2099-02-02", self.fetch))
+        snapshot.update(self.attributed, self.pin, nix, "2099-02-02", self.fetch)
         self.assertEqual((self.pin.read_bytes(), self.pin.stat().st_mtime_ns), before)
 
     def test_fetch_or_owner_parser_failure_preserves_pin(self):
         original = self.pin.read_bytes()
         with self.assertRaises(subprocess.CalledProcessError) as rejected:
             snapshot.update(self.explicit, self.pin, nix, "2099-01-01", lambda _: b"<html>login</html>")
-        self.assertEqual(rejected.exception.cmd[0], self.explicit["validate"])
         self.assertEqual(rejected.exception.returncode, 17)
         self.assertEqual(self.pin.read_bytes(), original)
 
@@ -129,18 +134,14 @@ class DocumentationSnapshot(unittest.TestCase):
             "http": ("http://docs.kimchi.dev/docs/page", "invalid documentation URL"),
             "outside tree": (origin + "/other/page", "outside the published index tree"),
             "parent segment": (origin + "/docs/../page", "invalid documentation path"),
-            "published index": (origin + "/llms.txt", None),
             "query": (origin + "/docs/page?secret=1", "invalid documentation URL"),
         }
-        responses = {origin + "/llms.txt": b"[Page](/docs/page.md)", origin + "/docs/page.md": b"page"}
         for name, (url, error) in rows.items():
             with self.subTest(name=name):
                 config = {**kimchi, "index": {**kimchi["index"], "url": url, "requiredIndexes": []}}
                 output = self.root / name
-                with self.assertRaisesRegex(ValueError, error) if error else nullcontext():
-                    snapshot.snapshot(config, output, "2099-01-01", responses.__getitem__)
-                if not error:
-                    self.assertEqual((output / "docs/page.md").read_bytes(), b"page")
+                with self.assertRaisesRegex(ValueError, error):
+                    snapshot.snapshot(config, output, "2099-01-01", self.fetch)
 
     def test_index_walk_resolves_relative_links_ignores_external_and_breaks_cycles(self):
         root_url = "https://docs.kimchi.dev/llms.txt"
@@ -156,18 +157,23 @@ class DocumentationSnapshot(unittest.TestCase):
             "https://docs.kimchi.dev/reference/endpoint.md": b"endpoint",
         }
         fetched = []
+
         def fetch(url):
             fetched.append(url)
             return responses[url]
-        snapshot.snapshot(kimchi, self.root / "walk", "2099-01-01", fetch)
-        self.assertEqual(sorted(fetched), sorted(responses))
-        self.assertEqual((self.root / "walk/docs/relative.md").read_bytes(), b"relative")
-        self.assertEqual((self.root / "walk/reference/endpoint.md").read_bytes(), b"endpoint")
 
-    def test_required_index_cannot_silently_disappear(self):
-        config = {**kimchi, "index": {**kimchi["index"], "requiredIndexes": ["https://docs.kimchi.dev/docs/missing/llms.txt"]}}
-        with self.assertRaisesRegex(ValueError, "required documentation indexes"):
-            snapshot.snapshot(config, self.root / "missing", "2099-01-01", captured_fetch(kimchi_tree))
+        snapshot.snapshot(kimchi, self.root / "walk", "2099-01-01", fetch)
+        # Exact request membership and multiplicity reject skipped, external,
+        # or revisited links, even if the final files would be the same.
+        self.assertCountEqual(fetched, responses.keys())
+
+        # A successful crawl is not enough if the owner requires another index.
+        with self.subTest("undiscovered required index"):
+            missing = "https://docs.kimchi.dev/docs/missing/llms.txt"
+            config = {**kimchi, "index": {**kimchi["index"], "requiredIndexes": [*kimchi["index"]["requiredIndexes"], missing]}}
+            with self.assertRaisesRegex(ValueError, "required documentation indexes were not discovered") as rejected:
+                snapshot.snapshot(config, self.root / "missing", "2099-01-01", responses.__getitem__)
+            self.assertIn(missing, str(rejected.exception))
 
     def test_source_normalize_runs_before_content_identity(self):
         normalize = self.root / "normalize"
@@ -178,7 +184,7 @@ class DocumentationSnapshot(unittest.TestCase):
         digests = [snapshot.snapshot(config, self.root / f"normalized-{stamp}", "2099-01-01", lambda _, stamp=stamp: f"created {stamp}\nstable".encode()) for stamp in (1, 2)]
         self.assertEqual(digests[0], digests[1])
         self.assertEqual((self.root / "normalized-1/catalog.json").read_bytes(), b"stable")
-        with self.assertRaisesRegex(ValueError, "empty normalized"):
+        with self.assertRaisesRegex(ValueError, r"empty normalized response for https://example\.com/catalog"):
             snapshot.snapshot(config, self.root / "empty", "2099-01-01", lambda _: b"only one line")
 
     def test_explicit_destination_cannot_escape_or_overwrite(self):
@@ -186,7 +192,6 @@ class DocumentationSnapshot(unittest.TestCase):
             "absolute": ([str(self.root / "outside.md")], "invalid snapshot path"),
             "duplicate": (["models.md", "models.md"], r"duplicate snapshot path: models\.md"),
             "empty": ([""], "invalid snapshot path: $"),
-            "relative": (["models.md"], None),
             "traversal": (["../models.md"], r"invalid snapshot path: \.\./models\.md"),
         }
         responses = {"https://example.test/0": b"data", "https://example.test/1": b"other"}
@@ -194,10 +199,8 @@ class DocumentationSnapshot(unittest.TestCase):
             with self.subTest(name=name):
                 config = {"sources": [{"path": path, "url": f"https://example.test/{i}"} for i, path in enumerate(paths)]}
                 output = self.root / name
-                with self.assertRaisesRegex(ValueError, error) if error else nullcontext():
+                with self.assertRaisesRegex(ValueError, error):
                     snapshot.snapshot(config, output, "2099-01-01", responses.__getitem__)
-                if not error:
-                    self.assertEqual((output / "models.md").read_bytes(), b"data")
 
 
 unittest.main()

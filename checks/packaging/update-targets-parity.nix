@@ -28,6 +28,7 @@
 # Runs the SAME resolver (dev/scripts/resolve-recipe-file.sh) the pipeline
 # uses, against the SAME owner package trees.
 {
+  harness,
   inputs,
   lib,
   pkgs,
@@ -110,9 +111,12 @@
         packageCoverage
       )
     );
-    uncoveredFile = pkgs.writeText "update-target-uncovered-packages.txt" (
-      lib.concatStringsSep "\n" (builtins.attrNames uncoveredPackages)
-    );
+    uncoveredFile = assert harness.checkRows "update-targets-parity coverage" {
+      "dropping the context7-mcp row leaves its package uncovered" = positiveControlPass;
+    };
+      pkgs.writeText "update-target-uncovered-packages.txt" (
+        lib.concatStringsSep "\n" (builtins.attrNames uncoveredPackages)
+      );
 
     # Only entries that carry a `git` URL go through rev-bump resolution
     # (main-tracking packages); binary packages have `git = null`.
@@ -172,11 +176,6 @@
       # shellcheck source=dev/scripts/resolve-recipe-file.sh
       source dev/scripts/resolve-recipe-file.sh
 
-      if [ "${lib.boolToString positiveControlPass}" != true ]; then
-        echo "ERROR: removing the context7-mcp row did not make its package uncovered" >&2
-        exit 1
-      fi
-
       if [ -n "${toString missingGoFloorWriters}" ]; then
         echo "ERROR: update targets with passthru.goFloor but no passthru.fixGoFloor: ${toString missingGoFloorWriters}" >&2
         echo "Give each package a packageLib.mkGoFloorFix writer." >&2
@@ -198,13 +197,9 @@
         exit 1
       fi
 
-      # An empty set means every main-tracking target lost its `git` URL — the
-      # dissolved registry is expected to carry ~18 of them. Fail loudly rather
-      # than pass by absence.
-      if [ ! -s ${tableFile} ]; then
-        echo "ERROR: no config.update.targets entry carries a git URL. The" >&2
-        echo "dissolved registry expects ~18 main-tracking targets — did the" >&2
-        echo "update-target wiring get dropped?" >&2
+      # Pin a real rev-bump row, not just a nonempty resolver input table.
+      if ! grep -q '^github-mcp'$'\t' ${tableFile}; then
+        echo "ERROR: expected main-tracking github-mcp in the recipe resolver table" >&2
         exit 1
       fi
 

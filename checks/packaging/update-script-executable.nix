@@ -57,7 +57,9 @@
     # output DIRECTORY rather than a script FILE). run_check below must
     # reject only that row, with the same remedy message a real regression
     # would get.
-    controlName = builtins.head (builtins.attrNames presentTargets);
+    # gh is a real release-script target on all supported systems. A table
+    # that dropped it could pass while skipping the executable check.
+    controlName = "gh";
     brokenTable = mkTable {
       ${controlName}.updateScript = pkgs.writeShellApplication {
         name = "update-script-executable-positive-control";
@@ -120,8 +122,8 @@
         exit 1
       fi
 
-      if [ ! -s "$tablePath" ]; then
-        echo "ERROR: no --use-update-script target resolved to an update script" >&2
+      if ! grep -q -- "^$controlName"$'\t' "$tablePath"; then
+        echo "ERROR: expected --use-update-script target $controlName in the real table" >&2
         exit 1
       fi
 

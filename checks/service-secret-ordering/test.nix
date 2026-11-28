@@ -113,8 +113,8 @@
   };
 
   # A throwaway age identity and every set in fixtures/values.json encrypted to
-  # it, made at build time; the sets under `foreign` go to a second identity
-  # that is never kept, so nothing can decrypt them.
+  # it, made at build time. Each `foreign` entry reuses a plaintext set but
+  # encrypts it to a second identity that is never kept, so nothing can decrypt it.
   sopsFiles = pkgs.runCommand "service-secret-ordering-secrets" {nativeBuildInputs = [pkgs.age pkgs.sops];} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -123,14 +123,14 @@
     age-keygen -o foreign.txt 2>/dev/null
     ${lib.concatLines (lib.mapAttrsToList (name: values: let
         key =
-          if builtins.elem name fixtures.foreign
+          if builtins.hasAttr name fixtures.foreign
           then "foreign.txt"
           else ''"$out/identity.txt"'';
       in ''
         printf '%s' ${lib.escapeShellArg (builtins.toJSON values)} >${name}.json
         sops encrypt --age "$(age-keygen -y ${key})" --input-type json --output-type yaml ${name}.json >"$out/${name}.yaml"
       '')
-      fixtures.secrets)}
+      (fixtures.secrets // lib.mapAttrs (_: source: fixtures.secrets.${source}) fixtures.foreign))}
   '';
   identity = "${sopsFiles}/identity.txt";
   cases = pkgs.writeText "service-secret-ordering.json" (builtins.toJSON {

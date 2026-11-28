@@ -1,4 +1,8 @@
-# Positive-control package B deliberately claims package A's keys.
-{fixtureClaims, ...}: {
-  config.ai = fixtureClaims "shared" "package-b";
+# The same package file claims either an unrelated key or package A's key.
+{
+  fixtureClaims,
+  fixturePackageBKey,
+  ...
+}: {
+  config.ai = fixtureClaims fixturePackageBKey "package-b";
 }

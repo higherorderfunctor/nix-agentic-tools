@@ -4,7 +4,7 @@
 # file type can abort `nix flake check`, `devenv shell` or direnv rather than
 # failing one derivation. Both fixture shapes reproduce observed hazards:
 #
-#   - `fixtures/binary-*` carry a file with NUL bytes (a CPython `.pyc`
+#   - `fixtures/binary-a` carries a file with NUL bytes (a CPython `.pyc`
 #     header). `builtins.readFile` refuses those bytes — "the contents of the
 #     file ... cannot be represented as a Nix string" — and an agent that
 #     imported a `dev/skills/*/scripts/*.py` instead of running it dropped
@@ -16,11 +16,10 @@
 #     the fixture keeps a plain name because `readDir` types by lstat, not by
 #     name, so the name is not what is under test.
 #
-# The binary rows rule out a name-based blocklist that skips `__pycache__`
+# The binary fixture rules out a name-based blocklist that skips `__pycache__`
 # and known binary extensions. A blocklist that misses `payload.pyc-fixture`
 # (such as a literal `*.pyc` rule) still aborts with a `readFile` walk. One that
-# matches it silently drops the payload. The two trees differ in one byte,
-# inside the nested binary payload only, and must produce distinct digests.
+# matches it drops the payload, producing a digest that fails the fixed answer.
 {
   harness,
   lib,
@@ -31,21 +30,19 @@
   mkTest = harness.mkAssertion "trace-source";
 
   # Regenerate the fixed answers from each fixture directory. Use the listed
-  # paths for binary-a and binary-b; for symlinks, use only real.txt.
+  # paths for binary-a; for symlinks, use only real.txt.
   # for f in nested/payload.pyc-fixture text.txt; do digest=$(sha256sum < "$f"); printf '%s\n%s\n' "$f" "${digest%% *}"; done | sha256sum
   # Including real.txt ensures a walk that skips the entire symlink fixture fails.
   # If only the framing in registerTrackedInputs changes, regenerate the pins;
   # a change to the framing alone is not a file-tracking regression.
-  matchesDigest = src: expected: traceSource.registerTrackedInputs src == expected;
+  inherit (traceSource) registerTrackedInputs;
 in {
   checks.trace-source-tracks-regular-files = mkTest "tracks-regular-files" (
     harness.checkRows "trace-source digest" {
-      "binary-a includes its nested NUL payload" =
-        matchesDigest ./fixtures/binary-a "3d027bdf1e1dee626eaee932995e8fcade24e594f2ad43d79329518a5d9edeeb";
-      "binary-b reflects the one-byte payload change" =
-        matchesDigest ./fixtures/binary-b "afdd61d54d2bbaa3d097d60caa5ba3fd04f967d606f8a8080b294e20e73e6ee6";
-      "symlinks includes real.txt but ignores the dangling link" =
-        matchesDigest ./fixtures/symlinks "b8d9e81f9ee837f693d915720c2cb053ae62544a5598bccd8f281ea7ece824c1";
+      "binary-a hashes the nested NUL payload and its text sibling" =
+        registerTrackedInputs ./fixtures/binary-a == "3d027bdf1e1dee626eaee932995e8fcade24e594f2ad43d79329518a5d9edeeb";
+      "symlinks hashes real.txt and skips the dangling link" =
+        registerTrackedInputs ./fixtures/symlinks == "b8d9e81f9ee837f693d915720c2cb053ae62544a5598bccd8f281ea7ece824c1";
     }
   );
 

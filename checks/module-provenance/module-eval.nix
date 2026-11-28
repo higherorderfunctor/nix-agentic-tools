@@ -6,7 +6,8 @@
   harness,
   ...
 }: let
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) forwardingHelper normalizedPoolNames packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations;
+  provenance = import ./helpers.nix;
+  inherit (provenance {inherit lib harness;}) forwardingHelper normalizedPoolNames packagePoolCollisions packagePoolProbeConfigs packagePoolsClean rootPoolClean rootPoolProbeConfig rootPoolSrcRoot rootPoolViolations;
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
   inherit (harness) aiStubs checkRows evalDevenv evalHm harnessNames hmLib mkTest rejectsChange;
   poolOption = lib.mkOption {
@@ -68,24 +69,64 @@ in {
           claims = lib.genAttrs poolNames (_: {${key} = value;});
         in
           claims // {claude = claims;};
-        probe = modules:
+        probeWithKey = fixturePackageBKey: modules:
           lib.evalModules {
-            specialArgs = {inherit fixtureClaims;};
+            specialArgs = {inherit fixtureClaims fixturePackageBKey;};
             modules = [{options.ai = pools // {claude = pools;};}] ++ modules;
           };
+        probe = probeWithKey "shared";
         claim = ownerFile: ai: {
           _file = "${rootPoolSrcRoot}/packages/${ownerFile}.nix";
           config = {inherit ai;};
         };
-        packageA = claim "pool-a/default" {skills = lib.mkDefault {shared = "package-a";};};
-        packageB = claim "pool-b/default" {skills.shared = "package-b";};
         fixtureA = ./fixtures/pool-package-a.nix;
         fixtureB = ./fixtures/pool-package-b.nix;
-        distinct = probe [fixtureA ./fixtures/pool-package-distinct.nix];
-        overlapping = probe [fixtureA fixtureB];
-        combined = probe [packageA packageB];
+        consumer = probe [
+          fixtureA
+          {
+            ai.skills = {
+              inline = "consumer";
+              shared = "package-a";
+            };
+          }
+        ];
+        fixtures = [fixtureA fixtureB];
+        distinct = probeWithKey "distinct" fixtures;
+        overlapping = probe fixtures;
         isolate = map (module: probe [module]);
-        isolated = isolate [packageA packageB];
+
+        # Give the real probe builder two owner switches. In the combined
+        # evaluation B's ordinary definition hides A's whole-option default;
+        # only evaluating the switches separately can recover A's provenance.
+        packageA = claim "pool-a/default" {skills = lib.mkDefault {shared = "package-a";};};
+        packageB = claim "pool-b/default" {skills.shared = "package-b";};
+        priorityHarness =
+          harness
+          // {
+            harnessNames = ["claude"];
+            testing.moduleProbes = [{probe.a = true;} {probe.b = true;}];
+          };
+        priorityProbes = provenance {
+          inherit lib;
+          harness = priorityHarness;
+        };
+        evalPriority = config:
+          probe [
+            config
+            ({config, ...}: {
+              options = {
+                ai.claude.enable = lib.mkEnableOption "the probe runtime";
+                probe.a = lib.mkEnableOption "package A's claim";
+                probe.b = lib.mkEnableOption "package B's claim";
+              };
+              imports = [
+                (packageA // {config = lib.mkIf config.probe.a packageA.config;})
+                (packageB // {config = lib.mkIf config.probe.b packageB.config;})
+              ];
+            })
+          ];
+        combined = evalPriority priorityProbes.rootPoolProbeConfig;
+        priorityEvaluations = map evalPriority priorityProbes.packagePoolProbeConfigs;
         fixtureOwners = [(toString fixtureA) (toString fixtureB)];
         # Names and attribution are the contract, not definition order.
         collisionsByKey = evaluated:
@@ -97,13 +138,13 @@ in {
           }) (packagePoolCollisions evaluated));
       in
         checkRows "package pool ownership" {
-          "different keys in the same pools are allowed" =
-            distinct.config.ai.skills
+          "consumer inline keys do not become a second package owner" =
+            consumer.config.ai.skills
             == {
-              distinct = "package-distinct";
+              inline = "consumer";
               shared = "package-a";
             }
-            && packagePoolCollisions distinct == [];
+            && packagePoolsClean "inline consumer" consumer;
           "files under one package count as one owner" = let
             probes = isolate [
               (claim "pool-owner/a" {skills.shared = "same-package";})
@@ -113,13 +154,10 @@ in {
             map (evaluated: evaluated.config.ai.skills.shared) probes
             == ["same-package" "same-package"]
             && packagePoolCollisions probes == [];
-          # Whole-option priorities are filtered before definitionsWithLocations
-          # is exposed. The combined evaluation hides package A; the isolated
-          # claim evaluations retain both owners and must still collide.
           "isolated evaluations reject a claim shadowed by priority in the combined tree" =
             combined.config.ai.skills
             == {shared = "package-b";}
-            && collisionsByKey isolated
+            && collisionsByKey priorityEvaluations
             == [
               {
                 key = "ai.skills.shared";
@@ -128,7 +166,7 @@ in {
             ]
             && rejectsChange (packagePoolsClean "priority probe") {
               valid = combined;
-              invalid = isolated;
+              invalid = priorityEvaluations;
               expected = true;
             };
           "same keys across root and runtime scopes are independent" = let
@@ -139,8 +177,13 @@ in {
             == {shared = "root";}
             && runtime.config.ai.claude.skills == {shared = "runtime";}
             && packagePoolCollisions [root runtime] == [];
-          "two owners of one key are rejected in every root and runtime pool" =
-            collisionsByKey overlapping
+          "unrelated keys pass but the same key in any one pool and scope is rejected" =
+            distinct.config.ai.skills
+            == {
+              distinct = "package-b";
+              shared = "package-a";
+            }
+            && collisionsByKey overlapping
             == map (key: {
               inherit key;
               files = fixtureOwners;
@@ -184,10 +227,6 @@ in {
         repoModule = probe writer;
       in
         checkRows "root pool ownership" {
-          "a consumer can write ai.skills inline" =
-            builtins.attrNames consumer.config.ai.skills
-            == ["provenance-positive-control"]
-            && rootPoolViolations consumer == [];
           "a repository module writing ai.skills is rejected and named" =
             rootPoolViolations repoModule
             == ["ai.skills <- ${toString writer}"]
@@ -247,8 +286,6 @@ in {
         owner.options.ai;
       in
         checkRows "layer-1 forwarding provenance" {
-          "an owner forwarding through the helper is clean" =
-            rootPoolViolations owner == [];
           "another file writing forwarded options directly is rejected and named" =
             rootPoolViolations direct
             == [

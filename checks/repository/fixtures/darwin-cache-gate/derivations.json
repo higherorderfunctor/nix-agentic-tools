@@ -1,7 +1,7 @@
 {
   "00000000000000000000000000000000-local-download.drv": {
     "env": {
-      "allowSubstitutes": "",
+      "allowSubstitutes": "1",
       "out": "/nix/store/00000000000000000000000000000000-local-download"
     },
     "inputs": {
@@ -9,8 +9,7 @@
     },
     "outputs": {
       "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg="
       }
     },
     "structuredAttrs": {
@@ -22,7 +21,6 @@
     "inputs": {
       "drvs": {
         "22222222222222222222222222222222-native-source.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         }
       }
@@ -42,8 +40,7 @@
     },
     "outputs": {
       "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg="
       }
     }
   },
@@ -56,8 +53,7 @@
     },
     "outputs": {
       "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg="
       }
     }
   },
@@ -70,8 +66,7 @@
     },
     "outputs": {
       "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg="
       }
     }
   },
@@ -80,7 +75,6 @@
     "inputs": {
       "drvs": {
         "88888888888888888888888888888888-stdenv-darwin-no-cc.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         }
       }
@@ -91,26 +85,11 @@
       }
     }
   },
-  "66666666666666666666666666666666-cached.drv": {
-    "env": {
-      "out": "/nix/store/66666666666666666666666666666666-cached"
-    },
-    "inputs": {
-      "drvs": {}
-    },
-    "outputs": {
-      "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
-      }
-    }
-  },
   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-kiro-kas-dispatch.drv": {
     "env": {},
     "inputs": {
       "drvs": {
         "sg1ynigl5sh0w3cd8cb8i9c304h9ycrk-kiro-cli-unwrapped-3.6.0.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         }
       }
@@ -145,7 +124,6 @@
     "inputs": {
       "drvs": {
         "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         }
       }
@@ -178,7 +156,6 @@
     "inputs": {
       "drvs": {
         "pdpnzivrkzvisqgfnw4np9507ph68si9-stdenv-darwin.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         }
       }
@@ -197,23 +174,19 @@
     "inputs": {
       "drvs": {
         "ig8lvy55zlsh7fnqmrcxx3dzjd6aapxy-bash-5.3p20.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         },
         "r79fq5nkp4lp1fcqys3bxhhydb71hqn5-stdenv-darwin-no-cc.drv": {
-          "dynamicOutputs": {},
           "outputs": ["out"]
         },
         "x6ignb4ipvcrjiiz568g5fknjfvy4nh2-curl-8.23.0.drv": {
-          "dynamicOutputs": {},
           "outputs": ["dev"]
         }
       }
     },
     "outputs": {
       "out": {
-        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg=",
-        "method": "flat"
+        "hash": "sha256-7VaT+JsMvR0qjFoxuu0r16dLCq1oZy4IREwYaMOPSfg="
       }
     },
     "structuredAttrs": {

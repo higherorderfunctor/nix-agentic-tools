@@ -25,61 +25,64 @@
     accepted = "(${read}) (${valid})";
     refused = "(${read}) (${invalid})";
   };
-  sealed = read: valid: invalid: rejects read valid invalid "refused a value that is not a redact reference";
+  sealed = where: read: valid: invalid: rejects read valid invalid "${where}: refused a value that is not a redact reference";
+  assignSealed = sealed "test.token" assignToken;
   assignToken = ''assign "TOKEN"'';
-  deliveredOnlyByService = "delivered only by an ai.services launcher";
+  deliveryRefusal = "takes the secret value, and this is a redact.types.secretFile, delivered only by an ai.services launcher";
   environment = "evaluate redact.types.environment";
-  fileRefusal = sealed "redact.file" ''"/run/secrets/''${sentinel}"'';
+  fileRefusal = sealed "redact.file" "redact.file" ''"/run/secrets/''${sentinel}"'';
   maybeStr = "evaluate (redact.types.maybeRedacted lib.types.str)";
   notIdentifier = "the variable name is not a shell identifier";
+  optionSealed = sealed "value";
   redacted = "evaluate redact.types.redacted";
   secretFile = "evaluate redact.types.secretFile";
   refusals = {
+    # assign rejects inputs before emitting any launch shell.
+    assignInvalidName = rejects "name: assign name sentinel" ''"TOKEN"'' ''"BAD-NAME"'' "test.token: ${notIdentifier}";
+    assignInvalidReference = assignSealed "ref" "{ _redact.file = sentinel; }";
+    assignSecretFile = rejects assignToken "ref" "asFile ref" "test.token: ${deliveryRefusal}";
+    assignWrongType = assignSealed "sentinel" "1";
+
     # References and concat constructors.
-    commandRelative = sealed "redact.command" ''"/bin/''${sentinel}"'' "sentinel";
-    concatLiteral = sealed "redact.concat" ''[ "Bearer " ref ]'' ''[ "Bearer " sentinel ]'';
-    concatNested = sealed "redact.concat" ''[ "a" ref ]'' ''[ "a" (redact.concat [ ref sentinel ]) ]'';
+    commandRelative = sealed "redact.command" "redact.command" ''"/bin/''${sentinel}"'' "sentinel";
+    concatLiteral = sealed "redact.concat" "redact.concat" ''[ "Bearer " ref ]'' ''[ "Bearer " sentinel ]'';
+    # Keep a direct reference in the outer concat: only the nested part is invalid.
+    concatNested = sealed "redact.concat" "redact.concat" ''[ ref sentinel ]'' ''[ ref (redact.concat [ ref sentinel ]) ]'';
     fileDot = fileRefusal ''"/run/./secrets/''${sentinel}"'';
-    fileEmptySegment = fileRefusal ''"/''${builtins.storeDir}/aaaa-source/''${sentinel}"'';
+    fileEmptySegment = fileRefusal ''"/run//secrets/''${sentinel}"'';
     fileRelative = fileRefusal ''"run/secrets/''${sentinel}"'';
     fileStore = fileRefusal ''"''${builtins.storeDir}/aaaa-source/''${sentinel}"'';
-    fileTraversal = fileRefusal ''"/run/..''${builtins.storeDir}/aaaa-source/''${sentinel}"'';
+    fileTraversal = fileRefusal ''"/run/../secrets/''${sentinel}"'';
 
     # Option types, forced through the module merge rather than the constructors.
-    environmentDashed = rejects environment ''{ GOOD_NAME = sentinel; }'' ''{ "BAD-NAME" = sentinel; }'' notIdentifier;
-    environmentInvalidNull = rejects environment ''{ GOOD_NAME = null; }'' ''{ "BAD-NAME" = null; }'' notIdentifier;
-    environmentLeadingDigit = rejects environment ''{ X1 = sentinel; }'' ''{ "1X" = sentinel; }'' notIdentifier;
-    environmentLiteral = sealed environment "{ API_TOKEN = ref; }" "{ API_TOKEN = sentinel; }";
+    environmentInvalidNull = rejects environment ''{ GOOD_NAME = null; }'' ''{ "BAD-NAME" = null; }'' "value.BAD-NAME: ${notIdentifier}";
+    environmentLeadingDigit = rejects environment ''{ X1 = sentinel; }'' ''{ "1X" = sentinel; }'' "value.\"1X\": ${notIdentifier}";
+    environmentLiteral = sealed "value.API_TOKEN" environment "{ API_TOKEN = ref; }" "{ API_TOKEN = sentinel; }";
+    # Use a reference so neither definition fails the type in isolation.
     environmentNullConflict =
       rejects environment
       "lib.mkMerge [ { API_TOKEN = null; } { API_TOKEN = null; } ]"
-      "lib.mkMerge [ { API_TOKEN = null; } { API_TOKEN = sentinel; } ]"
-      "defined both null and not null";
-    maybeAttrsReservedKey = sealed "evaluate (redact.types.maybeRedacted (lib.types.attrsOf lib.types.str))" "{ public = sentinel; }" "{ _redact = sentinel; }";
-    maybeIntWrongType = sealed "evaluate (redact.types.maybeRedacted lib.types.int)" "1" "sentinel";
-    maybeStrInvalidConcat = sealed maybeStr "sentinel" "{ _redact.concat = [ sentinel ]; }";
-    maybeStrInvalidReference = sealed maybeStr "sentinel" "{ _redact.file = sentinel; }";
-    maybeStrWrongType = sealed maybeStr "sentinel" "1";
+      "lib.mkMerge [ { API_TOKEN = null; } { API_TOKEN = ref; } ]"
+      "value.API_TOKEN: defined both null and not null";
+    maybeAttrsReservedKey = optionSealed "evaluate (redact.types.maybeRedacted (lib.types.attrsOf lib.types.str))" "{ public = sentinel; }" "{ _redact = sentinel; }";
+    maybeIntWrongType = optionSealed "evaluate (redact.types.maybeRedacted lib.types.int)" "1" "sentinel";
+    maybeStrInvalidConcat = optionSealed maybeStr "sentinel" "{ _redact.concat = [ sentinel ]; }";
+    maybeStrInvalidReference = optionSealed maybeStr "sentinel" "{ _redact.file = sentinel; }";
+    maybeStrWrongType = optionSealed maybeStr "sentinel" "1";
     orSecretFileMixedDefinitions =
       rejects "evaluate (redact.types.orSecretFile redact.types.redacted)"
       "lib.mkMerge [ ref ref ]"
       "lib.mkMerge [ ref (asFile ref) ]"
-      "defined both as a redact.types.secretFile value and as another value";
-    redactedInvalidConcat = sealed redacted "{ _redact.concat = [ ref ]; }" "{ _redact.concat = [ sentinel ]; }";
-    redactedLiteral = sealed redacted "ref" "sentinel";
-    redactedRelative = sealed redacted "ref" "{ _redact.file = sentinel; }";
+      "value: defined both as a redact.types.secretFile value and as another value";
+    redactedInvalidConcat = optionSealed redacted "{ _redact.concat = [ ref ]; }" "{ _redact.concat = [ sentinel ]; }";
+    redactedLiteral = optionSealed redacted "ref" "sentinel";
+    redactedRelative = optionSealed redacted "ref" "{ _redact.file = sentinel; }";
     # A secret file reaching a value consumer says where it can go instead.
-    redactedSecretFile = rejects redacted "ref" "asFile ref" deliveredOnlyByService;
-    redactedTwoSources = sealed redacted "{ _redact.file = \"/a\"; }" ''{ _redact = { command = "/''${sentinel}"; file = "/a"; }; }'';
-    secretFileLiteral = sealed secretFile "ref" "sentinel";
-    secretFileStore = sealed secretFile "ref" ''{ _redact.file = "''${builtins.storeDir}/aaaa-source/''${sentinel}"; }'';
-    secretFileTaggedLiteral = sealed secretFile "asFile ref" "asFile sentinel";
-
-    # assign rejects inputs before emitting any launch shell.
-    assignInvalidName = rejects "name: assign name sentinel" ''"TOKEN"'' ''"BAD-NAME"'' notIdentifier;
-    assignInvalidReference = sealed assignToken "ref" "{ _redact.file = sentinel; }";
-    assignSecretFile = rejects assignToken "ref" "asFile ref" deliveredOnlyByService;
-    assignWrongType = sealed assignToken "sentinel" "1";
+    redactedSecretFile = rejects redacted "ref" "asFile ref" "value: ${deliveryRefusal}";
+    redactedTwoSources = optionSealed redacted "{ _redact.file = \"/a\"; }" ''{ _redact = { command = "/''${sentinel}"; file = "/a"; }; }'';
+    secretFileLiteral = optionSealed secretFile "ref" "sentinel";
+    secretFileStore = optionSealed secretFile "ref" ''{ _redact.file = "''${builtins.storeDir}/aaaa-source/''${sentinel}"; }'';
+    secretFileTaggedLiteral = optionSealed secretFile "asFile ref" "asFile sentinel";
   };
   probeRows =
     lib.mapAttrsToList (name: refusal: ''

@@ -9,7 +9,9 @@
   checks.rust-toolchain-selection = let
     inherit (harness) checkRows rejectsChange;
     vu = import ../../lib/toolchains.nix {inherit inputs;};
-    versions = ["1.86.0" "1.86.9" "1.86.10" "1.86.11rc1" "1.99.1"];
+    # Each prerelease would win its respective sort if not filtered: one
+    # outranks the stable patch in 1.86, and one outranks all stable releases.
+    versions = ["1.86.0" "1.86.9" "1.86.10" "1.86.11rc1" "1.99.1" "1.100.0rc1"];
     stable = lib.genAttrs versions (version: {
       default = lib.makeOverridable ({extensions ? []}: {
         inherit extensions version;
@@ -52,7 +54,7 @@
       };
     locked = inputs.rust-overlay.lib.mkRustBin {} pkgs;
     cases = {
-      "bare minor selects newest stable patch within its minor" = (resolve {channel = "1.86";}).version == "1.86.10";
+      "bare minor selects 1.86.10 rather than an older patch, prerelease or newer minor" = (resolve {channel = "1.86";}).version == "1.86.10";
       "exact patch below newest selects exact release" = (resolve {channel = "1.86.0";}).version == "1.86.0";
       "extensions reach the selected toolchain" =
         (resolve {
@@ -61,7 +63,7 @@
         }).extensions
         == ["rust-src"];
       "host-suffixed exact channel selects its release" = (resolve {channel = hostedExact;}).version == "1.86.0";
-      "latest override skips prereleases" = (resolve {override = "latest";}).version == "1.99.1";
+      "latest override selects 1.99.1 rather than the newer 1.100.0 prerelease" = (resolve {override = "latest";}).version == "1.99.1";
       "locked exact release matches overlay derivation" =
         (vu.mkRustToolchain {
           inherit pkgs;

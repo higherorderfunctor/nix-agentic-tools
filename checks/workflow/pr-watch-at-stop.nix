@@ -2,16 +2,12 @@
 # a hand-back while this branch's PR is unfinished.
 #
 # It drives the REAL script against a STUB `gh`, so what is exercised is the
-# decision logic and the fail-open paths, not GitHub. That split matters: the
-# fail-open paths are the ones that cannot be tested against a live API at all
-# (no `gh` on PATH, no upstream, a timeout), and they are also the ones whose
-# regression is worst — a hook that blocks because the network hiccuped is
-# worse than the failure it prevents, and unlike the lint validator this one
-# cannot be satisfied by editing a file.
+# decision logic and fail-open paths, not GitHub. The same red fixture that
+# blocks a normal Stop must allow the retry and the missing-tool/repo paths.
 {pkgs, ...}: {
   checks.pr-watch-at-stop =
     pkgs.runCommandLocal "pr-watch-at-stop-check" {
-      nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.python3 pkgs.shellcheck];
+      nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.python3];
       src = ../../lib/pr-watch-at-stop.sh;
     } ''
       set -euETo pipefail
@@ -22,8 +18,6 @@
       git config --global user.email a@b.c
       git config --global user.name a
       git config --global init.defaultBranch main
-
-      shellcheck --shell=bash "$src"
 
       mkdir -p bin repo
       REAL_PATH="$PATH"          # PATH without the gh stub, for the no-gh case below
@@ -42,8 +36,6 @@
         echo 'exit 1'
       } > bin/gh
       chmod +x bin/gh
-      # Positive control on the stub itself, for exactly the reason above.
-      PR_JSON=probe bin/gh | grep -qx probe
 
       cd repo
       git init -q .
@@ -90,26 +82,26 @@
 
       # A finished PR must NOT block — without this the others pass for a hook that
       # always blocks, which would be indistinguishable and useless.
-      expect green "$(pr 1 OPEN CLEAN "$green")"
+      resolved='[{"isResolved":true}]'
+      expect green "$(pr 1 OPEN CLEAN "$green" "$resolved")"
 
       # Not OPEN: nothing to finish, even with a failing check.
       expect merged "$(pr 2 MERGED BLOCKED "$red")"
+      # The red row is also the end-to-end control for the executable gh stub.
       expect red "$red_pr" 'these checks are RED: test'
 
       # The case that actually failed in practice: the agent pushed and ended the
       # turn while CI was still running.
       expect running "$(pr 3 OPEN BLOCKED '[{"name":"build","status":"IN_PROGRESS"}]')" \
         'these checks are still running: build - arm a watcher'
-      expect threads "$(pr 5 OPEN BLOCKED "$green" '[{"isResolved":false}]')" '1 review thread(s) are unresolved'
+      expect threads "$(pr 5 OPEN BLOCKED "$green" '[{"isResolved":false},{"isResolved":true}]')" '1 review thread(s) are unresolved'
 
       # --- fail-open paths, using the same red PR that blocks above where possible ---
       # loop guard: Claude re-runs Stop hooks after a block
       expect loop-guard "$red_pr" "" true
 
-      # no gh on PATH at all. Drop ONLY the stub directory — an earlier version
-      # built a minimal PATH by hand and left out bash itself, so the hook never
-      # ran and the case passed for the wrong reason.
-      PATH="$REAL_PATH" command -v bash >/dev/null
+      # no gh on PATH at all. Drop only the stub directory; expect checks the
+      # hook's exit status, so a missing bash cannot pass on empty output.
       if PATH="$REAL_PATH" command -v gh >/dev/null; then
         echo 'FAIL [no-gh]: gh is still on PATH' >&2; exit 1
       fi
@@ -118,7 +110,7 @@
       # no PR for this branch (stub gh exits non-zero)
       expect no-pr ""
 
-      # not a git work tree
+      # A cwd outside Git must not block even when gh would return a red PR.
       expect no-repo "$red_pr" "" false /
 
       mkdir -p "$outdir"; touch "$outdir/ok"

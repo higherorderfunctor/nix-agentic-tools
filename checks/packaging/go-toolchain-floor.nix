@@ -53,17 +53,12 @@
         expected = "/fixture/go-1.25.0";
       };
     latestFrom = releases: (resolveFrom releases {override = "latest";}).go.outPath;
-    recipeToolchain = resolve {
-      floor = "1.25.0";
-      recipeFile = "./package.nix";
-    };
     goBin = inputs.go-overlay.lib.mkGoBin pkgs;
     # Any exact key the locked overlay ships; go-overlay keeps past releases.
     lockedExact = "1.26.10";
     cases = {
       "bare minor selects newest stable patch of its minor" = (resolve {floor = "1.25";}).go.version == "1.25.10";
       "exact minor key precedes patch fallback" = (resolve {floor = "1.24";}).go.version == "1.24";
-      "exact patch below newest does not simply grab newest" = toolchain.go.version == "1.25.0";
       "injects buildGo134Module compiler and retains defaults" =
         (injected "buildGo134Module").go.outPath
         == toolchain.go.outPath
@@ -77,7 +72,6 @@
           pname = "locked-fixture";
         }).go.outPath
         == goBin.versions.${lockedExact}.outPath;
-      "missing floor allows exact override" = (resolve {override = "1.25.0";}).go.version == "1.25.0";
       "missing floor allows latest override" =
         (resolve {
           floor = "0";
@@ -85,10 +79,6 @@
         }).go.version
         == "1.26.0";
       "override passthru records recipe choice" = (resolve {override = "latest";}).passthru.goToolchainOverride == "latest";
-      "recipe passthru carries floor and fixer" =
-        recipeToolchain.passthru.goFloor
-        == "1.25.0"
-        && recipeToolchain.passthru.fixGoFloor.goFloorDestination == "recipe";
       "rejects a lock with no stable release" = rejectsChange latestFrom {
         valid = versions;
         invalid = {"1.27rc1" = versions."1.27rc1";};

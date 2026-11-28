@@ -97,6 +97,7 @@
       done <<'CASES'
       rust-toolchain cargo|source hash repair must precede rust-toolchain extraction
       rust-toolchain src cargo|source hash repair must precede rust-toolchain extraction
+      src cargo|no rust-toolchain fixer in its extract chain
       src cargo rust-toolchain|does not precede the cargo fixer
       src rust-toolchain|no cargo fixer in its extract chain
       CASES

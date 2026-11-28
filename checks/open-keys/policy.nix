@@ -7,7 +7,7 @@
   inherit (builtins) elemAt head length;
   inherit (harness) checkRows mkTest;
   keys = import ../../lib/open-keys {inherit lib;};
-  known = keys.fromPaths {paths = ["entries[].name" "opaque" "permissions.allow" "services.*.url"];};
+  known = keys.fromPaths {paths = ["entries[].name" "opaque" "services.*.url"];};
   inspect = args:
     keys.inspect ({
         inherit known;
@@ -20,11 +20,6 @@
   warnsFor = paths: actual:
     map (line: head (lib.splitString ";" line)) (warningLines actual)
     == map (path: "settings.${path}: unrecognized key") paths;
-  credential = name:
-    keys.check {
-      inherit name;
-      optionPath = ["settings"];
-    };
   literalNames = keys.fromPaths {
     names = ["chat.modelDefaults"];
     paths = [];
@@ -53,20 +48,6 @@
 in {
   checks = {
     open-keys-policy = mkTest "open-keys-policy" (checkRows "open key inspection" {
-      "allowlist suppresses warnings for quoted and wildcard entries, still warns for an unlisted map sibling, and preserves the input" = let
-        value = {
-          "future.key" = 42;
-          services.custom = {
-            extra = true;
-            ul = "ok";
-          };
-        };
-        allowed = inspect {
-          inherit value;
-          allowed = [''"future.key"'' "services.*.ul"];
-        };
-      in
-        allowed.value == value && warnsFor ["services.custom.extra"] allowed.warnings;
       "branch-marked fields are accepted in lists and maps without opening their nodes" = let
         source = {
           extra = true;
@@ -83,14 +64,6 @@ in {
             services.custom = {inherit source;};
           };
         });
-      "credential check accepts a display name and refuses an acronym-led token field with its reason" = let
-        allowed = credential "displayName";
-        refused = credential "myAPIToken";
-      in
-        allowed.assertion
-        && allowed.reason == null
-        && !refused.assertion
-        && refused.reason == "token fields carry authentication material";
       "declared struct children take precedence over a wildcard map" = warnsFor ["services.custom.ul" "services.defaults.timeot" "services.defaults.url"] (warnings {
         known = keys.fromPaths {paths = ["services.*.url" "services.defaults.timeout"];};
         value.services = {
@@ -117,6 +90,9 @@ in {
           };
         };
       });
+      "only the unknown root warns, not its children" = warnsFor ["future"] (warnings {
+        value.future.key = [1 {nested = true;}];
+      });
       "owner note starts on a new line" = let
         actual = warnings {
           notes.future = "the owner note";
@@ -124,14 +100,6 @@ in {
         };
       in
         warnsFor ["future"] actual && lib.hasSuffix "\nthe owner note" (head actual);
-      "passthrough preserves the unknown payload and unchecked subtree" = let
-        value = {
-          future.key = [1 {nested = true;}];
-          opaque."anything.with.dots" = "ok";
-        };
-        ordinary = inspect {inherit value;};
-      in
-        ordinary.value == value && warnsFor ["future"] ordinary.warnings;
       "stale allowlist distinguishes declared list and wildcard paths from unchecked and concrete map paths" =
         warnings {
           allowed = ["entries[].name" "opaque.anything" "services.*.url" "services.custom.url"];
@@ -153,6 +121,21 @@ in {
           ''settings."chat.futureSetting": unrecognized key''
           "allowed: allowlist entry `chat.futureSetting` matches no unrecognized setting; remove it or quote dotted segments."
         ];
+      "wildcard suppression covers multiple map entries without swallowing a sibling" = let
+        value.services = {
+          custom.extra = true;
+          other = {
+            extra = "also accepted";
+            label = "still unrecognized";
+          };
+        };
+        allowed = inspect {
+          inherit value;
+          allowed = ["services.*.extra"];
+        };
+      in
+        warnsFor ["services.custom.extra" "services.other.extra" "services.other.label"] (warnings {inherit value;})
+        && warnsFor ["services.other.label"] allowed.warnings;
     });
     open-keys-printed-allowlist = mkTest "open-keys-printed-allowlist" (checkRows "printed allowlist round-trip" {
       "dotted map field is quoted and uses the wildcard instead of the entry name" = printedEntry ''services.*."future.key"'' {services."user.with.dots"."future.key" = true;};

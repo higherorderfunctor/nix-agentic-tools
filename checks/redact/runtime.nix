@@ -41,10 +41,12 @@
         ${body}
       '';
     };
-  exported = consumer "redact-exported" (redact.concat ["Bearer " (command "ok")]) true ''
-    ${pkgs.coreutils}/bin/printenv REDACT_VALUE
-  '';
-  local = consumer "redact-local" (command "ok") false ''
+  childValue = "${pkgs.coreutils}/bin/printenv REDACT_VALUE";
+  exported = consumer "redact-exported" (redact.concat ["Bearer " (command "ok")]) true childValue;
+  literal = consumer "redact-literal" "it's $(printf changed)" true childValue;
+  local = consumer "redact-local" (command "ok") false remainsLocal;
+  localLiteral = consumer "redact-local-literal" "local text" false remainsLocal;
+  remainsLocal = ''
     printf '%s' "$REDACT_VALUE"
     if ${pkgs.coreutils}/bin/printenv REDACT_VALUE; then exit 1; fi
   '';
@@ -56,6 +58,7 @@ in {
     text = ''
       REDACT_SENTINEL="redact-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
       export REDACT_SENTINEL
+      unset REDACT_VALUE
       # A failure exits 1, prints nothing on stdout and names a permitted reason.
       refuses() {
         local reason=$1 status=0
@@ -75,16 +78,28 @@ in {
         refuses "$expected" ${reader} test.token "$@"
       }
 
-      # Trailing newlines go; internal ones and shell metacharacters stay.
-      printf '%s\n\n' "$REDACT_SENTINEL" >value
-      ${reader} test.token file "$PWD/value" >actual
-      printf '%s' "$REDACT_SENTINEL" >expected
-      cmp actual expected
-      printf 'quote" slash\\ internal\nnewline\n' >special
-      ${reader} test.token file "$PWD/special" >actual
-      printf 'quote" slash\\ internal\nnewline' >expected
-      cmp actual expected
+      # Match bytes, not command substitution (which would hide extra newlines).
+      produces() {
+        local row=$1 expected=$2
+        shift 2
+        if ! "$@" >actual || ! cmp -s actual <(printf '%s' "$expected"); then
+          printf 'FAIL: %s did not produce the expected bytes\n' "$row" >&2
+          exit 1
+        fi
+      }
+      reader_produces() {
+        local row=$1 expected=$2
+        shift 2
+        produces "$row" "$expected" ${reader} test.token "$@"
+      }
 
+      # Trailing newlines go; internal ones and shell metacharacters stay.
+      printf 'file:%s\n\n' "$REDACT_SENTINEL" >value
+      printf ' quote" slash\\ internal\nnewline\n\n' >special
+      reader_produces 'file preserves spaces, backslash and internal newline while trimming its end' \
+        $' quote" slash\\ internal\nnewline' file "$PWD/special"
+
+      # Distinguish a zero-byte file from one that becomes empty after trim.
       : >empty
       printf '\n\n' >newlines
       printf '%s\0tail' "$REDACT_SENTINEL" >nul
@@ -101,25 +116,27 @@ in {
         reader_refuses 'reference file is unreadable' file "$PWD/unreadable"
       fi
 
-      ${reader} test.token command ${lib.getExe fixtures.ok} >actual
-      printf '%s' "$REDACT_SENTINEL" >expected
-      cmp actual expected
+      # A program can exit unsuccessfully after printing a usable-looking
+      # value, or fail to start at all; neither case may publish output.
       reader_refuses 'reference command failed' command ${lib.getExe fixtures.noisy}
       reader_refuses 'reference command failed' command "$PWD/absent"
       reader_refuses 'reference resolved empty' command ${lib.getExe fixtures.empty}
       reader_refuses 'reference contains a NUL byte' command ${lib.getExe fixtures.nul}
 
       # A concat joins literal and read parts, and prints nothing when one fails.
-      ${reader} test.token literal 'Bearer ' file "$PWD/value" literal / command ${lib.getExe fixtures.ok} >actual
-      printf 'Bearer %s/%s' "$REDACT_SENTINEL" "$REDACT_SENTINEL" >expected
-      cmp actual expected
+      reader_produces 'concat keeps the order of literals, file and command' \
+        "Bearer file:$REDACT_SENTINEL/$REDACT_SENTINEL" \
+        literal 'Bearer ' file "$PWD/value" literal / command ${lib.getExe fixtures.ok}
       reader_refuses 'reference file is missing' literal 'Bearer ' file "$PWD/value" file "$PWD/absent"
 
       # assign: exported to children, kept local without export, and aborting.
-      actual="$(${lib.getExe exported})"
-      [[ "$actual" == "Bearer $REDACT_SENTINEL" ]]
-      actual="$(${lib.getExe local})"
-      [[ "$actual" == "$REDACT_SENTINEL" ]]
+      produces 'concat reaches a child process only via export' \
+        "Bearer $REDACT_SENTINEL"$'\n' ${lib.getExe exported}
+      produces 'a reference without export is local to the launcher' "$REDACT_SENTINEL" ${lib.getExe local}
+      produces 'an exported literal keeps the apostrophe without running substitution' \
+        "it's \$(printf changed)"$'\n' ${lib.getExe literal}
+      produces 'a literal without export is local to the launcher' 'local text' ${lib.getExe localLiteral}
+      # Without errexit the launcher would continue unless assign aborts it.
       refuses 'reference command failed' ${lib.getExe aborted}
     '';
   };

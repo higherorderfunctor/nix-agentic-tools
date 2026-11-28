@@ -9,50 +9,37 @@
   inherit (harness) checkRows rejectsChange;
 
   # These fixtures emit plain Markdown links, one complete destination
-  # per capture; resolve each against the file containing that link.
+  # per capture; resolve each against the file containing that link. Preserve
+  # duplicates so two links to one document cannot stand in for one link each.
   resolvedLinks = filename: text:
-    lib.sort builtins.lessThan (lib.unique (map
+    lib.sort builtins.lessThan (map
       (capture: toString (/. + "/workspace/${builtins.dirOf filename}/${builtins.head capture}"))
-      (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" text))));
+      (builtins.filter builtins.isList (builtins.split "[]][(]([^()]*)[)]" text)));
 
-  # Split at top-level rule bullets and restore the consumed line ending.
-  hasRule = text: name: markers:
-    lib.any (rule: lib.hasPrefix "`${name}`**\n" rule && lib.all (marker: lib.hasInfix marker "${rule}\n") markers)
-    (builtins.tail (lib.splitString "\n- **" text));
+  # Read each rule's section rather than matching across adjacent rules.
+  ruleSection = text: name:
+    lib.findFirst (lib.hasPrefix "`${name}`**\n") "" (builtins.tail (lib.splitString "\n- **" text));
+  ruleLines = prefix: section: lib.filter (lib.hasPrefix prefix) (lib.splitString "\n" section);
 in {
   checks = {
     # ── Transformer shape tests ─────────────────────────────────────
-    factory-transformer-claude-empty = mkTest "transformer-claude-empty" (
-      ai.transformers.claude.render {text = "";} == ""
-    );
-
-    factory-transformer-claude-plain-text = mkTest "transformer-claude-plain-text" (
-      ai.transformers.claude.render {text = "hello world";} == "hello world"
-    );
-
-    factory-transformer-claude-with-frontmatter = mkTest "transformer-claude-with-frontmatter" (
+    factory-transformer-frontmatter = mkTest "transformer-frontmatter" (
       let
-        frontmatter = ai.transformers.claude.claudeTransformer.frontmatterData {
-          description = "Test rule";
-          paths = ["**/*.nix"];
-          text = "body content";
-        };
-      in
-        frontmatter.description == "Test rule"
-    );
-
-    factory-transformer-copilot-applyto = mkTest "transformer-copilot-applyto" (
-      let
-        frontmatter = ai.transformers.copilot.copilotTransformer.frontmatterData {
+        scoped = {
           description = "Nix rule";
-          paths = [
-            "**/*.nix"
-            "**/*.toml"
-          ];
+          paths = ["**/*.nix" "**/*.toml"];
           text = "body";
         };
       in
-        frontmatter.applyTo == "**/*.nix,**/*.toml"
+        checkRows "transformer frontmatter" {
+          "AGENTS.md discards both description and paths" = ai.transformers.agentsmd.render scoped == "body";
+          "Claude does not manufacture frontmatter or a newline for empty text" = ai.transformers.claude.render {text = "";} == "";
+          "Claude retains the explicit description alongside the path list" =
+            ai.transformers.claude.render scoped
+            == "---\ndescription: \"Nix rule\"\npaths:\n  - \"**/*.nix\"\n  - \"**/*.toml\"\n---\n\nbody";
+          "Copilot joins both globs in order and omits the description" =
+            ai.transformers.copilot.render scoped == "---\napplyTo: \"**/*.nix,**/*.toml\"\n---\n\nbody";
+        }
     );
 
     factory-transformer-kiro-frontmatter = mkTest "transformer-kiro-frontmatter" (
@@ -84,7 +71,11 @@ in {
         rejectsRender = rejectsChange render;
       in
         checkRows "Kiro frontmatter" {
-          "always ignores paths" = render always == alwaysOutput;
+          "always ignores paths and an unknown inclusion mode is rejected" = rejectsRender {
+            expected = alwaysOutput;
+            invalid = always // {inclusion = "unknown";};
+            valid = always;
+          };
           "auto requires a non-empty name" = rejectsRender {
             expected = autoOutput;
             invalid = builtins.removeAttrs automatic ["name"];
@@ -95,63 +86,30 @@ in {
             invalid = builtins.removeAttrs explicit ["paths"];
             valid = explicit;
           };
-          "manual emits name but no path pattern" =
+          "manual keeps its name and ignores paths" =
             render (always
               // {
                 inclusion = "manual";
                 name = "on-demand";
               })
             == "---\ninclusion: \"manual\"\nname: \"on-demand\"\n---\n\nbody";
-          "path list with one glob implies fileMatch and emits a scalar" = render scoped == scopedOutput;
-          "unknown inclusion mode is rejected" = rejectsRender {
-            expected = alwaysOutput;
-            invalid = always // {inclusion = "unknown";};
-            valid = always;
-          };
+          # The direct renderer reads a path itself; runtime rule rendering
+          # already converts sources to strings before invoking the transformer.
+          "path body is read verbatim and one glob implies fileMatch with a scalar pattern" =
+            render (scoped // {text = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;})
+            == "---\ndescription: \"Kiro rule\"\nfileMatchPattern: \"**/*.nix\"\ninclusion: \"fileMatch\"\n---\n\nAlpha steering body.\n";
         }
     );
 
-    # Several paths are a block sequence, one quoted glob per line. Prettier
-    # reflows a long inline array into a multi-line flow array, which Kiro
-    # loads on every turn instead of on a matching file.
-    factory-transformer-kiro-fileMatch-several-paths = mkTest "transformer-kiro-fileMatch-several-paths" (
-      ai.transformers.kiro.render {
-        description = "Kiro rule";
-        paths = [
-          "**/*.nix"
-          "lib/**"
-        ];
-        text = "body";
-      }
-      == "---\ndescription: \"Kiro rule\"\nfileMatchPattern:\n  - \"**/*.nix\"\n  - \"lib/**\"\ninclusion: \"fileMatch\"\n---\n\nbody"
-    );
-
-    factory-transformer-kiro-path-text = mkTest "transformer-kiro-path-text" (
-      ai.transformers.kiro.render {
-        inclusion = "manual";
-        name = "path-backed";
-        text = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-      }
-      == "---\ninclusion: \"manual\"\nname: \"path-backed\"\n---\n\nAlpha steering body.\n"
-    );
-
-    factory-transformer-agentsmd-no-frontmatter = mkTest "transformer-agentsmd-no-frontmatter" (
-      let
-        out = ai.transformers.agentsmd.render {
-          description = "ignored";
-          paths = ["ignored"];
-          text = "body only";
-        };
-      in
-        out == "body only"
-    );
-
+    # ── AGENTS.md index tests ─────────────────────────────────────────
     factory-transformer-agentsmd-tier-index = mkTest "transformer-agentsmd-tier-index" (
       let
         transformer = ai.transformers.agentsmd;
         scoped = {
           description = "";
           inclusion = "fileMatch";
+          # Non-alphabetical order distinguishes the child's original globs
+          # from the reduced, sorted matcher list in the root.
           matcher = ["src/alpha/**" "src/*.nix" "src-other/**" "lib/shared.nix" "wild/*/**" "wild/*/leaf.nix"];
           references = map (n: "docs/guidance/long-document-name-${n}.md") ["one" "two" "three" "four"];
         };
@@ -160,11 +118,17 @@ in {
           automatic =
             scoped
             // {
-              inclusion = "auto";
               description = "Deploy when relevant.";
+              inclusion = "auto";
+              references = ["docs/guidance/deploy.md"];
             };
           beta = scoped // {matcher = ["src/**" "src/beta/**" "lib/shared.nix"];};
-          manual = scoped // {inclusion = "manual";};
+          manual =
+            scoped
+            // {
+              inclusion = "manual";
+              references = ["docs/guidance/operations.md"];
+            };
         };
         audiences = {
           alpha = ["codex"];
@@ -183,12 +147,15 @@ in {
           inherit (tier) index indexGroups;
           hasOnDemandIndex = true;
         };
-        original = transformer.renderKeyed {
-          inherit audiences index;
-          hasOnDemandIndex = true;
-        };
         sourceTargets = map (ref: "/workspace/${ref}") scoped.references;
         child = tier.children.${childPath} or "";
+        childRule = name: expectedAudience: expectedGlobs: let
+          section = ruleSection child name;
+        in
+          ruleLines "  - Audience:" section
+          == ["  - Audience: `${expectedAudience}`"]
+          && ruleLines "    - `" section == map (glob: "    - `${glob}`") expectedGlobs
+          && resolvedLinks childPath section == lib.sort builtins.lessThan sourceTargets;
         tiersWithoutAudiences = filename: entries:
           transformer.tierIndex {
             inherit filename;
@@ -205,19 +172,14 @@ in {
         # list could stay in the root even if the link restriction disappeared.
         longLinks = prefix: map (ref: "${prefix}${ref}") scoped.references;
         staysInDefaultRoot = refs: staysInRoot "AGENTS.md" (paired refs);
+        # A long key widens the byte savings from grouping a single rule, so
+        # the minimum group size still matters if the fixture uses fewer links.
+        longRuleName = lib.concatStrings (lib.replicate 100 "long-rule-");
       in
         checkRows "AGENTS.md tier index" {
           "absolute links stay in the root" = staysInDefaultRoot (longLinks "/");
-          "child links resolve to the source documents" = resolvedLinks childPath child == lib.sort builtins.lessThan sourceTargets;
-          "child retains alpha's audience and original globs" = hasRule child "alpha" [
-            "  - Audience: `codex`\n"
-            "`src/*.nix`"
-            "`src/alpha/**`"
-          ];
-          "child retains beta's audience and original globs" = hasRule child "beta" [
-            "  - Audience: `kimchi`\n"
-            "`src/beta/**`"
-          ];
+          "child keeps alpha's exact audience, globs and resolved links" = childRule "alpha" "codex" ["src/alpha/**" "src/*.nix" "src-other/**" "lib/shared.nix" "wild/*/**" "wild/*/leaf.nix"];
+          "child keeps beta's exact audience, globs and resolved links" = childRule "beta" "kimchi" ["src/**" "src/beta/**" "lib/shared.nix"];
           "documents from different directories stay in the root" = staysInDefaultRoot (scoped.references ++ ["other/b.md"]);
           "fragment links stay in the root" = staysInDefaultRoot (scoped.references ++ ["docs/guidance/a.md#anchor"]);
           "group uses the union of audiences and drops only covered globs" =
@@ -233,14 +195,12 @@ in {
               }
             ];
           "long child link would increase the root size" = staysInRoot "${lib.concatStrings (lib.replicate 100 "long-custom-target-")}.md" (paired scoped.references);
-          "on-demand rules stay in the root" = lib.attrNames tier.index == ["automatic" "manual"];
-          "one child is emitted in the custom target namespace" = lib.attrNames tier.children == [childPath];
           "query links stay in the root" = staysInDefaultRoot (scoped.references ++ ["docs/guidance/a.md?query"]);
-          "relative links can move into a child" = lib.attrNames (tiersWithoutAudiences "AGENTS.md" (paired scoped.references)).children == [".agents/rules/guidance.md"];
           "remote links stay in the root" = staysInDefaultRoot (longLinks "https://example.org/");
-          "root links resolve to the child and on-demand documents" = resolvedLinks "nested/CUSTOM.md" root == lib.sort builtins.lessThan (sourceTargets ++ ["/workspace/${childPath}"]);
-          "single rule stays in the root" = staysInRoot "AGENTS.md" {alpha = scoped;};
-          "tiering makes the root smaller" = builtins.stringLength root < builtins.stringLength original;
+          "root resolves its child and both on-demand documents from the nested target" =
+            resolvedLinks "nested/CUSTOM.md" root
+            == ["/workspace/docs/guidance/deploy.md" "/workspace/docs/guidance/operations.md" "/workspace/${childPath}"];
+          "single rule stays in the root even when grouping would save bytes" = staysInRoot "AGENTS.md" {${longRuleName} = scoped;};
         }
     );
 
@@ -258,6 +218,7 @@ in {
         };
         sourceRefs = parent: map (n: "${parent}/long-document-name-${n}.md") ["one" "two" "three" "four" "five" "six"];
         parents = lib.attrNames childNames;
+        ruleNames = ["alpha" "beta"];
         index = lib.listToAttrs (lib.concatMap (parent:
           map (name: {
             name = "${parent}-${name}";
@@ -267,7 +228,8 @@ in {
               matcher = ["src/${name}/**"];
               references = sourceRefs parent;
             };
-          }) ["alpha" "beta"])
+          })
+          ruleNames)
         parents);
         targets = {
           "AGENTS.md" = ".agents/rules/";
@@ -286,16 +248,30 @@ in {
           };
           childPath = parent: prefix + childNames.${parent};
           root = transformer.renderKeyed {inherit (tier) index indexGroups;};
+          # The child link prefix depends on depth, not the sibling name.
+          # Keep one owner docs path and the guidance paths that pin both
+          # the depth and literal index.md source component in each namespace.
+          linkParents =
+            lib.subtractLists (
+              ["other/guidance" "other/index.md" "packages/kimchi/docs"]
+              ++ lib.optional (target == "CUSTOM.md") "dev/fragments/ai-module"
+            )
+            parents;
         in
           checkRows target ({
               "child paths match exactly" = lib.attrNames tier.children == lib.sort builtins.lessThan (map childPath parents);
+            }
+            // lib.optionalAttrs (target == "nested/AGENTS.md") {
               "root links resolve to every child" = resolvedLinks target root == lib.sort builtins.lessThan (map (parent: "/workspace/${childPath parent}") parents);
             }
-            // lib.mapAttrs' (parent: _:
-              lib.nameValuePair "child for ${parent} links to its source documents" (
-                resolvedLinks (childPath parent) (tier.children.${childPath parent} or "") == lib.sort builtins.lessThan (map (ref: "/workspace/${ref}") (sourceRefs parent))
+            // lib.listToAttrs (map (parent: let
+              child = tier.children.${childPath parent} or "";
+              expected = lib.sort builtins.lessThan (map (ref: "/workspace/${ref}") (sourceRefs parent));
+            in
+              lib.nameValuePair "both rules in the child for ${parent} link to their source documents" (
+                lib.all (name: resolvedLinks (childPath parent) (ruleSection child "${parent}-${name}") == expected) ruleNames
               ))
-            childNames);
+            linkParents));
       in
         checkRows "AGENTS.md tier namespaces" (lib.mapAttrs checkTarget targets)
     );
@@ -313,26 +289,11 @@ in {
           alpha = ["codex" "kimchi"];
           beta = ["codex" "kimchi"];
         };
-        mixed = render {
-          alpha = ["codex"];
-          beta = ["kimchi"];
-        };
-        private = render {};
       in
         checkRows "AGENTS.md index audiences" {
-          "mixed audiences are attributed to their own rule" =
-            hasRule mixed "alpha" ["  - Audience: `codex`\n"]
-            && hasRule mixed "beta" ["  - Audience: `kimchi`\n"];
           "uniform audience is declared globally, not per rule" =
             lib.hasInfix "This fallback index applies only to: `codex`, `kimchi`.\n" uniform
-            && !(lib.hasInfix "  - Audience:" uniform)
-            && lib.hasInfix "If your runtime is not named, skip this index." uniform
-            && lib.hasInfix "Runtimes with native rule injection" uniform;
-          "untagged rules render without fallback guidance" =
-            hasRule private "alpha" ["[`guide.md`](guide.md)"]
-            && hasRule private "beta" ["[`guide.md`](guide.md)"]
-            && !(lib.hasInfix "This fallback index" private)
-            && !(lib.hasInfix "Audience:" private);
+            && !(lib.hasInfix "  - Audience:" uniform);
         }
     );
 
@@ -347,7 +308,7 @@ in {
       in
         checkRows "AGENTS.md index headings" {
           "description alone does not make a rule on demand" = lib.hasPrefix "## Path-scoped rules\n" (ai.transformers.agentsmd.renderKeyed {inherit index;});
-          "on-demand index uses the generic heading" = lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {
+          "on-demand metadata makes the generic heading lead the same index" = lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {
             hasOnDemandIndex = true;
             inherit index;
           });

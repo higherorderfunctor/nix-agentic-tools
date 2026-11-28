@@ -76,35 +76,35 @@
               (( rc <= 1 ))
             }
 
-            # Exercise the same scan as the real targets. Pin the exact hit, not
-            # just success/failure, so each trap is rejected for its own line.
+            # Exercise the same scan as the real targets. Require the exact line hit
+            # for each unsafe shape and no hit for each safe shape. The real-target
+            # scan already sees the required bare opening and closing lines below,
+            # along with shell function declarations and bracket tests.
             # The inline and trailing-comment cases caught the old end-of-line
-            # anchor; the embedded awk is copied from update-pkg.sh.
-            while IFS='|' read -r row expected line; do
+            # anchor. The embedded awk row preserves the old false-positive input
+            # from update-pkg.sh even if the marker scanner changes.
+            while IFS='|' read -r row outcome line; do
+              case "$outcome" in
+                trap) expected="1:$line" ;;
+                safe) expected="" ;;
+                *) printf 'ERROR: fixture %s has unknown outcome %s\n' "$row" "$outcome" >&2; exit 1 ;;
+              esac
               hit=$(scan_traps <<<"$line")
-              if [[ $expected == trap ]]; then expected="1:$line"; else expected=""; fi
               if [[ $hit != "$expected" ]]; then
-                failures+="FIXTURE $row: expected hit '$expected', got '$hit' for '$line'"$'\n'
+                failures+="FIXTURE $row: expected $outcome (hit '$expected'), got '$hit' for '$line'"$'\n'
               fi
             done <<'FIXTURES'
-      and-list|trap|) && echo continued
-      elif|trap|    elif ! (
-      inline|trap|  if ! ( set -euETo pipefail; false ); then
-      inline-body|trap|if ! ( true ); then :; fi
-      or-list|trap|) || target_rc=$?
-      toplevel|trap|if ! (
-      trailing-comment|trap|    if ! (  # trailing comment
-      until-inline|trap|until ( false ); do :; done
-      until-multiline|trap|  until (
-      while|trap|  while ! (
-      arithmetic-if|safe|if (( x > 1 )); then
-      arithmetic-increment|safe|    ((count++))
-      arithmetic-while|safe|    while (( i-- )); do
-      embedded-awk|safe|              if (match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) && arr[1] != "" && arr[2] != "")
-      function|safe|  foo() {
-      ordinary-conditional|safe|  if [ -n "$x" ]; then
-      standalone-close|safe|)
-      standalone-open|safe|(
+      reject-and-list|trap|) && echo continued
+      reject-elif-condition|trap|    elif ! (
+      reject-inline-condition-before-then|trap|  if ! ( set -euETo pipefail; false ); then
+      reject-or-list|trap|) || target_rc=$?
+      reject-toplevel-condition|trap|if ! (
+      reject-trailing-comment-condition|trap|    if ! (  # trailing comment
+      reject-until-inline|trap|until ( false ); do :; done
+      reject-until-multiline|trap|  until (
+      reject-while-condition|trap|  while ! (
+      accept-arithmetic-if|safe|if (( x > 1 )); then
+      accept-embedded-awk|safe|              if (match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) && arr[1] != "" && arr[2] != "")
       FIXTURES
 
             for f in $TARGETS; do

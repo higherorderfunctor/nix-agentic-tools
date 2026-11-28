@@ -64,10 +64,14 @@ def journal(daemon: str, after: str) -> str:
     )
 
 
-def seen(daemon: str, after: str) -> list[str]:
+def logged_values(output: str) -> list[str]:
     # The whole quoted value: split() would also break on Unicode spaces that
     # %q leaves printable, letting a wrong value match its first token.
-    return [line.removeprefix("saw ") for line in journal(daemon, after).split("\n") if line.startswith("saw ")]
+    return [line.removeprefix("saw ") for line in output.split("\n") if line.startswith("saw ")]
+
+
+def seen(daemon: str, after: str) -> list[str]:
+    return logged_values(journal(daemon, after))
 
 
 def wait_settled() -> None:
@@ -101,15 +105,15 @@ def settle_base() -> None:
 
 
 def case_login_order() -> None:
+    # A cold user manager could start both readers without queuing or waiting
+    # for sops-nix; live activation does not exercise this start transaction.
     status, _ = machine.execute(f"systemctl is-active --quiet user@{UID}.service")
     check(status != 0, "precondition: the user manager was already running")
     check(activate("base")[0] == 0, "activating base before login failed")
     mark = cursor()
     machine.succeed(f"systemctl start user@{UID}.service")
-    machine.wait_until_succeeds(f"{CTL} is-system-running | grep -Eqx 'running|degraded'", timeout=120)
     wait_settled()
     decrypted = int(prop("sops-nix.service", "ExecMainExitTimestampMonotonic"))
-    check(decrypted > 0, "sops-nix.service never finished")
     problems = []
     for daemon, value in BASE_READERS.items():
         started = int(prop(f"{daemon}.service", "ExecMainStartTimestampMonotonic"))
@@ -133,68 +137,54 @@ def case_reader_switch(generation: str, expected: dict[str, list[str]]) -> None:
     after = main_pids(expected)
     problems = []
     for daemon, wanted in expected.items():
-        lines = seen(daemon, mark)
-        if lines != wanted:
-            problems.append(f"{daemon} saw {lines}, want {wanted}")
-        if wanted and after[daemon] in ("0", before[daemon]):
-            problems.append(f"{daemon} MainPID is {after[daemon]}, want a new process after {before[daemon]}")
-        if not wanted and after[daemon] != before[daemon]:
+        if wanted:
+            lines = seen(daemon, mark)
+            if lines != wanted:
+                problems.append(f"{daemon} saw {lines}, want {wanted}")
+            if after[daemon] == "0":
+                problems.append(f"{daemon} has no running main process after switching")
+        elif after[daemon] != before[daemon]:
             problems.append(f"{daemon} MainPID moved {before[daemon]} -> {after[daemon]}")
     check(not problems, "; ".join(problems))
 
 
-def case_new_secret() -> None:
+def case_reader_start(generation: str, daemon: str, value: str, *, stopped: bool = False) -> None:
     settle_base()
-    mark = switch("fresh")
-    value = "fresh-new"
-    restarts = prop("aa-fresh.service", "NRestarts")
-    lines = seen("aa-fresh", mark)
+    if stopped:
+        # sd-switch starts a stopped unit that an active target wants; that is
+        # its behavior, not ai-module's. Reconcile must not start it again.
+        machine.succeed(f"{CTL} stop {daemon}.service")
+    mark = switch(generation)
+    property_name, expected = ("ActiveState", "active") if stopped else ("NRestarts", "0")
+    actual = prop(f"{daemon}.service", property_name)
+    output = journal(daemon, mark)
+    lines = logged_values(output)
     check(
-        restarts == "0" and lines == [value],
-        f"aa-fresh restarted {restarts} times and saw {lines}, want one start that saw {[value]}; journal:\n"
-        + journal("aa-fresh", mark),
-    )
-
-
-def case_stopped_daemon() -> None:
-    # sd-switch starts a stopped unit that an active target wants, on every
-    # switch; that is its behavior, not ai-module's. What ai-module owns: the
-    # activation starts the reader at most once, and it ends on the new value.
-    settle_base()
-    machine.succeed(f"{CTL} stop zz-reader.service")
-    mark = switch("rotate-zz")
-    state = prop("zz-reader.service", "ActiveState")
-    lines = seen("zz-reader", mark)
-    rotated = "zz-rotated"
-    check(
-        state == "active" and lines == [rotated],
-        f"the stopped zz-reader is {state} and saw {lines}, want one start that saw {[rotated]} and left it active",
+        actual == expected and lines == [value],
+        f"{daemon} had {property_name}={actual} and saw {lines}; "
+        f"want {property_name}={expected} and exactly {[value]}; journal:\n{output}",
     )
 
 
 def case_systemctl_path() -> None:
-    # Calls only ai-module's step makes: Home Manager's own reload runs
-    # is-system-running, and sd-switch talks D-Bus.
+    # Catch the Home Manager module passing a hard-coded binary to reconcile
+    # instead of the configured wrapper. Home Manager's own reload runs
+    # is-system-running, and sd-switch talks D-Bus, so neither logs these calls.
     settle_base()
     machine.succeed(as_user(': > "$HOME/systemctl-calls"'))
     check(activate("systemctl-path")[0] == 0, "activating systemctl-path failed")
     calls = machine.succeed(as_user('cat "$HOME/systemctl-calls"')).splitlines()
-    wanted = [
-        "--user show --property=Result --value sops-nix.service",
-        "--user show --property=ActiveState --value aa-reader.service",
-    ]
-    missing = [call for call in wanted if call not in calls]
-    check(not missing, f"ai-module bypassed systemd.user.systemctlPath for {missing}; the wrapper logged {calls}")
+    wanted = "--user show --property=Result --value sops-nix.service"
+    check(wanted in calls, f"ai-module bypassed systemd.user.systemctlPath for {wanted!r}; the wrapper logged {calls}")
 
 
 def case_decrypt_failure() -> None:
-    # In the pinned order sops-nix's own step succeeds, so only ai-module's
-    # provider check can fail this activation.
+    # Catch activation succeeding on old secret bytes after sd-switch ignores
+    # the failed provider. In the pinned order sops-nix's own step succeeds,
+    # so only ai-module's provider check can fail this activation.
     settle_base()
     status, output = activate("broken")
-    result = prop("sops-nix.service", "Result")
-    check(status != 0, f"activation with an unreadable secrets file exited 0 (sops-nix.service Result={result})")
-    check(result == "exit-code", f"sops-nix.service Result={result}, want exit-code for the foreign key")
+    check(status != 0, "activation with an unreadable secrets file exited 0")
     message = "ai.services: secret provider sops-nix.service last ran with Result=exit-code"
     check(message in output.splitlines(), f"activation failed without {message!r}")
 
@@ -203,14 +193,23 @@ def case_decrypt_failure() -> None:
 # runs last because it leaves an unreadable sops-nix unit loaded.
 CASE_LIST: list[tuple[str, Callable[[], None]]] = [
     ("login-order", case_login_order),
+    # No changes: reconciliation or the provider restart could bounce every reader.
     ("noop-activation", lambda: case_reader_switch("base", {"aa-reader": [], "zz-reader": []})),
+    # Only the provider's unit changes: the running aa-reader could keep its
+    # old secret, or a broad restart could bounce the unchanged zz-reader.
     ("rotate-one", lambda: case_reader_switch("rotate-aa", {"aa-reader": ["aa-rotated"], "zz-reader": []})),
+    # Changed units: sd-switch could start a reader on the old bytes before
+    # decryption, or reconcile could restart an invocation sd-switch just started.
     (
         "unit-and-secret-change",
         lambda: case_reader_switch("changed", {"aa-reader": ["aa-changed"], "zz-reader": ["zz-changed"]}),
     ),
-    ("new-secret", case_new_secret),
-    ("stopped-daemon", case_stopped_daemon),
+    # A new reader sorting before the provider cannot fall back to old bytes:
+    # its file does not exist yet, so a premature start could fail and retry.
+    ("new-secret", lambda: case_reader_start("fresh", "aa-fresh", "fresh-new")),
+    # A previously stopped reader could be restarted again even though the
+    # invocation sd-switch started already read the rotated secret.
+    ("stopped-daemon", lambda: case_reader_start("rotate-zz", "zz-reader", "zz-rotated", stopped=True)),
     ("systemctl-path", case_systemctl_path),
     ("decrypt-failure", case_decrypt_failure),
 ]

@@ -41,11 +41,11 @@ linter_out=""
 # Baseline fixture: minimal, valid, and deliberately boring.
 # ---------------------------------------------------------------------------
 
-reset_case() {
-	rm -rf "$work/agents" "$work/hooks"
-	mkdir -p "$work/agents" "$work/hooks/bin"
+create_baseline() {
+	local baseline="$work/baseline"
+	mkdir -p "$baseline/agents" "$baseline/hooks/bin"
 
-	cat >"$work/agents/probe-baseline.md" <<'PROFILE'
+	cat >"$baseline/agents/probe-baseline.md" <<'PROFILE'
 ---
 description: Self-test baseline profile.
 dispatchKind: sub-agent
@@ -54,7 +54,7 @@ dispatchKind: sub-agent
 Reply with exactly one line: BASELINE.
 PROFILE
 
-	cat >"$work/hooks/probe-baseline.json" <<'HOOKS_JSON'
+	cat >"$baseline/hooks/probe-baseline.json" <<'HOOKS_JSON'
 {
   "hooks": [
     {
@@ -72,18 +72,23 @@ PROFILE
 }
 HOOKS_JSON
 
-	cat >"$work/hooks/bin/probe-baseline.sh" <<'SCRIPT'
+	cat >"$baseline/hooks/bin/probe-baseline.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 cat >/dev/null
 SCRIPT
-	chmod +x "$work/hooks/bin/probe-baseline.sh"
+	chmod +x "$baseline/hooks/bin/probe-baseline.sh"
+}
+
+reset_case() {
+	rm -rf "$work/agents" "$work/hooks"
+	cp -R "$work/baseline/agents" "$work/baseline/hooks" "$work"
 }
 
 run_linter() {
-	local rc=0
-	linter_out="$(bash "$linter" "$work/agents" "$work/hooks" 2>&1)" || rc=$?
+	local agents="${1:-$work/agents}" hooks="${2:-$work/hooks}" rc=0
+	linter_out="$(bash "$linter" "$agents" "$hooks" 2>&1)" || rc=$?
 	linter_rc="$rc"
 }
 
@@ -94,37 +99,62 @@ report_bad() {
 }
 
 expect_pass() {
+	local label="$1" path
+	shift
 	run_linter
-	if [ "$linter_rc" -eq 0 ]; then
-		printf 'ok   ACCEPT %s\n' "$1"
-		passed=$((passed + 1))
-	else
-		report_bad "ACCEPT $1 (expected exit 0, got ${linter_rc})"
+	if [ "$linter_rc" -ne 0 ]; then
+		report_bad "ACCEPT $label (expected exit 0, got ${linter_rc})"
+		return
 	fi
+	for path in "$@"; do
+		if ! grep -Fxq "  $path" <<<"$linter_out"; then
+			report_bad "ACCEPT $label (did not examine $path)"
+			return
+		fi
+	done
+	printf 'ok   ACCEPT %s\n' "$label"
+	passed=$((passed + 1))
 }
 
 expect_finding() {
-	local code="$1" label="$2"
+	local code="$1" path="$2" label="$3" finding
 	run_linter
-	if [ "$linter_rc" -eq 1 ] && grep -q "^FAIL ${code} " <<<"$linter_out"; then
+	finding="$(grep -F "FAIL $code $path: " <<<"$linter_out" || :)"
+	if [ "$linter_rc" -eq 1 ] && [ -n "$finding" ]; then
 		printf 'ok   REJECT %-34s %s\n' "$code" "$label"
-		printf '            %s\n' "$(grep -m1 "^FAIL ${code} " <<<"$linter_out")"
+		printf '            %s\n' "$finding"
 		passed=$((passed + 1))
 	else
-		report_bad "REJECT ${code} ${label} (exit ${linter_rc})"
+		report_bad "REJECT $label (expected $code on $path; exit $linter_rc)"
 	fi
 }
 
 expect_refusal() {
-	local label="$1" dir_a="$2" dir_b="$3" rc=0
-	linter_out="$(bash "$linter" "$dir_a" "$dir_b" 2>&1)" || rc=$?
-	if [ "$rc" -eq 2 ]; then
+	local label="$1" reason="$2"
+	run_linter "$3" "$4"
+	if [ "$linter_rc" -eq 2 ] && grep -Fq "lint-probes: $reason" <<<"$linter_out"; then
 		printf 'ok   REFUSE %s\n' "$label"
 		passed=$((passed + 1))
 	else
-		linter_rc="$rc"
-		report_bad "REFUSE ${label} (expected exit 2, got ${rc})"
+		report_bad "REFUSE $label (expected exit 2 and '$reason', got ${linter_rc})"
 	fi
+}
+
+write_profile() {
+	local path="$1"
+	shift
+	printf '%s\n' '---' "$@" '---' '' 'Body.' >"$work/agents/$path"
+}
+
+edit_baseline_hook() {
+	local hook="$work/hooks/probe-baseline.json"
+	jq "$@" "$hook" >"$hook.new"
+	mv "$hook.new" "$hook"
+}
+
+edit_baseline_command() {
+	edit_baseline_hook --arg command "\"\$KIRO_PROBE_BIN/$1\" $2" \
+		".hooks[0].action.command = \$command"
 }
 
 # ---------------------------------------------------------------------------
@@ -140,13 +170,11 @@ mutate_builtin_id_filename() {
 }
 
 mutate_builtin_id_name_override() {
-	printf '%s\n' '---' 'name: vibe' 'description: Shadows a builtin.' '---' '' 'Body.' \
-		>"$work/agents/probe-shadow.md"
+	write_profile probe-shadow.md 'name: vibe' 'description: Shadows a builtin.'
 }
 
 mutate_dispatch_kind_invalid() {
-	printf '%s\n' '---' 'dispatchKind: subagent' '---' '' 'Body.' \
-		>"$work/agents/probe-bad-kind.md"
+	write_profile probe-bad-kind.md 'dispatchKind: subagent'
 }
 
 mutate_doc_file_in_agents_dir() {
@@ -155,13 +183,11 @@ mutate_doc_file_in_agents_dir() {
 }
 
 mutate_duplicate_effective_id() {
-	printf '%s\n' '---' 'name: probe-baseline' '---' '' 'Body.' \
-		>"$work/agents/probe-twin.md"
+	write_profile probe-twin.md 'name: probe-baseline'
 }
 
 mutate_frontmatter_empty() {
-	printf '%s\n' '---' '# only a comment lives here' '---' '' 'Body.' \
-		>"$work/agents/probe-empty-fm.md"
+	write_profile probe-empty-fm.md '# only a comment lives here'
 }
 
 mutate_frontmatter_missing() {
@@ -180,13 +206,11 @@ mutate_hooks_object_json() {
 }
 
 mutate_hooks_object_md_flow() {
-	printf '%s\n' '---' 'hooks: {}' '---' '' 'Body.' \
-		>"$work/agents/probe-hooks-flow.md"
+	write_profile probe-hooks-flow.md 'hooks: {}'
 }
 
 mutate_hooks_object_md_mapping() {
-	printf '%s\n' '---' 'hooks:' '  onSave:' '    command: true' '---' '' 'Body.' \
-		>"$work/agents/probe-hooks-map.md"
+	write_profile probe-hooks-map.md 'hooks:' '  onSave:' '    command: true'
 }
 
 mutate_json_cli_only_fields() {
@@ -199,13 +223,11 @@ mutate_json_invalid() {
 }
 
 mutate_pseudo_boolean() {
-	printf '%s\n' '---' 'includePowers: yes' '---' '' 'Body.' \
-		>"$work/agents/probe-pseudo-bool.md"
+	write_profile probe-pseudo-bool.md 'includePowers: yes'
 }
 
 mutate_pseudo_boolean_in_sequence() {
-	printf '%s\n' '---' 'hooks:' '  - no' '---' '' 'Body.' \
-		>"$work/agents/probe-pseudo-seq.md"
+	write_profile probe-pseudo-seq.md 'hooks:' '  - no'
 }
 
 mutate_hook_json_comment() {
@@ -219,15 +241,11 @@ mutate_hook_json_trailing_comma() {
 }
 
 mutate_hook_matcher_invalid() {
-	jq '.hooks[0].matcher = "[unclosed"' "$work/hooks/probe-baseline.json" \
-		>"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_hook '.hooks[0].matcher = "[unclosed"'
 }
 
 mutate_hook_matcher_present() {
-	jq '.hooks[0].matcher = "read"' "$work/hooks/probe-baseline.json" \
-		>"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_hook '.hooks[0].matcher = "read"'
 }
 
 mutate_hook_nested_json() {
@@ -236,15 +254,11 @@ mutate_hook_nested_json() {
 }
 
 mutate_hook_schema_trigger() {
-	jq '.hooks[0].trigger = "onSessionStart"' "$work/hooks/probe-baseline.json" \
-		>"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_hook '.hooks[0].trigger = "onSessionStart"'
 }
 
 mutate_hook_script_missing() {
-	jq '.hooks[0].action.command = "\"$KIRO_PROBE_BIN/probe-absent.sh\" baseline"' \
-		"$work/hooks/probe-baseline.json" >"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_command probe-absent.sh baseline
 }
 
 mutate_hook_stderr_in_injecting_probe() {
@@ -256,53 +270,19 @@ mutate_hook_symlink() {
 }
 
 mutate_hook_timeout_zero() {
-	jq '.hooks[0].timeout = 0' "$work/hooks/probe-baseline.json" \
-		>"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_hook '.hooks[0].timeout = 0'
 }
-
-# code:mutation-function:label, sorted by code.
-reject_cases=(
-	"agent-broken-symlink:mutate_broken_symlink:a dangling profile symlink"
-	"agent-builtin-id-collision:mutate_builtin_id_filename:spec.md takes a builtin mode id"
-	"agent-builtin-id-collision:mutate_builtin_id_name_override:name: vibe overrides the filename"
-	"agent-dispatch-kind-invalid:mutate_dispatch_kind_invalid:dispatchKind outside the enum"
-	"agent-doc-file-in-agents-dir:mutate_doc_file_in_agents_dir:a README beside the profiles"
-	"agent-duplicate-effective-id:mutate_duplicate_effective_id:two profiles, one effective id"
-	"agent-frontmatter-empty:mutate_frontmatter_empty:comment-only front matter"
-	"agent-frontmatter-missing:mutate_frontmatter_missing:no front-matter fence"
-	"agent-frontmatter-unterminated:mutate_frontmatter_unterminated:front matter never closed"
-	"agent-hooks-object-shaped:mutate_hooks_object_json:JSON profile with hooks: {}"
-	"agent-hooks-object-shaped:mutate_hooks_object_md_flow:front matter with hooks: {}"
-	"agent-hooks-object-shaped:mutate_hooks_object_md_mapping:front matter with a hooks mapping"
-	"agent-json-cli-only-fields:mutate_json_cli_only_fields:allowedTools with no permissions"
-	"agent-json-invalid:mutate_json_invalid:malformed JSON profile"
-	"agent-pseudo-boolean:mutate_pseudo_boolean:includePowers: yes"
-	"agent-pseudo-boolean:mutate_pseudo_boolean_in_sequence:a bare no in a sequence"
-	"hook-json-comment:mutate_hook_json_comment:a // comment in a hook document"
-	"hook-json-trailing-comma:mutate_hook_json_trailing_comma:a trailing comma in a hook document"
-	"hook-matcher-invalid:mutate_hook_matcher_invalid:a matcher that does not compile"
-	"hook-matcher-present:mutate_hook_matcher_present:a matcher at all"
-	"hook-nested-json:mutate_hook_nested_json:a hook .json in a subdirectory"
-	"hook-schema-invalid:mutate_hook_schema_trigger:a trigger outside the canonical 11"
-	"hook-script-missing:mutate_hook_script_missing:a command pointing at no script"
-	"hook-stderr-in-injecting-probe:mutate_hook_stderr_in_injecting_probe:stderr from a SessionStart probe"
-	"hook-symlink:mutate_hook_symlink:a symlinked hook file"
-	"hook-timeout-zero:mutate_hook_timeout_zero:timeout: 0 means no timeout at all"
-)
 
 # ---------------------------------------------------------------------------
 # Near misses that must stay ACCEPTED.
 # ---------------------------------------------------------------------------
 
 allow_hooks_flow_array() {
-	printf '%s\n' '---' 'hooks: []' '---' '' 'Body.' \
-		>"$work/agents/probe-hooks-array.md"
+	write_profile probe-hooks-array.md 'hooks: []'
 }
 
 allow_hooks_block_array() {
-	printf '%s\n' '---' 'hooks:' '  - name: inline' '---' '' 'Body.' \
-		>"$work/agents/probe-hooks-block.md"
+	write_profile probe-hooks-block.md 'hooks:' '  - name: inline'
 }
 
 allow_json_cli_only_with_permissions() {
@@ -313,42 +293,60 @@ allow_json_cli_only_with_permissions() {
 
 allow_nested_agent_profile() {
 	mkdir -p "$work/agents/workers"
-	printf '%s\n' '---' 'description: Nested profile; the agents loader recurses.' '---' '' 'Body.' \
-		>"$work/agents/workers/drainer.md"
+	write_profile workers/drainer.md 'description: Nested profile; the agents loader recurses.'
 }
 
 allow_quoted_pseudo_boolean() {
-	printf '%s\n' '---' 'model: "yes"' '---' '' 'Body.' \
-		>"$work/agents/probe-quoted.md"
+	write_profile probe-quoted.md 'model: "yes"'
 }
 
 allow_strict_boolean_true() {
-	printf '%s\n' '---' 'includePowers: true' 'includeMcpJson: false' '---' '' 'Body.' \
-		>"$work/agents/probe-real-bool.md"
-}
-
-allow_timeout_nonzero() {
-	jq '.hooks[0].timeout = 60' "$work/hooks/probe-baseline.json" \
-		>"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	write_profile probe-real-bool.md 'includePowers: true' 'includeMcpJson: false'
 }
 
 allow_url_in_command() {
-	jq '.hooks[0].action.command = "\"$KIRO_PROBE_BIN/probe-baseline.sh\" https://example.invalid/x"' \
-		"$work/hooks/probe-baseline.json" >"$work/hooks/probe-baseline.json.new"
-	mv "$work/hooks/probe-baseline.json.new" "$work/hooks/probe-baseline.json"
+	edit_baseline_command probe-baseline.sh https://example.invalid/x
 }
 
-# mutation-function:label, sorted by function name.
-accept_cases=(
-	"allow_hooks_block_array:a hooks block sequence is the v3 shape"
-	"allow_hooks_flow_array:hooks: [] is the v3 shape"
-	"allow_json_cli_only_with_permissions:allowedTools WITH permissions is marked, not skipped"
-	"allow_nested_agent_profile:a profile in a subdirectory (the agents loader recurses)"
-	'allow_quoted_pseudo_boolean:a quoted "yes" is a string on purpose'
-	"allow_strict_boolean_true:literal true and false in boolean fields"
-	"allow_timeout_nonzero:timeout: 60 is not timeout: 0"
-	"allow_url_in_command:a // inside a command string is not a JSON comment"
+# outcome:mutation-function:path:label. A rejection requires both the finding
+# code and its path; an acceptance requires proof that the linter read the path.
+cases=(
+	# Rejections, sorted by finding code.
+	"agent-broken-symlink:mutate_broken_symlink:probe-dangling.md:a dangling profile symlink"
+	"agent-builtin-id-collision:mutate_builtin_id_filename:spec.md:spec.md takes a builtin mode id"
+	"agent-builtin-id-collision:mutate_builtin_id_name_override:probe-shadow.md:name: vibe overrides the filename"
+	"agent-dispatch-kind-invalid:mutate_dispatch_kind_invalid:probe-bad-kind.md:dispatchKind outside the enum"
+	"agent-doc-file-in-agents-dir:mutate_doc_file_in_agents_dir:README.md:a README beside the profiles"
+	"agent-duplicate-effective-id:mutate_duplicate_effective_id:probe-twin.md:two profiles, one effective id"
+	"agent-frontmatter-empty:mutate_frontmatter_empty:probe-empty-fm.md:comment-only front matter"
+	"agent-frontmatter-missing:mutate_frontmatter_missing:probe-no-fm.md:no front-matter fence"
+	"agent-frontmatter-unterminated:mutate_frontmatter_unterminated:probe-unterminated.md:front matter never closed"
+	"agent-hooks-object-shaped:mutate_hooks_object_json:probe-hooks-object.json:JSON profile with hooks: {}"
+	"agent-hooks-object-shaped:mutate_hooks_object_md_flow:probe-hooks-flow.md:front matter with hooks: {}"
+	"agent-hooks-object-shaped:mutate_hooks_object_md_mapping:probe-hooks-map.md:front matter with a hooks mapping"
+	"agent-json-cli-only-fields:mutate_json_cli_only_fields:probe-cli-only.json:allowedTools with no permissions"
+	"agent-json-invalid:mutate_json_invalid:probe-bad-json.json:malformed JSON profile"
+	"agent-pseudo-boolean:mutate_pseudo_boolean:probe-pseudo-bool.md:includePowers: yes"
+	"agent-pseudo-boolean:mutate_pseudo_boolean_in_sequence:probe-pseudo-seq.md:a bare no in a sequence"
+	"hook-json-comment:mutate_hook_json_comment:probe-commented.json:a // comment in a hook document"
+	"hook-json-trailing-comma:mutate_hook_json_trailing_comma:probe-trailing-comma.json:a trailing comma in a hook document"
+	"hook-matcher-invalid:mutate_hook_matcher_invalid:probe-baseline.json:a matcher that does not compile"
+	"hook-matcher-present:mutate_hook_matcher_present:probe-baseline.json:a matcher at all"
+	"hook-nested-json:mutate_hook_nested_json:nested/probe-nested.json:a hook .json in a subdirectory"
+	"hook-schema-invalid:mutate_hook_schema_trigger:probe-baseline.json:a trigger outside the canonical 11"
+	"hook-script-missing:mutate_hook_script_missing:probe-baseline.json:a command pointing at no script"
+	"hook-stderr-in-injecting-probe:mutate_hook_stderr_in_injecting_probe:probe-baseline.json:stderr from a SessionStart probe"
+	"hook-symlink:mutate_hook_symlink:probe-linked.json:a symlinked hook file"
+	"hook-timeout-zero:mutate_hook_timeout_zero:probe-baseline.json:timeout: 0 means no timeout at all"
+
+	# Acceptances, sorted by function name.
+	"accept:allow_hooks_block_array:probe-hooks-block.md:a hooks block sequence is the v3 shape"
+	"accept:allow_hooks_flow_array:probe-hooks-array.md:hooks: [] is the v3 shape"
+	"accept:allow_json_cli_only_with_permissions:probe-marked.json:allowedTools WITH permissions is marked, not skipped"
+	"accept:allow_nested_agent_profile:workers/drainer.md:a profile in a subdirectory (the agents loader recurses)"
+	'accept:allow_quoted_pseudo_boolean:probe-quoted.md:a quoted "yes" is a string on purpose'
+	"accept:allow_strict_boolean_true:probe-real-bool.md:literal true and false in boolean fields"
+	"accept:allow_url_in_command:probe-baseline.json:a // inside a command string is not a JSON comment"
 )
 
 # ---------------------------------------------------------------------------
@@ -356,57 +354,45 @@ accept_cases=(
 # ---------------------------------------------------------------------------
 
 echo '--- baseline control -------------------------------------------------'
+# Every case starts from a fresh copy of this same validated template, so a
+# rejection cannot be credited to unrelated baseline findings.
+create_baseline
 reset_case
-expect_pass 'the unchanged baseline fixture'
+expect_pass 'the unchanged baseline fixture' probe-baseline.md probe-baseline.json
 
 echo
-echo '--- REJECT cases -----------------------------------------------------'
-for entry in "${reject_cases[@]}"; do
-	code="${entry%%:*}"
+echo '--- REJECT and ACCEPT cases -------------------------------------------'
+for entry in "${cases[@]}"; do
+	outcome="${entry%%:*}"
 	rest="${entry#*:}"
 	fn="${rest%%:*}"
+	rest="${rest#*:}"
+	path="${rest%%:*}"
 	label="${rest#*:}"
 	reset_case
-	expect_pass "baseline before ${fn}"
 	"$fn"
-	expect_finding "$code" "$label"
-done
-
-echo
-echo '--- ACCEPT cases (near misses) ---------------------------------------'
-for entry in "${accept_cases[@]}"; do
-	fn="${entry%%:*}"
-	label="${entry#*:}"
-	reset_case
-	"$fn"
-	expect_pass "$label"
+	if [ "$outcome" = accept ]; then
+		expect_pass "$label" "$path"
+	else
+		expect_finding "$outcome" "$path" "$label"
+	fi
 done
 
 echo
 echo '--- REFUSE cases -----------------------------------------------------'
 reset_case
 rm -f "$work/agents/probe-baseline.md" "$work/hooks/probe-baseline.json"
-expect_refusal 'empty directories are not a pass' "$work/agents" "$work/hooks"
+expect_refusal 'empty directories are not a pass' 'examined nothing' "$work/agents" "$work/hooks"
 reset_case
-expect_refusal 'a missing agents directory' "$work/absent-agents" "$work/hooks"
-expect_refusal 'a missing hooks directory' "$work/agents" "$work/absent-hooks"
+expect_refusal 'a missing agents directory' "no agents directory at $work/absent-agents" \
+	"$work/absent-agents" "$work/hooks"
+expect_refusal 'a missing hooks directory' "no hooks directory at $work/absent-hooks" \
+	"$work/agents" "$work/absent-hooks"
 
 echo
 printf 'cases passed: %d\n' "$passed"
 printf 'cases failed: %d\n' "$failed"
 
-# Every REJECT case contributes two assertions (baseline pass + finding), every
-# ACCEPT one, plus one baseline control and three refusals.
-expected=$((2 * ${#reject_cases[@]} + ${#accept_cases[@]} + 1 + 3))
-if [ "$((passed + failed))" -ne "$expected" ]; then
-	printf 'FAIL: ran %d assertions, expected %d - the case tables and the runner disagree\n' \
-		"$((passed + failed))" "$expected" >&2
-	exit 1
-fi
-if [ "$passed" -eq 0 ]; then
-	echo 'FAIL: no assertions ran' >&2
-	exit 1
-fi
 if [ "$failed" -ne 0 ]; then
 	printf 'FAIL: %d case(s) did not behave as specified\n' "$failed" >&2
 	exit 1

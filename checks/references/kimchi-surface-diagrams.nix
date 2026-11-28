@@ -36,11 +36,16 @@
 
   renders = import ../../dev/references/kimchi-surface/renders.nix {inherit lib;};
 
-  # The published pair must still be compared if its render is dropped or
-  # renamed. Also compare new outputs automatically; renders.nix owns the
-  # invocation arguments, not the minimum set of published diagrams.
+  # List both published filenames explicitly so dropping or renaming a render
+  # in renders.nix fails as a missing output instead of skipping the comparison.
+  # Also compare new outputs automatically; renders.nix owns the invocation
+  # arguments, not the minimum set of published diagrams.
   comparedOutputs = lib.unique ([
+      # A capability description can change while the endpoint columns stay
+      # the same; only this output catches a stale capabilities diagram.
       "kimchi-capabilities.svg"
+      # A host or path can change while the capability columns stay the same;
+      # only this output catches a stale endpoints diagram.
       "kimchi-endpoints.svg"
     ]
     ++ lib.mapAttrsToList (_: spec: spec.out) renders.renders);

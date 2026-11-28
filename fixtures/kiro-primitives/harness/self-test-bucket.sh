@@ -106,14 +106,13 @@ check_bucket() {
 }
 
 # Fixed SHA-256 prefixes for these byte strings (first 16 hex digits).
-# Check the empty-set branch separately: it is a literal, not a hash.
-check_bucket 'empty path set' '_global'
-check_bucket 'one concatenated path' '0731f6eacabd6e75' '/tmp/a/tmp/b'
-# Reversed input exercises sorting as well as the NUL separator.
-check_bucket 'two paths, supplied in reverse order' 'c4bb7aca9eb3e434' '/tmp/b' '/tmp/a'
-# A previous false pass hid whitespace loss; both spellings must be preserved.
-check_bucket 'with trailing space' '790f498f3ee65d30' '/tmp/x '
-check_bucket 'without trailing space' '2e56aa36f538b33b' '/tmp/x'
+# An empty set must not hash the empty string.
+check_bucket 'empty path set uses the global bucket' '_global'
+# The reversed pair exercises sorting and the NUL separator.
+check_bucket 'two reversed paths are sorted and NUL-joined' 'c4bb7aca9eb3e434' '/tmp/b' '/tmp/a'
+# The singleton exercises hashing with no separator or terminator. A previous
+# false pass hid whitespace loss, so use a trailing space to catch trimming.
+check_bucket 'trailing space is part of the path' '790f498f3ee65d30' '/tmp/x '
 
 printf 'buckets reproduced: %d\n' "$ok"
 printf 'mismatched:         %d\n' "$bad"
