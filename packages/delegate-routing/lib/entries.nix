@@ -194,8 +194,14 @@ in {
             name = "E3";
             text = ''
               **E3.** Look for the simpler, cheaper shape. A finding that says a part can go also
-              says what breaks if it is removed. Implement each decision once, and abstract
-              repeated decisions only when that avoids needless jumping between files.
+              says what breaks if it is removed. For a check, show that another check still
+              catches the same wrong outcome, or that the outcome is no longer required; a
+              check stays only when it is the only one that catches a plausible regression.
+              Implement each decision once: a repeated fact or decision (a constant, an
+              external naming formula, an ID, a version) and a duplicated helper doing the
+              same job each get one source from the second copy, using a library when one
+              fits. Leave incidental similar lines that carry no shared decision. If one copy
+              changed and the other did not, and anything would break, extract it now.
             '';
           }
           {
@@ -278,6 +284,8 @@ in {
               failing for the intended reason before the fix, or against one plausible
               wrong implementation, and passing after.
 
+              Every check and row names the plausible regression that only it catches; one
+              that cannot is deleted, the same as one a surviving guard already covers.
               Before pruning a row or assertion, trace every reader of it, including
               symlinks and files selected by name. Prune only when the skip test above still
               holds for each reader after the whole prune, or the outcome is no longer

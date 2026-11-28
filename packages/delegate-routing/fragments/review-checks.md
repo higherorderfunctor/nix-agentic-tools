@@ -48,15 +48,20 @@ review history or the writer's notes) and the rubric file verbatim. Apply the
 Rubric's Review order row first; then examine its other rows and the guarantee
 claims. Every engineering or guarantee question not yet examined is unknown, not
 passed. A guarantee with no enforcing line in this diff is an issue of at least
-medium severity. A finding that adds test machinery names what it protects that
-existing checks do not; otherwise it is a nit, not a reason to add machinery.
-For each fail or issue, return its location, the row or requirement it breaks,
-evidence, whether it holds, and a proposed severity; if uncertain, return the
-open question that would settle it.
+medium severity. A defect only in test or check code, on synthetic data, is low
+severity unless it lets a check pass on a wrong implementation. A finding that
+adds test machinery names what it protects that existing checks do not;
+otherwise it is a nit, not a reason to add machinery. When two rubric rows can
+both pass only by adding new machinery, report the conflict as an open question,
+not a finding. For each fail or issue, return its location, the row or
+requirement it breaks, evidence, whether it holds, and a proposed severity; if
+uncertain, return the open question that would settle it.
 
 The reviewer, not the writer, searches for dead code: removed names, dead
-branches, checks pinning removed behavior, stale prose and shims. It lists what
-it searched, so an empty result differs from not looking.
+branches, checks pinning removed behavior, stale prose and shims, and kept
+checks or table rows that name no regression only they catch. Each kept check it
+finds is a proposed cut with its evidence, judged like any other cut at any
+size. It lists what it searched, so an empty result differs from not looking.
 
 **Second check:** gets each issue that holds, its location and its rubric row or
 requirement, without the first check's reasoning, evidence or severity.

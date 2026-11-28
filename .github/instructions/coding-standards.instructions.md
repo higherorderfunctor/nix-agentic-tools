@@ -111,6 +111,9 @@ collections.
 
 ### DRY Principle
 
-Never duplicate logic, configuration, or patterns. When the same thing appears
-twice, extract it. Three similar lines is better than a premature abstraction,
-but three similar blocks means it is time to extract.
+Never duplicate logic, configuration, or patterns. A repeated fact or decision
+(a constant, an external naming formula, an ID, a version) and a duplicated
+helper doing the same job each get one source from the second copy, using a
+library when one fits. Leave incidental similar lines that carry no shared
+decision; do not force them into an abstraction. The test: if one copy changed
+and the other did not, would anything break? If yes, extract it now.
