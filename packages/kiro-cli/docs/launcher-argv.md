@@ -382,35 +382,55 @@ and fetched build inputs are not a second installed runtime. Ordinary
 input-addressed builds share identical selections, but do not promise
 cross-release deduplication merely because two releases contain equal payloads.
 
-`passthru.withBundlePatches { replace; }` selects the existing tweaks at build
-time; `withRolloutFeatures` and `unwrapped` preserve that selection. The factory
-uses the same selector on both backends. `lib/kas.nix` runs the extractor once
-on the original bytes, and `lib/kiro-bundle-patch.py` turns each selected tweak
-into named edits on one prompt's decoded text, ids like
-`relativeFileCheckPaths.paragraph`. Every edit must match exactly once in its
-own prompt (overlapping occurrences count), whole-paragraph edits also pin the
-digest of the selected text, and no two edits may intersect. Any failure refuses
-the whole build before output is written and names the edits, never vendor text.
-The extractor already decoded each prompt, so edits apply to that text and the
-bundle bytes of each edited prompt's literal, quotes included, are replaced by
-the new text as a double-quoted JSON string, which JavaScript reads as the same
-value. Unedited prompts and every byte outside the literals stay as they were,
-so a stock bundle is byte-identical. Every KAS output, patched or not, also
-ships the three original prompts as `share/kiro/vendorSteering/<leaf>.txt`;
-nothing reads them at evaluation. The independent CI drift check requires every
-built-in edit to match real vendor data on each platform even when a consumer
-disables it, and compares each of the four selections with expectations written
-in the check.
+`passthru.withBundlePatches` takes one manifest, `{}` or
+`{ prompts; replace; }`, and selects the enabled tweaks and the consumer's
+`prompts` entries at build time; `withRolloutFeatures` and `unwrapped` preserve
+that selection. The factory uses the same selector on both backends.
+`lib/kas.nix` runs the extractor once on the original bytes, and
+`lib/kiro-bundle-patch.py` turns each selected tweak into named edits on one
+prompt's decoded text, ids like `relativeFileCheckPaths.paragraph`. Every edit
+must match exactly once in its own prompt (overlapping occurrences count),
+whole-paragraph edits also pin the digest of the selected text, and no two edits
+may intersect. Any failure refuses the whole build before output is written and
+names the edits, never vendor text. The extractor already decoded each prompt,
+so edits apply to that text and the bundle bytes of each edited prompt's
+literal, quotes included, are replaced by the new text as a double-quoted JSON
+string, which JavaScript reads as the same value. Unedited prompts and every
+byte outside the literals stay as they were, so a stock bundle is
+byte-identical. Every KAS output, patched or not, also ships the three original
+prompts as `share/kiro/vendorSteering/<leaf>.txt`; nothing reads them at
+evaluation. The independent CI drift check requires every built-in edit to match
+real vendor data on each platform even when a consumer disables it, and compares
+each of the four selections with expectations written in the check.
+
+`ai.kiro.cli.prompts` is the consumer's own edits: an attribute set whose
+entries are `{ target; match; replace; }`. `target` is one of the three promoted
+prompts (`agents.workflow.creator`, `agents.workflow.planner`,
+`workflow.orchestration`), `match` is non-empty, and an empty `replace` deletes
+the match. The option is declared once in the shared Kiro record, so the lib
+factory, Home Manager and devenv take the same entries. `lib/mkKiro.nix` lowers
+the enabled tweaks and the entries into one manifest. An empty `prompts` set, or
+an empty selection passed straight to `withBundlePatches`, equals stock: the
+stock server stays selected, the package keeps its stock name and nothing warns.
+A refused entry names itself, and an entry with no managed package warns. A
+custom selection dispatches to its own server with `--set`, so an inherited
+server path cannot override it. The patcher edits each entry as `prompts.<key>`
+under the same checks as the tweaks, including intersection with a tweak's edit.
+`{{primary}}` and `{{repo}}` are not resolved at evaluation or build; the
+per-session fill is separate work, so an entry carrying them delivers the
+literal text until it lands. `module-kiro-custom-prompts-parity` pins that both
+backends build the wrapper the literal manifest builds, that both empty forms
+equal stock, and that a custom-only selection dispatches with `--set`.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
 The workflow tweaks retain the existing relative file-check guidance and
-deletion of vendor worktree ownership/merge guidance. Configurable prompt files,
-additional roots and engine-default changes are separate work.
+deletion of vendor worktree ownership/merge guidance. Prompt files, additional
+roots and engine-default changes are separate work.
 
 Inherited overrides have deliberate precedence: all-off uses `--set-default` for
 the server, preserving a caller's explicit `KIRO_KAS_SERVER_PATH`. Any managed
-tweak uses `--set` so another server cannot silently discard it.
+tweak or prompt entry uses `--set` so another server cannot silently discard it.
 `KIRO_KAS_NODE_PATH` always defaults to the packaged Node and still accepts an
 explicit caller override. These are fixed package paths, with no launch-time
 materializer or cache-selection fallback.

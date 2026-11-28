@@ -5,10 +5,15 @@
   src,
   sourceRoot,
   version,
-}: {replace ? []}: let
+}: patches: let
   inherit (pkgs) lib;
   vu = import ./packaging.nix;
-  selected = replace != [];
+  # `patches` is the manifest `lib/mkKiro.nix` builds: `{}` when nothing is edited,
+  # else `replace` (built-in tweak names) and/or `prompts` (consumer entries).
+  selected = patches != {};
+  prompts = patches.prompts or {};
+  replace = patches.replace or [];
+  promptsFile = pkgs.writeText "kiro-prompt-edits.json" (builtins.toJSON prompts);
 in
   pkgs.stdenvNoCC.mkDerivation {
     pname = "kiro-cli-kas" + lib.optionalString selected "-patched";
@@ -32,6 +37,7 @@ in
       ${vu.kiroPromptFactsExtractScript pkgs} "$server" > "$TMPDIR/prompt-leaves.json"
       python3 ${./kiro-bundle-patch.py} "$server" "$TMPDIR/prompt-leaves.json" "$server" \
         --export-leaves "$out/share/kiro/vendorSteering" \
+        ${lib.optionalString (prompts != {}) "--prompts ${promptsFile}"} \
         ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") (lib.sort builtins.lessThan (lib.unique replace))}
       node --check "$server"
       runHook postInstall

@@ -1625,6 +1625,66 @@ in {
         && builtins.all (forks evalDevenv (v: v.config.packages)) names
     );
 
+    # One `ai.kiro.cli.prompts` definition serves the lib factory, Home Manager and
+    # devenv. Each backend's wrapper must equal the one built from the literal
+    # manifest below (so the manifests are identical), an explicit empty set, through
+    # the module or the package selector, must equal the stock wrapper, and a custom-only selection must dispatch to its
+    # own server with `--set`, which an inherited server path cannot override.
+    module-kiro-custom-prompts-parity = let
+      entry = replace: {
+        inherit replace;
+        match = "# Workflow Orchestration";
+        target = "workflow.orchestration";
+      };
+      prompts.heading = entry "# Workflow Orchestration\n\nPrimary checkout: {{primary}}";
+      patched = pkgs.ai.kiro-cli.withBundlePatches {inherit prompts;};
+      wrapped = evaluate: packages: cli: kiroWrappedDrvs (packages (evaluate {ai.kiro.cli = {enable = true;} // cli;}));
+      runtime = import ../lib/mkKiro.nix {
+        lib = lib // {ai = import ../../../lib/ai {inherit lib;};};
+        inherit pkgs;
+      };
+      rows = evaluate: packages: let
+        drv = wrapped evaluate packages;
+        accepts = bad: (builtins.tryEval (builtins.deepSeq (evaluate {ai.kiro.cli.prompts.x = bad;}).config.ai.kiro.cli.prompts true)).success;
+      in
+        soleSame (drv {inherit prompts;}) (drv {package = patched;})
+        && soleFork (drv {inherit prompts;}) (drv {})
+        && soleSame (drv {prompts = {};}) (drv {})
+        && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts = {};};}) (drv {})
+        && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {replace = [];};}) (drv {})
+        && soleSame (drv {prompts.x = entry "";}) (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts.x = entry "";};})
+        && !accepts (entry "" // {match = "";})
+        && !accepts (entry "" // {target = "agents.workflow.unknown";})
+        && (evaluate {
+          ai.kiro.cli = {
+            enable = true;
+            package = null;
+            inherit prompts;
+          };
+        }).config.warnings
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.prompts. Unset them or set ai.kiro.cli.package."]
+        && (evaluate {
+          ai.kiro.cli = {
+            enable = true;
+            package = null;
+            prompts = {};
+          };
+        }).config.warnings
+        == [];
+      failing = lib.attrNames (lib.filterAttrs (_: ok: !ok) {
+        devenv = rows evalDevenv (v: v.config.packages);
+        hm = rows evalHm (v: v.config.home.packages);
+        libType = runtime.options.cli.prompts.type.description == (evalHm {}).options.ai.kiro.cli.prompts.type.description && runtime.options.cli.prompts.type.description == (evalDevenv {}).options.ai.kiro.cli.prompts.type.description;
+      });
+    in
+      mkWrapperGrepTest {
+        name = "kiro-custom-prompts-parity";
+        package = assert lib.assertMsg (failing == []) "FAIL: kiro-custom-prompts-parity: ${toString failing}"; patched.unwrapped;
+        bin = "kiro-cli";
+        needles = ["export KIRO_KAS_SERVER_PATH='${patched.kas}/node_modules/@kiro/agent/dist/server/acp-server.js'"];
+        absentNeedles = ["KIRO_KAS_SERVER_PATH-"];
+      };
+
     # The launcher carries the v3 selectors, so even a config with no other
     # wrapper reason installs it, on both backends. The Git SSH default is
     # off so that its environment export cannot be what produced the wrapper.
