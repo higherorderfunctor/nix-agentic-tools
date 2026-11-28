@@ -3,6 +3,9 @@
 Airlock is a local egress proxy for coding harnesses, built from the in-tree
 Rust workspace.
 
+The optional [route plan prototype](docs/route-plan-prototype.md) exercises
+credential forwarding and model routing with fake providers.
+
 The server listens only on IP loopback addresses and detects HTTP/1.1 or
 cleartext HTTP/2 prior knowledge on the same port. CONNECT opens a TCP tunnel to
 a hostname or IP address with an explicit port, forwarding opaque bytes without

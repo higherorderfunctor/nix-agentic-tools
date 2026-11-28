@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use airlock::ca::Instance;
 use clap::{Parser, Subcommand};
@@ -20,6 +20,9 @@ pub enum Command {
         /// IP loopback address to listen on (port 0 allowed).
         #[arg(long, default_value = "127.0.0.1:8318")]
         listen: SocketAddr,
+        /// Enable the experimental inference gateway with a JSON route plan.
+        #[arg(long)]
+        route_plan: Option<PathBuf>,
     },
     /// Manage the private local CA without installing trust.
     Ca {

@@ -18,7 +18,11 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
-        Command::Serve { listen } => server::run(listen).map_err(|error| error.to_string()),
+        Command::Serve { listen, route_plan } => match route_plan {
+            Some(path) => server::run_with_route_plan(listen, &path),
+            None => server::run(listen),
+        }
+        .map_err(|error| error.to_string()),
         Command::Ca {
             command: CaCommand::Init { instance },
         } => {

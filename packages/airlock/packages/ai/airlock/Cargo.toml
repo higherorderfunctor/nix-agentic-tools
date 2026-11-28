@@ -7,17 +7,24 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+base64.workspace = true
 clap.workspace = true
 h2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
+hyper-rustls.workspace = true
 hyper-util.workspace = true
 pem.workspace = true
 rcgen.workspace = true
+rustls.workspace = true
 rustix.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+subtle.workspace = true
 tempfile.workspace = true
 time.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
 x509-parser.workspace = true
 zeroize.workspace = true
 
