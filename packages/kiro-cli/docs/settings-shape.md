@@ -54,6 +54,30 @@ which kiro never matches — it compares the literal key it reads. Nothing error
 the setting simply does not exist. That held on BOTH backends, so the option was
 not a devenv-scope problem, it was unusable.
 
+### Additional directories
+
+`ai.kiro.cli.native.settings.chat.additionalDirectories` is a list of strings,
+not Nix paths. Kiro 3.6.2 has no such key, so a patched KAS bundle reads it from
+the global `cli.json` and the project one, on both backends, and adds each entry
+to the session's roots after the ones the client sends. A relative global entry
+resolves beside the global file, a project entry from the session's cwd. A root
+already in the list under another spelling is skipped, first spelling first.
+Settings are read again for each new request, so a cold load sees edits and one
+request never sees two answers. A non-array, empty or non-string entry refuses
+the session; a relative root from the client is still refused by Kiro.
+
+A configured root is membership and nothing else. Kiro's default policy allows
+`fs_read ./**` and allows no write, so writes there still prompt. Its
+`.kiro/settings/mcp.json` is not read: the MCP reader receives the cwd and the
+client's roots only (a root that is both configured and sent by the client is
+treated as configured). A workflow step keeps only the extra roots its owning
+session holds, and refuses to start when its owner is named but not loaded.
+`src/patch-session-roots.mjs` finds these sites by AST and refuses the build
+when a release moves one; `kiro-additional-roots` runs the vendor functions
+involved. Not measured: how the vendor applies the relative read allow under an
+added root, and session fork and send-message loads, which still start from
+roots saved with the session. With the key unset the stock bundle runs.
+
 ### The boundary is extracted, not guessed
 
 `aiCommon.flattenDotKeysUntil` takes a list of dotted paths that are complete
@@ -105,8 +129,9 @@ The generic `lib/open-keys` inspector checks the flattened file as one struct
 level. Every dotted key stays one literal name, and each known value is opaque:
 `chat.modelDefaults` accepts arbitrary model names and fields without treating
 them as setting keys. The known names come from `kiroSettingKeys`, plus the
-known key `app.disableAutoupdates` and the typed `telemetry.enabled` option that
-neither extracted list names. These facts are not a complete nested schema.
+known keys `app.disableAutoupdates` and `chat.additionalDirectories` and the
+typed `telemetry.enabled` option that no extracted list names. These facts are
+not a complete nested schema.
 
 An unknown key such as `chat.defautModel` warns with a suggestion for
 `chat.defaultModel` on Home Manager and devenv. Home Manager writes it
