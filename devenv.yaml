@@ -5,9 +5,9 @@ allowUnfree: true
 
 inputs:
   devenv:
-    url: github:cachix/devenv/09273b2564a7b6f4662b4301698998fde08905c7
+    url: github:cachix/devenv/8566ba531135bf196863afb5fc746b255e4205e9
   git-branchless:
-    url: github:arxanas/git-branchless/d0eceb7efb5d61a287c1444bb340fb2ee17b9497
+    url: github:arxanas/git-branchless/c5926fc4a747c299b6416de18378430003e57d77
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -17,7 +17,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   go-overlay:
-    url: github:purpleclay/go-overlay/6b35f329c0958368fed0ebaa756fa5bc86f60436
+    url: github:purpleclay/go-overlay/c91103ec130b3f310d0dbb11876146b298368b1b
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -46,7 +46,7 @@ inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/2786a2a72088ecf32aea5b3ec52099e6a7cff78f
   nixpkgs-stable:
-    url: github:NixOS/nixpkgs/0dc498bfe49baeb18b0f9891e800b53bb2603193
+    url: github:NixOS/nixpkgs/5b31ff946309736077f0c4ee23bb85d0a0a1c181
   rust-overlay:
     url: github:oxalica/rust-overlay/8771c4aba509d6efb8bf376fd8cb657cce52b013
     inputs:

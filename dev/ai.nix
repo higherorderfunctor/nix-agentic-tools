@@ -170,7 +170,6 @@ in {
       index-repo-docs = ./skills/index-repo-docs;
       kimchi-surface-scan = ./skills/kimchi-surface-scan;
       pr-review-loop = ./skills/pr-review-loop;
-      repo-review = ./skills/repo-review;
     };
   };
 }

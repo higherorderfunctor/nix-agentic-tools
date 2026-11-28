@@ -20,6 +20,7 @@
   overrides = {
     # refinements: the values they admit
     "access.key-allowlist[].credentials[].kind" = "oauth";
+    "api-keys.claude[].keys[].cloak.mode" = "uncloak";
     config-version = 8;
     # config/passthrough.go: HTTP(S) base, upstream path and object-key paths
     "api-keys.passthrough[].base-url" = "https://upstream.example";

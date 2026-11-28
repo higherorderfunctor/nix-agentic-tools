@@ -76,6 +76,12 @@
   # no-op, so identity checks see the name CPA serves. The interior is free.
   modelType = types.strMatching "[!-~](.*[!-~])?" // {description = "model name whose first and last characters are printable ASCII other than space";};
 
+  # CPA 8.1.7 cloak modes (internal/config/config_types.go:741-746). CPA
+  # lowercases and trims the value, then treats any other value as "auto" with
+  # cloaking configured (claude_executor_cloaking.go:2585-2639), so a typo would
+  # turn cloaking on. Shared with the settings refinement in ./default.nix.
+  cloakModeType = types.enum ["always" "auto" "never" "uncloak"];
+
   passthroughModelType = types.submodule {
     options = {
       alias = mkOption {
@@ -123,6 +129,12 @@
         };
         default = {};
         description = "The APIs this upstream credential serves, each with its base URL.";
+      };
+      cloakMode = mkOption {
+        type = types.nullOr cloakModeType;
+        default = null;
+        example = "uncloak";
+        description = "CPA cloak mode for this key on the Anthropic API (`api-keys.claude[].keys[].cloak.mode`). `uncloak` (or `never`) strips the Claude Code User-Agent, the claude-code beta, and exact Claude Code identity and billing system blocks, so Anthropic does not bill the request as Claude Code. `auto` and `always` make CPA dress other clients as Claude Code. Unset renders nothing. Other APIs fail evaluation.";
       };
       codexShellArgCleanup = mkOption {
         type = types.bool;
@@ -261,7 +273,11 @@
         ({
             inherit name;
             inherit (value) base-url;
-            keys = [({api-key = provider.key;} // (apis.${api}.key or {}))];
+            keys = [
+              ({api-key = provider.key;}
+                // (apis.${api}.key or {})
+                // lib.optionalAttrs (api == "anthropic" && (provider.cloakMode or null) != null) {cloak.mode = provider.cloakMode;})
+            ];
             models = map (model:
               if apis.${api}.modelObjects
               then lib.filterAttrs (_: value: value != null) model
@@ -429,7 +445,7 @@
       '';
     }));
 in {
-  inherit apiKeys apis baseUrlType canonical clientKeyType credentialType literalHeader modelsOf normalizeCredential opencodeGo route rule served vendors;
+  inherit apiKeys apis baseUrlType canonical clientKeyType cloakModeType credentialType literalHeader modelsOf normalizeCredential opencodeGo route rule served vendors;
   lower = pkgs: credentials:
     lib.zipAttrsWith (_: lib.concatLists) (lib.mapAttrsToList (name: credential:
       blocks (lib.mapAttrs (_: literalHeader pkgs) (

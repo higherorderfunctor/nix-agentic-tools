@@ -1,1 +1,0 @@
-../../../references/philosophy.md

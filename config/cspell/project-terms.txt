@@ -84,7 +84,6 @@ agenix
 agentic
 agentpin
 agentsdir
-agentskills
 agentsmd
 agnix
 aihubmix
@@ -172,7 +171,6 @@ dedented
 dedents
 deepseek
 deleg
-derefs
 devenv
 devshell
 difftool

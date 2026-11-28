@@ -1,8 +1,7 @@
 # Config Parity Reference
 
-Architectural principle for the nix-agentic-tools monorepo. Used by
-repo-review's consistency-auditor to detect feature gaps across configuration
-methods.
+Architectural reference for checking feature parity across the monorepo's
+configuration methods.
 
 ## Three Configuration Methods
 
@@ -94,7 +93,7 @@ Typed options with `freeformType` fallback for unknown keys:
 | Claude | `ai.claude.native.settings.*` (generated from the binary)       | `ai.claude.native.settings.*` (generated from the binary)       |
 | Kiro   | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` |
 
-## Audit Checklist (for repo-review)
+## Audit Checklist
 
 When auditing config parity:
 

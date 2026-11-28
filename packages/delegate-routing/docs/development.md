@@ -1005,18 +1005,18 @@ The planner saves `task`, originating launch `runtime`, the complete captured
 helper JSON as `snapshot`, `rubric`, `units` and `waves` in the
 orchestrator-provided working-data directory. Each unit names goal, owned files,
 dependencies, one audience, one verification with its wrong implementation,
-associated docs/checks, per-kind size and worker/reviewer launches. A launch
-record contains its role, launching runtime, exact selected helper `launch`
-object as `candidate`, that candidate's pinned `line`, and its prepared `brief`
-path. Rubric and brief paths resolve relative to the plan. Every worker and
-every reviewer brief contains the complete saved rubric bytes verbatim; a
-summary or a path alone fails. The orchestrator may pass the prepared brief
-artifact without reading all of it into the interactive context. The planner
-prepares a base brief for every reviewer launch, including second-check and
-judge, before returning the plan. The orchestrator adds earlier-check inputs
-after those checks return, using the neutral, role-specific input rules in the
-shared Review step. Check-plan therefore validates existing base briefs, not
-future artifacts.
+associated docs/checks, per-kind size, per-file final line targets
+(`fileTargets`) and worker/reviewer launches. A launch record contains its role,
+launching runtime, exact selected helper `launch` object as `candidate`, that
+candidate's pinned `line`, and its prepared `brief` path. Rubric and brief paths
+resolve relative to the plan. Every worker and every reviewer brief contains the
+complete saved rubric bytes verbatim; a summary or a path alone fails. The
+orchestrator may pass the prepared brief artifact without reading all of it into
+the interactive context. The planner prepares a base brief for every reviewer
+launch, including second-check and judge, before returning the plan. The
+orchestrator adds earlier-check inputs after those checks return, using the
+neutral, role-specific input rules in the shared Review step. Check-plan
+therefore validates existing base briefs, not future artifacts.
 
 Invoke the same rendered executable with
 `--check-plan <plan.json> --launch-context <current-context.json>` and repeat
@@ -1039,9 +1039,8 @@ validation result supplies the current snapshot. There is no date expiry or
 fingerprint over unrelated configuration. With all fitting pools unmeasured, a
 current fit-only result may validate with budget/session uncertainty; this does
 not certify an unresolved launch. A planner analyzing in another harness must
-use the actual launching runtime's helper/sessionPool. Downstream launches in
-another runtime need their own runtime-qualified plan and check. Candidate
-target runtime can differ from launching runtime through a configured reach.
+use the actual launching runtime's helper/sessionPool. Candidate target runtime
+can differ from launching runtime through a configured reach.
 
 Independent units may share a wave on separate branches/parts with disjoint
 owned files. The helper checks the declared shape, not code dependencies or
@@ -1056,29 +1055,25 @@ planner/harness compliance.
 
 ### Policy placement ledger
 
-The Plan step adds a saved artifact and validation caller; existing policy
-paragraphs retain their authoritative fragment and compulsory readers. No source
-is removed or hidden by this change. This ledger names the current destination
-of each execution clause so later context delivery can preserve its audience
-without copying authoritative paragraphs.
+The Plan step adds a saved artifact and validation caller. This ledger names
+where the execution rules live and who reads them.
 
-| Policy substance                                                                                                                         | Source and compulsory destination/reader                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parts, Size, same-change docs/tests, file ownership and dependencies                                                                     | `choose-execution.md` remains resolved routing context; Plan consumes these as saved unit fields before returning a plan.                                                                   |
-| At most ten, isolated/read-only reviewers, tree inspection after delegates                                                               | `choose-execution.md` remains execution policy; Plan records wave bounds and briefs carry relevant constraints; the orchestrator enforces them.                                             |
-| Change a running brief instead of stopping, prevent damage, salvage diffs, retain finished work                                          | `choose-execution.md` remains compulsory execution context and is attached to relevant worker briefs; orchestrator supervision retains these duties.                                        |
-| Brief before launch, detach long jobs, wait for exit, outside-repository paths, transient 5xx reroute, vendor refusals, tool-less probes | `choose-execution.md` remains compulsory planner/executor context and supplies the relevant prepared launch briefs.                                                                         |
-| One delegate versus workflow, independent starts, disjoint writers, serialization                                                        | `choose-execution.md` remains the decision procedure; Plan records its units, owners, dependencies and waves.                                                                               |
-| First available pinning route, generated Claude agent files, concrete named fallbacks, launch cwd                                        | `choose-execution.md` plus helper route output remains planner launch context; prepared briefs carry exact pinned choices and working directory.                                            |
-| Every external brief declares a non-interactive delegate reporting to an orchestrator, not a person                                      | `choose-execution.md` remains the source; Plan explicitly requires that declaration in every external-launch brief.                                                                         |
-| Non-interactive/external delegates never launch external delegates                                                                       | `choose-execution.md` remains an unconditional launch-context constraint; Plan requires it in worker briefs and helper checks refuse headless external candidates.                          |
-| Another harness for an entire multi-step job, unknown reach probes, runtime workflow/self-run fallback sequence                          | `choose-execution.md` remains planner/executor context; the plan records the relevant decision and launch exception.                                                                        |
-| Rubric, Subtractive, Work hard rules, full Review policy and trial/fit restrictions                                                      | The resolved Work and review steps remain compulsory workflow context; Plan saves the full rubric first and includes it verbatim in every prepared worker/reviewer brief.                   |
-| Result validation and evidence chain                                                                                                     | `validate-the-result.md` remains orchestrator-visible; prepared briefs carry relevant evidence duties and the orchestrator validates receipts.                                              |
-| Pre-handoff triage of what the user pointed at; quick facts only while a delegate runs; skill/usage reads count as handoff               | `orchestrator-session.md` remains always-on orchestrator context; Plan's rubric preflight adds no task-source investigation exception.                                                      |
-| Read only delegate-cited output lines; pass the next delegate a file path rather than pasted content                                     | `orchestrator-session.md` remains always-on orchestrator context; prepared brief paths let the orchestrator comply.                                                                         |
-| Aim for every pool to reach reset near empty; do not report pool numbers unless asked                                                    | `pool-drain.md` remains always-on execution context; helper output does not waive either obligation.                                                                                        |
-| Source customization and rule steering                                                                                                   | `tune-these-rules.md` and `load-delegate-routing.md` retain their resolved/always-on placement; portable/runtime entry replacement, disables and direct builder overrides remain unchanged. |
+| Policy substance                                                                                                           | Source and compulsory destination/reader                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parts, Size, same-change docs/tests, file ownership and dependencies                                                       | `choose-execution.md` remains resolved routing context; Plan consumes these as saved unit fields before returning a plan.                                                                   |
+| At most ten, isolated/read-only reviewers, tree inspection after delegates                                                 | `choose-execution.md` remains execution policy; Plan records wave bounds and briefs carry relevant constraints; the orchestrator enforces them.                                             |
+| Change a running brief instead of stopping, prevent damage, salvage diffs, retain finished work                            | `choose-execution.md` remains compulsory execution context and is attached to relevant worker briefs; orchestrator supervision retains these duties.                                        |
+| Brief before launch, outside-repository paths, transient 5xx reroute, vendor refusals, tool-less probes                    | `choose-execution.md` supplies planner and executor context for prepared launch briefs.                                                                                                     |
+| One delegate versus workflow, independent starts, disjoint writers, serialization                                          | `choose-execution.md` remains the decision procedure; Plan records its units, owners, dependencies and waves.                                                                               |
+| Observed native techniques, exact model and effort pins, fresh helper run for each launch                                  | `choose-execution.md` and helper output supply launch context; prepared briefs carry the pinned choices.                                                                                    |
+| Delegates do not launch external CLIs                                                                                      | `choose-execution.md` governs delegate launches; Plan attaches the relevant execution policy to each brief.                                                                                 |
+| Manual CLI use for probes, fixtures or explicit user requests; probe launch directory                                      | `choose-execution.md` keeps manual CLI use outside automatic work routing.                                                                                                                  |
+| Rubric, Subtractive, Work hard rules, full Review policy and trial/fit restrictions                                        | The resolved Work and review steps remain compulsory workflow context; Plan saves the full rubric first and includes it verbatim in every prepared worker/reviewer brief.                   |
+| Result validation and evidence chain                                                                                       | `validate-the-result.md` remains orchestrator-visible; prepared briefs carry relevant evidence duties and the orchestrator validates receipts.                                              |
+| Pre-handoff triage of what the user pointed at; quick facts only while a delegate runs; skill/usage reads count as handoff | `orchestrator-session.md` remains always-on orchestrator context; Plan's rubric preflight adds no task-source investigation exception.                                                      |
+| Read only delegate-cited output lines; pass the next delegate a file path rather than pasted content                       | `orchestrator-session.md` remains always-on orchestrator context; prepared brief paths let the orchestrator comply.                                                                         |
+| Aim for every pool to reach reset near empty; do not report pool numbers unless asked                                      | `pool-drain.md` remains always-on execution context; helper output does not waive either obligation.                                                                                        |
+| Source customization and rule steering                                                                                     | `tune-these-rules.md` and `load-delegate-routing.md` retain their resolved/always-on placement; portable/runtime entry replacement, disables and direct builder overrides remain unchanged. |
 
 Fragment paths in this ledger are relative to
 `packages/delegate-routing/fragments/`. The Orchestrator session first

@@ -34,7 +34,7 @@
   repoPath,
   ...
 }: let
-  rustToolchainChannel = "1.86";
+  rustToolchainChannel = "1.97";
   rustPlatform = packageLib.mkRustPlatform {
     channel = rustToolchainChannel;
     inherit pkgs;

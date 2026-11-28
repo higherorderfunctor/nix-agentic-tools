@@ -33,6 +33,8 @@
       "exit",
       "ferment",
       "ferment-v2",
+      "fork-test-compact",
+      "fork-test-select",
       "help",
       "hooks",
       "idle-probe",
@@ -47,6 +49,7 @@
       "remote-run",
       "remote-sessions",
       "resources",
+      "review",
       "seed-remote-completion",
       "session-costs",
       "ssh-config",
@@ -308,8 +311,8 @@
   ],
   "header": {
     "facts": {
-      "kimchiSourceHash": "sha256-yRV6bkEPoxZAH5htiAZnTGHIBCE05PGk4SE2cbOG9/o=",
-      "kimchiVersion": "1.42.1",
+      "kimchiSourceHash": "sha256-ZDGjDZ4AHEqkPI4otGHbulDhsW0pKPg24XmD0fBM2As=",
+      "kimchiVersion": "1.42.4",
       "piVersion": "1.3.0"
     },
     "provenance": {
@@ -327,8 +330,8 @@
       "urlPathLiterals": "scan.mjs: TypeScript AST over Kimchi's tree, regex over pi's dist and Go"
     },
     "scan": {
-      "kimchiSourceHash": "sha256-yRV6bkEPoxZAH5htiAZnTGHIBCE05PGk4SE2cbOG9/o=",
-      "kimchiVersion": "1.42.1",
+      "kimchiSourceHash": "sha256-ZDGjDZ4AHEqkPI4otGHbulDhsW0pKPg24XmD0fBM2As=",
+      "kimchiVersion": "1.42.4",
       "piVersion": "1.3.0",
       "scannerVersion": "2.0.0"
     }
@@ -1152,7 +1155,10 @@
     },
     {
       "callSites": ["src/utils/http.ts:90"],
-      "files": ["src/integrations/constants.ts"],
+      "files": [
+        "src/extensions/review-runner/network-boundary.ts",
+        "src/integrations/constants.ts"
+      ],
       "value": "registry.npmjs.org"
     },
     {
@@ -4007,43 +4013,43 @@
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:1322",
-          "value": "KIMCHI_REMOTE_ENDPOINT"
-        },
-        {
-          "host": null,
-          "kind": "env",
           "origin": "src/extensions/agents/manager/agent-manager.ts:1336",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:607",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:1350",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:647",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:620",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:698",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:660",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:748",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:711",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
           "host": null,
           "kind": "env",
-          "origin": "src/extensions/agents/manager/agent-manager.ts:792",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:761",
+          "value": "KIMCHI_REMOTE_ENDPOINT"
+        },
+        {
+          "host": null,
+          "kind": "env",
+          "origin": "src/extensions/agents/manager/agent-manager.ts:805",
           "value": "KIMCHI_REMOTE_ENDPOINT"
         },
         {
@@ -6008,6 +6014,12 @@
       "target": "\"git\""
     },
     {
+      "callee": "execFile",
+      "category": "spawn",
+      "file": "kimchi/src/extensions/review-targets/git.ts",
+      "target": "\"git\""
+    },
+    {
       "callee": "execFileSync",
       "category": "spawn",
       "file": "kimchi/src/extensions/work-attribution/commits.ts",
@@ -6065,6 +6077,18 @@
       "callee": "execFileSync",
       "category": "spawn",
       "file": "kimchi/tests/e2e/tui/support/pr-watch-targets.ts",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
+      "file": "kimchi/tests/e2e/tui/support/review-fixture.ts",
+      "target": "\"git\""
+    },
+    {
+      "callee": "execFileSync",
+      "category": "spawn",
+      "file": "kimchi/tests/fixtures/review-panel/natural-exit-process.ts",
       "target": "\"git\""
     }
   ],
@@ -6346,7 +6370,10 @@
       "value": "/bin/jsh"
     },
     {
-      "files": ["kimchi/src/update/install.ts"],
+      "files": [
+        "kimchi/src/extensions/review-runner/network-boundary.ts",
+        "kimchi/src/update/install.ts"
+      ],
       "value": "/bin/sh"
     },
     {
@@ -6381,6 +6408,7 @@
     {
       "files": [
         "kimchi/tests/e2e/tui/support/fake-openai-server.ts",
+        "kimchi/tests/smoke/review-apa-runner.ts",
         "pi/dist/bundle/chunks/chunk-H3QXYIF7.js"
       ],
       "value": "/chat/completions"
@@ -6471,7 +6499,8 @@
       "files": [
         "kimchi/src/extensions/bash-tool-guard.ts",
         "kimchi/src/extensions/ferment/phase-evidence.ts",
-        "kimchi/src/extensions/permissions/taxonomy.ts"
+        "kimchi/src/extensions/permissions/taxonomy.ts",
+        "kimchi/src/extensions/review-runner/network-boundary.ts"
       ],
       "value": "/dev/null"
     },
@@ -7042,6 +7071,12 @@
         "kimchi/src/extensions/documents/writers/template.ts"
       ],
       "value": "/presentationml/2006/main"
+    },
+    {
+      "files": [
+        "kimchi/src/extensions/review-runner/inherited-process-operations.ts"
+      ],
+      "value": "/proc"
     },
     {
       "files": [

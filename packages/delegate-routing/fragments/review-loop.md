@@ -20,6 +20,11 @@ review count their own rounds, and a fix round counts toward the loop it
 repairs. If the same defect survives 2 rounds, change the brief instead of
 repeating it. At the cap, return the result, open defects and decision needed.
 
-A finding that breaks neither the happy path nor a guarantee the task or prior
-art lists goes on the report's gap list, not into a fix. Never split a change to
-get past the round cap.
+Fix real in-scope nits and follow the Review step's fix-review rule, including
+its exception after the ready review. The gap list is for out-of-scope findings
+only. The orchestrator applies the final nits directly. Report the net line
+change in each fix round. Never split a change to get past the round cap.
+
+After two follow-up jobs on one PR (fixes, rework or relaunches), stop and
+compare the diff with the approved scope and estimate. Report the comparison to
+the user before launching another job.

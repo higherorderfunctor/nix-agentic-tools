@@ -323,6 +323,26 @@ in {
           apis.chat.models = null;
           models = ["split-shared"];
         };
+        uncloaked = split {cloakMode = "uncloak";};
+        readHandWrittenCloak = mode: let
+          rawSettings =
+            (instanceAfter {
+              settings.api-keys.claude = [
+                {
+                  base-url = "https://raw.example";
+                  keys = [
+                    {
+                      api-key = clientKey "raw";
+                      cloak.mode = mode;
+                    }
+                  ];
+                  name = "raw";
+                }
+              ];
+            }).settings;
+          rawBlock = lib.findFirst (entry: entry.name or null == "raw") null rawSettings.api-keys.claude;
+        in
+          builtins.deepSeq rawSettings (lib.head rawBlock.keys).cloak.mode;
         blockPriorities = evaluation:
           lib.mapAttrs (_:
             map (lib.intersectAttrs {
@@ -483,6 +503,39 @@ in {
             == []
             && splitModels fallback "openai-compatibility" == [{name = "split-shared";}]
             && splitModels fallback "claude" == [{name = "split-anthropic";}];
+          "cloak mode on the setter's Anthropic key" =
+            failedMessages uncloaked
+            == []
+            && (namedBlock uncloaked "claude" "split").keys
+            == [
+              {
+                api-key = clientKey "split";
+                cloak.mode = "uncloak";
+              }
+            ];
+          "cloak mode stays off other Anthropic credentials" = (namedBlock uncloaked "claude" "zhipuai").keys == [{api-key = apiKey.key;}];
+          "cloak mode stays off the setter's chat key" = (namedBlock uncloaked "openai-compatibility" "split").keys == [{api-key = clientKey "split";}];
+          "cloak mode without Anthropic refused" = refuseInstance "credentials.chat-only.apiKey.cloakMode applies only to the Anthropic API" {
+            credentials.chat-only.apiKey = {
+              apis.chat = {
+                base-url = "https://chat.example/v1";
+                models = ["chat-model"];
+              };
+              cloakMode = "uncloak";
+              key = clientKey "chat-only";
+            };
+          };
+          "hand-written cloak mode typed" = rejectsChange readHandWrittenCloak {
+            valid = "uncloak";
+            invalid = "off";
+            expected = "uncloak";
+          };
+          "unknown cloak mode refused" = rejectsChange (change: (instanceAfter change).credentials.zhipuai.apiKey.cloakMode) {
+            valid.credentials.zhipuai.apiKey.cloakMode = "uncloak";
+            invalid.credentials.zhipuai.apiKey.cloakMode = "off";
+            expected = "uncloak";
+          };
+          "unset cloak mode omitted" = lib.all (block: lib.all (key: !(key ? cloak)) block.keys) (lib.concatLists (builtins.attrValues settings.api-keys));
           "API missing both model lists is refused" =
             failsWith ["credentials.split.apiKey serves API `chat` without models"] (split {apis.chat.models = null;});
           "API whose declared list merges empty is refused" =

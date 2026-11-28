@@ -105,19 +105,7 @@
   inherit (caddy) envRef;
   redact = import ../redact {inherit lib;};
 
-  # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
-  # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
-  # this is ~10 similar LINES, and the repo's DRY rule prefers that to
-  # prying a working secret path apart to serve a second caller.
-  sanitize = s:
-    lib.concatStrings (map
-      (c:
-        if lib.match "[A-Z0-9]" c != null
-        then c
-        else "_")
-      (lib.stringToCharacters (lib.toUpper s)));
-
-  envVarFor = serverName: field: "MCP_PROXY_${sanitize serverName}_${sanitize field}";
+  envVarFor = (import ./env-var-name.nix {inherit lib;}).envVarName "MCP_PROXY";
 
   inherit (redact) isReserved;
 

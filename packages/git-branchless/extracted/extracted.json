@@ -329,6 +329,17 @@
       ],
       "writes": {}
     },
+    "branchless.record.wrapWidth": {
+      "description": "At what column to wrap commit messages by default, if at all.",
+      "reads": {
+        "git-branchless-lib/src/core/config.rs#get_record_wrap_width": [
+          "repository"
+        ]
+      },
+      "status": "current",
+      "type": "string",
+      "writes": {}
+    },
     "branchless.restack.defaultRevset": {
       "description": "The configured revset for bare restack; setting it also limits explicit restack's branch repair to the selection. An unresolvable configured default stops before restacking commits or moving branches; pass a revset explicitly to override it.",
       "reads": {

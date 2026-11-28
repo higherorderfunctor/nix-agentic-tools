@@ -18,48 +18,43 @@ one only when its next step would do damage, such as pushing to a merged branch,
 and salvage its diff first. Finished work outside the intended scope, or done
 after its PR merged, becomes a new PR on a fresh branch and is never discarded.
 
-Write every brief file before launching. Launch long external runs detached so
-they outlive the launching step, and wait on their exit. Tell reviewers how to
-address paths outside the repository: absolute paths and `git -C`. On a
-transient 5xx from a provider, rerun on another pool instead of looping. When a
-vendor's safety filter refuses a brief, route the task to another vendor; never
-retry it or reword it to get past the filter. Check whether a model answers only
-with a tool-less probe agent or a direct API call, never with an ordinary
-workflow agent.
+Write every brief file before launching. Tell reviewers how to address paths
+outside the repository: absolute paths and `git -C`. On a transient 5xx from a
+provider, rerun on another pool instead of looping. When a vendor's safety
+filter refuses a brief, route the task to another vendor; never retry it or
+reword it to get past the filter. Check whether a model answers only with a
+tool-less probe agent or a direct API call, never with an ordinary workflow
+agent.
 
-Treat a pool that answers with rate-limit errors as depleted for the rest of the
-session: add its families to each role's `exclude` list in every later launch
-context instead of retrying it per launch.
-
-When a runtime’s root agent runs its own subagents, hand it a unit’s or a PR’s
-whole loop (write, review, fix and fix review) as one job instead of launching
-each step separately. Its brief carries the Work and Review steps without
-weakening them.
+On a rate limit, wait out the stated reset or cooldown, or back off when none is
+stated, then retry. In the helper launch context, exclude that pool's families
+only while its usage reads 100% used, until that window resets.
 
 When local validation cannot run, such as a held shared lock or an unreachable
 cache, push the reviewed unit or branch and let CI run its checks instead of
 working around the block. CI's result is that unit's check: dependent work still
 waits for it.
 
-Use a tool that exists in this session's mode. A single self-contained task
-needs one delegate. Use a workflow where the runtime has one, otherwise native
-subagents, when the work has dependent steps, loops or parallel parts. With
-"Orchestrator session" enabled, every sweep, including self-contained design
-work, also takes that route. Start independent tasks together. Writers on
-disjoint files may run in parallel in one working tree, with one committer
-staging and committing for all of them. Serialize writers whose files overlap;
-use separate worktrees when they need different bases.
+Use this session's native subagent tool for one self-contained task. Use its
+native workflow tool, where it has one, for dependent steps, whole write-review
+loops and parallel parts; without one, run those steps with native subagent
+calls. With "Orchestrator session" enabled, every sweep, including
+self-contained design work, also takes that route. Start independent tasks
+together. Writers on disjoint files may run in parallel in one working tree,
+with one committer staging and committing for all of them. Serialize writers
+whose files overlap; use separate worktrees when they need different bases.
 
-Choose the launch path by what this session shows it can do, never by runtime
-name. Observed tools and configuration decide availability: use a technique only
-when it is in your tool list or its command is on PATH. Report what you observed
-in the helper’s launch context. Every launch fixes technique, model and effort
-from one helper line, bound exactly; a named user request wins. Rerun the helper
-before every launch (each subagent call or new workflow).
+Offer the helper every native technique and model this session shows it can pin.
+Observed tools and configuration decide availability: use a technique only when
+it is in your tool list or its command is on PATH, never by runtime or model
+family name. Report what you observed in the helper's launch context. Every
+launch fixes technique, model and effort from one helper line, bound exactly; a
+named user request wins. Rerun the helper before every launch (each subagent
+call or new workflow).
 
 - **Native subagents only:** you invoke the helper, then bind the returned fixed
   technique, model and effort in each subagent call.
-- **Static workflow** (the script is fixed once it starts): a planner delegate
+- **Static workflow** (the steps are fixed once it starts): a planner delegate
   returns the plan and the caller that launches the workflow builds it from that
   plan with fixed values. A static workflow's picks stay fixed for that run and
   the next launch reruns the helper. Never mutate a running one.
@@ -67,23 +62,33 @@ before every launch (each subagent call or new workflow).
   planner reruns the helper between steps and fixes every dispatch's values from
   that fresh result.
 
-Launch delegate CLIs from the current directory. That directory decides their
-permissions and configuration. Say in every external launch brief that the
-delegate is non-interactive and reports to an orchestrator, not a person.
+External CLIs such as `codex exec` are manual techniques for probes, fixture
+testing or work the user explicitly asks to run with them, not automatic
+fallback routes. Run a manual probe from the intended launch directory, which
+determines permissions and configuration. If no native technique reaches a
+qualified model, report the gap instead of shelling out. A delegate never
+launches external CLIs; it may use its own runtime's native subagent and
+workflow tools.
 
-A non-interactive or external delegate does not launch external delegates. It
-may use its own runtime's native subagent and workflow tools. This limit governs
-every launch recommendation in this skill; report an unreachable model to the
-orchestrator.
+Every work workflow carries its own guards: in its script if the tool has one,
+otherwise in its step list or in the launching orchestrator.
 
-Use another vendor's harness for a model this runtime can reach only when that
-harness runs the whole multi-step job itself: hand the entire job to one
-delegate there that can run its own subagents, such as one that orchestrates a
-three-check review with another vendor's model. A model no technique of this
-runtime reaches takes the helper's external line for one delegate, a single
-cross-vendor reviewer included. If no runtime can, an interactive orchestrator
-runs the steps from this session:
+- **Ceiling:** a token limit it can enforce, or a maximum number of agent calls
+  if it cannot meter tokens. Check it before each dispatch; a turn budget alone
+  is not enough.
+- **Size:** after each unit, check the Size row's running total and compare each
+  changed file's resulting size with its planned target. Measure final lengths
+  against those targets, not preexisting lines or net shrinkage.
+- **Scope judge:** at the first unit and periodically after it, a fresh agent
+  that did not write the work judges scope and size against the approved plan
+  and agreed design.
 
-1. Use this session's workflow tool, if it has one.
-2. Otherwise run the steps yourself: launch each external worker, wait for it,
-   check its output, then start the next step, such as the reviewer.
+The workflow returns early:
+
+- at the first unit, for the orchestrator's first-diff check;
+- on a ceiling, Size trigger, missed file target or scope-creep verdict.
+
+It returns completed unit IDs, artifact paths, measured sizes and the judge's
+evidence. The orchestrator verifies those artifacts and settles the next step
+before resuming from the finished run where the workflow tool supports it; reuse
+completed results from cache where supported.

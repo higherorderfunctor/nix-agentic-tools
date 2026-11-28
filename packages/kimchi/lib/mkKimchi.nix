@@ -49,7 +49,7 @@
     if backend == "devenv"
     then "${projectDir}/agents"
     else "${userHarnessDir cfg}/agents";
-  # Kimchi 1.42.1 hard-codes the user permissions file to
+  # Kimchi 1.42.3 hard-codes the user permissions file to
   # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
   # (src/extensions/permissions/config.ts:35), so unlike the rest of the
   # harness it does not follow configDir even under a package override.
@@ -121,10 +121,10 @@
   hmSettingsDefaults = {
     config = {
       telemetry.enabled = lib.mkDefault false;
-      # DEFAULT_SKILL_PATHS (Kimchi v1.42.1, src/config.ts:52-56). If skillPaths
+      # DEFAULT_SKILL_PATHS (Kimchi v1.42.3, src/config.ts:52-56). If skillPaths
       # is unset, Kimchi writes these defaults on non-interactive launches or
       # uses the setup wizard's choices on interactive launches
-      # (src/cli.ts:583,600-614). The defaults cover where ai.*
+      # (src/cli.ts:585,602-617). The defaults cover where ai.*
       # delivers skills: the default harness directory, or, for a non-default
       # configDir, the overriding package's agent directory, whose `skills/`
       # Kimchi always scans
@@ -427,7 +427,7 @@
       if isDevenv
       then projectDir
       else userPermissionsDir;
-    # Kimchi 1.42.1 loads `<agentDir>/agents/*.md` and a trusted project's
+    # Kimchi 1.42.3 loads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:34-48).
     agentsDir = agentsDirectory backend cfg;
     userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredProjectHarnessSettings);
@@ -739,7 +739,7 @@ in
       environmentVariables = {};
       hooks = {
         backends = ["devenv"];
-        reason = "Kimchi v1.42.1 reads its own lifecycle hooks from .kimchi/hooks.json and .kimchi/hooks.local.json in trusted projects (src/extensions/kimchi-hooks/definition.ts:31-36). This module manages only .kimchi/hooks.json, and only in devenv. Kimchi has two user-scope routes, but neither can be managed by Home Manager. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:138-145) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+        reason = "Kimchi v1.42.3 reads its own lifecycle hooks from .kimchi/hooks.json and .kimchi/hooks.local.json in trusted projects (src/extensions/kimchi-hooks/definition.ts:31-36). This module manages only .kimchi/hooks.json, and only in devenv. Kimchi has two user-scope routes, but neither can be managed by Home Manager. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:138-145) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
         gaps =
           map (event: {
             path = [event];

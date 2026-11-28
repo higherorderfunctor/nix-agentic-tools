@@ -78,7 +78,7 @@ in {
 
           After hard eligibility the helper runs its own one-shot picker, without tools, that keeps or excludes each role and family pair for this task, then ranks what is kept by pool pace. An unknown non-null proposer is refused; missing or null proposer identity skips the picker. When the picker is unavailable or fails, report `WARNING: model picker unavailable; using tier and pool ranking only. Report this failure to the user.`, followed by ` Unavailable: <reason>.` for each failed entry, or for missing identity/no runnable entry, and use the tier and pool ranking the helper returns. The authorized internal picker may run in nonInteractive contexts, needs no entry in `techniques`, and is skipped when its executable is not on PATH.
 
-          JSON goes to stdout and routing lines to stderr. A line is a specification for your own launch tool, never shell text: bind its technique, model and effort exactly. A role whose first pick is a fallback prints `WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user.` Failed Readers and dropped windows print warnings ending "Report this failure to the user." Exclude wins over avoid and removes every route for that family with reason "excluded by caller"; avoid never removes a route by itself. Avoided families rank after the rest with measured preference and pace ordering within each partition and carry `kind`, `resolvedEffort` and `launchEffort`; list order and duplicates add no preference. Session pace still compares all otherwise fitting measured candidates, including avoided ones. Review callers avoid the writer family; cut judges avoid writer and proposer families; use fresh separate agents with neutral briefs. After a launch route fails, follow Choose execution’s retry rules; when the failure makes the family unusable, add it to `exclude` and rerun the helper, retaining other evidence. Planner and review roles require strong or frontier tiers; try shared fallback before reporting no qualified route and never step down a tier. For a fit-only selection, report budget and session uncertainty. If no reachable candidate survives, retain the exclusions and report a loop failure. An unknown or headless context cannot certify an external launch. Provider identity is provisional for maker independence; callers still enforce trial and independence rules.
+          JSON goes to stdout and routing lines to stderr. A line is a specification for your own launch tool, never shell text: bind its technique, model and effort exactly. A role whose first pick is a fallback prints `WARNING: <role>: no non-avoided candidate; using fallback <family> at effort <x>. Report this to the user.` Failed Readers and dropped windows print warnings ending "Report this failure to the user." Exclude wins over avoid and removes every route for that family with reason "excluded by caller"; avoid never removes a route by itself. Avoided families rank after the rest with measured preference and pace ordering within each partition and carry `kind`, `resolvedEffort` and `launchEffort`; list order and duplicates add no preference. Session pace still compares all otherwise fitting measured candidates, including avoided ones. Review callers avoid the writer family; cut judges avoid writer and proposer families; use fresh separate agents with neutral briefs. After a launch route fails, follow Choose execution’s retry rules. Outside rate limits, when the failure makes the family unusable, add it to `exclude` and rerun the helper, retaining other evidence. Planner and review roles require strong or frontier tiers; try shared fallback before reporting no qualified route and never step down a tier. For a fit-only selection, report budget and session uncertainty. If no reachable candidate survives, retain the exclusions and report a loop failure. An unknown or headless context cannot certify an external launch. Provider identity is provisional for maker independence; callers still enforce trial and independence rules.
         '';
       }
       {
@@ -121,11 +121,9 @@ in {
           {
             name = "Review order";
             text = ''
-              **Review order.** Apply R1-R6 first to each unit of code. If any
-              readability row fails, stop for that unit and report only those failures.
-              Only after all six pass does the same reviewer apply E1-E4 to that unit.
-              This ordering does not change how many independent reviewers the workflow
-              requires.
+              **Review order.** Apply R1-R6 first to each unit. Stop grading that unit
+              only for a readability failure of medium severity or higher. Report lower
+              readability nits and continue through E1-E4. The reviewer count is unchanged.
             '';
           }
           {
@@ -203,42 +201,42 @@ in {
           {
             name = "E4";
             text = ''
-              **E4.** Parse each external input once, at the earliest boundary that can
-              refuse it, into a typed model. Document one input format; another shape needs
-              a named producer that sends it. Typed values flow downstream without
-              conversion or revalidation. Choosing by type is acceptable only in a downstream
-              unit whose actual job is to choose by type, never as a reason to skip boundary
-              validation.
+              **E4.** Types are the contract. Use typed request and response models at
+              external boundaries. Parse each external input once at the earliest point that
+              can refuse it; a shape change should surface in validation or type checking.
+              Document one input format; another shape needs a named producer. Typed values
+              flow downstream without conversion or revalidation. Choose by type only in a
+              unit whose job is to do so, never instead of boundary validation.
             '';
           }
           {
             name = "Fixtures";
             text = ''
-              **Fixtures.** Fixtures send the production client's exact shape, use bounded
-              literal cases for contract edges, and cover input spaces with a few named
-              properties. Cases that share a setup go in one input and expected pair,
-              with each behavior a named entry so a failure names the rule it broke. A
-              fixture that cannot reproduce production names the difference; a path no
-              fixture exercises is a finding.
+              **Fixtures.** Match the real input format and name any differences the code can
+              see. Share setup, never expected results that must stay independent. Use facts
+              extracted from the source and test the real code that reads them. A
+              mock endpoint shows what a client sends or how it handles a reply, never what
+              the live endpoint accepts. A check that only replays a canned answer tests
+              nothing and is deleted.
             '';
           }
           {
             name = "Size";
             text = ''
-              **Size.** Estimate while planning and count the final diff while reviewing:
-              200-400 lines per PR is the target, and about 500 is where a change counts as
-              over. Measure the line budget on normally formatted code. The signal is the
-              added lines of the ready change's line breakdown, its hand-written code row
-              plus its docs row; removed lines count separately and never raise it. Tests,
-              fixtures and checks fit within about twice the change's actual hand-written
-              code unless the brief says why. These are steering signals, never caps: being
-              over never stops work, never needs the user's approval, and being over on
-              code lines alone does not fail this row; the row fails a change that is over
-              on code with neither a split nor a stated reason, or whose tests, fixtures
-              and checks run past about twice its code with no stated reason. If an estimate
-              is over and a seam exists that a reviewer can read alone, split into stacked
-              PRs without asking; each piece passes its checks on its own. If no seam
-              exists, make one change and say why in the brief and PR summary.
+              **Size.** Aim for 200-400 added lines of hand-written code and docs per PR;
+              around 500 is over. Split an over-size estimate or draft at a seam a reviewer
+              can read alone, with checks in each PR. If no seam fits, say why in the brief
+              and PR summary.
+
+              After each unit, report the normally formatted PR diff's cumulative added
+              lines against the plan's total for code, docs, tests, fixtures and checks.
+              Count deletions and generated lines separately; don't net them against
+              additions. When additions reach 1.5x the current estimate, pause before
+              the next unit: split, cut scope within the agreed design, or record the
+              reason and a new estimate. Judge a unit planned as a cut by each file's
+              planned target size, not by added lines. At 2x the original positive
+              estimate, report the numbers and options to the user before more work
+              runs.
             '';
           }
           {
@@ -260,12 +258,32 @@ in {
           {
             name = "Checks";
             text = ''
-              **Checks.** Each added check names the wrong implementation it fails on. A
-              check whose expected value is computed by the expression under test, or read
-              back from the input the check itself supplied, fails on none: write the
-              expected value by hand or take it from an observed result, or delete the
-              check. A check for a race or a regression is shown to fail against the code
-              before the fix.
+              **Checks.** Skip a test when a surviving guard (evaluation, a linter, a type
+              checker or another check) already rejects the same wrong outcome, for the same
+              reason, on the same path. Do not count the guard under test as the check that
+              verifies it.
+              Keep one representative bad input per restriction that could be loosened,
+              beside a valid control, and run both through the real path that accepts or
+              rejects the input. Put a declaration's good and bad inputs in one check over a
+              table so a failure names the row; where the stack has a property-testing library,
+              generate the inputs instead. Known regression inputs stay as explicit rows.
+
+              For any other wrong outcome that matters (a value, order, side effect, timing,
+              attribution or decision), name the input, the wrong outcome and the expected
+              result, taken from the requirement. Check the particular failure, never just
+              that something failed. When an empty result would pass, pin the expected
+              members. A test that recomputes production's logic to get its expectation is
+              reworked: use a known answer for a fixed input or an independent observation,
+              and keep the behavior it checks. Show a bug-fix, race or regression check
+              failing for the intended reason before the fix, or against one plausible
+              wrong implementation, and passing after.
+
+              Before pruning a row or assertion, trace every reader of it, including
+              symlinks and files selected by name. Prune only when the skip test above still
+              holds for each reader after the whole prune, or the outcome is no longer
+              required. A missing comment or missing run evidence is a rework, not grounds
+              to prune. At planning, list the distinct failures to cover; there is no
+              test-to-code target.
             '';
           }
         ];
