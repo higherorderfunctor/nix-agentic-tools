@@ -26,6 +26,18 @@ text = {name: fact["text"] for name, fact in original.items()}
 planner, creator, orchestration = "agents.workflow.planner", "agents.workflow.creator", "workflow.orchestration"
 gate, relative_gate = "/repo/.agents/tasks/fix-throttle/review.json", ".agents/tasks/fix-throttle/review.json"
 paragraph_start, paragraph_end = "When a task should run in a worktree", "Do not create the worktree yourself.\n\n"
+# Authored replacement instructions, written here so a weaker rewrite of either cannot pass.
+GATE_SENTENCE = "names the gate file's workspace-relative path, the one `fileCheck.path` checks, in its prompt"
+PATH_RULE = (
+    "5. **Every path in a step prompt is absolute, except the stop-condition file.** "
+    "Step agents run in the parent session's workspace, not in a worktree, so write every other file a step "
+    "reads, writes, or commits as a literal absolute path, and tell worktree steps to use "
+    "`git -C <absolute worktree>`. The file a `stopCondition` or `completion` checks is written by the step "
+    "and checked by `fileCheck.path` at the same relative path: a plain path relative to the workflow "
+    "workspace root (e.g. `.agents/tasks/review.json`), without templates or an absolute worktree prefix. "
+    "Step agents' cwd is that root, so the writing step and the check agree. "
+    "A `fileCheck.path` that never resolves spins the loop to `maxIterations`."
+)
 # Measured on the pinned release: gate-file sites, whole removed paragraph length, and lines the creator tweak may touch.
 GATE_SITES, PARAGRAPH_LENGTH, REWRITTEN_LINES = 4, 663, 2
 
@@ -64,7 +76,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 if was != line
             ]
             assert len(changed) == REWRITTEN_LINES, f"{label}: {len(changed)} creator lines differ from the expected rewrite"
-            assert all("relative" in line for _, line in changed), f"{label}: a rewritten line lacks the relative-path rule"
+            for instruction in (GATE_SENTENCE, PATH_RULE):
+                assert now[creator].count(instruction) == 1, f"{label}: an authored creator instruction is not present exactly once"
+            assert now[creator].count(relative_gate) == GATE_SITES, f"{label}: the relative gate path is not at exactly the example sites"
             assert now[creator].count("\n") == text[creator].count("\n") and gate not in now[creator], label
         else:
             assert now[creator] == text[creator], f"{label}: the creator changed"
