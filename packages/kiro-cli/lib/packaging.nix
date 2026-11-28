@@ -1,5 +1,11 @@
 # cspell:ignore bfnrt
 rec {
+  # The one canonical KAS prompt-edit manifest: an empty `prompts` or `replace`
+  # counts as nothing, so an unedited selection is always `{}` and stays the
+  # stock server whichever door (module or `withBundlePatches`) it came through.
+  normalizeBundlePatches = patches:
+    removeAttrs patches (builtins.filter (name: patches.${name} == [] || patches.${name} == {}) (builtins.attrNames patches));
+
   # SINGLE definition of "which file is the kiro chat binary", shared by the
   # read-only extractor (`mkKiroExtract`) and the in-place patcher
   # (`mkKiroRolloutPatch`). Emitted as Python source rather than a helper

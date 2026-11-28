@@ -1627,8 +1627,8 @@ in {
 
     # One `ai.kiro.cli.prompts` definition serves the lib factory, Home Manager and
     # devenv. Each backend's wrapper must equal the one built from the literal
-    # manifest below (so the manifests are identical), an explicit empty set must
-    # equal the stock wrapper, and a custom-only selection must dispatch to its
+    # manifest below (so the manifests are identical), an explicit empty set, through
+    # the module or the package selector, must equal the stock wrapper, and a custom-only selection must dispatch to its
     # own server with `--set`, which an inherited server path cannot override.
     module-kiro-custom-prompts-parity = let
       entry = replace: {
@@ -1650,6 +1650,8 @@ in {
         soleSame (drv {inherit prompts;}) (drv {package = patched;})
         && soleFork (drv {inherit prompts;}) (drv {})
         && soleSame (drv {prompts = {};}) (drv {})
+        && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts = {};};}) (drv {})
+        && soleSame (drv {package = pkgs.ai.kiro-cli.withBundlePatches {replace = [];};}) (drv {})
         && soleSame (drv {prompts.x = entry "";}) (drv {package = pkgs.ai.kiro-cli.withBundlePatches {prompts.x = entry "";};})
         && !accepts (entry "" // {match = "";})
         && !accepts (entry "" // {target = "agents.workflow.unknown";})

@@ -409,19 +409,18 @@ prompts (`agents.workflow.creator`, `agents.workflow.planner`,
 `workflow.orchestration`), `match` is non-empty, and an empty `replace` deletes
 the match. The option is declared once in the shared Kiro record, so the lib
 factory, Home Manager and devenv take the same entries. `lib/mkKiro.nix` lowers
-the enabled tweaks and the entries into one manifest and passes it on; an empty
-`prompts` set leaves the manifest `{}`, so the stock server stays selected and
-nothing warns. The manifest is the only place that decision is made: the
-package's managed-dispatch choice, the `kiro-cli-kas-patched` name, the
-null-package warning for an explicit entry and the missing-`withBundlePatches`
-error all read it. `lib/kas.nix` writes the entries to a JSON file and the
-patcher's `--prompts` flag edits them as `prompts.<key>`, under the same checks
-as the tweaks, including intersection with a tweak's edit. `{{primary}}` and
-`{{repo}}` are not resolved at evaluation or build; the per-session fill is
-separate work, so an entry carrying them delivers the literal text until it
-lands. `module-kiro-custom-prompts-parity` pins that both backends build the
-wrapper the literal manifest builds and that a custom-only selection dispatches
-to its own server with `--set`.
+the enabled tweaks and the entries into one manifest. An empty `prompts` set, or
+an empty selection passed straight to `withBundlePatches`, equals stock: the
+stock server stays selected, the package keeps its stock name and nothing warns.
+A refused entry names itself, and an entry with no managed package warns. A
+custom selection dispatches to its own server with `--set`, so an inherited
+server path cannot override it. The patcher edits each entry as `prompts.<key>`
+under the same checks as the tweaks, including intersection with a tweak's edit.
+`{{primary}}` and `{{repo}}` are not resolved at evaluation or build; the
+per-session fill is separate work, so an entry carrying them delivers the
+literal text until it lands. `module-kiro-custom-prompts-parity` pins that both
+backends build the wrapper the literal manifest builds, that both empty forms
+equal stock, and that a custom-only selection dispatches with `--set`.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.

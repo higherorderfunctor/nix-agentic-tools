@@ -23,6 +23,7 @@
       then server
       else removeAttrs server ["timeout"]
     );
+  packaging = import ./packaging.nix;
   # Launcher/chat wrapper: idempotent flag injection plus the HM env bake.
   # Lifted out of this file so it has a seam a check can drive directly.
   # See packages/kiro-cli/lib/wrapPackage.nix.
@@ -907,7 +908,7 @@
   # placeholders left for the session to fill).
   tweakNames = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
   bundlePatchesOf = cfg:
-    lib.filterAttrs (_: value: value != [] && value != {}) {
+    packaging.normalizeBundlePatches {
       prompts = lib.mapAttrs (_: entry: {inherit (entry) match replace target;}) cfg.cli.prompts;
       replace = lib.filter (name: cfg.cli.tweaks.${name}) tweakNames;
     };

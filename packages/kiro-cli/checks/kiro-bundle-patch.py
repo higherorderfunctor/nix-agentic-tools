@@ -124,6 +124,10 @@ class PatchTests(unittest.TestCase):
                 self.assertIn("relativeFileCheckPaths.paragraph: unknown leaf agents.workflow.creator", result.stderr)
             self.assertEqual((root / "kept.js").read_bytes(), b"untouched")
             entries = root / "prompts.json"
+            entries.write_text("{}", encoding="utf-8")
+            result = cli("--check", "--prompts", str(entries))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("cannot be combined with --prompts", result.stderr)
             entries.write_text(json.dumps({"mine": {"target": "u", "match": "only", "replace": ""}}), encoding="utf-8")
             self.assertEqual(cli(str(root / "custom.js"), "--prompts", str(entries)).returncode, 0)
             self.assertEqual(self.evaluate((root / "custom.js").read_bytes())[2], 'joined "u" -u')

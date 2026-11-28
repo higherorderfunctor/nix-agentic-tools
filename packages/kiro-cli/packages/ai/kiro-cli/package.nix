@@ -42,7 +42,8 @@
   };
   canonFeatures = fs: pkgs.lib.sort (a: b: a < b) (pkgs.lib.unique fs);
 
-  mkKiroCliWithPayload = rawFeatures: bundlePatches: let
+  mkKiroCliWithPayload = rawFeatures: patches: let
+    bundlePatches = vu.normalizeBundlePatches patches;
     kas = mkKas bundlePatches;
     managedKas = bundlePatches != {};
     # Defaults updates off and normalizes an explicit opt-in. Each packaged
