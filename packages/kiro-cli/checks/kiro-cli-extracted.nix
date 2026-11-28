@@ -170,7 +170,7 @@
 
           manifest = {
               feature: {
-                  "description": "Enable the example rollout for selected accounts",
+                  "description": 'Enable the "example rollout" for selected accounts',
                   "treatment_percent": 10,
               },
           }

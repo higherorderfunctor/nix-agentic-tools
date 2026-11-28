@@ -79,6 +79,15 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert parameterized.returncode == 0, parameterized.stderr
     assert json.loads(parameterized.stdout) == modern_result
 
+    # 3.7.0's Bun bytecode payload places the module in a CommonJS wrapper.
+    wrapped = run(
+        "(function(exports, require, module, __filename, __dirname){"
+        + bundle(merge=explicit_path + composer)
+        + "})"
+    )
+    assert wrapped.returncode == 0, wrapped.stderr
+    assert json.loads(wrapped.stdout) == modern_result
+
     argument_property = run(
         bundle(
             merge=explicit_path.replace(

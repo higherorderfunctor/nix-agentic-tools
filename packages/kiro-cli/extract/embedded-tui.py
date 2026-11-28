@@ -13,7 +13,7 @@ import mmap
 from pathlib import Path
 import subprocess
 
-SHEBANG = b"#!/usr/bin/env bun\n// @bun\n"
+BUN_HEADERS = (b"#!/usr/bin/env bun\n// @bun @bytecode @bun-cjs\n", b"#!/usr/bin/env bun\n// @bun\n")
 
 
 def extract(frames, binary, destination, architecture, library, zstd):
@@ -22,7 +22,7 @@ def extract(frames, binary, destination, architecture, library, zstd):
         start, end = frames.architecture_range(data, architecture)
         for offset, frame in frames.frames(data, start, end, library):
             result = subprocess.run([zstd, "-d", "-q", "-c"], input=frame, capture_output=True)
-            if result.returncode or not result.stdout.startswith(SHEBANG):
+            if result.returncode or not result.stdout.startswith(BUN_HEADERS):
                 continue
             digest = hashlib.sha256(result.stdout).hexdigest()
             # The checksum the binary itself accepts, at the frame's end; a

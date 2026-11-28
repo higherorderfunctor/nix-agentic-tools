@@ -553,68 +553,23 @@
   "rolloutPatchability": {
     "background_execution": { "patchable": true, "unmatchedSites": 0 },
     "c2s": { "patchable": true, "unmatchedSites": 0 },
-    "code_review": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "daemon": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "fullscreen_default": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
+    "code_review": { "patchable": true, "unmatchedSites": 0 },
+    "daemon": { "patchable": true, "unmatchedSites": 0 },
+    "fullscreen_default": { "patchable": true, "unmatchedSites": 0 },
     "infra_safety": { "patchable": true, "unmatchedSites": 0 },
     "kiro_voice": { "patchable": true, "unmatchedSites": 0 },
     "kmux": { "patchable": true, "unmatchedSites": 0 },
     "kvim": { "patchable": true, "unmatchedSites": 0 },
     "lite": { "patchable": true, "unmatchedSites": 0 },
-    "managed_settings": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "memory_cloud_sync": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "memory_import": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "release_help_docs": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
-    "review": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
+    "managed_settings": { "patchable": true, "unmatchedSites": 0 },
+    "memory_cloud_sync": { "patchable": true, "unmatchedSites": 0 },
+    "memory_import": { "patchable": true, "unmatchedSites": 0 },
+    "release_help_docs": { "patchable": true, "unmatchedSites": 0 },
+    "review": { "patchable": true, "unmatchedSites": 0 },
     "test": { "patchable": true, "unmatchedSites": 0 },
     "test_internal_only": { "patchable": true, "unmatchedSites": 0 },
     "test_nightly_only": { "patchable": true, "unmatchedSites": 0 },
-    "themes_v2": {
-      "patchable": false,
-      "unmatchedSites": {
-        "__platforms": { "aarch64-darwin": 2, "x86_64-linux": 1 }
-      }
-    },
+    "themes_v2": { "patchable": true, "unmatchedSites": 0 },
     "trust_classifier_shadow": { "patchable": true, "unmatchedSites": 0 }
   },
   "rolloutStates": {
@@ -634,13 +589,13 @@
       "segment": "internal",
       "treatment_percent": 0
     },
-    "fullscreen_default": { "channel": "nightly", "treatment_percent": 100 },
+    "fullscreen_default": { "segment": "internal", "treatment_percent": 100 },
     "infra_safety": { "segment": "internal", "treatment_percent": 100 },
     "kiro_voice": { "segment": "internal", "treatment_percent": 100 },
     "kmux": {
       "channel": "nightly",
       "segment": "internal",
-      "treatment_percent": 0
+      "treatment_percent": 100
     },
     "kvim": { "segment": "internal", "treatment_percent": 100 },
     "lite": { "segment": "internal", "treatment_percent": 100 },
@@ -649,16 +604,8 @@
       "segment": "internal",
       "treatment_percent": 0
     },
-    "memory_cloud_sync": {
-      "channel": "nightly",
-      "segment": "internal",
-      "treatment_percent": 0
-    },
-    "memory_import": {
-      "channel": "nightly",
-      "segment": "internal",
-      "treatment_percent": 100
-    },
+    "memory_cloud_sync": { "segment": "internal", "treatment_percent": 100 },
+    "memory_import": { "segment": "internal", "treatment_percent": 100 },
     "release_help_docs": {
       "channel": "nightly",
       "segment": "internal",
@@ -700,6 +647,7 @@
     "chat.disableWrap",
     "chat.enableAutoBackground",
     "chat.enableC2s",
+    "chat.enableCodeReview",
     "chat.enableCustomSpinnerVerbs",
     "chat.enableInfraSafetyEnforce",
     "chat.enableInfraSafetyMonitor",

@@ -83,13 +83,15 @@ rec {
   kiroRolloutEntryPy = ''
     import re
 
+    json_string = rb'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
+
     def entry_re(name):
         n = re.escape(name.encode())
         return re.compile(
             rb'"' + n + rb'": \{\n'
-            rb'    "description": "[^"]*",\n'
+            rb'    "description": ' + json_string + rb',\n'
             rb'    "treatment_percent": \d+'
-            rb'(?:,\n    "(?:segment|channel)": "[^"]*")*\n'
+            rb'(?:,\n    "(?:segment|channel)": ' + json_string + rb')*\n'
             rb'  \}'
         )
 
@@ -104,7 +106,6 @@ rec {
         and fails closed.
         """
         key = rb'"' + re.escape(name.encode()) + rb'": \{'
-        json_string = rb'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"'
         treatment_row = (
             rb'\n    "treatment": \['
             rb'(?:\n      ' + json_string + rb'(?:,\n      ' + json_string + rb')*\n    )?'

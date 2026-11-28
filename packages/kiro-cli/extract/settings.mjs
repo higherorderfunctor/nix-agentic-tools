@@ -20,6 +20,30 @@ function fail(message) {
 if (file.parseDiagnostics.length)
   fail("the TUI bundle is not valid JavaScript");
 
+// Bun's CommonJS bytecode build wraps the entire JavaScript module in one
+// parenthesized function. Its body, not the file, is the module's top level.
+const [statement] = file.statements;
+const wrapper = statement?.expression?.expression;
+const moduleScope =
+  file.statements.length === 1 &&
+  ts.isExpressionStatement(statement) &&
+  ts.isParenthesizedExpression(statement.expression) &&
+  ts.isFunctionExpression(wrapper) &&
+  !wrapper.name &&
+  !wrapper.asteriskToken &&
+  !wrapper.modifiers?.length &&
+  wrapper.parameters.length === 5 &&
+  wrapper.parameters.every(
+    (param, index) =>
+      ts.isIdentifier(param.name) &&
+      param.name.text ===
+        ["exports", "require", "module", "__filename", "__dirname"][index] &&
+      !param.initializer &&
+      !param.dotDotDotToken,
+  )
+    ? wrapper.body
+    : file;
+
 const registryCandidates = [];
 const setCandidates = [];
 const warningFunctions = [];
@@ -124,7 +148,7 @@ for (const use of setUses) {
   const parent = use.parent;
   if (ts.isVariableDeclaration(parent) && parent.name === use) {
     declarations += 1;
-    if (parent.initializer || parent.parent.parent.parent !== file)
+    if (parent.initializer || parent.parent.parent.parent !== moduleScope)
       fail("workspace allowlist binding is not a top-level declaration");
   } else if (parent === allowlist && allowlist.left === use) {
     assignments += 1;
@@ -146,7 +170,7 @@ if (declarations !== 1 || assignments !== 1)
 const merge = warningFunctions[0];
 // The extracted merge must itself be top-level: a nested declaration would
 // not be the binding that top-level callers resolve by spelling.
-if (merge.parent !== file)
+if (merge.parent !== moduleScope)
   fail("workspace merge has an unsupported loader shape");
 const statements = merge.body?.statements;
 const globalStatement = statements?.[0];
@@ -235,7 +259,7 @@ if (emptySeed) {
       ret && ts.isReturnStatement(ret) ? ret.expression : undefined;
     if (
       object &&
-      node.parent === file &&
+      node.parent === moduleScope &&
       node.parameters.length === 0 &&
       node.body.statements.length === 1 &&
       ts.isObjectLiteralExpression(object) &&
