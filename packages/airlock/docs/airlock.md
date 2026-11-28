@@ -2,9 +2,9 @@
 
 <!-- cspell:ignore cutover sqlx -->
 
-> **Last verified:** 2026-11-07 — carries the vetted Airlock rebuild decision;
-> the code quality bar, extraction rules and stack process for rebuilding the
-> Airlock egress proxy as small PRs.
+> **Last verified:** 2026-11-27 — carries the vetted Airlock rebuild decision
+> and the CA threat model; the code quality bar, extraction rules and stack
+> process for rebuilding the Airlock egress proxy as small PRs.
 
 ## Architecture decisions
 
@@ -19,6 +19,14 @@ Relocated from the Isolation list, last verified 2026-11-06.
   Handlers stay small dispatchers, Cedar only permits or forbids, and Rust owns
   candidate selection, availability and connections. Direction vetted
   2026-10-26. See `packages/airlock/` and `packages/airlock/docs/airlock.md`.
+- **The sandbox, not Airlock, guards the CA from the user's own processes.**
+  Airlock keeps the CA key from other local users (a 0700 directory, a 0600 key,
+  no shared ancestors under `AIRLOCK_HOME`) and refuses unusable material. It
+  does not defend against processes of the same user, including the LLM harness:
+  they can read the key or replace the binary whatever the file code does. That
+  boundary belongs to the sandbox (bwrap, a macOS sandbox where supported, or a
+  microVM). So the CA code carries no symlink-swap or directory-anchoring
+  defenses. Vetted 2026-11-27.
 
 ## Basics
 
