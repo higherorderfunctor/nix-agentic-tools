@@ -1629,6 +1629,9 @@ in {
     # manifest below (so the manifests are identical), an explicit empty set, through
     # the module or the package selector, must equal the stock wrapper, and a custom-only selection must dispatch to its
     # own server with `--set`, which an inherited server path cannot override.
+    # Disabled entries are dropped: only-disabled equals stock, a disabled entry
+    # beside an active one equals the active one alone, and a null package with
+    # only disabled entries stays silent.
     module-kiro-custom-prompts-parity = let
       entry = replace: {
         inherit replace;

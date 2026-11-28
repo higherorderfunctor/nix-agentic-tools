@@ -110,7 +110,7 @@
     sourceEnabled runtime
     && builtins.elem "kiro" (requiredTargets runtime))
   supportedRuntimes;
-  kiroPromptOptionsDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "tweaks"] options;
+  kiroPromptOptionsDeclared = lib.hasAttrByPath ["ai" "kiro" "cli" "prompts"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = familyFunctions.effectiveTechniques config;
   agentFiles = import ../lib/agent-files.nix {inherit lib;};
