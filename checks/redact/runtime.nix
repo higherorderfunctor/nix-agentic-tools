@@ -30,6 +30,8 @@
   consumer = name: value: export: body:
     strict {
       inherit name;
+      # This fixture deliberately exports quote and substitution syntax as data.
+      excludeShellChecks = lib.optionals (name == "redact-literal") ["SC2016" "SC2089" "SC2090"];
       text = ''
         # The emitted shell must abort without the caller's errexit.
         set +o errexit

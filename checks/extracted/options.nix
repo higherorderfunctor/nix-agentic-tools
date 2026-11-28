@@ -454,10 +454,15 @@
       names = ["key: unknown field `range`"];
     };
   };
-  # Keep the options and renderer's relative import of redact intact.
+  # Keep the fixture's relative imports intact inside the builder.
   source = lib.fileset.toSource {
     root = ../..;
-    fileset = lib.fileset.unions [../../lib/extracted/options.nix ../../lib/extracted/render.nix ../../lib/redact];
+    fileset = lib.fileset.unions [
+      ../../lib/ai/env-var-name.nix
+      ../../lib/extracted/options.nix
+      ../../lib/extracted/render.nix
+      ../../lib/redact
+    ];
   };
   runner = (import ./runner.nix {inherit lib pkgs;}).nix;
   runRefusal = label: case:
