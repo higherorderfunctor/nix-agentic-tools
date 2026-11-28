@@ -4,7 +4,7 @@ const early = process.env.READ_FIRST;
 process.env.READ_FIRST = "1";
 const viaGlobal = globalThis["process"].env.READ_VIA_GLOBAL_THIS;
 process.env.READ_VIA_GLOBAL_THIS = "1";
-process.env.FIXED_DOT = "1";
+
 process.env["FIXED_BRACKET"] = "1";
 if (Math.random()) {
   process.env.IF_BOTH = "1";
@@ -38,7 +38,7 @@ function declared() {
 process.env.IN_FN_DECL = "1";
 void [(process.env.IN_ARRAY = "1"), 0];
 void [(process.env.ARRAY_BEFORE_AWAIT = "1"), await 0]; // stores before the await suspends
-void process.env.FIXED_DOT;
+
 void process.env.FIXED_BRACKET;
 void process.env.IF_BOTH;
 void process.env.IF_ONE;

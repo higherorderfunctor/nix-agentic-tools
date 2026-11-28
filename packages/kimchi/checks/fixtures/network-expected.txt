@@ -29,7 +29,6 @@ pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 node-http n
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2 undici - url https://m02-minified-undici.test/v1 m02-minified-undici.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-minified.js:2
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3 node-http node_modules/undici/index.js argument url - @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:3
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5 undici - url https://b01-bundled-undici-request.test/v1 b01-bundled-undici-request.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:5
-pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7 node-http - url https://b03-bundled-https.test/v1 b03-bundled-https.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:7
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9 fetch - url https://b05-bundled-sdk-default.test/v1 b05-bundled-sdk-default.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:9 fetch - url https://b06-provider-table.test/openai/v1 b06-provider-table.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:12
 pi @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:13 sdk:BaseClient - url https://b06-provider-table.test/openai/v1 b06-provider-table.test @earendil-works/pi-fixture/dist/bundle/chunks/chunk-shapes.js:12

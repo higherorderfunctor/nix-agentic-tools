@@ -12,7 +12,7 @@
   "block_roles": ["selection", "guard", "mutator", "guard"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "After moving the stack, the preview itself reports branch a without relying on stdout or stderr from a real push",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-03",

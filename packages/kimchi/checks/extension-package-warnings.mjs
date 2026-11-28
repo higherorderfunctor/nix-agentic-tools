@@ -16,12 +16,10 @@ try {
   process.env.HOME = join(root, "home");
   const loaderUrl = pathToFileURL(resolve(process.argv[2]));
   const { DefaultResourceLoader } = await import(loaderUrl.href);
-  const { CONFIG_DIR_NAME } = await import(new URL("../config.js", loaderUrl));
   const [user, project] = JSON.parse(readFileSync(process.argv[3], "utf8"));
   const cwd = join(root, "project");
   const agentDir = join(process.env.HOME, user.harnessDir);
   const projectDir = join(cwd, project.harnessDir);
-  assert.equal(projectDir, join(cwd, CONFIG_DIR_NAME));
   for (const [delivery, base] of [
     [user, agentDir],
     [project, projectDir],
@@ -53,7 +51,27 @@ try {
   const userPath = join(agentDir, user.source, "index.js");
   const projectPath = join(projectDir, project.source, "index.js");
   const retainedPath = join(retained, "index.js");
-  for (const trust of [true, false, undefined]) {
+  const retainedWarning = { path: retainedPath, warning: "preloaded warning" };
+  for (const { name, trust, selectedPath, nonPackageWarnings } of [
+    {
+      name: "approved project shadows the user package without leaking its warning",
+      trust: true,
+      selectedPath: projectPath,
+      nonPackageWarnings: [retainedWarning],
+    },
+    {
+      name: "denied project cannot replace the user package or its warning",
+      trust: false,
+      selectedPath: userPath,
+      nonPackageWarnings: [retainedWarning],
+    },
+    {
+      name: "ordinary reload selects the project without a trust bootstrap",
+      trust: undefined,
+      selectedPath: projectPath,
+      nonPackageWarnings: [],
+    },
+  ]) {
     const loader = new DefaultResourceLoader({
       agentDir,
       cwd,
@@ -62,39 +80,41 @@ try {
       noSkills: true,
       noThemes: true,
     });
-    const retainedWarning = {
-      path: retainedPath,
-      warning: "preloaded warning",
-    };
     await loader.reload(
       trust === undefined
         ? undefined
         : {
             resolveProjectTrust: ({ extensionsResult }) => {
-              assert.deepEqual(extensionsResult.errors, []);
+              assert.deepEqual(
+                extensionsResult.errors,
+                [],
+                `${name}: bootstrap errors`,
+              );
               assert.ok(
                 extensionsResult.extensions.some(
                   (ext) => ext.path === userPath,
                 ),
+                `${name}: bootstrap omitted the user package`,
               );
               assert.ok(
                 extensionsResult.extensions.every(
                   (ext) => ext.path !== projectPath,
                 ),
+                `${name}: bootstrap loaded the project before the trust decision`,
               );
               // Supply a non-package diagnostic from the surviving preloaded
               // extension; final loading must retain it.
-              extensionsResult.warnings.push(retainedWarning);
+              extensionsResult.warnings.push({ ...retainedWarning });
               return trust;
             },
           },
     );
     const result = loader.getExtensions();
-    assert.deepEqual(result.errors, []);
-    const selectedPath = trust === false ? userPath : projectPath;
+    assert.deepEqual(result.errors, [], `${name}: final load errors`);
     assert.deepEqual(
       result.extensions.map((ext) => ext.path).sort(),
       [retainedPath, selectedPath].sort(),
+      `${name}: final extension paths`,
     );
     assert.deepEqual(
       result.warnings
@@ -105,16 +125,14 @@ try {
         join(retained, "package.json"),
         join(dirname(selectedPath), "package.json"),
       ].sort(),
-      "only final packages may warn",
+      `${name}: only final packages may warn`,
     );
     assert.deepEqual(
       result.warnings.filter((entry) => !entry.path.endsWith("/package.json")),
-      trust === undefined ? [] : [retainedWarning],
-      "surviving preloaded non-package warnings must remain",
+      nonPackageWarnings,
+      `${name}: surviving preloaded non-package warnings must remain`,
     );
-    console.log(
-      `PASS: trust=${trust}: only final packages warn; retained warning preserved`,
-    );
+    console.log(`PASS: ${name}`);
   }
 } finally {
   rmSync(root, { force: true, recursive: true });

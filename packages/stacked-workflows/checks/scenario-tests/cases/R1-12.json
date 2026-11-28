@@ -3,17 +3,37 @@
     "scenario": "static",
     "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
   },
+  "assertions": [
+    {
+      "id": "new-stack-recipe-does-not-check-out-local-main",
+      "pattern": "git checkout main\\b",
+      "present": false
+    },
+    {
+      "id": "restack-does-not-replace-amend",
+      "pattern": "`git restack` instead of `git amend`",
+      "present": false
+    },
+    {
+      "id": "scoped-move-can-affect-a-worktree-stacked-on-the-current-one",
+      "pattern": "moves another worktree.s branch only when\\s+that worktree is stacked on yours",
+      "present": true
+    },
+    {
+      "id": "scoped-move-is-not-described-as-isolated-from-all-worktrees",
+      "pattern": "never touches other worktrees",
+      "present": false
+    }
+  ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "Branchless reference does not teach unsafe checkout, move, or repair shortcuts",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-12",
-  "kind": "static",
+  "kind": "static-set",
   "path": "references/git-branchless.md",
-  "pattern": "git checkout main",
-  "present": false,
   "topology": "T4"
 }

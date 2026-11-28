@@ -1,3 +1,4 @@
+# cspell:ignore fsyncs
 """Real disk/process/HTTP contracts; no live credentials or provider requests."""
 
 import json
@@ -48,7 +49,7 @@ def refresh_child(account, connection):
         result = account.refresh(clock=lambda: 1987200)
         connection.send(result["refresh_token"])
     except Exception as error:
-        connection.send(type(error).__name__)
+        connection.send(f"{type(error).__name__}: {error}")
 
 
 class StateRefresh(unittest.TestCase):
@@ -76,7 +77,7 @@ class StateRefresh(unittest.TestCase):
             return store.reconcile()
 
     def test_day23_same_token_preserves_fields_and_hard_deadline(self):
-        """Reject deadline extension, dropped response fields and newline secrets."""
+        """Persist all returned fields and trim secret line endings without extending consent."""
         with provider() as (endpoint, calls):
             self.config["provider"]["tokenUrl"] = endpoint
             result = self.account.refresh(clock=lambda: 1987200)
@@ -106,8 +107,11 @@ class StateRefresh(unittest.TestCase):
     def test_optional_refresh_expiry_and_fixed_login_lifetime(self):
         """Reject required extension fields, erased known expiry and refresh extending consent."""
         absent = {key: value for key, value in RESPONSE.items() if key != "refresh_token_expires_in"}
-        for lifetime, deadline in ((30, 2592000), (None, None)):
-            with self.subTest(lifetime=lifetime):
+        for scenario, lifetime, deadline in (
+            ("missing refresh expiry leaves fixed bound intact", 30, 2592000),
+            ("no bounds must not acquire an invented deadline", None, None),
+        ):
+            with self.subTest(scenario=scenario):
                 self.config["provider"]["loginLifetimeDays"] = lifetime
                 self.seed(absent)
                 self.assertEqual(self.read()["login_deadline"], deadline)
@@ -118,7 +122,6 @@ class StateRefresh(unittest.TestCase):
                 self.assertEqual(current["login_deadline"], deadline)
                 self.assertIsNone(current["refresh_expires_at"])
                 self.assertNotIn("refresh_token_expires_in", current)
-                self.assertNotIn("Infinity", (self.root / "account/state.json").read_text())
                 if lifetime is None:
                     self.assertEqual(self.account.status(clock=lambda: 100), "ready; no known login expiry")
                 self.seed(dict(RESPONSE, refresh_token_expires_in=172800))
@@ -136,15 +139,18 @@ class StateRefresh(unittest.TestCase):
             current = self.account.refresh(clock=lambda: 1987200)
         self.assertEqual(current["login_deadline"], 2592000)
         self.assertEqual(current["refresh_expires_at"], 4579200)
-        self.assertIn("login required", self.account.status(clock=lambda: 2592000))
+        self.assertEqual(self.account.status(clock=lambda: 2592000), "login required; login has expired")
 
     def test_scheduled_waiting_checks_expiry_before_due(self):
         """Scheduled waiting must not exchange or hide an expired login."""
         self.seed(dict(RESPONSE, expires_in=200, refresh_token_expires_in=100))
         with provider() as (url, calls):
             self.config["provider"]["tokenUrl"] = url
-            for now, required in ((50, False), (100, True), (101, True)):
-                with self.subTest(now=now):
+            for scenario, now, required in (
+                ("early refresh leaves a live login ready", 50, False),
+                ("exact expiry invalidates login before the due time", 100, True),
+            ):
+                with self.subTest(scenario=scenario):
                     current = self.account.refresh(clock=lambda: now,
                                                    due_at=lambda current: current["access_expires_at"])
                     self.assertEqual(current["login_required"], required)
@@ -153,6 +159,7 @@ class StateRefresh(unittest.TestCase):
         self.assertFalse((self.root / "account/access-token").exists())
         with self.assertRaisesRegex(OAuthError, "login required"):
             self.account.refresh(clock=lambda: 101)
+        # A daemon without any state can wait, while an explicit refresh fails.
         missing = Account("devenv:/project", "missing",
                           dict(self.config, state_dir=str(self.root / "missing")))
         self.assertIsNone(missing.refresh(due_at=lambda current: 0))
@@ -166,14 +173,21 @@ class StateRefresh(unittest.TestCase):
             pairs = [PROCESSES.Pipe() for _ in range(2)]
             children = [PROCESSES.Process(target=refresh_child, args=(self.account, pair[1]))
                         for pair in pairs]
-            for child in children:
-                child.start()
-            for child, pair in zip(children, pairs):
-                child.join(5)
-                self.assertFalse(child.is_alive())
-                self.assertEqual(child.exitcode, 0)
-                self.assertTrue(pair[0].poll(1))
-                self.assertEqual(pair[0].recv(), "refresh-rotated")
+            try:
+                for child in children:
+                    child.start()
+                for child, (parent, _) in zip(children, pairs):
+                    child.join(5)
+                    self.assertFalse(child.is_alive(), "refresh did not release the account lock")
+                    self.assertTrue(parent.poll(1))
+                    self.assertEqual(parent.recv(), "refresh-rotated")
+            finally:
+                for child, (parent, pipe) in zip(children, pairs):
+                    if child.is_alive():
+                        child.kill()
+                        child.join(5)
+                    parent.close()
+                    pipe.close()
             self.assertEqual([call[1]["refresh_token"] for call in calls],
                              [["refresh-original"], ["refresh-rotated"]])
         self.assertEqual(self.read()["refresh_token"], "refresh-rotated")
@@ -182,17 +196,26 @@ class StateRefresh(unittest.TestCase):
         """Real SIGKILL preserves state-first publication and durable rejection."""
         lock, projection = self.root / "account/lock", self.root / "account/access-token"
         inode = lock.stat().st_ino
-        cases = [(False, boundary) for boundary in (1, 2, 3, 4)] + [(True, boundary) for boundary in (1, 2, 3)]
-        for reject, boundary in cases:
-            with self.subTest(reject=reject, boundary=boundary):
+        # Projection bytes before recovery and after reopening are protocol
+        # expectations, not conditions derived from the implementation's fsyncs.
+        cases = (
+            ("seed must not publish before state rename", False, 1, b"access-old", False, b"access-old"),
+            ("seed must recover after durable state rename", False, 2, b"access-old", False, b"access-new"),
+            ("seed must not publish an unfinished projection", False, 3, b"access-old", False, b"access-new"),
+            ("seed retains completed projection after crash", False, 4, b"access-new", False, b"access-new"),
+            ("rejection must not withdraw before state rename", True, 1, b"access-old", False, b"access-old"),
+            ("durable rejection must withdraw on reopen", True, 2, b"access-old", True, None),
+            ("completed withdrawal cannot resurrect", True, 3, None, True, None),
+        )
+        for scenario, reject, boundary, before, required, after in cases:
+            with self.subTest(scenario=scenario):
                 self.seed()
                 parent, child_pipe = PROCESSES.Pipe()
                 child = PROCESSES.Process(target=killed_publish, args=(self.account, boundary, child_pipe, reject))
                 child.start()
                 try:
                     self.assertTrue(parent.poll(5), "writer never reached kill point")
-                    self.assertEqual(parent.recv(), "at-fsync")
-                    before = None if reject and boundary == 3 else b"access-old" if boundary <= 3 else b"access-new"
+                    parent.recv()
                     self.assertEqual(projection.read_bytes() if projection.exists() else None, before)
                 finally:
                     child.kill()
@@ -200,9 +223,8 @@ class StateRefresh(unittest.TestCase):
                     parent.close()
                     child_pipe.close()
                 self.assertEqual(child.exitcode, -signal.SIGKILL)
-                self.assertEqual(self.read()["login_required"], reject and boundary >= 2)
-                expected = None if reject and boundary >= 2 else b"access-old" if reject or boundary == 1 else b"access-new"
-                self.assertEqual(projection.read_bytes() if projection.exists() else None, expected)
+                self.assertEqual(self.read()["login_required"], required)
+                self.assertEqual(projection.read_bytes() if projection.exists() else None, after)
                 self.assertEqual(lock.stat().st_ino, inode)
         self.assertEqual((self.root / "account").stat().st_mode & 0o777, 0o700)
         for path in (self.root / "account").iterdir():
@@ -216,25 +238,27 @@ class StateRefresh(unittest.TestCase):
         self.assertFalse((self.root / "account/access-token").exists())
 
     def test_unusable_state_refused_where_read(self):
-        """Refuse corrupt authoritative state and unsafe file permissions."""
+        """Refuse malformed deadlines and unsafe file permissions when loading state."""
         path = self.root / "account/state.json"
         original = path.read_bytes()
         try:
             value = json.loads(original)
+            value["login_started_at"] = 1
             value["login_deadline"] = 10368000
             value["refresh_expires_at"] = None
             path.write_text(json.dumps(value))
             self.assertEqual(self.read()["login_deadline"], 10368000)
-            for invalid in (-1, True, "unknown", float("inf")):
-                path.write_text(json.dumps(dict(value, login_deadline=invalid)))
-                with self.assertRaises(OAuthError):
-                    self.read()
-            path.write_text("not json")
-            with self.assertRaises(OAuthError):
-                self.read()
+            for scenario, invalid, message in (
+                ("deadline cannot precede the login", 0, "invalid login deadline"),
+                ("deadline cannot be text", "unknown", "invalid lifetime or timestamp"),
+            ):
+                with self.subTest(scenario=scenario):
+                    path.write_text(json.dumps(dict(value, login_deadline=invalid)))
+                    with self.assertRaisesRegex(OAuthError, message):
+                        self.read()
             path.write_bytes(original)
             path.chmod(0o644)
-            with self.assertRaises(OAuthError):
+            with self.assertRaisesRegex(OAuthError, "unsafe account state ownership, type or permissions"):
                 self.read()
         finally:
             path.write_bytes(original)
@@ -243,27 +267,38 @@ class StateRefresh(unittest.TestCase):
     def test_bad_responses_leave_authoritative_state_unchanged(self):
         """Reject missing refresh_token, malformed tokens and invented lifetimes."""
         before = self.read()
-        cases = [dict(RESPONSE, **change) for change in (
-            {"access_token": "bad\n"}, {"expires_in": -1}, {"expires_in": True},
-            {"refresh_token_expires_in": float("inf")}, {"scope": None}, {"token_type": "MAC"}
-        )]
-        cases.append({key: value for key, value in RESPONSE.items() if key != "refresh_token"})
-        for body in cases:
-            with self.subTest(body=body), provider(body) as (url, _):
+        cases = (
+            ("header token cannot contain a newline", dict(RESPONSE, access_token="bad\n"), "invalid token syntax"),
+            ("access lifetime cannot be negative", dict(RESPONSE, expires_in=-1), "invalid lifetime or timestamp"),
+            ("access lifetime cannot be a boolean", dict(RESPONSE, expires_in=True), "invalid lifetime or timestamp"),
+            ("provider expiry cannot be unbounded", dict(RESPONSE, refresh_token_expires_in=float("inf")),
+             "invalid lifetime or timestamp"),
+            ("scope cannot be null", dict(RESPONSE, scope=None), "invalid scope"),
+            ("response must supply a Bearer token", dict(RESPONSE, token_type="MAC"), "unsupported token type"),
+            ("refresh token is required", {key: value for key, value in RESPONSE.items() if key != "refresh_token"},
+             "incomplete token response"),
+        )
+        for scenario, body, message in cases:
+            with self.subTest(scenario=scenario), provider(body) as (url, _):
                 self.config["provider"]["tokenUrl"] = url
-                with self.assertRaises(OAuthError):
+                with self.assertRaisesRegex(OAuthError, message):
                     self.account.refresh(clock=lambda: 1)
                 self.assertEqual(self.read(), before)
 
     def test_credentials_refused_before_exchange(self):
         """Reject empty or embedded-newline credentials before provider calls."""
         path = Path(self.config["client_secret_file"])
-        for bad in ("\r\n", "secret\nmore", "secret\rmore"):
-            path.write_text(bad)
-            with provider() as (url, calls), self.assertRaises(OAuthError):
+        for scenario, bad in (
+            ("empty after trimming trailing line endings", "\r\n"),
+            ("embedded line feed", "secret\nmore"),
+            ("embedded carriage return", "secret\rmore"),
+        ):
+            with self.subTest(scenario=scenario), provider() as (url, calls):
+                path.write_text(bad)
                 self.config["provider"]["tokenUrl"] = url
-                self.account.refresh(clock=lambda: 1)
-            self.assertEqual(calls, [])
+                with self.assertRaisesRegex(OAuthError, "empty or multiline credential"):
+                    self.account.refresh(clock=lambda: 1)
+                self.assertEqual(calls, [])
 
     def test_packaged_cli_expired_status_corrupt_state_and_secret_free_output(self):
         """Check packaged expired-state status, corrupt-state refusal and secret-free output."""

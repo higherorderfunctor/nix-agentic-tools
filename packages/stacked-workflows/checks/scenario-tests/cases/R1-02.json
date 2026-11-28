@@ -10,7 +10,7 @@
   "block_roles": ["selection", "selection"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "A checkout with no own commits selects no subjects rather than widening to sibling drafts",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-02",

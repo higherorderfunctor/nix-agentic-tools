@@ -9,7 +9,7 @@
   "block_roles": ["mutator"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "The new-stack recipe starts at the latest fetched upstream even when checked-out local main is stale",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R4-N3",

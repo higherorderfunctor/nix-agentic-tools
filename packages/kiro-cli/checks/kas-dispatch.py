@@ -18,6 +18,7 @@ smoke = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(smoke)
 variants = json.loads(Path(sys.argv[1]).read_text())
 
+
 def capture_node(root):
     capture, node = root / "capture.json", root / "node"
     node.write_text("#!" + sys.executable + "\nimport json,sys\nfrom pathlib import Path\nPath(" + repr(str(capture)) + ").write_text(json.dumps(sys.argv))\n")
@@ -73,11 +74,7 @@ for name, variant in variants.items():
                     old.parent.mkdir(parents=True)
                     old.write_text("throw Error('stale KAS selected');")
                 capture, node = capture_node(root)
-                env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"],
-                       "HOME": str(home), "CFFIXED_USER_HOME": str(home),
-                       "XDG_CACHE_HOME": str(root / "cache"), "XDG_CONFIG_HOME": str(root / "config"),
-                       "KIRO_KAS_NODE_PATH": str(node), "KIRO_DISABLE_TELEMETRY": "1",
-                       "KIRO_API_KEY": "offline-dispatch-fixture", "TERM": "dumb"}
+                env = offline_env(root, variant["package"] + "/bin", node)
                 args = [variant["package"] + "/bin/kiro-cli", mode]
                 if mode == "chat":
                     args += ["--no-interactive", "--model", "nix-no-such-model", "offline dispatch fixture"]
@@ -85,27 +82,29 @@ for name, variant in variants.items():
                 assert capture.exists(), (name, stale, args, result.returncode, result.stderr)
                 argv = json.loads(capture.read_text())
                 assert variant["server"] in argv, (name, stale, args, argv)
-                assert list(home.glob("**/kas/*/node_modules/@kiro/agent/dist/server/acp-server.js")) == ([old] if stale else []), "unexpected cache extraction"
+                # Dispatch must not materialize a KAS server even at a new path.
+                materialized = list(home.rglob("acp-server.js"))
+                assert materialized == ([old] if stale else []), (name, mode, stale, materialized)
     # Explicit inherited override remains available only in the stock variant.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         capture, node = capture_node(root)
         override = root / "override.js"
         override.write_text("// explicit override")
-        env = {"PATH": variant["package"] + "/bin:" + os.environ["PATH"], "HOME": tmp,
-               "CFFIXED_USER_HOME": tmp, "KIRO_KAS_NODE_PATH": str(node),
-               "KIRO_KAS_SERVER_PATH": str(override), "KIRO_API_KEY": "offline-dispatch-fixture"}
-        subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
-                       input="", capture_output=True, text=True, timeout=30)
+        env = offline_env(root, variant["package"] + "/bin", node)
+        env["KIRO_KAS_SERVER_PATH"] = str(override)
+        result = subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
+                                input="", capture_output=True, text=True, timeout=30)
+        assert capture.exists(), (name, "override must reach KAS dispatch", result.returncode, result.stderr)
         expected = variant["server"] if variant["managed"] else str(override)
         assert expected in json.loads(capture.read_text()), (name, "override precedence")
         # The wrapper names the engine on `acp` itself: `acp-smoke` is on the
         # binary's v2 client list, so without the appended selector upstream's
         # default would answer it with the v2 engine and never start KAS.
         capture.unlink()
-        subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
-                       input=smoke.request("acp-smoke"), capture_output=True, text=True, timeout=30)
-        assert capture.exists(), (name, "v2-listed client through the wrapper")
+        result = subprocess.run([variant["package"] + "/bin/kiro-cli", "acp"], env=env, cwd=tmp,
+                                input=smoke.request("acp-smoke"), capture_output=True, text=True, timeout=30)
+        assert capture.exists(), (name, "v2-listed client must reach v3 KAS", result.returncode, result.stderr)
         # Remove both overrides and initialize through native ACP with real Node.
         del env["KIRO_KAS_NODE_PATH"]
         del env["KIRO_KAS_SERVER_PATH"]

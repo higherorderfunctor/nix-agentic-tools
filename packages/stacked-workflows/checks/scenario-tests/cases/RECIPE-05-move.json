@@ -7,7 +7,7 @@
   "block_roles": ["selection", "mutation"],
   "env": {},
   "expected": {
-    "description": "Recipe preserves other worktrees and achieves its scoped endpoint",
+    "description": "The reference move must not land on stale local main or carry along the unrelated sibling stack",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "RECIPE-05-move",

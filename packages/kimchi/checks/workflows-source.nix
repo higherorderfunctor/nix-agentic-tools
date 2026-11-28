@@ -16,11 +16,19 @@ in {
       ${pkgs.coreutils}/bin/cp ${kimchi.src}/src/resources/definitions.ts src/resources/definitions.ts
       ${pkgs.coreutils}/bin/chmod u+w src/cli.ts src/resources/definitions.ts
       ${kimchi.externalizeExtensions}
+      rejectRegistration() {
+        if ${pkgs.gnugrep}/bin/grep -F "$@" src/cli.ts src/resources/definitions.ts; then
+          echo 'externalized code is still imported or registered' >&2
+          exit 1
+        else
+          test "$?" -eq 1
+        fi
+      }
+      # Pin the known registration independently of the substitution rows:
+      # an empty externalization list must not leave the builtin factory or toggle.
+      rejectRegistration -e '@kimchi-dev/kimchi-workflows/extension' -e 'extensions.workflows'
       ${lib.concatMapStrings (extension: ''
-          if ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg extension.id} src/cli.ts src/resources/definitions.ts; then
-            echo 'externalized resource is still registered' >&2
-            exit 1
-          fi
+          rejectRegistration -e ${lib.escapeShellArg extension.id}
         '')
         kimchi.externalizedExtensions}
       echo PASS > "$out"

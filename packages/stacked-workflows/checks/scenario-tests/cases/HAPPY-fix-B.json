@@ -64,7 +64,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Dependency-aware absorb excludes older candidates, checks newer targets, and permits explicit fixups with content hooks",
+    "description": "Targeted absorb preserves the dependency, hook, fallback and leftover checks in the published recipe",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "HAPPY-fix-B",

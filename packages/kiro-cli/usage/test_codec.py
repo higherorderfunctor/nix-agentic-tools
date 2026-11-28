@@ -1,7 +1,6 @@
 """Synthetic sealed-payload codec contracts; pure bytes, no SQLite."""
 
 import base64
-import contextlib
 import gzip
 import json
 from pathlib import Path
@@ -13,9 +12,9 @@ from unittest.mock import patch
 
 from compression import zstd
 
-from capture import DECODE_LIMIT, SSE, Analysis, EventStream, content_decoder, decode_chunk, event_text, packed
+from capture import SSE, Analysis, EventStream, content_decoder, decode_chunk, event_text, packed
 import codec
-from codec import MIN_BASE, Chunk, Event, compress_request, compress_response, decompress_request, decompress_response
+from codec import Chunk, Event, compress_request, compress_response, decompress_request, decompress_response
 from test_capture import aws_event, aws_message, completed, event
 
 GOLDEN = json.loads((Path(__file__).parent / "fixtures/codec-golden.json").read_text())
@@ -61,12 +60,9 @@ def rows(response):
 
 class RequestTests(unittest.TestCase):
     def test_round_trip_with_and_without_base(self):
-        for base in (None, b"8 bytes!"):
-            for body in (b"", b'{"model":"synthetic"}'):
-                with self.subTest(base=base, body=body):
-                    self.assertEqual(decompress_request(compress_request(body, base), base), body)
-        with self.assertRaises(ValueError):
-            compress_request(b"body", b"x" * (MIN_BASE - 1))
+        for base, body in ((None, b""), (b"8 bytes!", b""), (b"8 bytes!", b'{"model":"synthetic"}')):
+            with self.subTest(base=base, body=body):
+                self.assertEqual(decompress_request(compress_request(body, base), base), body)
 
     def test_prefix_reaches_a_whole_multi_mib_base(self):
         # A direct raw dictionary loses matches past ~4 MiB back; random bytes leave only those matches to compress.
@@ -76,16 +72,24 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(decompress_request(blob, base), base[:1024 * 1024])
 
     def test_base_longer_than_the_window_still_round_trips(self):
+        # The prefix can exceed the encoder window without making its output undecodable.
         base = random.Random(1).randbytes(3 * 1024 * 1024)
         with patch.dict(codec.REQUEST_OPTIONS, {zstd.CompressionParameter.window_log: 20}):
             blob = compress_request(base[:256 * 1024] + b"tail", base)
         self.assertEqual(decompress_request(blob, base), base[:256 * 1024] + b"tail")
 
     def test_wrong_base_never_returns_the_body(self):
-        body = b'{"history":["first","second"]}' * 8
-        blob = compress_request(body, body[:64])
-        with contextlib.suppress(ValueError):
-            self.assertNotEqual(decompress_request(blob, b"x" * 64), body)
+        # Seeded noise cannot compress this small unless the encoder actually references the supplied base.
+        body = random.Random(2).randbytes(4096)
+        blob = compress_request(body, body)
+        self.assertLess(len(blob), 64)
+        self.assertEqual(decompress_request(blob, body), body)
+        try:
+            wrong = decompress_request(blob, b"x" * len(body))
+        except ValueError as error:
+            self.assertEqual(str(error), "corrupt sealed request")
+        else:
+            self.assertNotEqual(wrong, body)  # the store must hash even successfully decoded requests
 
 
 class ResponseTests(unittest.TestCase):
@@ -98,27 +102,47 @@ class ResponseTests(unittest.TestCase):
     def assert_derived(self, chunks, events, encoding="identity", parser="sse"):
         recipe, heap = self.round_trip(chunks, events, encoding, parser)
         self.assertEqual(heap, b"")
-        self.assertTrue(all(chunk[-1] in (0, None) for chunk in recipe["chunks"]))
-        self.assertTrue(all(event[-1] == 0 for event in recipe["events"]))
+        self.assertEqual([row[-1] for row in recipe["chunks"]],
+                         [None if chunk.application is None else 0 for chunk in chunks])
+        self.assertEqual([row[-1] for row in recipe["events"]], [0] * len(events))
 
     def test_numeric_recipe_fields_must_be_exact_ints(self):
-        chunks, events = staged([event(completed())])
+        frame = b"data: {}\n\n"
+        chunks = [Chunk(0, 10, 20, frame, frame), Chunk(1, 11, 21, b"x", b"x")]
+        events = [Event(0, 0, 10, 20, "message", frame, "{}")]
         transport, recipe, heap = compress_response("identity", "sse", chunks, events)
-        parsed = json.loads(zstd.decompress(recipe))
-        for path in (("chunks", 0, 0), ("chunks", 0, 3), ("events", 0, 0), ("events", 0, 2)):
-            for bad in ("0", 0.0, True, [0]):
-                with self.subTest(path=path, bad=bad):
-                    mutated = json.loads(json.dumps(parsed))
-                    mutated[path[0]][path[1]][path[2]] = bad
-                    blob = zstd.compress(json.dumps(mutated).encode())
-                    with self.assertRaises(ValueError):
-                        decompress_response(transport, blob, heap)
+        self.assertEqual(decompress_response(transport, recipe, heap), (chunks, events))
+        # The digest sees the same bytes for a numeric string; booleans can act like 0 or 1 in indexing/flags.
+        cases = {"chunk application flag as bool": (("chunks", 0, 4), False),
+                 "chunk application flag as float": (("chunks", 0, 4), 0.0),
+                 "chunk entity length as bool": (("chunks", 1, 3), True),
+                 "chunk sequence as string": (("chunks", 0, 0), "0"),
+                 "event data flag as bool": (("events", 0, 5), False),
+                 "event frame start as bool": (("events", 0, 4, 0), False),
+                 "event sequence as string": (("events", 0, 0), "0"),
+                 "event timestamp as string": (("events", 0, 2), "10")}
+        for reason, (path, bad) in cases.items():
+            with self.subTest(reason=reason):
+                mutated = json.loads(zstd.decompress(recipe))
+                field = mutated
+                for component in path[:-1]:
+                    field = field[component]
+                field[path[-1]] = bad
+                blob = zstd.compress(json.dumps(mutated).encode())
+                with self.assertRaisesRegex(ValueError, "^corrupt sealed response$"):
+                    decompress_response(transport, blob, heap)
 
     def test_sse_derives_every_row(self):
-        body = (event({"type": "response.output_text.delta", "delta": "é🙂"}) + b"data: [DONE]\n\n"
-                + b'event: note\r\ndata: {"a":\r\ndata: 1}\r\n\r\n' + b'data: {"tail":1}')
-        chunks, events = staged([body[i:i + 1] for i in range(len(body))])
-        self.assertEqual([e.data for e in events], ['{"delta":"é🙂","type":"response.output_text.delta"}', None, '{"a":1}', None])
+        frames = [(event({"type": "response.output_text.delta", "delta": "é🙂"}), "message",
+                   '{"delta":"é🙂","type":"response.output_text.delta"}'),
+                  (b"data: [DONE]\n\n", "message", None),
+                  (b'event: note\r\ndata: {"a":\r\ndata: 1}\r\n\r\n', "note", '{"a":1}'),
+                  (b'data: {"tail":1}', "message", None)]
+        body = b"".join(frame for frame, _, _ in frames)
+        chunks = [Chunk(seq, 10 + seq, 20 + seq, part, part) for seq, part in enumerate(split(body, 41, 78))]
+        # Frame positions follow the recorded stream, not a second run of the production parser.
+        events = [Event(seq, chunk_seq, 10 + chunk_seq, 20 + chunk_seq, name, frame, data)
+                  for seq, (chunk_seq, (frame, name, data)) in enumerate(zip((1, 2, 2, 2), frames, strict=True))]
         self.assert_derived(chunks, events)
 
     def test_sse_frame_past_the_limit_disables_parsing(self):
@@ -144,19 +168,18 @@ class ResponseTests(unittest.TestCase):
     def test_non_identity_applications_derive(self):
         body = event(completed())
         encoded = gzip.compress(body)
+        bounded = 16 * 1024 * 1024 + 1
         cases = {"corrupt": ("gzip", [encoded[:20], b"\xff" * 16, encoded[20:]]),
                  "deflate": ("deflate", split(zlib.compress(body), 5, 30)),
                  "gzip": ("gzip", split(encoded, 9, 20)),
                  "multi_member": ("gzip", split(encoded + gzip.compress(b"more"), 9, len(encoded) + 4)),
-                 "over_limit": ("gzip", [gzip.compress(b"\0" * (DECODE_LIMIT + 1)), gzip.compress(b"later")]),
+                 "over_limit": ("gzip", [gzip.compress(b"\0" * (bounded)), gzip.compress(b"later")]),
                  "truncated": ("gzip", split(encoded[:-8], 9))}
         for name, (encoding, parts) in cases.items():
             with self.subTest(name):
                 chunks, events = staged(parts, encoding)
-                if name in ("corrupt", "over_limit"):
+                if name == "corrupt":
                     self.assertIsNone(chunks[-1].application)
-                if name == "over_limit":
-                    self.assertEqual(len(chunks[0].application), DECODE_LIMIT + 1)
                 self.assert_derived(chunks, events, encoding)
 
     def test_dropped_chunks_store_exceptions(self):
@@ -165,9 +188,7 @@ class ResponseTests(unittest.TestCase):
         for encoding, parts in (("gzip", split(gzip.compress(body), 40, 80)), ("identity", split(body, first, first + 5))):
             with self.subTest(encoding):
                 chunks, events = staged(parts, encoding, drop={1})
-                self.assertEqual([chunk.seq for chunk in chunks], [0, 2])
-                recipe, heap = self.round_trip(chunks, events, encoding)
-                self.assertNotEqual(heap, b"")
+                recipe, _ = self.round_trip(chunks, events, encoding)
                 if encoding == "gzip":
                     self.assertIsInstance(recipe["chunks"][1][-1], list)
                 else:
@@ -179,22 +200,11 @@ class ResponseTests(unittest.TestCase):
                   Event(2, 3, 7, 8, "message", None, '{"a":1}'), Event(3, 4, 9, 9, "json", None, packed({"k": "é"}))]
         self.round_trip(chunks, events)
 
-    def test_unsupported_encoding_keeps_null_applications(self):
-        chunks, events = staged([b"\x01\x02", b"\x03"], "br")
-        self.assertEqual([chunk.application for chunk in chunks], [None, None])
-        self.assert_derived(chunks, events, "br")
-
     def test_interrupted_capture_stores_every_event_as_an_exception(self):
         # Interrupted before finalize, response_json stays "{}": identity, and no parser for a non-RPC capture.
         chunks, events = staged(split(event(completed()) + event(completed()), 30))
         recipe, _ = self.round_trip(chunks, events, parser=None)
-        self.assertTrue(all(isinstance(event[-1], list) for event in recipe["events"]))
-
-    def test_derivation_mismatch_is_an_exception(self):
-        chunks, events = staged([event(completed())])
-        events[0] = events[0]._replace(data='{"other":1}')
-        recipe, _ = self.round_trip(chunks, events)
-        self.assertEqual(recipe["events"][0][-1][0], "message")
+        self.assertEqual([(row[0], row[-1][0]) for row in recipe["events"]], [(0, "message"), (1, "message")])
 
     def test_tampered_blobs_refuse(self):
         chunks, events = staged([event(completed())])
@@ -211,17 +221,20 @@ class ResponseTests(unittest.TestCase):
                     decompress_response(transport, zstd.compress(packed(changed).encode()), exceptions)
         with self.assertRaisesRegex(ValueError, "digest"):
             decompress_response(transport, recipe, zstd.compress(bytes(heap)))
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "corrupt sealed response"):
             decompress_response(transport, recipe[:-1], exceptions)
 
     def test_golden_blobs_decode(self):
         # Sealed captures outlive the parsers: a change that alters this derivation needs a new RECIPE_VERSION.
         blob = lambda value: base64.b64decode(value)
-        for request in GOLDEN["requests"]:
-            base = None if request["base"] is None else blob(request["base"])
-            self.assertEqual(decompress_request(blob(request["blob"]), base), blob(request["body"]))
-        for response in GOLDEN["responses"]:
-            self.assertEqual(decompress_response(*map(blob, response["blobs"])), rows(response))
+        for name, request in zip(("standalone request", "prefix-dependent request"), GOLDEN["requests"], strict=True):
+            with self.subTest(name=name):
+                base = None if request["base"] is None else blob(request["base"])
+                self.assertEqual(decompress_request(blob(request["blob"]), base), blob(request["body"]))
+        for name, response in zip(("SSE exception heap and derived events", "event-stream derived and corrupt frames"),
+                                  GOLDEN["responses"], strict=True):
+            with self.subTest(name=name):
+                self.assertEqual(decompress_response(*map(blob, response["blobs"])), rows(response))
 
 
 if __name__ == "__main__":

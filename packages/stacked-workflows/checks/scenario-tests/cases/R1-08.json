@@ -7,13 +7,13 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "The branchless reference does not recommend restacking every draft explicitly",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-08",
   "kind": "static",
   "path": "references/git-branchless.md",
-  "pattern": "git restack 'draft\\(\\)'",
+  "pattern": "\\bgit\\s+restack\\s+['\"]draft\\(\\)['\"]",
   "present": false,
   "topology": "T4"
 }

@@ -13,7 +13,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv;
+  inherit (harness) checkRows evalDevenv rejectsChange;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   inherit (extractedLib {inherit pkgs;}) get load;
   inherit (load {dir = ../extracted;}) aggregate;
@@ -42,9 +42,6 @@
     };
     removed = ["config.keys.llmEndpoint"];
   };
-  # Guards the fixture itself: recursiveUpdate cannot delete a key.
-  fixtureHasNoLlmEndpoint = !(fixture.settingsOptions ? llmEndpoint);
-
   # A hand-table row whose path is gone, and a key whose type nothing maps.
   withoutSkillPaths = surfaceFor {removed = ["config.keys.skillPaths"];};
   withUnion = surfaceFor {
@@ -66,25 +63,20 @@
     };
   };
 
-  # Does `value` type-check against a closed submodule of `options`?
-  accepts = options: value:
-    (builtins.tryEval (builtins.deepSeq
-      (lib.evalModules {
-        modules = [
-          {
-            options.native = lib.mkOption {
-              type = lib.types.submodule {inherit options;};
-              default = {};
-            };
-          }
-          {config.native = value;}
-        ];
-      })
-      .config
-      .native
-      true))
-    .success;
-
+  # Read the precise field through the generated, closed submodule's merge.
+  mergeNative = options: value:
+    (lib.evalModules {
+      modules = [
+        {
+          options.native = lib.mkOption {
+            type = lib.types.submodule {inherit options;};
+            default = {};
+          };
+        }
+        {config.native = value;}
+      ];
+    }).config.native;
+  harnessOption = name: input: (mergeNative real.harnessSettingsOptions {${name} = input;}).${name};
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
   # The user harness settings.json Home Manager copies, decoded.
   hmHarnessSettings = evaluated:
@@ -96,10 +88,9 @@
         native = {inherit harnessSettings;};
       };
     });
-  forced = value: (builtins.tryEval (builtins.deepSeq value true)).success;
 
-  # The normalized effort enum, read off the option rather than restated.
-  normalizedEfforts =
+  portableEfforts = ["high" "low" "medium" "xhigh"];
+  declaredEfforts =
     ((evalHm {}).options.ai.settings.type.getSubOptions []).reasoningEffort.type.nestedTypes.elemType.functor.payload.values;
   loweredEffort = effort:
     (hmHarnessSettings (evalHm {
@@ -110,8 +101,6 @@
     }))
     .defaultThinkingLevel
     or null;
-
-  keptKeys = keys: excluded: sorted (builtins.attrNames (builtins.removeAttrs keys (builtins.attrNames excluded)));
 
   # `telemetry.endpoint`, because devenv passes `telemetry.enabled` through
   # the launcher environment rather than the project file.
@@ -132,131 +121,35 @@
       ai = lib.recursiveUpdate {kimchi.enable = true;} extra;
     });
 
+  # Every reconciled entry must appear on exactly one consumer-facing
+  # surface: supported options or the documented exclusion report.
+  completeSurface = options: excluded: entries:
+    builtins.attrNames (options // excluded)
+    == builtins.attrNames entries
+    && builtins.intersectAttrs options excluded == {};
+  completeNative = surface:
+    completeSurface surface.settingsOptions surface.report.excluded.settings surface.rules.results.config.entries
+    && completeSurface surface.harnessSettingsOptions surface.report.excluded.harnessSettings surface.rules.results.harness.entries;
+
   cases = {
-    # Every key the sidecar keeps is an option, and nothing else is.
-    real-surface-is-the-sidecar =
-      sorted (builtins.attrNames real.settingsOptions)
-      == keptKeys real.rules.results.config.entries real.report.excluded.settings
-      && sorted (builtins.attrNames real.harnessSettingsOptions)
-      == keptKeys real.rules.results.harness.entries real.report.excluded.harnessSettings
-      && real.report.excluded.settings ? apiKey
-      && real.report.excluded.settings ? api_key
-      && real.report.excluded.settings ? gitTokens;
-
-    # A row marked `ignored` removes the key from every surface built from the
-    # reconciled entries, not just from the library's own result. The first
-    # two clauses are the precondition: an excluded key has no option anyway.
-    ignored-row-is-not-an-option =
-      real.harnessSettingsOptions
-      ? httpProxy
-      && real.settingsOptions ? llmEndpoint
-      && !(withIgnoredRows.harnessSettingsOptions ? httpProxy)
-      && !(withIgnoredRows.settingsOptions ? llmEndpoint)
-      && !(lib.elem "httpProxy" withIgnoredRows.userScopeHarnessKeys)
-      && sorted (builtins.attrNames withIgnoredRows.harnessSettingsOptions)
-      == keptKeys withIgnoredRows.rules.results.harness.entries withIgnoredRows.report.excluded.harnessSettings
-      && sorted (builtins.attrNames withIgnoredRows.settingsOptions)
-      == keptKeys withIgnoredRows.rules.results.config.entries withIgnoredRows.report.excluded.settings;
-
-    # JSON Schema metadata has no runtime settings reader; its explicit ignored
-    # annotation removes it before the unknown raw scope reaches option delivery.
-    schema-metadata-is-not-an-option =
-      !(real.rules.results.harness.entries ? "$schema");
-
-    added-key-appears =
-      fixture.harnessSettingsOptions ? probeAdded
-      && accepts fixture.harnessSettingsOptions {probeAdded = true;}
-      && !(accepts real.harnessSettingsOptions {probeAdded = true;});
-
-    removed-key-fails-its-consumer =
-      fixtureHasNoLlmEndpoint
-      && accepts real.settingsOptions {llmEndpoint = "https://example.invalid";}
-      && !(accepts fixture.settingsOptions {llmEndpoint = "https://example.invalid";});
+    added-key-appears = rejectsChange (options: (mergeNative options {probeAdded = true;}).probeAdded) {
+      expected = true;
+      invalid = real.harnessSettingsOptions;
+      valid = fixture.harnessSettingsOptions;
+    };
 
     enum-follows-the-sidecar =
-      accepts fixture.harnessSettingsOptions {doubleEscapeAction = "probe";}
-      && !(accepts real.harnessSettingsOptions {doubleEscapeAction = "probe";})
-      && accepts real.harnessSettingsOptions {doubleEscapeAction = "tree";};
-
-    # The same rejection through the real module, on the option a normalized
-    # `ai.settings.reasoningEffort` lowers into.
-    module-rejects-an-invalid-enum =
-      !(forced (hmHarness {defaultThinkingLevel = "bogus";}))
-      && (hmHarness {defaultThinkingLevel = "high";}).defaultThinkingLevel == "high";
-
-    # Normalized `ai.settings` converts INTO the typed native option, so every
-    # normalized value must be one the extracted enum accepts.
-    normalized-effort-lowers-into-native =
-      normalizedEfforts
-      != []
-      && lib.all (effort: forced (loweredEffort effort) && loweredEffort effort == effort) normalizedEfforts;
-
-    nested-types-follow-the-sidecar =
-      accepts real.harnessSettingsOptions {fermentV2.autoResume = true;}
-      && !(accepts real.harnessSettingsOptions {fermentV2 = true;})
-      && !(accepts real.harnessSettingsOptions {fermentV2.probe = true;})
-      && accepts real.harnessSettingsOptions {statusLine.pinned = ["model"];}
-      && !(accepts real.harnessSettingsOptions {statusLine.pinned = ["probe"];});
-
-    helper-guard-derived-option =
-      real.harnessSettingsOptions ? workSemanticMatching
-      && accepts real.harnessSettingsOptions {workSemanticMatching = true;}
-      && accepts real.harnessSettingsOptions {workSemanticMatching = false;}
-      && accepts real.harnessSettingsOptions {workSemanticMatching = null;}
-      && !(accepts real.harnessSettingsOptions {workSemanticMatching = "true";})
-      && (hmHarness {workSemanticMatching = true;}).workSemanticMatching;
-
-    option-notes-are-current =
-      real.report.staleNotes
-      == []
-      && withoutSkillPaths.report.staleNotes == ["settings.skillPaths"];
-
-    # The devenv rejection list is the sidecar's per-key scope, including
-    # Kimchi's own additions and pi's global-only keys a hand list once
-    # missed.
-    user-scope-harness-follows-the-sidecar =
-      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "sessionNameModel" "workSemanticMatching"]
-      && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
-      && !(lib.elem "theme" real.userScopeHarnessKeys)
-      && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys
-      && lib.all (key: real.harnessSettingsOptions ? ${key}) real.userScopeHarnessKeys;
-
-    # The sidecar's derived inert flag, not a hand list, removes the option.
-    inert-keys-follow-the-sidecar =
-      lib.all (key: real.report.excluded.settings ? ${key} && !(real.settingsOptions ? ${key})) ["maxToolResultChars" "mcpSearch" "mcpSearchLimit"]
-      && withConsumedInertKey.settingsOptions ? mcpSearchLimit;
-
-    scalar-unions-follow-the-sidecar = lib.all (entry:
-      accepts real.harnessSettingsOptions {${entry.name} = entry.sentinel;}
-      && accepts real.harnessSettingsOptions {${entry.name} = 25;}
-      && !(accepts real.harnessSettingsOptions {${entry.name} = "probe";})
-      && !(accepts real.harnessSettingsOptions {${entry.name} = true;})) [
-      {
-        name = "fullscreenWheelScrollLines";
-        sentinel = "auto";
+      rejectsChange (harnessOption "doubleEscapeAction") {
+        expected = "tree";
+        invalid = "probe";
+        valid = "tree";
       }
-      {
-        name = "httpIdleTimeoutMs";
-        sentinel = "disabled";
-      }
-      {
-        name = "websocketConnectTimeoutMs";
-        sentinel = "disabled";
-      }
-    ];
+      && (mergeNative fixture.harnessSettingsOptions {doubleEscapeAction = "probe";}).doubleEscapeAction == "probe";
 
     every-type-is-mapped =
       real.report.untyped
       == []
       && withUnion.report.untyped == ["harnessSettings.probeUnion"];
-
-    # Per-key `project` and projectTier.honoredKeys are two readings of one
-    # extraction; the devenv rejection uses the first.
-    project-tier-rejects-user-scope-config =
-      sorted real.userScopeConfigKeys
-      == sorted (lib.subtractLists (get aggregate "config.projectTier").honoredKeys (builtins.attrNames real.rules.results.config.entries))
-      && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
-      && failedAssertions hmTelemetry == [];
 
     # PI_CODING_AGENT_DIR is overwritten too, but entry.ts reads it first and
     # preserves it, so the derived flag must leave it settable.
@@ -270,17 +163,127 @@
       == []
       && fixedVariable {kimchi.environmentVariables.KIMCHI_EXTRA = "yes";} == [];
 
-    own-environment-names-are-extracted =
-      real.environmentName "KIMCHI_REGION"
-      == "KIMCHI_REGION"
-      && !(forced (withoutOwnVariable.environmentName "KIMCHI_REGION"));
+    # The helper's boolean is optional but must not accept a string lookalike.
+    helper-guard-derived-option =
+      rejectsChange (harnessOption "workSemanticMatching") {
+        expected = false;
+        invalid = "true";
+        valid = false;
+      }
+      && harnessOption "workSemanticMatching" null == null;
+
+    # A row marked `ignored` removes the key from every surface built from the
+    # reconciled entries, not just from the library's own result.
+    ignored-row-is-not-an-option =
+      !(withIgnoredRows.harnessSettingsOptions ? httpProxy)
+      && !(withIgnoredRows.settingsOptions ? llmEndpoint)
+      && !(lib.elem "httpProxy" withIgnoredRows.userScopeHarnessKeys)
+      && completeNative withIgnoredRows;
+
+    # The sidecar's derived inert flag, not a hand list, removes the option.
+    inert-keys-follow-the-sidecar =
+      lib.all (key: real.report.excluded.settings ? ${key} && !(real.settingsOptions ? ${key})) ["maxToolResultChars" "mcpSearch" "mcpSearchLimit"]
+      && withConsumedInertKey.settingsOptions ? mcpSearchLimit;
+
+    # The same restriction through the real module, on the option a normalized
+    # `ai.settings.reasoningEffort` lowers into.
+    module-rejects-an-invalid-enum = rejectsChange (value: (hmHarness {defaultThinkingLevel = value;}).defaultThinkingLevel) {
+      expected = "high";
+      invalid = "bogus";
+      valid = "high";
+    };
+
+    nested-types-follow-the-sidecar = let
+      autoResume = input: (harnessOption "fermentV2" input).autoResume;
+      validFerment = {autoResume = true;};
+    in
+      checkRows "native nested settings" {
+        "fermentV2 rejects a scalar in place of an object" = rejectsChange autoResume {
+          expected = true;
+          invalid = true;
+          valid = validFerment;
+        };
+        "fermentV2 rejects undeclared fields" = rejectsChange autoResume {
+          expected = true;
+          invalid = validFerment // {probe = true;};
+          valid = validFerment;
+        };
+        "statusLine.pinned rejects unknown list members" = rejectsChange (input: (harnessOption "statusLine" {pinned = input;}).pinned) {
+          expected = ["model"];
+          invalid = ["probe"];
+          valid = ["model"];
+        };
+      };
+
+    # The portable effort values must all reach the generated option unchanged.
+    normalized-effort-lowers-into-native = checkRows "portable effort value" (
+      lib.genAttrs portableEfforts (value: loweredEffort value == value)
+      // {"every portable effort has a lowering row" = sorted declaredEfforts == portableEfforts;}
+    );
+
+    option-notes-are-current =
+      real.report.staleNotes
+      == []
+      && withoutSkillPaths.report.staleNotes == ["settings.skillPaths"];
+
+    own-environment-names-are-extracted = rejectsChange (surface: surface.environmentName "KIMCHI_REGION") {
+      expected = "KIMCHI_REGION";
+      invalid = withoutOwnVariable;
+      valid = real;
+    };
+
+    # Per-key `project` and projectTier.honoredKeys are two readings of one
+    # extraction; the devenv rejection uses the first.
+    project-tier-rejects-user-scope-config =
+      sorted real.userScopeConfigKeys
+      == sorted (lib.subtractLists (get aggregate "config.projectTier").honoredKeys (builtins.attrNames real.rules.results.config.entries))
+      && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
+      && failedAssertions hmTelemetry == [];
+
+    # A reconciled key cannot silently vanish or become an undocumented option.
+    reconciled-keys-have-exactly-one-destination = completeNative real;
+
+    removed-key-fails-its-consumer = rejectsChange (options: (mergeNative options {llmEndpoint = "https://example.invalid";}).llmEndpoint) {
+      expected = "https://example.invalid";
+      invalid = fixture.settingsOptions;
+      valid = real.settingsOptions;
+    };
+
+    # Each key is extracted separately; one key losing either union arm is a
+    # regression even if the other keys' unions remain intact.
+    scalar-unions-follow-the-sidecar = checkRows "native scalar unions" (lib.mapAttrs (name: sentinel:
+      checkRows name {
+        "rejects a boolean arm" = rejectsChange (harnessOption name) {
+          expected = 25;
+          invalid = true;
+          valid = 25;
+        };
+        "string arm permits only its sentinel" = rejectsChange (harnessOption name) {
+          expected = sentinel;
+          invalid = "probe";
+          valid = sentinel;
+        };
+      }) {
+      fullscreenWheelScrollLines = "auto";
+      httpIdleTimeoutMs = "disabled";
+      websocketConnectTimeoutMs = "disabled";
+    });
+
+    # A raw credential must not become a regular option that writes to the store.
+    secrets-stay-out-of-native-settings = lib.all (key:
+      real.report.excluded.settings ? ${key} && !(real.settingsOptions ? ${key}))
+    ["apiKey" "api_key" "gitTokens"];
+
+    # The devenv rejection list is the sidecar's per-key scope, including
+    # Kimchi's own additions and pi's global-only keys a hand list once
+    # missed.
+    user-scope-harness-follows-the-sidecar =
+      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["httpProxy" "lastTerminalWarnings" "sessionNameModel" "workSemanticMatching"]
+      && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
+      && !(lib.elem "theme" real.userScopeHarnessKeys)
+      && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys
+      && lib.all (key: real.harnessSettingsOptions ? ${key}) real.userScopeHarnessKeys;
   };
-  failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
 in {
-  checks.kimchi-native-options =
-    if failed == []
-    then
-      pkgs.writeText "kimchi-native-options"
-      (lib.concatMapStringsSep "\n" (name: "PASS ${name}") (builtins.attrNames cases) + "\n")
-    else throw "kimchi-native-options: FAILED ${lib.concatStringsSep ", " failed}";
+  checks.kimchi-native-options = harness.mkTest "kimchi-native-options" (checkRows "native options" cases);
 }

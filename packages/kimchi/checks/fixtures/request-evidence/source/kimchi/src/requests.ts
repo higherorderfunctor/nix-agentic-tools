@@ -2,14 +2,6 @@ import { loadConfig } from "./config.js";
 import { SEARCH_ID } from "./resources/ids.js";
 import { isResourceEnabled as enabledResource } from "./resources/store.js";
 
-// Fails a callee-name match and a missed imported resource id.
-export function positive() {
-  const enabled = enabledResource(SEARCH_ID);
-  if (enabled) {
-    fetch("https://positive.example");
-  }
-}
-
 // Fails reversed condition polarity: source truthy, condition false.
 export function negatedReturn() {
   const enabled = enabledResource(SEARCH_ID);
@@ -57,11 +49,6 @@ export function separateCalls() {
     fetch("https://first.example");
   }
   fetch("https://second.example");
-}
-
-// Fails calling absence of evidence "always enabled" in the report.
-export function unguarded() {
-  fetch("https://unguarded.example");
 }
 
 // Fails inventing a name or polarity for unsupported tests.

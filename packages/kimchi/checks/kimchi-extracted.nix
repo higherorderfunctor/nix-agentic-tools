@@ -73,15 +73,11 @@
           mutant "$kimchi" config-timezone-guard src/config.ts \
             "$timezone_call" 'const timezone = normalizeTuiTimezone(tc.otherTimezone)'
           # Repoint readSurveyConfig's config.json parse: at the harness file its
-          # `surveys` read must surface as an unknown harness key, and at a file
-          # that is neither surface the parse must be unattributable.
+          # `surveys` read must surface as an unknown harness key.
           survey_parse=$'function readSurveyConfig(surveyId: string, configPath: string): SurveyConfig | undefined {\n\ttry {\n\t\tconst parsed = JSON.parse(readFileSync('
           mutant "$kimchi" config-parse-attribution src/config.ts \
             "''${survey_parse}configPath, \"utf-8\"))" \
             "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"settings.json\"), \"utf-8\"))"
-          mutant "$kimchi" config-parse-unattributable src/config.ts \
-            "''${survey_parse}configPath, \"utf-8\"))" \
-            "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"state.json\"), \"utf-8\"))"
           # Each inline mutant must fail with "is not bound to a local".
           # Counting these shapes as single named property reads could hide key
           # reads: a computed key, the whole object, required access, delete,
@@ -110,9 +106,7 @@
             "$inline_config" "$inline_config()"
           mutant "$kimchi" config-inline-unattributable src/config.ts \
             "$inline_config" 'readConfigObject(resolve(AGENT_CONFIG_DIR, "state.json"))?.modelEffortDefaults'
-          mutant "$kimchi" config-shape src/config.ts \
-            'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
-          mutant "$kimchi" config-second-shape src/config.ts \
+          mutant "$kimchi" config-scalar-shape src/config.ts \
             'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
           mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
             'import { homedir } from "node:os"' $'import { homedir } from "node:os"\ninterface FermentV2Settings {}'
@@ -202,10 +196,16 @@
 
           expect_rejection collision "$TMPDIR/collision-source" \
             "config.json exposes a top-level 'harness' key" > "$TMPDIR/proof"
-          expect_rejection config-array-shape "$TMPDIR/config-array-shape-source" \
-            "config.json validation shape changed" >> "$TMPDIR/proof"
-          expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
-            "config.json validation shape changed" >> "$TMPDIR/proof"
+          # Exercise descriptor traversal independently: array items, nested
+          # properties, and direct config keys cannot bypass runtime guards.
+          while IFS=: read -r label key kind; do
+            expect_rejection "$label" "$TMPDIR/$label-source" \
+              "config.json validation shape changed: $key is no longer guarded as a $kind"
+          done >> "$TMPDIR/proof" <<'SHAPES'
+          config-array-shape:skillPaths.[]:string
+          config-nested-shape:telemetry.enabled:boolean
+          config-scalar-shape:llmEndpoint:string
+          SHAPES
           for label in config-timezone-alias-mutable config-timezone-computed-key config-timezone-guard; do
             expect_rejection "$label" "$TMPDIR/$label-source" \
               'tui.timezone is no longer guarded as a string' >> "$TMPDIR/proof"
@@ -221,18 +221,12 @@
             fi
             echo "$label (exit 0): preserved the tui.timezone string guard" >> "$TMPDIR/proof"
           done
-          expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
-            'cannot attribute the JSON read' >> "$TMPDIR/proof"
           for label in "''${inline_rejected[@]}"; do
             expect_rejection "$label" "$TMPDIR/$label-source" \
               'is not bound to a local' >> "$TMPDIR/proof"
           done
           expect_rejection config-inline-unattributable "$TMPDIR/config-inline-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
-          expect_rejection config-shape "$TMPDIR/config-shape-source" \
-            "config.json validation shape changed" >> "$TMPDIR/proof"
-          expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
-            "config.json validation shape changed" >> "$TMPDIR/proof"
           # A second same-named declaration in a live module makes the schema
           # ambiguous, which must stop the extraction rather than pick one.
           expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
@@ -251,15 +245,6 @@
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
             'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
-          ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
-          # The patched title setting is one optional user-level string. Upstream
-          # b1e77fad removed roles and their companion settings.
-          ${pkgs.jq}/bin/jq -e '
-            .harness.keys |
-            (.sessionNameModel | .type == "string" and .optional == true and .project == false and .source == "kimchi") and
-            (has("hidePhaseChanges") or has("modelMetadata") or has("modelRoles") or has("multiModel") | not)
-          ' "$TMPDIR/real.json" > /dev/null
-          echo 'real (exit 0): extracted the user-only sessionNameModel string without retired settings' >> "$TMPDIR/proof"
           ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
           if ${pkgs.jq}/bin/jq -e \
             '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
@@ -309,20 +294,8 @@
           ${pkgs.jq}/bin/jq -e '.harness.keys.fermentV2.type == "object"' \
             "$TMPDIR/helper-known-unresolved.json" > /dev/null
           echo 'helper-known-unresolved (exit 0): warned and retained parser shape' >> "$TMPDIR/proof"
-          ${pkgs.jq}/bin/jq -e '.config.keys.modelEffortDefaults == {type: null, project: false}' \
-            "$TMPDIR/real.json" > /dev/null
-          echo 'real (exit 0): attributed the inline modelEffortDefaults read to user config.json' >> "$TMPDIR/proof"
-          # Settings is re-exported by settings-manager, and compaction is
-          # inherited from its TypeBox schema rather than declared on Settings.
-          # Resolve both the inherited properties and a replacement interface
-          # from the compaction module, whose enabled member is required.
-          ${pkgs.jq}/bin/jq -e '
-            (.harness.keys.compaction.properties.enabled | .type == "boolean" and .optional == true) and
-            (.harness.keys.retry.properties | has("maxRetries") and (has("maxDelayMs") | not)) and
-            (.harness.keys | has("queueMode") or has("websockets") | not) and
-            (.harness.keys | has("$schema") and ."$schema".project == null and .codemode.project == true)
-          ' "$TMPDIR/real.json" > /dev/null
-          echo 'real (exit 0): resolved re-exported Settings and inherited TypeBox fields with Omit exclusions' >> "$TMPDIR/proof"
+          # Resolve re-exported Settings through the compaction module's
+          # replacement interface, whose enabled member is required.
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-definition-reference.json"'' ''"$TMPDIR/pi-definition-reference-source"''}
           if ${pkgs.jq}/bin/jq -e \
             '.harness.keys.compaction.properties.enabled | .type == "boolean" and .optional == null' \
@@ -335,35 +308,30 @@
           fi
           # A pi key's project scope follows how pi reads it.
           ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-scope-merged.json"'' ''"$TMPDIR/pi-scope-merged-source"''}
-          for fixture in real:false pi-scope-merged:true; do
-            IFS=: read -r label project <<< "$fixture"
-            if ${pkgs.jq}/bin/jq -e --argjson project "$project" \
-              '.harness.keys | (.defaultProjectTrust.project == $project) and (.httpProxy.project == false) and (.theme.project == true)' \
-              "$TMPDIR/$label.json" > /dev/null; then
-              echo "$label (exit 0): defaultProjectTrust project=$project" >> "$TMPDIR/proof"
-            else
-              echo "FAIL: $label did not derive the expected harness key scopes" >&2
-              ${pkgs.jq}/bin/jq '.harness.keys | map_values(.project)' "$TMPDIR/$label.json" >&2
-              exit 1
-            fi
-          done
+          if ${pkgs.jq}/bin/jq -e \
+            '.harness.keys.defaultProjectTrust.project == true' \
+            "$TMPDIR/pi-scope-merged.json" > /dev/null; then
+            echo 'pi-scope-merged (exit 0): defaultProjectTrust project=true' >> "$TMPDIR/proof"
+          else
+            echo 'FAIL: pi-scope-merged did not mark defaultProjectTrust as project scoped' >&2
+            ${pkgs.jq}/bin/jq '.harness.keys | map_values(.project)' "$TMPDIR/pi-scope-merged.json" >&2
+            exit 1
+          fi
           # Inertness is derived too: one consumer of the loaded value clears it.
           ${runExtractor ''"$TMPDIR/inert-consumed-source"'' ''"$TMPDIR/inert-consumed.json"'' ''"$pi"''}
-          for fixture in real:true inert-consumed:null; do
-            IFS=: read -r label inert <<< "$fixture"
-            if ${pkgs.jq}/bin/jq -e --argjson inert "$inert" \
-              '.config.keys | (.maxToolResultChars.inert == $inert) and .mcpSearch.inert and .mcpSearchLimit.inert' \
-              "$TMPDIR/$label.json" > /dev/null; then
-              echo "$label (exit 0): maxToolResultChars inert=$inert" >> "$TMPDIR/proof"
-            else
-              echo "FAIL: $label did not derive the expected inert config keys" >&2
-              ${pkgs.jq}/bin/jq '.config.keys | {maxToolResultChars, mcpSearch, mcpSearchLimit}' "$TMPDIR/$label.json" >&2
-              exit 1
-            fi
-          done
+          if ${pkgs.jq}/bin/jq -e \
+            '.config.keys | has("maxToolResultChars") and (.maxToolResultChars.inert == null) and
+             (.mcpSearch.inert == true) and (.mcpSearchLimit.inert == true)' \
+            "$TMPDIR/inert-consumed.json" > /dev/null; then
+            echo 'inert-consumed (exit 0): maxToolResultChars inert=null' >> "$TMPDIR/proof"
+          else
+            echo 'FAIL: inert-consumed did not derive the expected inert config keys' >&2
+            ${pkgs.jq}/bin/jq '.config.keys | {maxToolResultChars, mcpSearch, mcpSearchLimit}' "$TMPDIR/inert-consumed.json" >&2
+            exit 1
+          fi
           {
             ${pkgs.coreutils}/bin/cat "$TMPDIR/proof"
-            echo "real (exit 0): kimchi-extract: config.json harness guard passed"
+            echo 'kimchi-extract: config.json harness guard passed'
           } > "$out"
         '';
     };

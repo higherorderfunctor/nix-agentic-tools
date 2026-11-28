@@ -1,10 +1,9 @@
 // Synthetic producer-boundary test; it does not run or emulate CodeQL.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "../../../../..");
 const generator =
@@ -12,36 +11,64 @@ const generator =
   resolve(root, "packages/kimchi/extract/egress/generate.mjs");
 const sources =
   process.argv[3] || resolve(root, "packages/kimchi/sources.json");
-const { FACT_FIELDS, SCAN_FIELDS } = await import(
-  pathToFileURL(resolve(generator, "../report.mjs"))
-);
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+const fixture = (name) =>
+  read(resolve(import.meta.dirname, `expected/${name}.json`));
+const regionRegistry = fixture("regionRegistry");
+const requestGuards = fixture("requestGuards");
+const resourceDefinitions = fixture("resourceDefinitions");
+
+// Use independent scanner keys and sentinels so a dropped or blanked section fails.
+const scan = {
+  commands: { cliSubcommands: ["search"] },
+  dependencies: { kimchiDirect: { fixture: "1.0.0" } },
+  goCallSites: [
+    { callee: "http.Get", category: "http", file: "main.go", target: "url" },
+  ],
+  goHosts: [{ files: ["main.go"], value: "api.example" }],
+  spawnCallSites: [
+    { callee: "spawn", category: "spawn", file: "cli.ts", target: "git" },
+  ],
+  urlPathLiterals: [{ files: ["cli.ts"], value: "/v1/search" }],
+};
+const scanHeader = { fixture: true };
+const callSite = (line, overrides = {}) => ({
+  bundledModule: null,
+  file: "src/requests.ts",
+  library: "fetch",
+  line,
+  readBy: "kimchi",
+  targets: [],
+  ...overrides,
+});
+const absent = "no modeled local guard";
+const necessary =
+  "necessary local conditions at the listed call columns; not sufficient for execution";
+const guardAt = (line) =>
+  requestGuards.find(({ callSite }) => callSite.line === line);
+// Pin all joined rows, including the polarity of the two early-return guards.
+// Each negative row isolates one ignored component of the join identity.
+const guardRows = [
+  ["negated return", callSite(9), [guardAt(9)], necessary],
+  [
+    "different bundle",
+    callSite(9, { bundledModule: "node_modules/unrelated/index.js" }),
+    [],
+    absent,
+  ],
+  ["different library", callSite(9, { library: "undici" }), [], absent],
+  ["positive return", callSite(16), [guardAt(16)], necessary],
+  ["sibling call with a different line", callSite(51), [], absent],
+  ["different file", callSite(9, { file: "src/unrelated.ts" }), [], absent],
+];
+const callSites = guardRows.map(([, site]) => site);
 const facts = {
-  egressScan: {
-    header: { scan: { fixture: true } },
-    ...Object.fromEntries(Object.keys(SCAN_FIELDS).map((key) => [key, []])),
-  },
+  egressScan: { ...scan, header: { scan: scanHeader } },
   environment: { variables: {} },
-  network: {
-    callSites: [
-      9, 17, 24, 31, 40, 51, 57, 59, 64, 69, 70, 76, 85, 91, 97, 103, 105, 112,
-      119, 126,
-    ].map((line) => ({
-      bundledModule: null,
-      file: "src/requests.ts",
-      library: "fetch",
-      line,
-      readBy: "kimchi",
-      targets: [],
-    })),
-    unattributed: [],
-  },
-  ...Object.fromEntries(
-    ["regionRegistry", "requestGuards", "resourceDefinitions"].map((name) => [
-      name,
-      read(resolve(import.meta.dirname, `expected/${name}.json`)),
-    ]),
-  ),
+  network: { callSites, unattributed: [] },
+  regionRegistry,
+  requestGuards,
+  resourceDefinitions,
 };
 const dir = mkdtempSync(resolve(tmpdir(), "kimchi-request-evidence-"));
 const input = resolve(dir, "facts.json");
@@ -59,41 +86,43 @@ function generate() {
   ]);
   return read(output);
 }
-const report = generate();
-assert.deepEqual(report.networkCallSites, facts.network.callSites);
-assert.deepEqual(report.hosts, []);
-assert.deepEqual(report.endpointVariables, []);
-for (const key of Object.keys(SCAN_FIELDS))
-  assert.deepEqual(report[key], facts.egressScan[key]);
-assert.deepEqual(report.header.scan, facts.egressScan.header.scan);
-assert.deepEqual(report.header.provenance, { ...FACT_FIELDS, ...SCAN_FIELDS });
-assert.deepEqual(report.regionRegistry, facts.regionRegistry);
-assert.deepEqual(report.resourceDefinitions, facts.resourceDefinitions);
-for (const row of report.requestGuards) {
-  const count = [9, 17, 24, 31, 40, 57, 119].includes(row.line) ? 1 : 0;
-  assert.equal(row.guards.length, count);
+try {
+  const report = generate();
+  // The additive report must not erase scanner or extractor facts or invent
+  // endpoints when no network row has a target.
+  assert.deepEqual(report.networkCallSites, callSites);
+  assert.deepEqual(report.hosts, []);
+  assert.deepEqual(report.endpointVariables, []);
+  for (const [key, expected] of Object.entries(scan)) {
+    assert.deepEqual(report[key], expected, key);
+  }
+  assert.deepEqual(report.header.scan, scanHeader);
+  assert.deepEqual(report.regionRegistry, regionRegistry);
+  assert.deepEqual(report.resourceDefinitions, resourceDefinitions);
+
   assert.equal(
-    row.status,
-    count
-      ? "necessary local conditions at the listed call columns; not sufficient for execution"
-      : "no modeled local guard",
+    report.requestGuards.length,
+    guardRows.length,
+    "preserve every network identity",
   );
+  for (const [
+    index,
+    [name, { targets: _targets, ...site }, guards, status],
+  ] of guardRows.entries()) {
+    assert.deepEqual(
+      report.requestGuards[index],
+      { ...site, guards, status },
+      name,
+    );
+  }
+  // Move and reverse the non-tied rows, preserving the two bundles' tie order.
+  // Without call-site sorting the published report would now be different.
+  const [first, second, ...otherSites] = callSites;
+  facts.network.callSites = [...otherSites.reverse(), first, second];
+  assert.deepEqual(generate(), report);
+} finally {
+  rmSync(dir, { force: true, recursive: true });
 }
-assert.equal(report.requestGuards[1].guards[0].conditionOutcome, false);
-assert.equal(report.requestGuards[2].guards[0].outcome, "falsy");
-facts.network.callSites.reverse();
-facts.requestGuards.reverse();
-assert.deepEqual(generate(), report);
-// Fails attaching a guard to another bundled module sharing a line/library.
-facts.network.callSites.push({
-  ...facts.network.callSites.find(({ line }) => line === 9),
-  bundledModule: "node_modules/unrelated/index.js",
-});
-assert.equal(
-  generate().requestGuards.find(({ bundledModule }) => bundledModule !== null)
-    .guards.length,
-  0,
-);
 console.log(
-  "PASS: legacy fields preserved; seven guards joined; thirteen absent guards explicit; input order and bundle identity checked",
+  "PASS: scanner and extractor facts preserved; guard polarity, absence, order and identity checked",
 );

@@ -85,7 +85,8 @@ def notice(case, arguments=(), *, cwd=root, warnings=(), budget=32768, expected_
 
 
 def sized(path, size, tail=b"TAIL-END"):
-    ending = b"\n" + tail + b"\n"
+    # The last byte must survive prompt whitespace trimming to witness truncation.
+    ending = b"\n" + tail
     path.write_bytes(b"x" * (size - len(ending)) + ending)
 
 

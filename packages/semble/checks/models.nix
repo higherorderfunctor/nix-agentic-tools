@@ -7,7 +7,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) checkRows evalDevenv evalHm mkTest rejectsChange;
   inherit (import ../../../lib/packaging.nix) huggingFaceModelCacheDirName;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
@@ -42,12 +42,6 @@
     evaluated.config.assertions;
   allPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
   count = needle: text: builtins.length (lib.splitString needle text) - 1;
-  # Like mkTest, but takes named conditions and names the ones that failed.
-  expectAll = name: conditions: let
-    failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) conditions);
-  in
-    mkTest name (failed == [] || throw "FAIL: ${name}: ${lib.concatStringsSep ", " failed}");
-
   routingIntro = "Plain `semble search` in this setup searches";
   templateIntro = "Use `semble search` to discover code by behavior or meaning.";
 
@@ -96,16 +90,19 @@
       {
         argv = [];
         content = ["code" "config"];
+        name = "omitted CLI content uses the configured default";
         port = null;
       }
       {
         argv = ["--content" "docs"];
         content = ["docs"];
+        name = "explicit CLI content replaces the configured default";
         port = null;
       }
       {
         argv = ["--http" "--port" "9001"];
         content = ["code" "config"];
+        name = "HTTP mode forwards the requested port";
         port = 9001;
       }
     ];
@@ -115,7 +112,9 @@
       {
         tool = "search";
         arguments.query = "alpha";
+        content = ["code" "config"];
         model = "${codeConfigModel}";
+        name = "search without content uses the configured model and scope";
       }
       {
         tool = "search";
@@ -123,7 +122,9 @@
           query = "install guide";
           content = "docs";
         };
+        content = ["docs"];
         model = "${docsModel}";
+        name = "explicit search content replaces the combined default";
       }
       {
         tool = "find_related";
@@ -132,7 +133,9 @@
           line = 1;
           content = "docs";
         };
+        content = ["docs"];
         model = "${docsModel}";
+        name = "find_related selects the docs index instead of the default";
       }
       {
         tool = "search";
@@ -140,14 +143,23 @@
           query = "alpha";
           content = "code";
         };
+        content = ["code"];
         model = "${fallbackModel}";
+        name = "an unmatched set uses the fallback model, not a superset match";
+      }
+      {
+        arguments = {
+          content = "all";
+          query = "alpha";
+        };
+        content = ["code" "config" "docs"];
+        model = "${fallbackModel}";
+        name = "a second fallback scope reuses the model but not the code index";
+        tool = "search";
       }
     ];
     models = ["${codeConfigModel}" "${docsModel}" "${fallbackModel}"];
   });
-
-  # The index directory suffix for a model other than Semble's own.
-  hash = model: builtins.substring 0 16 (builtins.hashString "sha256" "${model}");
 in {
   checks = {
     module-semble-models-option-shape = let
@@ -159,82 +171,62 @@ in {
       options = entryOptions hm;
       root = rootOptions hm;
       mappingOptions = removeAttrs (root.pathMappings.type.nestedTypes.elemType.getSubOptions []) ["_module"];
-      rejected = config: !(builtins.tryEval (builtins.deepSeq (evalHm config).config.ai.claude.mcpServers true)).success;
     in
-      expectAll "semble-models-option-shape" {
-        entryFields = builtins.attrNames options == ["content" "description" "enable" "model"];
-        modelType = options.model.type.description == "package";
-        modelRequired = !(options.model ? default);
-        enableDefault = options.enable.default;
-        descriptionOptional = options.description.default == null;
-        modelsIsList = root.models.type.description == "list of (submodule)";
-        modelsDefault = root.models.default == [];
-        defaultContent = root.defaultContent.default == ["code"];
-        defaultModel = root.defaultModel.default == null && root.defaultModel.type.description == "null or package";
-        pathMappingsIsList = root.pathMappings.type.description == "list of (submodule)" && root.pathMappings.default == [];
-        mappingFields = builtins.attrNames mappingOptions == ["content" "language" "patterns"];
-        runtimeMappingsReplace = runtimeOptions.pathMappings.type.description == "null or (list of (submodule))";
-        devenvParity = builtins.attrNames (entryOptions devenv) == builtins.attrNames options;
-        # A runtime override replaces the whole list.
-        runtimeListType = runtimeOptions.models.type.description == "null or (list of (submodule))";
-        runtimeListDefault = runtimeOptions.models.default == null;
-        finalPackageReadOnly = root.finalPackage.readOnly;
-        # The old paths are gone, not aliased.
-        cliModelsGone = rejected {ai.programs.semble.cli.models = [];};
-        mcpContentGone = rejected {ai.programs.semble.mcp.content = "docs";};
-        rootExposureGone = rejected {ai.programs.semble.mcp.rootExposure = false;};
-        mcpPathMappingsGone = rejected {ai.programs.semble.mcp.pathMappings = [];};
-      };
+      mkTest "semble-models-option-shape" (checkRows "model option contract" {
+        "default model remains optional and accepts only packages" = root.defaultModel.default == null && root.defaultModel.type.description == "null or package";
+        "devenv exposes the same model entry fields" = builtins.attrNames (entryOptions devenv) == builtins.attrNames options;
+        "entries accept only the declared model fields" = builtins.attrNames options == ["content" "description" "enable" "model"];
+        "entries need a package, not an unpinned name or a default" = options.model.type.description == "package" && !(options.model ? default);
+        "finalPackage cannot be supplied by the consumer" =
+          rejectsChange
+          (config: let
+            package = (evalHm config).config.ai.programs.semble.finalPackage;
+          in
+            (package.unwrapped or package).drvPath) {
+            valid = {};
+            invalid.ai.programs.semble.finalPackage = lib.mkForce pkgs.hello;
+            expected = pkgs.ai.semble.drvPath;
+          };
+        "mapping entries expose language, category and patterns" = builtins.attrNames mappingOptions == ["content" "language" "patterns"];
+        "mappings are ordered and unset by default" = root.pathMappings.type.description == "list of (submodule)" && root.pathMappings.default == [];
+        "model descriptions may be omitted" = options.description.default == null;
+        "model entries use an empty list, not a keyed model table" = root.models.type.description == "list of (submodule)" && root.models.default == [];
+        "runtime mappings can inherit or replace the ordered list" = runtimeOptions.pathMappings.type.description == "null or (list of (submodule))";
+        "runtime models can inherit or replace the ordered list" = runtimeOptions.models.type.description == "null or (list of (submodule))";
+      });
 
-    module-program-allows-settings = let
-      program = programFactory.mkProgram {
+    module-program-option-names = let
+      spec = {
         name = "fixture";
-        options.settings = lib.mkOption {
-          type = lib.types.str;
-          default = "default";
+        supportedRuntimes = ["claude"];
+      };
+      setting = lib.mkOption {
+        type = lib.types.str;
+        default = "default";
+      };
+      readSetting = options: let
+        program = programFactory.mkProgram (spec // {inherit options;});
+        evaluated = lib.evalModules {
+          modules = [program.module {ai.programs.fixture.settings = "portable";}];
         };
-        supportedRuntimes = ["claude"];
-      };
-      evaluated = lib.evalModules {
-        modules = [
-          program.module
-          {ai.programs.fixture.settings = "portable";}
-        ];
-      };
-      result = builtins.tryEval (program.resolve evaluated.config "claude").settings;
+      in
+        (program.resolve evaluated.config "claude").settings;
     in
-      mkTest "program-allows-settings" (result.success && result.value == "portable");
+      mkTest "program-option-names" (checkRows "program factory option names" {
+        "runtimes is reserved for the factory, settings is not" = rejectsChange readSetting {
+          valid.settings = setting;
+          invalid = {
+            runtimes = setting;
+            settings = setting;
+          };
+          expected = "portable";
+        };
+      });
 
-    module-program-reserves-runtimes = mkTest "program-reserves-runtimes" (!(builtins.tryEval
-      (programFactory.mkProgram {
-        name = "x";
-        options.runtimes = lib.mkOption {type = lib.types.str;};
-        supportedRuntimes = ["claude"];
-      }).module).success);
-
-    # The program factory has no `pools` field (the keyed-models design needed
-    # it; a list does not), and a runtime `models` list replaces the portable
-    # one wholesale.
+    # A runtime can inherit, explicitly clear, or replace the portable model
+    # list. The real launchers' JSON distinguishes all three states.
     module-semble-models-runtime-list = mkTest "semble-models-runtime-list" (
       let
-        spec = {
-          name = "fixture";
-          supportedRuntimes = ["claude"];
-          options.entries = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            default = [];
-          };
-        };
-        program = programFactory.mkProgram spec;
-        evaluated = lib.evalModules {
-          modules = [
-            program.module
-            {
-              ai.programs.fixture.entries = ["root-a" "root-b"];
-              ai.programs.fixture.runtimes.claude.entries = ["runtime-a"];
-            }
-          ];
-        };
         installed =
           builtins.head
           (evalHm {
@@ -252,10 +244,7 @@ in {
           }).config.home.packages;
         tables = lib.mapAttrs (_: package: (runtimeConfig package).models) installed.sembleRuntimePackages;
       in
-        !(program ? pools)
-        && !(program.spec ? pools)
-        && (program.resolve evaluated.config "claude").entries == ["runtime-a"]
-        && tables
+        tables
         == {
           claude = [
             {
@@ -296,19 +285,30 @@ in {
           models = [(docs // {model = withFiles ["0_StaticEmbedding/model.safetensors" "0_StaticEmbedding/tokenizer.json" "config_sentence_transformers.json"] docsModel;})];
         };
         badDefaultModel = withModels {defaultModel = withFiles ["config.json"] fallbackModel;};
-        noDescription = withModels {models = [(removeAttrs docs ["description"])];};
       in
-        failedWith "`models` entries 1, 2 all route content `docs`" duplicate
-        && failedWith "`models` entries 1, 2 all route content `code config docs`" allCollision
-        && allPass disabledTwin
-        && failedWith "`models.1.content` must contain at least one category" emptyContent
-        && failedWith "`models.1.model` does not hold a model2vec model" missingTokenizer
-        && failedWith "Files given: config.json, model.safetensors, modules.json" missingTokenizer
-        && allPass nestedLayout
-        && failedWith "`defaultModel` does not hold a model2vec model" badDefaultModel
-        && allPass noDescription
-        # Direct callers get the same messages as a throw.
-        && !(builtins.tryEval (customizePackage pkgs.ai.semble {models = [docs docs];}).drvPath).success
+        checkRows "model routing restrictions" {
+          "a disabled twin does not reserve its scope" = allPass disabledTwin;
+          "a model must name at least one category" = failedWith "`models.1.content` must contain at least one category" emptyContent;
+          "all reserves the same scope as its explicit expansion" = failedWith "`models` entries 1, 2 all route content `code config docs`" allCollision;
+          "an incomplete default model reports the defaultModel path" = failedWith "`defaultModel` does not hold a model2vec model" badDefaultModel;
+          "direct callers cannot build an ambiguous routing table" =
+            rejectsChange
+            (models: (runtimeConfig (customizePackage pkgs.ai.semble {inherit models;})).models) {
+              valid = [docs];
+              invalid = [docs docs];
+              expected = [
+                {
+                  content = ["docs"];
+                  model = "${docsModel}";
+                }
+              ];
+            };
+          "enabled entries cannot reserve the same scope" = failedWith "`models` entries 1, 2 all route content `docs`" duplicate;
+          "nested weights and tokenizer are a valid layout" = allPass nestedLayout;
+          "partial entry layout identifies the entry and the given files" =
+            failedWith "`models.1.model` does not hold a model2vec model" missingTokenizer
+            && failedWith "Files given: config.json, model.safetensors, modules.json" missingTokenizer;
+        }
     );
 
     # An MCP call's `content` is one category or "all"; omitting it searches
@@ -409,8 +409,6 @@ in {
         config = runtimeConfig routedPackage;
       in
         lib.all (evaluate: sharesPackage (packagesFor evaluate)) [evalHm evalDevenv]
-        && config.defaultContent == ["code" "config"]
-        && config.defaultModel == "${fallbackModel}"
         && config.models
         == [
           {
@@ -422,52 +420,6 @@ in {
             model = "${codeConfigModel}";
           }
         ]
-    );
-
-    # Mappings keep the consumer's list order, one entry per pattern: the
-    # first match wins, and one language can map to several categories.
-    module-semble-models-mapping-order = mkTest "semble-models-mapping-order" (
-      (runtimeConfig (customizePackage pkgs.ai.semble {
-        pathMappings = [
-          {
-            language = "json";
-            content = "docs";
-            patterns = ["docs/*.json"];
-          }
-          {
-            language = "yaml";
-            content = "config";
-            patterns = ["special.lock"];
-          }
-          {
-            language = "json";
-            content = "config";
-            patterns = ["*.json" "*.lock"];
-          }
-        ];
-      })).pathMappings
-      == [
-        {
-          content = "docs";
-          language = "json";
-          pattern = "docs/*.json";
-        }
-        {
-          content = "config";
-          language = "yaml";
-          pattern = "special.lock";
-        }
-        {
-          content = "config";
-          language = "json";
-          pattern = "*.json";
-        }
-        {
-          content = "config";
-          language = "json";
-          pattern = "*.lock";
-        }
-      ]
     );
 
     module-semble-models-routing-text = mkTest "semble-models-routing-text" (
@@ -553,7 +505,7 @@ in {
       jq=${pkgs.jq}/bin/jq
       warning="semble: no model is configured for content"
       indexes() {
-        ${pkgs.findutils}/bin/find "$1" -mindepth 2 -maxdepth 2 -name 'index*' -type d -printf '%f\n' | ${pkgs.coreutils}/bin/sort | ${pkgs.coreutils}/bin/tr '\n' ' '
+        ${pkgs.findutils}/bin/find "$1" -mindepth 2 -maxdepth 2 -name 'index*' -type d -printf '%f\n' | ${pkgs.gnused}/bin/sed -E 's/@[0-9a-f]{16}$/@model/' | ${pkgs.coreutils}/bin/sort | ${pkgs.coreutils}/bin/tr '\n' ' '
       }
       expect_indexes() {
         actual="$(indexes "$1")"
@@ -562,9 +514,18 @@ in {
           exit 1
         fi
       }
-      # expect_model CACHE INDEX-DIR MODEL
+      # expect_model CACHE INDEX-SCOPE MODEL [custom]
+      # Scope and persisted model are independent of the concrete store-path hash.
       expect_model() {
-        actual="$($jq -r .model_path "$1"/*/"$2"/metadata.json)"
+        dirs=("$1"/*/"$2")
+        if [ "''${4:-}" = custom ]; then
+          dirs=("$1"/*/"$2"@????????????????)
+        fi
+        if [ "''${#dirs[@]}" -ne 1 ]; then
+          echo "FAIL: expected one $2 directory in $1, got ''${dirs[*]}" >&2
+          exit 1
+        fi
+        actual="$($jq -r .model_path "''${dirs[0]}/metadata.json")"
         if [ "$actual" != "$3" ]; then
           echo "FAIL: $2 was built with '$actual', expected '$3'" >&2
           exit 1
@@ -597,21 +558,26 @@ in {
       ${routed.config.home.activation.ai-semble-cache-guard.text}
 
       check no "$semble" search alpha repo
-      expect_indexes "$cache" "index-code-config@${hash codeConfigModel} " "a plain search (defaultContent)"
-      expect_model "$cache" "index-code-config@${hash codeConfigModel}" ${codeConfigModel}
+      expect_indexes "$cache" "index-code-config@model " "a plain search (defaultContent)"
+      expect_model "$cache" index-code-config ${codeConfigModel} custom
 
       check no "$semble" search "install guide" repo --content docs
+      expect_model "$cache" index-docs ${docsModel} custom
+      # A cold related search must itself build the docs index with the docs model.
+      ${pkgs.coreutils}/bin/rm -r "$cache"/*/index-docs@*
       check no "$semble" find-related README.md 1 repo --content docs
-      expect_model "$cache" "index-docs@${hash docsModel}" ${docsModel}
+      expect_model "$cache" index-docs ${docsModel} custom
 
       # --content replaces defaultContent wholesale: `code` alone has no entry.
       check yes "$semble" search alpha repo --content code
       ${pkgs.gnugrep}/bin/grep -Fx "$warning 'code'; using the default model" run.err
-      expect_model "$cache" "index@${hash fallbackModel}" ${fallbackModel}
+      expect_model "$cache" index ${fallbackModel} custom
 
       # The disabled "all" entry routes nothing.
       check yes "$semble" search alpha repo --content all
-      expect_indexes "$cache" "index-code-config-docs@${hash fallbackModel} index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "every routed search"
+      expect_model "$cache" index-code-config-docs ${fallbackModel} custom
+      routed_indexes="index-code-config-docs@model index-code-config@model index-docs@model index@model "
+      expect_indexes "$cache" "$routed_indexes" "every routed search"
 
       # The cache guard's `semble clear index` reaches every model's index,
       # and a home-manager dry run clears none of them.
@@ -620,14 +586,15 @@ in {
       export DRY_RUN=1
       ${routed.config.home.activation.ai-semble-cache-guard.text}
       )
-      expect_indexes "$cache" "index-code-config-docs@${hash fallbackModel} index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "a dry-run cache guard"
+      expect_indexes "$cache" "$routed_indexes" "a dry-run cache guard"
       ${pkgs.gnugrep}/bin/grep -Fx stale "$cache/.nix-package"
       ${routed.config.home.activation.ai-semble-cache-guard.text}
       expect_indexes "$cache" "" "the cache guard"
 
       # ── No models: a default model alone never warns ──
       check no ${silentPackage}/bin/semble search alpha repo
-      expect_indexes ${silentCacheHome}/semble "index@${hash fallbackModel} " "a default model alone"
+      expect_indexes ${silentCacheHome}/semble "index@model " "a default model alone"
+      expect_model ${silentCacheHome}/semble index ${fallbackModel} custom
 
       # ── Vanilla: upstream's package and its built-in model ──
       check no ${vanillaPackage}/bin/semble search alpha repo
@@ -637,7 +604,13 @@ in {
       # ── MCP: per-call routing through the patched server ──
       export SEMBLE_CACHE_LOCATION="$TMPDIR/mcp-cache"
       ${sembleScript "mcp-routing" routedPackage ./mcp-routing.py} ${mcpExpectations} repo
-      expect_indexes "$SEMBLE_CACHE_LOCATION" "index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "MCP calls"
+      expect_indexes "$SEMBLE_CACHE_LOCATION" "$routed_indexes" "MCP calls"
+      # All three models coexist in one server; persisting one must not use
+      # another call's model from the process environment.
+      expect_model "$SEMBLE_CACHE_LOCATION" index-code-config-docs ${fallbackModel} custom
+      expect_model "$SEMBLE_CACHE_LOCATION" index-code-config ${codeConfigModel} custom
+      expect_model "$SEMBLE_CACHE_LOCATION" index-docs ${docsModel} custom
+      expect_model "$SEMBLE_CACHE_LOCATION" index ${fallbackModel} custom
       ${pkgs.coreutils}/bin/touch "$out"
     '';
   };

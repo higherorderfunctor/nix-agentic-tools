@@ -13,7 +13,7 @@
   "block_roles": ["selection", "guard", "mutator", "mutator"],
   "env": {},
   "expected": {
-    "description": "publication honors the pre-rewrite remote snapshot for create",
+    "description": "An absent remote branch can be created, including one named locally after the lease snapshot",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "LEASE-create",

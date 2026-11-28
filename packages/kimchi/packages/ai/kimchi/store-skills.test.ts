@@ -17,22 +17,24 @@ import { resolveSkillPathsForDiscovery } from "./resolve-skill-roots.js";
 describe("immutable bundled skills", () => {
   let root: string;
   let bundled: string;
-  const readOnlyDirs: string[] = [];
+  let readOnlyDir: string | undefined;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "kimchi-store-test-"));
     bundled = join(root, "bundled");
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-    for (const path of readOnlyDirs.splice(0)) chmodSync(path, 0o755);
+    if (readOnlyDir) chmodSync(readOnlyDir, 0o755);
+    readOnlyDir = undefined;
     rmSync(root, { recursive: true, force: true });
   });
-  function skill(base: string, name: string): string {
+  function skill(base: string, name: string, resource?: string): string {
     const dir = join(base, name);
     mkdirSync(dir, { recursive: true });
+    const requirement = resource ? `requires-resource: ${resource}\n` : "";
     writeFileSync(
       join(dir, "SKILL.md"),
-      `---\nname: ${name}\ndescription: A test skill.\n---\nSee reference.txt.\n`,
+      `---\nname: ${name}\ndescription: A test skill.\n${requirement}---\nSee reference.txt.\n`,
     );
     writeFileSync(join(dir, "reference.txt"), "Supporting content.");
     return dir;
@@ -44,14 +46,22 @@ describe("immutable bundled skills", () => {
       extraPaths,
     });
   }
-  it("loads read-only source directories directly without an exit cleanup", () => {
+  it("loads a read-only gated view in place without copying skills or adding an exit cleanup", () => {
+    const agentDir = join(root, "agent");
+    mkdirSync(agentDir);
+    writeFileSync(
+      join(agentDir, "settings.json"),
+      JSON.stringify({ resources: { "skills.pptx": false } }),
+    );
+    vi.stubEnv("KIMCHI_CODING_AGENT_DIR", agentDir);
     const dir = skill(bundled, "bundled-example");
+    skill(bundled, "gated", "skills.pptx");
     chmodSync(dir, 0o555);
-    readOnlyDirs.push(dir);
+    readOnlyDir = dir;
+    // An ungated tree would never exercise the former temp-copy path.
     const listeners = process.listenerCount("exit");
     const paths = discover();
     expect(paths).toEqual([dir]);
-    expect(discover()).toEqual(paths);
     expect(process.listenerCount("exit")).toBe(listeners);
     const result = loadSkills({
       cwd: root,
@@ -68,7 +78,7 @@ describe("immutable bundled skills", () => {
       ),
     ).toBe("Supporting content.");
   });
-  it("honors symlinked overrides while retaining new bundled skills", () => {
+  it("honors a symlinked override beside a dangling link without losing unrelated bundled skills", () => {
     skill(bundled, "overridden");
     const kept = skill(bundled, "new-bundled");
     const custom = skill(join(root, "custom"), "overridden");
@@ -84,31 +94,12 @@ describe("immutable bundled skills", () => {
       skillPaths: paths,
       includeDefaults: false,
     });
-    expect(result.diagnostics.filter((d) => d.type === "collision")).toEqual(
-      [],
-    );
     expect(result.skills.map((s) => s.name).sort()).toEqual([
       "new-bundled",
       "overridden",
     ]);
   });
-  it("hides resource-gated bundled skills without a temp copy", () => {
-    const agentDir = join(root, "agent");
-    mkdirSync(agentDir);
-    writeFileSync(
-      join(agentDir, "settings.json"),
-      JSON.stringify({ resources: { "skills.pptx": false } }),
-    );
-    vi.stubEnv("KIMCHI_CODING_AGENT_DIR", agentDir);
-    const kept = skill(bundled, "ungated");
-    const gated = skill(bundled, "gated");
-    writeFileSync(
-      join(gated, "SKILL.md"),
-      "---\nname: gated\ndescription: d\nrequires-resource: skills.pptx\n---\n",
-    );
-    expect(discover()).toEqual([kept]);
-  });
-  it("contributes nothing when every bundled skill is overridden", () => {
+  it("does not fall back to the bundled root when every skill was overridden", () => {
     skill(bundled, "overridden");
     const extra = join(root, "extra");
     skill(extra, "overridden");

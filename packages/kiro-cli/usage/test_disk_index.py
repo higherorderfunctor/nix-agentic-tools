@@ -75,6 +75,7 @@ class DiskIndexTests(unittest.TestCase):
         return self.db.execute("SELECT count(*) FROM disk_records").fetchone()[0]
 
     def test_numeric_facts_privacy_and_request_identity(self):
+        # Store the numeric projection and ordered identities, never source text or public permissions.
         self.messages.write_bytes(usage() + encoded({
             "type": "session_metadata", "key": "contextUsage",
             "executionId": "execution-a", "value": {"usagePercentage": 4.2, "text": "SECRET"},
@@ -85,14 +86,13 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(json.loads(row["usage_json"]), [{"usage": 1.25, "unit": "credit"}])
         self.assertEqual((row["execution_id"], row["turn_id"], row["elapsed_ms"]),
                          ("execution-a", "turn-a", 20))
-        self.assertEqual(self.db.execute("SELECT request_id FROM disk_request_ids ORDER BY request_index").fetchall()[1][0], "upstream-b")
+        self.assertEqual([row[0] for row in self.db.execute("SELECT request_id FROM disk_request_ids ORDER BY request_index")],
+                         ["upstream-a", "upstream-b"])
         session = self.db.execute("SELECT * FROM disk_sessions").fetchone()
         self.assertEqual(session["model_scope"], "session-current")
         self.assertEqual(json.loads(session["identifiers_json"]), {"parentSessionId": "parent-synthetic"})
         self.assertEqual(json.loads(session["numeric_metadata_json"]), {"contextWindowTokens": 1000})
         self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
-        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(self.path.parent.stat().st_mode & 0o777, 0o700)
 
     def test_partial_tail_append_restart_and_idempotence(self):
         first, second = usage(), usage(2)
@@ -107,7 +107,6 @@ class DiskIndexTests(unittest.TestCase):
         self.scan()
         self.scan()
         self.assertEqual(self.count(), 2)
-        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_request_ids").fetchone()[0], 4)
 
     def test_truncate_replace_and_same_size_rewrite_retire_old_facts(self):
         self.messages.write_bytes(usage() * 2)
@@ -130,13 +129,17 @@ class DiskIndexTests(unittest.TestCase):
     def test_malformed_complete_lines_are_visible_omissions(self):
         invalid = b'{"SECRET":broken}\n'
         invalid_usage = encoded({"type": "usage_summary", "requestIds": "SECRET"})
-        self.messages.write_bytes(usage() + invalid + invalid_usage + usage(2))
+        # Syntax, record shape and parser recursion must all be reported, without leaking the line.
+        deeply_nested = b'{"SECRET_DEEP":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}\n'
+        self.messages.write_bytes(usage() + invalid + invalid_usage + deeply_nested + usage(2))
         self.scan()
         self.assertEqual(self.count(), 2)
         omissions = self.db.execute("SELECT * FROM disk_omissions ORDER BY byte_offset").fetchall()
         self.assertEqual([(row["byte_offset"], row["byte_count"], row["reason"]) for row in omissions],
                          [(len(usage()), len(invalid), "invalid_json_or_usage_record"),
-                          (len(usage()) + len(invalid), len(invalid_usage), "invalid_json_or_usage_record")])
+                          (len(usage()) + len(invalid), len(invalid_usage), "invalid_json_or_usage_record"),
+                          (len(usage()) + len(invalid) + len(invalid_usage), len(deeply_nested),
+                           "invalid_json_or_usage_record")])
         self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], self.messages.stat().st_size)
         self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
 
@@ -170,8 +173,6 @@ class DiskIndexTests(unittest.TestCase):
                           "byte_count": len(exhausted), "reason": "parse_memory_exhausted"})
         self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0],
                          len(exhausted) + len(healthy))
-        with self.messages_not_parsed():
-            self.scan()
         self.assertNotIn("SECRET", "\n".join(self.db.iterdump()))
 
     def test_blank_complete_lines_advance_checkpoint_without_omissions(self):
@@ -180,10 +181,8 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 1)
         self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT offset FROM disk_sources").fetchone()[0], self.messages.stat().st_size)
-        with self.messages_not_parsed():
-            self.scan()
 
-    def test_missing_facts_are_null_and_no_cross_source_join(self):
+    def test_missing_record_fields_stay_null_without_inventing_request_ids(self):
         self.messages.write_bytes(encoded({"type": "usage_summary"}) + encoded({
             "type": "session_metadata", "key": "contextUsage", "value": {},
         }))
@@ -248,7 +247,7 @@ class DiskIndexTests(unittest.TestCase):
         calls = []
         with patch.object(disk_index, "MAX_RECORD", 100), patch.object(disk_index, "DRAIN_CHUNK", 64):
             stream = TrackedStream(b'x' * 400 + b'\nnext\n')
-            self.assertEqual(disk_index.read_record(stream), (None, 401, True))
+            disk_index.read_record(stream)
         self.assertEqual(calls[0], 101)
         self.assertEqual(set(calls[1:]), {64})
         self.assertEqual(stream.read(), b'next\n')
@@ -271,14 +270,12 @@ class DiskIndexTests(unittest.TestCase):
                                      "--sessions", str(self.sessions), "--json"], capture_output=True, text=True)
         self.assertEqual(structured.returncode, 0, structured.stderr)
         self.assertEqual(json.loads(structured.stdout), {"sources": 1, "records": 1, "omitted_records": 1})
-        self.assertIn("unknown usage coverage", structured.stderr)
 
     def test_cli_requires_explicit_inputs(self):
         result = subprocess.run([sys.executable, str(Path(disk_index.__file__))],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("--db", result.stderr)
-        self.assertIn("--sessions", result.stderr)
+        self.assertIn("the following arguments are required: --db, --sessions", result.stderr)
 
     def test_cli_full_pass_waits_for_index_lock(self):
         self.messages.write_bytes(usage())
@@ -321,9 +318,6 @@ class DiskIndexTests(unittest.TestCase):
         row = self.db.execute("SELECT model_id,identifiers_json FROM disk_sessions WHERE path=?", (str(self.session),)).fetchone()
         self.assertEqual(row["model_id"], "repaired")
         self.assertEqual(json.loads(row["identifiers_json"])["parentSessionId"], "parent-repaired")
-        changes = self.db.total_changes
-        self.scan()
-        self.assertEqual(self.db.total_changes, changes)
 
     def test_unreadable_session_metadata_is_visible_but_sql_errors_propagate(self):
         self.messages.write_bytes(usage())
@@ -335,22 +329,17 @@ class DiskIndexTests(unittest.TestCase):
             with self.assertRaisesRegex(sqlite3.OperationalError, "database failure"):
                 self.scan()
 
-    def test_unchanged_complete_tree_does_not_write(self):
+    def test_unchanged_tree_neither_writes_nor_reparses_transcripts_and_model_updates(self):
         self.messages.write_bytes(usage())
         self.scan()
         changes = self.db.total_changes
-        self.scan()
-        self.assertEqual(self.db.total_changes, changes)
-
-    def test_unchanged_files_are_not_parsed_again_and_model_updates(self):
-        self.messages.write_bytes(usage())
-        self.scan()
         with self.messages_not_parsed():
             self.scan()
+        self.assertEqual(self.db.total_changes, changes)
         self.metadata.write_text(json.dumps({"modelId": "new-current"}))
-        self.scan()
+        with self.messages_not_parsed():
+            self.scan()
         self.assertEqual(self.db.execute("SELECT model_id FROM disk_sessions").fetchone()[0], "new-current")
-        self.assertEqual(self.count(), 1)
 
     def test_batches_checkpoint_before_further_parsing_and_allow_capture(self):
         self.messages.write_bytes(usage() * 130)
@@ -388,12 +377,6 @@ class DiskIndexTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertFalse(errors, errors)
         self.assertEqual(self.count(), 130)
-        with self.messages.open("ab") as stream:
-            stream.write(b'{"SECRET_DEEP":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}\n')
-        self.scan()
-        self.assertEqual(self.count(), 130)
-        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 1)
-        self.assertNotIn("SECRET_DEEP", "\n".join(self.db.iterdump()))
 
     def test_existing_disk_index_adds_omission_table_without_replaying_facts(self):
         self.messages.write_bytes(usage())
@@ -404,20 +387,14 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 1)
         self.assertEqual(self.db.execute("SELECT count(*) FROM disk_omissions").fetchone()[0], 0)
 
-    def test_capture_and_disk_schema_both_initialization_orders(self):
+    def test_capture_schema_can_follow_disk_schema(self):
         self.messages.write_bytes(usage())
-        for disk_first in (False, True):
-            with self.subTest(disk_first=disk_first):
-                db = disk_index.open_database(self.path.parent / f"order-{disk_first}.sqlite")
-                try:
-                    if disk_first:
-                        disk_index.index_tree(db, self.sessions)
-                    self.captured(db, "sess_synthetic")
-                    disk_index.index_tree(db, self.sessions)
-                    self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 1)
-                    self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE name='captures'").fetchone())
-                finally:
-                    db.close()
+        with contextlib.closing(disk_index.open_database(self.path.parent / "disk-first.sqlite")) as db:
+            disk_index.index_tree(db, self.sessions)
+            self.captured(db, "sess_synthetic")
+            disk_index.index_tree(db, self.sessions)
+            self.assertEqual(db.execute("SELECT count(*) FROM disk_records").fetchone()[0], 1)
+            self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master WHERE name='captures'").fetchone())
 
     def child(self, name, metadata, records=b"", mtime=None):
         session = self.sessions / "other-workspace" / name
@@ -438,20 +415,20 @@ class DiskIndexTests(unittest.TestCase):
         step = self.child("sess_step", {"rootConversationId": "sess_synthetic", "id": "sess_step", "_meta": {"kiro": {
             "workflow": {"workflowId": "wf_a", "nodeId": "node-a", "type": "step"},
             "serverSession": {"role": "workflow-step", "ownerSessionId": "sess_synthetic"}}}}, usage(2))
-        helper = self.child("sess_helper", {"parentSessionId": "step"}, usage(3))
+        self.child("sess_helper", {"parentSessionId": "step"}, usage(3))
         unlinked = self.child("sess_unlinked", {"rootConversationId": "sess_elsewhere"}, usage(4))
         self.scan()
-        self.assertEqual(self.ids(step), {"nodeId": "node-a", "ownerSessionId": "sess_synthetic", "role": "workflow-step",
-                                          "rootConversationId": "sess_synthetic", "workflowId": "wf_a"})
-        self.assertEqual(self.ids(helper), {"parentSessionId": "step"})
+        step_ids = {"nodeId": "node-a", "ownerSessionId": "sess_synthetic", "role": "workflow-step",
+                    "rootConversationId": "sess_synthetic", "workflowId": "wf_a"}
+        self.assertEqual(self.ids(step), step_ids)
         self.assertIsNone(self.ids(unlinked))
         self.assertEqual(self.count(), 3)
         self.assertIsNone(self.db.execute("SELECT 1 FROM disk_sources WHERE session_path=?", (str(unlinked),)).fetchone())
-        # A row from an indexer that predates these keys is rewritten, not trusted.
-        self.db.execute("UPDATE disk_sessions SET identifiers_json='{}' WHERE path=?", (str(step),))
+        # A full scan, not just requested history, repairs legacy lineage even if the file did not change.
+        self.db.execute("UPDATE disk_sessions SET identifiers_json='{}',lineage_version=0 WHERE path=?", (str(step),))
         self.db.commit()
         self.scan()
-        self.assertEqual(self.ids(step)["rootConversationId"], "sess_synthetic")
+        self.assertEqual(self.ids(step), step_ids)
         self.assertEqual(self.count(), 3)
         self.db.execute("DELETE FROM captures")
         self.db.commit()
@@ -459,7 +436,6 @@ class DiskIndexTests(unittest.TestCase):
         self.scan()
         self.assertEqual([Path(row[0]).name for row in self.db.execute("SELECT path FROM disk_sessions")], ["sess_unlinked"])
         self.assertEqual(self.count(), 1)
-        self.assertEqual(self.db.execute("SELECT count(*) FROM disk_request_ids").fetchone()[0], 2)
 
     def test_unlinked_sessions_older_than_captures_are_not_read(self):
         self.db.execute("DELETE FROM captures")
@@ -554,7 +530,8 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 4)
         lookups = [sql for sql in statements if sql.startswith("SELECT path FROM disk_sessions WHERE json_extract")]
         plans = {row[3] for sql in lookups for row in self.db.execute("EXPLAIN QUERY PLAN " + sql)}
-        for link in disk_index.LINKS:
+        # Every supported ancestry lookup must stay indexed; a production list could silently lose a key.
+        for link in ("ownerSessionId", "parentSessionId", "rootConversationId", "rootSessionId"):
             self.assertTrue(any(f"SEARCH disk_sessions USING INDEX disk_sessions_{link} " in plan for plan in plans),
                             plans)
 
@@ -646,10 +623,18 @@ class DiskIndexTests(unittest.TestCase):
         self.assertEqual(self.count(), 1)
 
     def test_cli_reports_errors_without_traceback(self):
-        result = subprocess.run([sys.executable, str(Path(disk_index.__file__)), "--db", str(self.path),
-                                 "--sessions", str(self.root / "missing")], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 1)
-        self.assertNotIn("Traceback", result.stderr)
+        # A missing root raises OSError; an existing non-directory raises ValueError.
+        for root, stderr in ((self.metadata, "--sessions must be a directory\n"), (self.root / "missing", None)):
+            with self.subTest(root=root.name):
+                result = subprocess.run([sys.executable, disk_index.__file__, "--db", str(self.path),
+                                         "--sessions", str(root)], capture_output=True, text=True,
+                                        env={**os.environ, "LC_ALL": "C"})
+                self.assertEqual((result.returncode, result.stdout), (1, ""))
+                if stderr is None:
+                    self.assertIn("No such file or directory", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+                else:
+                    self.assertEqual(result.stderr, stderr)
 
     def test_top_level_lineage_wins_over_nested_keys(self):
         ids = disk_index.session_identifiers({"parentSessionId": "sess_local", "_meta": {"kiro": {

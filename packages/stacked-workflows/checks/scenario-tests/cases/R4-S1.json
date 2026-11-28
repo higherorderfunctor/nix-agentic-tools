@@ -11,7 +11,7 @@
   "block_roles": ["selection", "selection", "mutator"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "A cached worktree-strategy run must not make fix mode silently skip rewriting either commit",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R4-S1",

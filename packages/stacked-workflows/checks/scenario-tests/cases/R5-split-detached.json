@@ -12,7 +12,7 @@
   "block_roles": ["mutator", "mutator", "observation", "mutator"],
   "env": {},
   "expected": {
-    "description": "Update-refs split leaves a detached sibling worktree unchanged",
+    "description": "Splitting the tip must preserve the detached worktree stacked on the earlier commit",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R5-split-detached",

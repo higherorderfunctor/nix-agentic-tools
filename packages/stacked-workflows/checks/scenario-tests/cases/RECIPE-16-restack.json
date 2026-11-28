@@ -6,7 +6,7 @@
   "block_roles": ["mutation"],
   "env": {},
   "expected": {
-    "description": "Recipe preserves other worktrees and achieves its scoped endpoint",
+    "description": "Forced repair must attach the own child to its rewritten parent without restacking the independent sibling",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "RECIPE-16-restack",

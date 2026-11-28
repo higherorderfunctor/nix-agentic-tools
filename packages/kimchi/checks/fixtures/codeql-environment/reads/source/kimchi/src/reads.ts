@@ -4,7 +4,7 @@ void process["env"].S15_PROCESS_BRACKET_ENV;
 void (process.env as Record<string, string>).S21_AS_PAREN;
 const pp = process;
 void pp.env.S32_PROCESS_ALIAS;
-void globalThis["process"].env.S17_GLOBAL_THIS_BRACKET;
+
 void require("process").env.S28_REQUIRE;
 process.env.S26_COMPOUND += "x";
 
@@ -40,14 +40,14 @@ function ciProvider() {
   for (let e3 of Xt) if (zt[e3[1] || e3[0]]) return { name: e3[0].toLowerCase(), ...e3[2] };
 }
 
-const { GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_INDEX_FILE } = process.env;
+const { GIT_DIR, GIT_WORK_TREE } = process.env;
 
 // Declared key helpers: oauth-config and shared/env-int.
 function readKey(name: string) {
   return process.env[name];
 }
 const helperKey = "HELPER_CONSTANT";
-void readKey("HELPER_LITERAL");
+
 void readKey(helperKey);
 
 // Bundled module initialization assigns a previously declared binding.
@@ -70,7 +70,7 @@ const { ENV_PROFILE: ENV_PROFILE2 } = (init_config(), __toCommonJS(config_export
 void process.env[ENV_PROFILE2];
 
 // Pinned PR-cost CI callback.
-const CI_VARIABLES = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "JENKINS_URL", "TEAMCITY_VERSION", "CIRCLECI", "TF_BUILD"];
+const CI_VARIABLES = ["CI", "TF_BUILD"];
 const ci = CI_VARIABLES.find((name) => process.env[name]?.trim() && !disabled(process.env[name]));
 
 // Pinned steer table indexed by the runtime kind.

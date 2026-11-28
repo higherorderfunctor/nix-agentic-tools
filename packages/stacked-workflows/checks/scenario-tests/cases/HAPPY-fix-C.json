@@ -7,13 +7,13 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Manual amend, revise, restack and branch repairs remain outside this skill",
+    "description": "Structural fixes do not authorize manual amend, revise, restack or branch repair",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "HAPPY-fix-C",
   "kind": "static",
   "path": "skills/stack-fix/SKILL.md",
-  "pattern": "This skill does not\\s+attempt those repairs",
+  "pattern": "^## Structural fixes\\n(?:(?!^#).)*Manual amend, git-revise, restack, and branch-repair recipes(?:(?!^#).)*This skill does not\\s+attempt those repairs",
   "present": true,
   "topology": "T4"
 }

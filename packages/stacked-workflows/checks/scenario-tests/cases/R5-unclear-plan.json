@@ -1,70 +1,56 @@
 {
-  "args": {
-    "scenario": "static",
-    "shell_scope": "none"
-  },
   "assertions": [
     {
-      "id": "SWI-0406",
-      "pattern": "description:.*reset --soft",
+      "id": "autosquash-is-not-a-restructure-recovery",
+      "pattern": "git rebase -i --autosquash",
+      "present": false
+    },
+    {
+      "id": "do-not-recreate-local-main",
+      "pattern": "git (?:checkout -B|switch -C) main\\b",
+      "present": false
+    },
+    {
+      "id": "no-interactive-revise-repair",
+      "pattern": "git revise -i\\b",
+      "present": false
+    },
+    {
+      "id": "no-one-commit-move-repair",
+      "pattern": "git move -x\\b",
+      "present": false
+    },
+    {
+      "id": "no-unscoped-restack-repair",
+      "pattern": "(?:run `git restack`|bare one would restack)",
+      "present": false
+    },
+    {
+      "id": "route-forward-move-panics",
+      "pattern": "^description:(?:(?!^---$).)*git move -F panics",
       "present": true
     },
     {
-      "id": "SWI-0407",
-      "pattern": "description:.*git move -F panics",
+      "id": "route-soft-reset-restructures",
+      "pattern": "^description:(?:(?!^---$).)*reset --soft",
       "present": true
     },
     {
-      "id": "SWI-0431",
-      "pattern": "delete it first",
-      "present": false
+      "id": "stop-rather-than-run-rewrite-repairs",
+      "pattern": "Do not improvise a rebase, move, revise, or restack repair",
+      "present": true
     },
     {
-      "id": "SWI-0439",
-      "pattern": "git checkout -B main",
-      "present": false
-    },
-    {
-      "id": "SWI-0450",
-      "pattern": "GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash",
-      "present": false
-    },
-    {
-      "id": "SWI-0451",
-      "pattern": "run `git restack`",
-      "present": false
-    },
-    {
-      "id": "SWI-0452",
-      "pattern": "git move -x <hash> -d <dest>",
-      "present": false
-    },
-    {
-      "id": "SWI-0453",
-      "pattern": "git revise -i",
-      "present": false
-    },
-    {
-      "id": "SWI-0454",
-      "pattern": "bare one would restack",
-      "present": false
-    },
-    {
-      "id": "SWI-0455",
-      "pattern": "Use `git move -x`",
-      "present": false
-    },
-    {
-      "id": "SWI-0456",
-      "pattern": "`git revise -i` for bulk",
-      "present": false
+      "id": "stop-rather-than-delete-a-global-backup",
+      "pattern": "Do not create or delete a generic repository-global backup branch",
+      "present": true
     }
   ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Plan inventory items are non-executable prose or removed repairs",
+    "description": "Plan routing must cover restructuring and recovery; the skill must not authorize destructive repairs",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R5-unclear-plan",

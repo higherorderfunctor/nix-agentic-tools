@@ -5,18 +5,6 @@
       "kind": "deb",
       "targetTriple": "x86_64-unknown-linux-gnu",
       "os": "linux",
-      "fileType": "zip",
-      "architecture": "x86_64",
-      "variant": "headless",
-      "download": "3.1.0/kirocli-x86_64-linux.zip",
-      "sha256": "6f43c9ca9811d1ef2d4b47148667243b5af2d4aaea7cdef3e9a6af1c10d4c8ba",
-      "size": 138093607,
-      "channel": "stable"
-    },
-    {
-      "kind": "deb",
-      "targetTriple": "x86_64-unknown-linux-gnu",
-      "os": "linux",
       "fileType": "tarZst",
       "architecture": "x86_64",
       "variant": "headless",
@@ -63,18 +51,6 @@
     },
     {
       "kind": "deb",
-      "targetTriple": "x86_64-unknown-linux-gnu",
-      "os": "linux",
-      "fileType": "rpm",
-      "architecture": "x86_64",
-      "variant": "headless",
-      "download": "3.1.0/kirocli-x86_64-linux.rpm",
-      "sha256": "139a3eab6f129fd2237423250c0fba35bac1af1b61665f6af1ce20c137b71a42",
-      "size": 137809994,
-      "channel": "stable"
-    },
-    {
-      "kind": "deb",
       "targetTriple": "x86_64-unknown-linux-musl",
       "os": "linux",
       "fileType": "tarGz",
@@ -83,18 +59,6 @@
       "download": "3.1.0/kirocli-x86_64-linux-musl.tar.gz",
       "sha256": "82ae70f353f8e1a8bd414053f16e47a6b07567660daf4ade9501213864c0c335",
       "size": 142060130,
-      "channel": "stable"
-    },
-    {
-      "kind": "deb",
-      "targetTriple": "x86_64-unknown-linux-musl",
-      "os": "linux",
-      "fileType": "zip",
-      "architecture": "x86_64",
-      "variant": "headless",
-      "download": "3.1.0/kirocli-x86_64-linux-musl.zip",
-      "sha256": "53a2e7e99c23714e5e021cfda67369b97c6dbcb69f10479eaed5b613270ad6d3",
-      "size": 142058864,
       "channel": "stable"
     }
   ]

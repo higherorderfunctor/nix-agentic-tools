@@ -1,17 +1,13 @@
 {
-  "args": {
-    "scenario": "static",
-    "shell_scope": "none"
-  },
   "assertions": [
     {
-      "id": "SWI-0564",
-      "pattern": "git test fix --strategy working-copy --jobs 1 --no-cache",
+      "id": "ask-before-clearing-shared-cache",
+      "pattern": "Cache cleanup affects the common Git directory shared by every worktree\\. Stop\\s+and\\s+ask before clearing cached test results",
       "present": true
     },
     {
-      "id": "SWI-0578",
-      "pattern": "git test clean 'all\\(\\)'",
+      "id": "no-clear-all-cache-recipe",
+      "pattern": "git test clean [\"']?all\\(\\)",
       "present": false
     }
   ],
@@ -19,7 +15,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Test inventory items use guarded fix mode and preserve shared cache",
+    "description": "Test mode must not clear cached results shared with other worktrees without asking",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R5-unclear-test",

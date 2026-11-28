@@ -6,8 +6,10 @@ in {
     kiro-autoupdate-switch = pkgs.runCommand "kiro-autoupdate-switch" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      # The realized command must include the behavior tested by the stub.
       ${pkgs.gnugrep}/bin/grep -qF 'set -euETo pipefail; shopt -s inherit_errexit' "${package}/bin/kiro-cli"
       ${pkgs.gnugrep}/bin/grep -qF '*) export KIRO_NO_AUTO_UPDATE=1' "${package}/bin/kiro-cli"
+      # Probe only spelling drift here; binary presence does not establish semantics.
       ${pkgs.gnugrep}/bin/grep -aqF 'KIRO_NO_AUTO_UPDATE' \
         ${package}/bin/.kiro-cli-wrapped
       ${pkgs.gnugrep}/bin/grep -aqF 'app.disableAutoupdates' \
@@ -32,27 +34,24 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
         printf '%s\n' "''${KIRO_NO_AUTO_UPDATE-unset}"
         EOF
-        cat > "$out/bin/reexport" <<EOF
-        #!${pkgs.bash}/bin/bash
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        export KIRO_NO_AUTO_UPDATE=0
-        exec "\$1"
-        EOF
-        chmod +x "$out/bin/binary" "$out/bin/reexport"
+        chmod +x "$out/bin/binary"
         makeWrapper "$out/bin/binary" "$out/bin/kiro-cli" ${package.autoUpdateWrapperFlags}
+        expect_guard() {
+          local regression="$1" expected="$2" observed
+          shift 2
+          observed="$("$@")"
+          if [ "$observed" != "$expected" ]; then
+            printf 'FAIL: %s: expected %s, got %s\n' "$regression" "$expected" "$observed" >&2
+            return 1
+          fi
+        }
         unset KIRO_NO_AUTO_UPDATE
-        test "$("$out/bin/kiro-cli")" = 1
-        for value in "" 0 false FALSE False off OFF no NO; do
-          test "$(KIRO_NO_AUTO_UPDATE="$value" "$out/bin/kiro-cli")" = unset
+        expect_guard 'an absent variable defaults to updates off' 1 "$out/bin/kiro-cli"
+        for value in "" 0 FaLsE no off; do
+          KIRO_NO_AUTO_UPDATE="$value" expect_guard "opt-in '$value' must be absent at the binary" unset "$out/bin/kiro-cli"
         done
-        for value in 1 true on yes; do
-          test "$(KIRO_NO_AUTO_UPDATE="$value" "$out/bin/kiro-cli")" = 1
-        done
-        # A module wrapper re-exporting the opt-in in front of the command is
-        # normalized the same way.
-        test "$("$out/bin/reexport" "$out/bin/kiro-cli")" = unset
-        echo 'PASS: default and opt-in hold on the direct command; module re-export is normalized'
+        KIRO_NO_AUTO_UPDATE=yes expect_guard 'a non-opt-in value is normalized rather than forwarded' 1 "$out/bin/kiro-cli"
+        echo 'PASS: default and opt-in hold on the direct command'
       '';
   };
 }

@@ -7,7 +7,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Document references configured alias (external feature provenance not tested)",
+    "description": "The reference must not claim the scoped sync option exists in a source revision without its declaration",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-01",

@@ -118,8 +118,19 @@ entry.namespace.bashBackgroundExtension({
     registered = tool;
   },
 });
-for (const value of ["/configured/shell", undefined]) {
-  shellPath = value;
+for (const { name, setting, expected } of [
+  {
+    name: "configured shell reaches spawned operations",
+    setting: "/configured/shell",
+    expected: "/configured/shell",
+  },
+  {
+    name: "unset shell setting does not override the default or reuse the previous shell",
+    setting: undefined,
+    expected: undefined,
+  },
+]) {
+  shellPath = setting;
   sessionStart(
     {},
     {
@@ -128,15 +139,14 @@ for (const value of ["/configured/shell", undefined]) {
       ui: { setStatus() {} },
     },
   );
-  const result = await registered.execute(
+  await registered.execute(
     "call",
     { command: "true" },
     undefined,
     undefined,
     {},
   );
-  assert.equal(result.details.handoff, true);
-  assert.deepEqual(calls.splice(0), [value]);
+  assert.deepEqual(calls.splice(0), [expected], name);
 }
 console.log(
   "PASS: configured and absent shellPath reach the spawned operations",

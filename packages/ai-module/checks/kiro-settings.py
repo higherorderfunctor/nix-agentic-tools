@@ -159,6 +159,8 @@ with tempfile.TemporaryDirectory() as temporary:
             helper.chmod(0o755)
             failed_plan = root / "failed-plan.json"
             for failure, diagnostic in failures.items():
+                # Seed hooks independently: the helper plan retires alpha.json.
+                activate("plain")
                 credential = root / "credential-url"
                 credential.unlink(missing_ok=True)
                 if failure == "empty":

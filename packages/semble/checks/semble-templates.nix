@@ -47,8 +47,11 @@
     assert lib.assertMsg (builtins.attrNames reviewed.mcpSurface == ["disposition" "reviewedTools"]) "Semble MCP surface coverage must contain exactly disposition and reviewedTools";
     assert lib.assertMsg (lib.all (name: recordShapeIsValid reviewed.templates.${name}) expectedNames) "Every Semble template coverage record must contain exactly disposition and reviewedHash";
     assert lib.assertMsg templateHashesMatch "A Semble agent template changed; review the derivative and update templateCoverage.nix";
-    assert lib.assertMsg (pinnedVersion != null) "Semble installer instructions no longer embed a `${pinMarker}` package version";
-    assert lib.assertMsg (pinnedVersion == snapshot.version) "Semble installer instructions pin ${pinMarker}${pinnedVersion} but the packaged version is ${snapshot.version}";
+    assert lib.assertMsg (pinnedVersion == snapshot.version) "Semble installer instructions pin ${pinMarker}${
+      if pinnedVersion == null
+      then "<missing>"
+      else pinnedVersion
+    } but the packaged version is ${snapshot.version}";
     assert lib.assertMsg (reviewed.mcpSurface.reviewedTools == reviewedSurface) "The Semble MCP tools/list surface changed; review packages/semble/mcp-agent-instructions.md and update templateCoverage.nix";
     # Natural-language prompt correctness remains a review obligation. These two
     # assertions mechanically join its declared dependencies, literal references,

@@ -7,7 +7,7 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "The revise reference must not prescribe a bare restack to repair missing branchless rewrite tracking",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R3-S4",

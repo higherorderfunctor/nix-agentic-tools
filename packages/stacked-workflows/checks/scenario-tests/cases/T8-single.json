@@ -14,11 +14,11 @@
     "SQUASH_OVERLAP": "no"
   },
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Ordinary move must recognize an identical single squashed patch as already applied and retain the open commit",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"],
+    "skip": "Skipped commit (was already applied upstream)"
   },
   "id": "T8-single",
   "kind": "squash-move",
-  "subjects": ["f", "a3"],
   "topology": "T8"
 }

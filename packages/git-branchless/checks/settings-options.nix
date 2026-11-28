@@ -1,175 +1,134 @@
-# The typed git-branchless options follow packages/git-branchless/extracted/.
-#
-# ../lib/default.nix generates them, through lib/git-tool-settings, from the
-# committed sidecar. Agreement with the real sidecar alone would also hold for a hand-copied option list, so the
-# cases that matter run the same generator over FIXTURE sidecars — a key added,
-# a key removed, an enum widened, a builtin revset added, a type nothing maps —
-# and require the option surface to move with it. Each case is named in the
-# failure message.
+# The real sidecar pins the shipped surface; changed fixture sidecars expose
+# a stale, hand-copied generator that happens to agree with today's sidecar.
 {
+  harness,
   lib,
-  pkgs,
   ...
 }: let
+  inherit (harness) checkRows mkTest rejectsChange;
   committed = import ../../../lib/git-tool-settings/extracted.nix {
     dir = ../extracted;
     inherit lib;
   };
   surfaceFor = extracted: (import ../lib/default.nix).git-branchless.settings {inherit extracted lib;};
   real = surfaceFor committed;
-  sorted = lib.sort (a: b: a < b);
-  setting = key: node: {settings.${key} = node;};
-  withSettings = patch: lib.recursiveUpdate committed patch;
-  without = key: committed // {settings = builtins.removeAttrs committed.settings [key];};
+  withSetting = key: node: surfaceFor (lib.recursiveUpdate committed {settings.${key} = node;});
+  without = key: surfaceFor (committed // {settings = builtins.removeAttrs committed.settings [key];});
   read = {reads."probe.rs#get_probe" = ["repository"];};
 
-  added = surfaceFor (withSettings (setting "branchless.probe.added" (read
-    // {
-      type = "bool";
-      default = false;
-    })));
-  removed = surfaceFor (without "branchless.smartlog.reverse");
-  widened = surfaceFor (withSettings {
-    settings."branchless.test.strategy".values = committed.settings."branchless.test.strategy".values ++ [{value = "probe";}];
-  });
-  newBuiltin = surfaceFor (committed // {revsetFunctions = committed.revsetFunctions ++ ["mine"];});
-  unmapped = surfaceFor (withSettings (setting "branchless.probe.odd" (read // {type = "u64";})));
-  emptyEnum = surfaceFor (withSettings (setting "branchless.probe.enum" (read
+  added = withSetting "branchless.probe.added" (read // {type = "bool";});
+  emptyEnum = withSetting "branchless.probe.enum" (read
     // {
       type = "enum";
       values = [];
-    })));
-  writeOnly = surfaceFor (withSettings (setting "branchless.probe.written" {
+    });
+  nested = withSetting "branchless.test" (read // {type = "string";});
+  newBuiltin = surfaceFor (committed // {revsetFunctions = committed.revsetFunctions ++ ["mine"];});
+  unmapped = withSetting "branchless.probe.odd" (read // {type = "u64";});
+  widened = withSetting "branchless.test.strategy" {
+    values = committed.settings."branchless.test.strategy".values ++ [{value = "probe";}];
+  };
+  writeOnly = withSetting "branchless.probe.written" {
     reads = {};
     type = "string";
     writes."probe.rs#set_probe" = ["file"];
-  }));
-  nested = surfaceFor (withSettings (setting "branchless.test" (read // {type = "string";})));
-  noJobs = surfaceFor (without "branchless.test.jobs");
-  retypedJobs = surfaceFor (withSettings {settings."branchless.test.jobs".type = "string";});
-  noLegacy = surfaceFor (without "branchless.mainBranch");
+  };
 
-  # Does `value` type-check against a closed submodule of `options`?
-  accepts = surface: value:
-    (builtins.tryEval (builtins.deepSeq
-      (lib.evalModules {
-        modules = [
-          {
-            options.settings = lib.mkOption {
-              type = lib.types.submodule {inherit (surface) options;};
-              default = {};
-            };
-          }
-          {config.settings = value;}
-        ];
-      })
-      .config
-      .settings
-      true))
-    .success;
-  unset =
+  # Force the closed submodule's exact merge leaf. Reading the option tree
+  # alone would not force the rejection of a consumer's value or unknown key.
+  merged = surface: value:
     (lib.evalModules {
       modules = [
         {
           options.settings = lib.mkOption {
-            type = lib.types.submodule {inherit (real) options;};
+            type = lib.types.submodule {inherit (surface) options;};
             default = {};
           };
         }
+        {config.settings = value;}
       ];
-    })
-    .config
-    .settings;
-  leafValues = lib.collect (v: !(builtins.isAttrs v) || v == {}) unset;
-  optionAt = surface: key: lib.attrByPath (lib.splitString "." (lib.removeSuffix ".<name>" key)) null surface.options;
-  keptKeys = sorted (builtins.attrNames (builtins.removeAttrs committed.settings (builtins.attrNames real.report.excluded)));
-
-  cases = {
-    # Every key the sidecar keeps is an option leaf, and nothing else is.
-    real-surface-is-the-sidecar =
-      sorted (map (leaf: leaf.key) real.leaves)
-      == keptKeys
-      && lib.all (key: lib.isOption (optionAt real key)) keptKeys
-      && real.report.excluded ? "branchless.mainBranch"
-      && optionAt real "branchless.mainBranch" == null;
-
-    added-key-appears =
-      accepts added {branchless.probe.added = true;}
-      && !(accepts real {branchless.probe.added = true;});
-
-    removed-key-fails-its-consumer =
-      accepts real {branchless.smartlog.reverse = true;}
-      && !(accepts removed {branchless.smartlog.reverse = true;});
-
-    restack-default-revset-is-a-string =
-      !(committed.settings."branchless.restack.defaultRevset" ? default)
-      && committed.settings."branchless.restack.defaultRevset".type == "string";
-
-    enum-follows-the-sidecar =
-      accepts widened {branchless.test.strategy = "probe";}
-      && !(accepts real {branchless.test.strategy = "probe";})
-      && accepts real {branchless.test.strategy = "worktree";};
-
-    # Unset means absent: nothing is set until a consumer sets it.
-    unset-is-null =
-      leafValues != [] && lib.all (v: v == null || v == {}) leafValues;
-
-    jobs-range =
-      accepts real {branchless.test.jobs = 0;}
-      && accepts real {branchless.test.jobs = 2147483647;}
-      && !(accepts real {branchless.test.jobs = -1;})
-      && !(accepts real {branchless.test.jobs = 2147483648;});
-
-    alias-names =
-      accepts real {
-        branchless.test.alias = {
-          ci-full = "nix flake check";
-          fast = "true";
-        };
-      }
-      && !(accepts real {branchless.test.alias."ci.full" = "true";})
-      && !(accepts real {branchless.test.alias."1st" = "true";})
-      && !(accepts real {branchless.test.alias.my_x = "true";})
-      # Only revset aliases are shadowed by builtins.
-      && accepts real {branchless.test.alias.draft = "true";};
-
-    revset-alias-rejects-builtins =
-      accepts real {branchless.revsets.alias.mine = "author.email(me)";}
-      && !(accepts real {branchless.revsets.alias.draft = "main()";})
-      && !(accepts real {branchless.revsets.alias.Draft = "main()";})
-      && !(accepts newBuiltin {branchless.revsets.alias.mine = "author.email(me)";});
-
-    every-type-is-mapped =
-      real.report.untyped
-      == []
-      && unmapped.report.untyped == ["branchless.probe.odd"]
-      && emptyEnum.report.untyped == ["branchless.probe.enum"]
-      && !(lib.any (leaf: leaf.key == "branchless.probe.odd") unmapped.leaves);
-
-    written-only-keys-are-excluded =
-      writeOnly.report.excluded ? "branchless.probe.written"
-      && optionAt writeOnly "branchless.probe.written" == null;
-
-    nested-keys-are-reported =
-      real.report.collisions
-      == []
-      && nested.report.collisions == ["branchless.test / branchless.test.alias.<name>" "branchless.test / branchless.test.jobs" "branchless.test / branchless.test.strategy"]
-      && !(builtins.tryEval (builtins.deepSeq nested.options true)).success;
-
-    hand-tables-are-current =
-      real.report.staleExclusions
-      == []
-      && real.report.staleRefinements == []
-      && noJobs.report.staleRefinements == ["branchless.test.jobs"]
-      && retypedJobs.report.staleRefinements == ["branchless.test.jobs"]
-      && noLegacy.report.staleExclusions == ["branchless.mainBranch"];
-  };
-  failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
+    }).config.settings;
+  settingAt = surface: path: value:
+    lib.attrByPath path null (merged surface (lib.setAttrByPath path value));
+  pathFor = key: lib.splitString "." (lib.removeSuffix ".<name>" key);
+  optionAt = surface: key: lib.attrByPath (pathFor key) null surface.options;
+  unset = merged real {};
+  familyKeys = ["branchless.revsets.alias.<name>" "branchless.test.alias.<name>"];
+  strategy = settingAt real ["branchless" "test" "strategy"];
+  testAlias = settingAt real ["branchless" "test" "alias"];
+  rejectsTestAlias = name:
+    rejectsChange testAlias {
+      valid.ci-full = "true";
+      invalid.${name} = "true";
+      expected.ci-full = "true";
+    };
+  legacy = "branchless.mainBranch";
+  # The pinned census has reads for every owned key; the one legacy name is
+  # deliberately hidden. Do not let the generator's exclusion report decide
+  # which keys this check requires: that would hide an accidental exclusion.
+  shippedKeys = builtins.filter (key: key != legacy) (builtins.attrNames committed.settings);
 in {
-  checks.git-branchless-settings-options =
-    if failed == []
-    then
-      pkgs.writeText "git-branchless-settings-options"
-      (lib.concatMapStringsSep "\n" (name: "PASS ${name}") (builtins.attrNames cases) + "\n")
-    else throw "git-branchless-settings-options: FAILED ${lib.concatStringsSep ", " failed}";
+  checks.git-branchless-settings-options = mkTest "git-branchless-settings-options" (
+    checkRows "branchless option surface" {
+      "a new sidecar key is accepted only after it is added" = rejectsChange (surface:
+        settingAt surface ["branchless" "probe" "added"] true) {
+        valid = added;
+        invalid = real;
+        expected = true;
+      };
+      "a removed sidecar key becomes unknown to an existing consumer" = rejectsChange (surface:
+        settingAt surface ["branchless" "smartlog" "reverse"] true) {
+        valid = real;
+        invalid = without "branchless.smartlog.reverse";
+        expected = true;
+      };
+      "enum merge rejects a value absent from the sidecar" = rejectsChange strategy {
+        valid = "worktree";
+        invalid = "probe";
+        expected = "worktree";
+      };
+      "legacy main branch key is not exposed as a typed option" = optionAt real legacy == null;
+      "option declarations include all shipped read keys" = lib.all (key: lib.isOption (optionAt real key)) shippedKeys;
+      "widening the sidecar enum makes its new value merge" = settingAt widened ["branchless" "test" "strategy"] "probe" == "probe";
+      "write-only sidecar key is reported but does not become an option" =
+        builtins.attrNames writeOnly.report.excluded
+        == [legacy "branchless.probe.written"]
+        && optionAt writeOnly "branchless.probe.written" == null;
+    }
+    && checkRows "branchless defaults and refinements" {
+      "a newly extracted builtin shadows a formerly valid revset alias" = rejectsChange (surface:
+        settingAt surface ["branchless" "revsets" "alias"] {mine = "@";}) {
+        valid = real;
+        invalid = newBuiltin;
+        expected.mine = "@";
+      };
+      "jobs accepts zero for automatic CPU sizing but rejects negative values" = rejectsChange (settingAt real ["branchless" "test" "jobs"]) {
+        valid = 0;
+        invalid = -1;
+        expected = 0;
+      };
+      "omitted alias families stay empty instead of inventing aliases" =
+        lib.all (key: lib.getAttrFromPath (pathFor key) unset == {}) familyKeys;
+      "revset builtin names are still valid test alias names" = testAlias {draft = "true";} == {draft = "true";};
+      "test aliases reject a dot that Git treats as a subsection separator" = rejectsTestAlias "ci.full";
+      "test aliases reject underscores outside the plain-name alphabet" = rejectsTestAlias "my_x";
+    }
+    && checkRows "branchless generator diagnostics" {
+      "a key that is both a leaf and a parent prevents option generation" = rejectsChange (surface: builtins.attrNames surface.options) {
+        valid = real;
+        invalid = nested;
+        expected = ["branchless"];
+      };
+      "an empty enum is reported as lacking a usable type" = emptyEnum.report.untyped == ["branchless.probe.enum"];
+      "collision diagnostics name all three settings blocked by the new parent key" =
+        nested.report.collisions == ["branchless.test / branchless.test.alias.<name>" "branchless.test / branchless.test.jobs" "branchless.test / branchless.test.strategy"];
+      "shipped hand tables still match their source keys and refinement types" =
+        real.report.staleExclusions == [] && real.report.staleRefinements == [];
+      "the exclusion is stale if its legacy key disappears" = (without legacy).report.staleExclusions == [legacy];
+      "the jobs refinement is stale if its key stops being an integer" =
+        (withSetting "branchless.test.jobs" {type = "string";}).report.staleRefinements == ["branchless.test.jobs"];
+      "unsupported types are reported and excluded from lowering" =
+        unmapped.report.untyped == ["branchless.probe.odd"] && map (leaf: leaf.key) unmapped.leaves == shippedKeys;
+    }
+  );
 }

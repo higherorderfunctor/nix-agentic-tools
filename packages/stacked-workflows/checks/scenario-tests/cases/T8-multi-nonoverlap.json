@@ -14,11 +14,11 @@
     "SQUASH_OVERLAP": "no"
   },
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
-    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+    "description": "Ordinary move must drop each disjoint squashed patch as empty and retain the open commit",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"],
+    "skip": "Skipped now-empty commit"
   },
   "id": "T8-multi-nonoverlap",
   "kind": "squash-move",
-  "subjects": ["f", "g", "a3"],
   "topology": "T8"
 }

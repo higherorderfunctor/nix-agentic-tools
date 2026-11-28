@@ -3,17 +3,37 @@
     "scenario": "static",
     "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
   },
+  "assertions": [
+    {
+      "id": "cleanliness-check-ignores-untracked-files",
+      "pattern": "git status --porcelain --untracked-files=no\\)",
+      "present": true
+    },
+    {
+      "id": "explicit-selection-excludes-commits-already-on-the-base",
+      "pattern": "^[ \\t]*SELECTED=\"[^\"\\n]*\\$ARGUMENTS[^\"\\n]* - ::\\$base\"",
+      "present": true
+    },
+    {
+      "id": "move-skips-disjoint-squashed-edits-but-conflicts-on-overlap",
+      "pattern": "only when their\\s+edits do not overlap, each applying as an empty commit; when they overlap, it\\s+conflicts",
+      "present": true
+    },
+    {
+      "id": "publication-does-not-hardcode-origin",
+      "pattern": "git push[^\\n]*\\borigin\\b",
+      "present": false
+    }
+  ],
   "block_ids": [],
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "Submit instructions preserve the documented boundaries on selection, remote, cleanliness, and squash recovery",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R2-N1",
-  "kind": "static",
+  "kind": "static-set",
   "path": "skills/stack-submit/SKILL.md",
-  "pattern": "SELECTED=\"(?:current\\(\\$ARGUMENTS\\)|\\(\\$ARGUMENTS\\)) - ::\\$base\"",
-  "present": true,
   "topology": "T4"
 }

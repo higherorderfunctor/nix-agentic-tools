@@ -6,16 +6,16 @@
   self,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) checkRows evalDevenv evalHm mkTest rejectsChange;
   args = {
     exe = lib.getExe pkgs.hello;
     outName = "sandbox-hello";
   };
   argvFixture = pkgs.writeScriptBin "sandbox-argv-fixture" ''
     #!${lib.getExe pkgs.python3}
-    import hashlib, os, sys
-    data = b"".join(os.fsencode(arg) + b"\0" for arg in sys.argv[1:])
-    print(f"SANDBOX_ARGV={len(sys.argv) - 1}:{hashlib.sha256(data).hexdigest()}:{os.getuid()}", flush=True)
+    import json, os, sys
+    print("SANDBOX_ARGV=" + json.dumps([os.fsencode(arg).hex() for arg in sys.argv[1:]]), flush=True)
+    print(f"SANDBOX_UID={os.getuid()}", flush=True)
   '';
   argvPackage = factory {
     exe = lib.getExe argvFixture;
@@ -29,7 +29,7 @@
     #!${lib.getExe pkgs.python3}
     import os, signal, sys
     port = "/dev/virtio-ports/sandbox.status"
-    assert os.stat(port).st_mode & 0o777 == 0o600
+    assert os.stat(port).st_mode & 0o777 == 0o600, "completion port is not root-only"
     try:
         open(port, "w")
     except PermissionError:
@@ -45,9 +45,10 @@ in {
   checks =
     {
       microvm-sandbox-empty = mkTest "microvm-sandbox-empty" (
-        (evalHm {}).config.home.packages
-        == []
-        && (evalDevenv {}).config.packages == []
+        checkRows "empty sandbox imports" {
+          "Home Manager does not install a default guest" = (evalHm {}).config.home.packages == [];
+          "devenv does not install a default guest" = (evalDevenv {}).config.packages == [];
+        }
       );
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -61,59 +62,103 @@ in {
           ${lib.getExe pkgs.python3} \
           ${lib.removePrefix "+" argvPackage.guest.config.systemd.services.sandbox.serviceConfig.ExecStopPost} \
           ${pkgs.systemd}/bin/systemctl
+        # The executable string context must retain its package even without a separate package field.
         ${pkgs.gnugrep}/bin/grep -Fx ${lib.escapeShellArg (builtins.unsafeDiscardStringContext (toString argvFixture))} \
           ${pkgs.closureInfo {rootPaths = [argvPackage];}}/store-paths
         touch "$out"
       '';
+      # Expose the real launcher for KVM smoke runs; the parser check substitutes its runner.
       microvm-sandbox-argv-launcher = argvPackage;
       microvm-sandbox-duplicate-name = mkTest "microvm-sandbox-duplicate-name" (
         let
+          distinct.ai.sandboxes = {
+            a = args;
+            b = args // {outName = "sandbox-other";};
+          };
           duplicate.ai.sandboxes = {
             a = args;
             b = args;
           };
-          rejected = result: builtins.any (a: !a.assertion && a.message == "ai.sandboxes: each outName must be unique.") result.config.assertions;
+          # The harness exposes backend assertions rather than turning them into throws.
+          # Read only the name-collision assertion and require the same guard in the control.
+          uniqueNameAssertions = evaluate: config:
+            map (a: a.assertion) (lib.filter (a: a.message == "ai.sandboxes: each outName must be unique.") (evaluate config).config.assertions);
+          checksNames = evaluate: let
+            read = uniqueNameAssertions evaluate;
+          in
+            read distinct == [true] && read duplicate == [false];
         in
-          rejected (evalHm duplicate) && rejected (evalDevenv duplicate)
+          checkRows "sandbox name collisions" {
+            "Home Manager rejects two launchers that would occupy the same bin path" = checksNames evalHm;
+            "devenv rejects two launchers that would occupy the same bin path" = checksNames evalDevenv;
+          }
       );
       microvm-sandbox-guest = mkTest "microvm-sandbox-guest" (
-        guest.nixpkgs.hostPlatform.system
-        == pkgs.stdenv.hostPlatform.system
-        && guest.microvm.hypervisor == "qemu"
-        && guest.microvm.interfaces == []
-        && guest.microvm.volumes == []
-        && guest.microvm.socket == null
-        && !guest.microvm.storeOnDisk
-        && guest.microvm.writableStoreOverlay == "/nix/.rw-store"
-        && guest.fileSystems."/".fsType == "tmpfs"
-        && guest.fileSystems."/nix/.rw-store".fsType == "tmpfs"
-        && builtins.length guest.microvm.shares == 1
-        && (builtins.head guest.microvm.shares).source == "/nix/store"
-        && (builtins.head guest.microvm.shares).mountPoint == "/nix/.ro-store"
-        && (builtins.head guest.microvm.shares).proto == "9p"
-        && (builtins.head guest.microvm.shares).readOnly
-        && guest.systemd.services.sandbox.serviceConfig.User == "sandbox"
-        && builtins.elem "virtserialport,chardev=status,name=sandbox.status" guest.microvm.qemu.extraArgs
-        && builtins.elem "qemu_fw_cfg" guest.boot.kernelModules
-        && builtins.elem "virtio_console" guest.boot.kernelModules
-        && builtins.elem "dev-virtio\\x2dports-sandbox.status.device" guest.systemd.services.sandbox.requires
-        && lib.hasInfix ''OWNER="root", GROUP="root", MODE="0600"'' guest.services.udev.extraRules
-        && lib.hasPrefix "+/nix/store/" guest.systemd.services.sandbox.serviceConfig.ExecStopPost
-        && builtins.all (a: a.assertion) guest.assertions
+        let
+          inherit (guest) microvm;
+          inherit (guest.systemd.services) sandbox;
+          statusDevice = "dev-virtio\\x2dports-sandbox.status.device";
+          storeShare = builtins.head microvm.shares;
+        in
+          checkRows "sandbox guest boundaries" {
+            "argv's firmware blob can be read by the guest kernel" = builtins.elem "qemu_fw_cfg" guest.boot.kernelModules;
+            "completion uses the sandbox status port, not the serial console" =
+              builtins.elem "virtserialport,chardev=status,name=sandbox.status" microvm.qemu.extraArgs;
+            "guest architecture does not drift from the host" = guest.nixpkgs.hostPlatform.system == pkgs.stdenv.hostPlatform.system;
+            "guest command does not run as root" = sandbox.serviceConfig.User == "sandbox";
+            "guest has no network interface" = microvm.interfaces == [];
+            "guest has no persistent disk volumes" = microvm.volumes == [];
+            "guest root is not disk-backed" = guest.fileSystems."/".fsType == "tmpfs";
+            "guest runner does not expose a control socket" = microvm.socket == null;
+            "only the host store is mounted, as the read-only lower layer" =
+              builtins.length microvm.shares
+              == 1
+              && storeShare.source == "/nix/store"
+              && storeShare.mountPoint == "/nix/.ro-store"
+              && storeShare.proto == "9p"
+              && storeShare.readOnly;
+            "reporter is privileged even though the guest command is not" =
+              lib.hasPrefix "+/nix/store/" sandbox.serviceConfig.ExecStopPost;
+            "sandbox does not start before the status port appears" =
+              builtins.elem statusDevice sandbox.requires && builtins.elem statusDevice sandbox.after;
+            "status device permissions prevent the guest command from writing completion" =
+              lib.hasInfix ''SUBSYSTEM=="virtio-ports", ATTR{name}=="sandbox.status", OWNER="root", GROUP="root", MODE="0600"'' guest.services.udev.extraRules;
+            "status port is recognized by the guest kernel" = builtins.elem "virtio_console" guest.boot.kernelModules;
+            "store writes go to a guest-local temporary overlay" =
+              microvm.writableStoreOverlay
+              == "/nix/.rw-store"
+              && guest.fileSystems."/nix/.rw-store".fsType == "tmpfs";
+          }
       );
       microvm-sandbox-invalid-name = mkTest "microvm-sandbox-invalid-name" (
-        builtins.attrNames (builtins.functionArgs factory)
-        == ["exe" "outName"]
-        && !(builtins.tryEval (factory (args // {exe = "hello";}))).success
-        && !(builtins.tryEval (factory (args // {outName = "../hello";}))).success
+        let
+          # Read a static guest setting through the factory entry point. Forcing
+          # the launcher derivation could reject a bad name independently.
+          reject = invalid:
+            rejectsChange (input: (factory input).guest.config.microvm.hypervisor) {
+              inherit invalid;
+              valid = args;
+              expected = "qemu";
+            };
+        in
+          checkRows "sandbox factory input restrictions" {
+            "factory cannot regain extra arguments such as pkg or binName" = builtins.attrNames (builtins.functionArgs factory) == ["exe" "outName"];
+            "guest executable cannot resolve through a relative path" = reject (args // {exe = "hello";});
+            "output name cannot escape the launcher's bin directory" = reject (args // {outName = "../hello";});
+          }
       );
       microvm-sandbox-launcher = package;
       microvm-sandbox-modules = mkTest "microvm-sandbox-modules" (
-        map (p: p.drvPath) (evalHm moduleConfig).config.home.packages
-        == [package.drvPath]
-        && map (p: p.drvPath) (evalDevenv moduleConfig).config.packages == [package.drvPath]
-        && (evalHm moduleConfig).config.ai.sandboxes.sandbox-hello.outName == "sandbox-hello"
+        let
+          hm = (evalHm moduleConfig).config;
+          devenv = (evalDevenv moduleConfig).config;
+        in
+          checkRows "sandbox installation" {
+            "Home Manager installs exactly the equivalent standalone launcher" = map (p: p.drvPath) hm.home.packages == [package.drvPath];
+            "devenv installs exactly the equivalent standalone launcher" = map (p: p.drvPath) devenv.packages == [package.drvPath];
+          }
       );
+      # A real VM is needed to distinguish enforced port permissions from the configured rule.
       microvm-sandbox-status-launcher = factory {
         exe = lib.getExe statusFixture;
         outName = "sandbox-status-fixture";

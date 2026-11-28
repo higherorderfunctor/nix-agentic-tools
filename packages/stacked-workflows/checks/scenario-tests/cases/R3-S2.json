@@ -10,7 +10,7 @@
   "block_roles": ["selection", "guard"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Stop a test-fix rewrite when a named sibling worktree has a commit descended from the selected stack root",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R3-S2",

@@ -91,15 +91,6 @@ T8() {
 	git_in up push -q origin main
 	git_in P fetch -q origin
 }
-T9() { T2; }
-T10() {
-	topo
-	git_in P merge -q --ff-only origin/main
-	c P localmain
-	wt a main
-	c wt-a a1
-	c wt-a a2
-}
 T11() {
 	T1
 	git_in P worktree add -q -b fork "$E/fork" a-1

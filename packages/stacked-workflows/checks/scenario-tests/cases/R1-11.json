@@ -7,13 +7,13 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "No-remote fallback documented",
+    "description": "Missing upstream is documented as using local main, not stopping or widening the selection",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-11",
   "kind": "static",
   "path": "skills/stack-test/SKILL.md",
-  "pattern": "no upstream ref|no main branch|does not resolve",
+  "pattern": "With no\\s+upstream ref\\s*\\([^)]*\\),\\s+`\\$base` falls\\s+back to local `main`",
   "present": true,
   "topology": "T4"
 }

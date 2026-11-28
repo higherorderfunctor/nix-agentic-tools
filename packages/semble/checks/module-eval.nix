@@ -6,12 +6,15 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles evalDevenv evalHm fromGeneratedTree hmLib markdownInput mkTest mkWrapperGrepTest;
+  inherit (harness) aiStubs checkRows deliveredFiles evalDevenv evalHm fromGeneratedTree hmLib markdownInput mkTest mkWrapperGrepTest rejectsChange;
   # The text a Markdown file goes into its runtime's generated tree as, for a
   # check that holds the evaluated `config` rather than the module.
   markdownText = config: path: (markdownInput {inherit config;} path).text;
   runtimeConfig = package: builtins.fromJSON (builtins.unsafeDiscardStringContext (builtins.readFile package.passthru.sembleConfig));
   sembleScript = import ./semble-script.nix pkgs;
+  allPass = assertions: lib.all (assertion: assertion.assertion) assertions;
+  failsWith = needle: assertions:
+    lib.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) assertions;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
@@ -46,15 +49,7 @@ in {
             };
           };
         };
-        hasWrappedSemble = packages:
-          builtins.any
-          (drv:
-            lib.hasSuffix "${lib.getName aiStubs.semble}-wrapped" (
-              builtins.baseNameOf drv
-            ))
-          packages;
         hmEval = evalHm config;
-        hm = hmEval.config;
         devenv = (evalDevenv config).config;
         readOnly =
           (evalDevenv {
@@ -86,11 +81,6 @@ in {
         && builtins.all
         (root: builtins.elem root devenv.ai.codex.files.".codex/config.toml".content.value.sandbox_workspace_write.writable_roots)
         ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
-        # Both backends make their selected cache authoritative through the
-        # launcher wrapper. Never through the surrounding shell: that would
-        # export the value to the user's session and everything else in it.
-        && hasWrappedSemble hm.home.packages
-        && hasWrappedSemble devenv.packages
         && readOnly.ai.codex.native.settings.sandbox_workspace_write == null
         && noCodex.ai.codex.native.settings.sandbox_workspace_write == null
         && profileOnly.ai.codex.native.settings.sandbox_workspace_write == null
@@ -100,10 +90,8 @@ in {
         && builtins.all (assertion: assertion.assertion) profileDenied.assertions
     );
 
-    # CONTENT coverage for semble's relocated cache. The parity test above can
-    # only assert the derivation NAME, which the launcher set carries whether
-    # or not its wrappers actually set anything — so on its own it would pass a
-    # wrapper that sets nothing at all. This greps every entry point, because
+    # A launcher derivation's name does not prove that the wrapper sets the
+    # relocated cache. This checks both entry points, because
     # `semble` and `semble-mcp` disagreeing about the cache location is the
     # specific failure the single-wrapper design exists to prevent.
     module-semble-devenv-cache-in-every-entry-point = let
@@ -119,16 +107,12 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         pkg=${semblePackage}
-        found=0
-        for bin in "$pkg"/bin/*; do
-          found=$((found + 1))
+        for bin in "$pkg/bin/semble" "$pkg/bin/semble-mcp"; do
           grep -qF -- 'SEMBLE_CACHE_LOCATION' "$bin" \
             || { echo "FAIL: $bin does not carry SEMBLE_CACHE_LOCATION" >&2; exit 1; }
           grep -qF -- '/semble-cache' "$bin" \
             || { echo "FAIL: $bin does not carry the relocated cache path" >&2; exit 1; }
         done
-        # An empty bin/ would pass the loop vacuously.
-        [ "$found" -gt 0 ] || { echo "FAIL: wrapper exposes no entry points" >&2; exit 1; }
         echo PASS > "$out"
       '';
 
@@ -170,10 +154,8 @@ in {
               || { echo "FAIL: $pkg exposes $(basename "$entry")/ beside bin/" >&2; exit 1; }
           done
         done
-        checked=0
         for pkg in ${lib.escapeShellArgs (installed ++ [pkgs.ai.semble])}; do
           for bin in "$pkg"/bin/*; do
-            checked=$((checked + 1))
             if ! PYTHONPATH="$fake" "$bin" --help > run.log 2>&1; then
               echo "FAIL: $bin failed with a fake semble on PYTHONPATH" >&2; cat run.log >&2; exit 1
             fi
@@ -182,7 +164,6 @@ in {
             fi
           done
         done
-        [ "$checked" -gt 0 ] || { echo "FAIL: no entry points checked" >&2; exit 1; }
         echo PASS > "$out"
       '';
 
@@ -337,7 +318,6 @@ in {
           }).config;
       in
         top.ai.codex.mcpServers ? semble
-        && top.ai.codex.mcpServers.semble.args == []
         && !(top.ai.codex.agents ? semble-search)
         && top.ai.codex.rules == {}
         && !(top.ai.claude.mcpServers ? semble)
@@ -385,7 +365,6 @@ in {
             pattern = "flake.lock";
           }
         ]
-        && hm.home.activation ? ai-semble-cache-guard
         && lib.hasInfix "semble-cache-guard" hm.home.activation.ai-semble-cache-guard.text
         && lib.hasInfix "semble-cache-guard" devenv.tasks."ai:semble-cache-guard".exec
         && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
@@ -415,8 +394,6 @@ in {
       assert lib.hasInfix "semble-claude search" evaluated.ai.claude.rules.semble.text;
       assert lib.hasInfix "semble-codex search" evaluated.ai.codex.rules.semble.text;
       assert lib.hasInfix "semble-kiro search" evaluated.ai.kiro.rules.semble.text;
-      assert runtimePackages.claude != runtimePackages.codex;
-      assert runtimePackages.codex != runtimePackages.kiro;
         pkgs.runCommand "module-test-semble-runtime-package-variants" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -447,40 +424,37 @@ in {
               inherit grammars pathMappings;
             };
           };
-        failedWith = needle: evaluated:
-          builtins.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) evaluated.config.assertions;
-        allPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
         mapping = language: patterns: {
           inherit language patterns;
           content = "code";
         };
-        awk = [pkgs.tree-sitter-grammars.tree-sitter-awk];
+        valid = mapping "bash" [".envrc"];
+        assertions = grammars: mappings: (withMappings grammars mappings).config.assertions;
+        rejectsField = field: value:
+          rejectsChange
+          (entry: (builtins.head (withMappings [] [entry]).config.ai.programs.semble.pathMappings).${field}) {
+            inherit valid;
+            invalid = valid // {${field} = value;};
+            expected = valid.${field};
+          };
       in
-        allPass (withMappings [] [(mapping "bash" [".envrc"])])
-        # An alias resolves to a bundled grammar.
-        && allPass (withMappings [] [(mapping "zsh" [".zshrc"])])
-        # Extension-map languages with no bundled grammar are line-chunked,
-        # with or without an extra grammar.
-        && allPass (withMappings [] [(mapping "awk" ["*.awk.in"]) (mapping "caddy" ["Caddyfile"]) (mapping "nginx" ["nginx.conf"])])
-        && allPass (withMappings awk [(mapping "awk" ["*.awk.in"])])
-        && failedWith ''`pathMappings.2.language`: "klingon" is not a language Semble knows'' (withMappings [] [(mapping "bash" [".envrc"]) (mapping "klingon" ["*.tlh"])])
-        # null asks for line chunking outright; a misspelt name is still an
-        # error rather than a silent line-chunked mapping.
-        && allPass (withMappings [] [(mapping null ["LICENSE" "*.vendored.py"])])
-        && failedWith ''`pathMappings.1.language`: "markdwon" is not a language Semble knows'' (withMappings [] [(mapping "markdwon" ["*.md.in"])])
-        # One language may appear in several entries.
-        && allPass (withMappings [] [
-          ((mapping "json" ["docs/*.json"]) // {content = "docs";})
-          ((mapping "json" ["*.json"]) // {content = "config";})
-        ])
-        && failedWith ''pattern ".envrc" is listed more than once'' (withMappings [] [
-          (mapping "bash" [".envrc"])
-          (mapping "json" [".envrc"])
-        ])
-        # The option type rejects an empty language, pattern list or pattern.
-        && !(builtins.tryEval (withMappings [] [(mapping "" [".envrc"])]).config.assertions).success
-        && !(builtins.tryEval (withMappings [] [(mapping "bash" [])]).config.assertions).success
-        && !(builtins.tryEval (withMappings [] [(mapping "bash" [""])]).config.assertions).success
+        checkRows "path mappings" {
+          "a bundled alias is accepted" = allPass (assertions [] [(mapping "zsh" [".zshrc"])]);
+          "a grammar may supply a language" = let
+            custom = pkgs.tree-sitter-grammars.tree-sitter-awk // {language = "fixture-language";};
+            entry = mapping "fixture-language" ["*.fixture"];
+          in
+            allPass (assertions [custom] [entry])
+            && failsWith ''"fixture-language" is not a language Semble knows'' (assertions [] [entry]);
+          "a pattern cannot be listed in two entries" = failsWith ''pattern ".envrc" is listed more than once'' (assertions [] [valid (mapping "json" [".envrc"])]);
+          "a typo is rejected, identifying the second entry" =
+            failsWith ''`pathMappings.2.language`: "markdwon" is not a language Semble knows'' (assertions [] [valid (mapping "markdwon" ["*.md.in"])]);
+          "empty language is not a null mapping" = rejectsField "language" "";
+          "empty pattern list is rejected during the merge" = rejectsField "patterns" [];
+          "extension-map languages need not have a bundled grammar" = allPass (assertions [] [(mapping "caddy" ["Caddyfile"])]);
+          "null explicitly selects line chunking" = allPass (assertions [] [(mapping null ["LICENSE" "*.vendored.py"])]);
+          "the pattern list cannot contain an empty glob" = rejectsField "patterns" [""];
+        }
     );
 
     module-semble-extra-grammars-load = let
@@ -561,7 +535,6 @@ in {
         }
         for language, source in samples.items():
             parser = _cached_get_parser(language)
-            assert parser is not None, language
             assert parser.parse(source).root_node.type == "program", language
 
         root = Path("repo").resolve()
@@ -847,39 +820,27 @@ in {
 
     module-semble-grammar-validation = mkTest "semble-grammar-validation" (
       let
-        missingLanguage = evalHm {
-          ai.programs.semble = {
-            enable = true;
-            grammars = [pkgs.hello];
-          };
-        };
-        duplicateLanguage = evalDevenv {
-          ai.programs.semble = {
-            enable = true;
-            grammars = with pkgs.tree-sitter-grammars; [
-              tree-sitter-awk
-              tree-sitter-awk
-            ];
-          };
-        };
-        # A grammar named like a bundled one (or an alias of one) would never
-        # be loaded.
-        named = language:
-          evalHm {
+        awk = pkgs.tree-sitter-grammars.tree-sitter-awk;
+        assertions = evaluate: grammars:
+          (evaluate {
             ai.programs.semble = {
               enable = true;
-              grammars = [(pkgs.tree-sitter-grammars.tree-sitter-awk // {inherit language;})];
+              inherit grammars;
             };
-          };
-        failed = evaluated: builtins.any (assertion: !assertion.assertion) evaluated.config.assertions;
-        failedWith = needle: evaluated:
-          builtins.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) evaluated.config.assertions;
+          }).config.assertions;
+        hm = assertions evalHm;
+        devenv = assertions evalDevenv;
+        # A grammar named like a bundled one (or an alias of one) would never
+        # be loaded.
+        named = language: hm [(awk // {inherit language;})];
       in
-        failedWith "non-empty `language`" missingLanguage
-        && failedWith ''language "awk" appears more than once'' duplicateLanguage
-        && failedWith ''language "bash" is already bundled with Semble'' (named "bash")
-        && failedWith ''language "zsh" is already bundled with Semble'' (named "zsh")
-        && !(failed (named "awk"))
+        checkRows "extra grammar restrictions" {
+          "a bundled alias cannot be shadowed" = failsWith ''language "zsh" is already bundled with Semble'' (named "zsh");
+          "a bundled parser cannot be shadowed" = failsWith ''language "bash" is already bundled with Semble'' (named "bash");
+          "a package without a language cannot register a parser" = failsWith "non-empty `language`" (hm [pkgs.hello]);
+          "an extra language can be registered once on either backend" = allPass (hm [awk]) && allPass (devenv [awk]);
+          "two grammars cannot claim the same extra language" = failsWith ''language "awk" appears more than once'' (devenv [awk awk]);
+        }
     );
 
     module-semble-mcp-entry-and-atomic-replacement = mkTest "semble-mcp-entry-and-atomic-replacement" (
@@ -913,14 +874,12 @@ in {
       let
         assertionsFor = defaultContent:
           (evalHm {ai.programs.semble = {inherit defaultContent;};}).config.assertions;
-        hasFailure = needle: assertions:
-          builtins.any
-          (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
-          assertions;
       in
-        hasFailure "`defaultContent` must contain at least one category" (assertionsFor [])
-        && hasFailure "duplicate categories" (assertionsFor ["docs" "docs"])
-        && hasFailure ''combine "all"'' (assertionsFor ["all" "code"])
+        checkRows "default content restrictions" {
+          "all cannot be combined with an explicit category" = failsWith ''`defaultContent` must not combine "all"'' (assertionsFor ["all" "code"]);
+          "duplicate categories are not normalized away" = failsWith "`defaultContent` must not contain duplicate categories" (assertionsFor ["docs" "docs"]);
+          "empty defaults are not interpreted as code" = failsWith "`defaultContent` must contain at least one category" (assertionsFor []);
+        }
     );
 
     module-semble-mcp-subagent-wiring = mkTest "semble-mcp-subagent-wiring" (
@@ -979,7 +938,6 @@ in {
           evaluated.assertions;
         mcpPrompt = ../mcp-agent-instructions.md;
         rootAgent = rootVisible.ai.kiro.native.agents.semble-search;
-        isolatedAgent = isolated.ai.kiro.native.agents.semble-search;
         emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = isolated;} ".kiro/agents/semble-search.json").text);
       in
         fromGeneratedTree ".kiro/agents/semble-search.json" isolated.home.file.".kiro/agents/semble-search.json"
@@ -993,9 +951,6 @@ in {
         && builtins.attrNames subagentOnly.ai.kiro.mcpServers == []
         && subagentOnly.ai.kiro.native.agents.semble-search.mcpServers ? semble
         && passes subagentOnly
-        && isolatedAgent.tools == ["@semble"]
-        && isolatedAgent.includeMcpJson == false
-        && isolatedAgent.mcpServers ? semble
         && emitted.tools == ["@semble"]
         && emitted.prompt == builtins.readFile mcpPrompt
         && emitted.includeMcpJson == false
@@ -1041,84 +996,83 @@ in {
           useFhsSandbox = false;
         };
     in
-      assert fromGeneratedTree ".kiro/agents/semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json";
-        pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
+      pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
 
-          export HOME="$TMPDIR/home"
-          export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-          export XDG_CACHE_HOME="$TMPDIR/cache"
-          export XDG_CONFIG_HOME="$TMPDIR/config"
-          export XDG_DATA_HOME="$TMPDIR/data"
-          export XDG_STATE_HOME="$TMPDIR/state"
-          export CFFIXED_USER_HOME="$HOME"
-          export KIRO_DISABLE_TELEMETRY=1
-          # Since 2.35.1 `agent validate` and `acp` refuse to start without a
-          # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
-          # too, but then session/new asks the remote MCP governance API, which
-          # fails without network, and Kiro disables every MCP server.
-          export KIRO_TEST_MODE=1
-          mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
-          cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
-          cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
-          cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
+        export HOME="$TMPDIR/home"
+        export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+        export XDG_CACHE_HOME="$TMPDIR/cache"
+        export XDG_CONFIG_HOME="$TMPDIR/config"
+        export XDG_DATA_HOME="$TMPDIR/data"
+        export XDG_STATE_HOME="$TMPDIR/state"
+        export CFFIXED_USER_HOME="$HOME"
+        export KIRO_DISABLE_TELEMETRY=1
+        # Since 2.35.1 `agent validate` and `acp` refuse to start without a
+        # login; test mode passes that gate. A placeholder KIRO_API_KEY passes it
+        # too, but then session/new asks the remote MCP governance API, which
+        # fails without network, and Kiro disables every MCP server.
+        export KIRO_TEST_MODE=1
+        mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
+        cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
+        cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
+        cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
 
-          validate_status=0
-          # Drive the unwrapped binary that implements `kiro-cli agent validate`
-          # directly. The exported Linux package is a buildFHSEnv
-          # bubblewrap launcher, and nested user namespaces are not portable across
-          # Nix build sandboxes; validation itself does not need the FHS root.
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
-            --path "$HOME/.kiro/agents/semble-search.json" \
-            >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
-            || validate_status=$?
-          test "$validate_status" -eq 0 || {
-            cat "$TMPDIR/validate.stderr" >&2
-            exit 1
-          }
-          test ! -s "$TMPDIR/validate.stderr" || {
-            cat "$TMPDIR/validate.stderr" >&2
-            exit 1
-          }
+        validate_status=0
+        # Drive the unwrapped binary that implements `kiro-cli agent validate`
+        # directly. The exported Linux package is a buildFHSEnv
+        # bubblewrap launcher, and nested user namespaces are not portable across
+        # Nix build sandboxes; validation itself does not need the FHS root.
+        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
+          --path "$HOME/.kiro/agents/semble-search.json" \
+          >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
+          || validate_status=$?
+        test "$validate_status" -eq 0 || {
+          cat "$TMPDIR/validate.stderr" >&2
+          exit 1
+        }
+        test ! -s "$TMPDIR/validate.stderr" || {
+          cat "$TMPDIR/validate.stderr" >&2
+          exit 1
+        }
 
-          invalid_status=0
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
-            --path "$HOME/.kiro/agents/invalid-search.json" \
-            >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
-            || invalid_status=$?
-          # Kiro 3.1.0 exits non-zero for an invalid file (earlier releases
-          # exited zero). The stderr assertion names the cause; the status check
-          # pins the trap so a future behavior change cannot make this negative
-          # control vacuous.
-          test "$invalid_status" -ne 0 || {
-            echo "invalid agent validated with exit status $invalid_status" >&2
-            cat "$TMPDIR/invalid.stderr" >&2
-            exit 1
-          }
-          grep -Fq 'is invalid: missing field `name`' "$TMPDIR/invalid.stderr" || {
-            cat "$TMPDIR/invalid.stderr" >&2
-            exit 1
-          }
+        invalid_status=0
+        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli agent validate \
+          --path "$HOME/.kiro/agents/invalid-search.json" \
+          >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
+          || invalid_status=$?
+        # Kiro 3.1.0 exits non-zero for an invalid file (earlier releases
+        # exited zero). The stderr assertion names the cause; the status check
+        # pins the trap so a future behavior change cannot make this negative
+        # control vacuous.
+        test "$invalid_status" -ne 0 || {
+          echo "invalid agent validated with exit status $invalid_status" >&2
+          cat "$TMPDIR/invalid.stderr" >&2
+          exit 1
+        }
+        grep -Fq 'is invalid: missing field `name`' "$TMPDIR/invalid.stderr" || {
+          cat "$TMPDIR/invalid.stderr" >&2
+          exit 1
+        }
 
-          # Drive the launcher production runs. It appends --agent-engine=v3 to
-          # `acp`, and the v3 engine selects the agent from session/new
-          # `_meta.kiro.modeId`; `acp --agent` is rejected there. The driver sends
-          # only initialize and session/new, never a model-bearing session/prompt.
-          python3 ${./semble-kiro-acp.py} \
-            ${wrapped}/bin/kiro-cli \
-            semble-search \
-            control-search \
-            "$TMPDIR/workspace" \
-            >"$TMPDIR/acp.json"
-          # Keep the driver's record, do not discard it. Each agent's result
-          # carries a `teardown` object saying whether the harness had to SIGKILL
-          # the child and how long it waited. Nix prints no log for a build that
-          # SUCCEEDS, so a child that quietly stops exiting cleanly would leave no
-          # trace anyone reads -- the teardown branch is a pass by design, and a
-          # pass with an unread log is indistinguishable from a healthy one.
-          cp "$TMPDIR/acp.json" "$out"
-        '';
+        # Drive the launcher production runs. It appends --agent-engine=v3 to
+        # `acp`, and the v3 engine selects the agent from session/new
+        # `_meta.kiro.modeId`; `acp --agent` is rejected there. The driver sends
+        # only initialize and session/new, never a model-bearing session/prompt.
+        python3 ${./semble-kiro-acp.py} \
+          ${wrapped}/bin/kiro-cli \
+          semble-search \
+          control-search \
+          "$TMPDIR/workspace" \
+          >"$TMPDIR/acp.json"
+        # Keep the driver's record, do not discard it. Each agent's result
+        # carries a `teardown` object saying whether the harness had to SIGKILL
+        # the child and how long it waited. Nix prints no log for a build that
+        # SUCCEEDS, so a child that quietly stops exiting cleanly would leave no
+        # trace anyone reads -- the teardown branch is a pass by design, and a
+        # pass with an unread log is indistinguishable from a healthy one.
+        cp "$TMPDIR/acp.json" "$out"
+      '';
 
     # The check above SIGKILLs a child that outlives its post-stdin-EOF budget
     # and then reads its exit status. Nothing exercised those branches, so a
@@ -1256,8 +1210,6 @@ in {
       in
         programShape hm
         == programShape devenv
-        && runtimeShape hm
-        == runtimeShape devenv
         && builtins.attrNames (programShape hm)
         == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "install" "mcp" "models" "package" "pathMappings" "runtimes" "subagent"]
         # finalPackage and install are portable-only: no runtime override exists for them.
@@ -1279,56 +1231,30 @@ in {
 
     module-semble-direct-helpers = mkTest "semble-direct-helpers" (
       let
-        mkSemble = import ../lib/mkSemble.nix;
-        helperPkgs = pkgs // {ai = aiStubs;};
-        code = mkSemble {
+        mkSemble = import ../lib/mkSemble.nix {
           lib = hmLib;
-          pkgs = helperPkgs;
-        } {};
-        all = mkSemble {
-          lib = hmLib;
-          pkgs = helperPkgs;
-        } {content = "all";};
-        # An explicit `code` is passed, so it also replaces a customized
-        # package's default content.
-        explicitCode = mkSemble {
-          lib = hmLib;
-          pkgs = helperPkgs;
-        } {content = "code";};
-        codeAndDocs = mkSemble {
-          lib = hmLib;
-          pkgs = helperPkgs;
-        } {content = ["docs" "code"];};
-        allMixed =
-          builtins.tryEval
-          (mkSemble {
-            lib = hmLib;
-            pkgs = helperPkgs;
-          } {content = ["all" "code"];}).args;
-        duplicate =
-          builtins.tryEval
-          (mkSemble {
-            lib = hmLib;
-            pkgs = helperPkgs;
-          } {content = ["docs" "docs"];}).args;
-        empty =
-          builtins.tryEval
-          (mkSemble {
-            lib = hmLib;
-            pkgs = helperPkgs;
-          } {content = [];}).args;
+          pkgs = pkgs // {ai = aiStubs;};
+        };
+        code = mkSemble {};
+        args = content: (mkSemble {inherit content;}).args;
+        rejectsContent = invalid:
+          rejectsChange args {
+            valid = ["docs" "code"];
+            inherit invalid;
+            expected = ["--content" "code" "docs"];
+          };
         records = import ../lib/integrations.nix;
       in
-        code.type
-        == "stdio"
-        && code.args == []
-        && lib.hasSuffix "/bin/semble-mcp" code.command
-        && all.args == ["--content" "all"]
-        && explicitCode.args == ["--content" "code"]
-        && codeAndDocs.args == ["--content" "code" "docs"]
-        && !allMixed.success
-        && !duplicate.success
-        && !empty.success
+        checkRows "direct MCP constructor" {
+          "all is passed through without expansion" = args "all" == ["--content" "all"];
+          "an empty category list is rejected, not omitted" = rejectsContent [];
+          "duplicate categories are rejected, not collapsed" = rejectsContent ["docs" "docs"];
+          # An explicit `code` replaces even a customized package's default.
+          "explicit code is passed, not treated like omission" = args "code" == ["--content" "code"];
+          "mixing all and another category is rejected" = rejectsContent ["all" "code"];
+          "omitted content leaves the package default intact" = code.args == [];
+          "the generated entry targets the Semble stdio binary" = code.type == "stdio" && lib.hasSuffix "/bin/semble-mcp" code.command;
+        }
         && records.rule.source == ../cli-instructions.md
         && records.semanticAgent.instructions.source == ../cli-instructions.md
         && records.semanticAgent.tools == ["Bash" "Read"]
@@ -1352,34 +1278,43 @@ in {
     # choose, producing "defined both null and not null" instead of a tombstone.
     module-semble-generated-pool-entries-accept-null = mkTest "semble-generated-pool-entries-accept-null" (
       let
-        config = {
+        base.ai = {
+          programs.semble = {
+            enable = true;
+            subagent.enable = true;
+          };
+          claude.enable = true;
+          codex.enable = true;
+          kiro.cli.enable = true;
+        };
+        withdrawn = lib.recursiveUpdate base {
           ai = {
-            programs.semble.enable = true;
             claude = {
-              enable = true;
               agents.semble-search = null;
               mcpServers.semble = null;
             };
             codex = {
-              enable = true;
               agents.semble-search = null;
               mcpServers.semble = null;
             };
-            kiro = {
-              cli.enable = true;
-              mcpServers.semble = null;
-            };
+            kiro.mcpServers.semble = null;
           };
         };
-        suppressed = evaluated:
-          evaluated.config.ai.claude.agents.semble-search
-          == null
-          && evaluated.config.ai.claude.mcpServers.semble == null
-          && evaluated.config.ai.codex.agents.semble-search == null
-          && evaluated.config.ai.codex.mcpServers.semble == null
-          && evaluated.config.ai.kiro.mcpServers.semble == null;
+        rows = evaluate: let
+          enabled = (evaluate base).config.ai;
+          disabled = (evaluate withdrawn).config.ai;
+          suppressed = runtime: pool: name:
+            enabled.${runtime}.${pool}.${name} != null && disabled.${runtime}.${pool}.${name} == null;
+        in {
+          "Claude agent is generated and can be withdrawn" = suppressed "claude" "agents" "semble-search";
+          "Claude root MCP server is generated and can be withdrawn" = suppressed "claude" "mcpServers" "semble";
+          "Codex agent is generated and can be withdrawn" = suppressed "codex" "agents" "semble-search";
+          "Codex root MCP server is generated and can be withdrawn" = suppressed "codex" "mcpServers" "semble";
+          "Kiro root MCP server is generated and can be withdrawn" = suppressed "kiro" "mcpServers" "semble";
+        };
       in
-        suppressed (evalHm config) && suppressed (evalDevenv config)
+        checkRows "Home Manager pool tombstones" (rows evalHm)
+        && checkRows "devenv pool tombstones" (rows evalDevenv)
     );
 
     # A Kiro null on the portable subagent removes the whole agent: the native

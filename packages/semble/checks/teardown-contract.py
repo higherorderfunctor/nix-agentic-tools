@@ -88,13 +88,18 @@ with tempfile.TemporaryDirectory() as root:
 
     # 6-8. Every looser reading fails: status 1 without the marker, the marker
     #      followed by another line, and the marker with a different status.
-    for teardown_mode, description in (
-        ("1", "status 1 without the stdin-closed marker"),
-        ("v3-closed-then-line", "the marker followed by another stderr line"),
-        ("v3-closed-status-2", "the marker with a status other than 1"),
+    for teardown_mode, status, description in (
+        ("1", 1, "status 1 without the stdin-closed marker"),
+        ("v3-closed-then-line", 1, "the marker followed by another stderr line"),
+        ("v3-closed-status-2", 2, "the marker with a status other than 1"),
     ):
         code, out, err = drive(teardown_mode, kiro, workspace)
         expect(code != 0, f"{description} must still fail the check", err)
-        expect("on its own" in err, f"{description} must be named an autonomous exit", err)
+        expect(
+            f"semble-search: ACP exited with status {status} on its own" in err
+            and "harness sent no signal" in err,
+            f"{description} must be named an autonomous exit with status {status}",
+            err,
+        )
 
 print("teardown-contract: all eight teardown branches behave")

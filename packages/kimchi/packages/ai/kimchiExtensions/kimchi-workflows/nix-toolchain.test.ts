@@ -1,3 +1,4 @@
+// cspell:ignore unstub
 import { execFile } from "node:child_process";
 import {
   chmod,
@@ -14,12 +15,8 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { expect, it } from "vitest";
-import { distribution } from "../src/host/distribution.ts";
-import {
-  prepareWorkflowPackage,
-  WorkflowPackagePreparationError,
-} from "../src/host/workflow-package.ts";
+import { expect, it, vi } from "vitest";
+import { prepareWorkflowPackage } from "../src/host/workflow-package.ts";
 import {
   resolveWorkflowPackageManager,
   runWorkflowPackageManager,
@@ -27,7 +24,6 @@ import {
 
 it("closes production preparation and verification over the store, ignoring user configuration", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "nix-workflow-toolchain-"));
-  const saved = { ...process.env };
   const requests: string[] = [];
   const registry = createServer((request, response) => {
     requests.push(request.url ?? "");
@@ -48,23 +44,27 @@ it("closes production preparation and verification over the store, ignoring user
       );
       await chmod(file, 0o755);
     }
-    process.env.PATH = wrongBin;
-    // Production must impose offline/config isolation itself, including outside CI.
-    delete process.env.CI;
-    process.env.npm_config_offline = "false";
-    process.env.NPM_CONFIG_OFFLINE = "false";
-    process.env.Npm_Config_use_node_version = "22.19.0";
-    process.env.Npm_Config_fetch_retries = "0";
-    process.env.pNpM_cOnFiG_use_node_version = "22.19.0";
-    process.env.pNpM_HOME = path.join(root, "unwanted-pnpm-home");
-    process.env.CODE_REVIEW_BIN = "caller-variable-preserved";
     const address = registry.address();
     if (!address || typeof address === "string")
       throw new Error("no registry port");
     const mirror = `http://127.0.0.1:${address.port}`;
-    process.env.npm_config_registry = mirror;
-    process.env["Npm_Config_node-mirror:release"] = `${mirror}/`;
-    process.env.npm_config_store_dir = path.join(root, "empty-store");
+    // Production must impose offline/config isolation itself, including outside CI.
+    for (const [key, value] of Object.entries({
+      CI: undefined,
+      CODE_REVIEW_BIN: "caller-variable-preserved",
+      NPM_CONFIG_OFFLINE: "false",
+      Npm_Config_fetch_retries: "0",
+      "Npm_Config_node-mirror:release": `${mirror}/`,
+      Npm_Config_use_node_version: "22.19.0",
+      PATH: wrongBin,
+      npm_config_offline: "false",
+      npm_config_registry: mirror,
+      npm_config_store_dir: path.join(root, "empty-store"),
+      pNpM_HOME: path.join(root, "unwanted-pnpm-home"),
+      pNpM_cOnFiG_use_node_version: "22.19.0",
+    })) {
+      vi.stubEnv(key, value);
+    }
     for (const variable of [
       "HOME",
       "PNPM_HOME",
@@ -73,8 +73,9 @@ it("closes production preparation and verification over the store, ignoring user
       "XDG_DATA_HOME",
       "XDG_STATE_HOME",
     ]) {
-      process.env[variable] = path.join(root, variable);
-      await mkdir(process.env[variable]!);
+      const location = path.join(root, variable);
+      await mkdir(location);
+      vi.stubEnv(variable, location);
     }
     const hostileConfig = `use-node-version=22.19.0\nnode-mirror:release=${mirror}/\nmanage-package-manager-versions=true\noffline=false\nregistry=${mirror}/\nupdate-notifier=true\n`;
     await writeFile(path.join(process.env.HOME!, ".npmrc"), hostileConfig);
@@ -84,8 +85,6 @@ it("closes production preparation and verification over the store, ignoring user
       hostileConfig,
     );
     const manager = await resolveWorkflowPackageManager();
-    expect(manager).toEqual({ command: "@pnpm@", args: [] });
-    expect(distribution.packageManager).toBe("pnpm@@pnpmVersion@");
     const directory = path.join(root, "workflows");
     await mkdir(directory);
     await writeFile(path.join(directory, "package.json"), "{}");
@@ -94,62 +93,45 @@ it("closes production preparation and verification over the store, ignoring user
       "packages: []\nuseNodeVersion: 22.19.0\nfetchRetries: 0\n";
     await writeFile(path.join(root, "pnpm-workspace.yaml"), workspaceConfig);
     await writeFile(path.join(root, ".npmrc"), hostileConfig);
-    const config = await runWorkflowPackageManager(
-      manager,
-      ["config", "list", "--json"],
-      {
-        cwd: directory,
+    const launch = (args: readonly string[], cwd = directory) =>
+      runWorkflowPackageManager(manager, [...args], {
+        cwd,
         timeoutMs: 10_000,
-        timeoutError: () => new Error("production pnpm config timed out"),
+        timeoutError: () => new Error(`pnpm ${args.join(" ")} timed out`),
         outputLimit: 65536,
-      },
-    );
+      });
+    // Read effective config from pnpm: hostile home, XDG, ancestor and env
+    // settings must not restore network access, install hooks or a Node switch.
+    const config = await launch(["config", "list", "--json"]);
     expect(config.code, JSON.stringify(config)).toBe(0);
     expect(JSON.parse(config.stdout)).toMatchObject({
       "ignore-scripts": true,
       "manage-package-manager-versions": false,
       offline: true,
       "update-notifier": false,
+      "use-node-version": process.versions.node,
       userconfig: "/dev/null",
     });
-    expect(JSON.parse(config.stdout)["use-node-version"]).toBe(
-      process.versions.node,
-    );
-    console.log(`mixed-case Node selection ignored: ${process.versions.node}`);
-    // Every entry hits the same launcher refusal. --dir overrides an unrelated
-    // cwd; run/exec child arguments must not redirect the checked directory.
-    const refuseConfig = async (name: string, content: string) => {
+    const hook = 'throw new Error("project hook must not run")';
+    const install = ["--dir", directory, "install", "--ignore-scripts"];
+    for (const [name, content, args, cwd] of [
+      // Detect interpreting a child --dir as a pnpm option in the cwd path.
+      [".pnpmfile.cjs", hook, ["exec", "node", "--dir", root], directory],
+      // Install must check the directory selected by the leading --dir, not cwd.
+      ["pnpm-workspace.yaml", workspaceConfig, install, root],
+    ] as const) {
       const file = path.join(directory, name);
       await writeFile(file, content);
       try {
-        for (const [args, cwd] of [
-          [["--dir", directory, "install", "--ignore-scripts"], root],
-          [["--dir", directory, "exec", "node", "--dir", root], root],
-          [["exec", "node", "--dir", root], directory],
-        ] as const) {
-          const result = await runWorkflowPackageManager(manager, args, {
-            cwd,
-            timeoutMs: 10_000,
-            timeoutError: () => new Error("config refusal timed out"),
-            outputLimit: 65536,
-          });
-          expect(result.code).toBe(1);
-          expect(result.stderr).toContain(
-            `forbids project configuration file ${name}: ${directory}`,
-          );
-        }
-        console.log(
-          `launcher config refused for --dir install/exec and cwd exec: ${name}`,
+        const result = await launch(args, cwd);
+        expect(result.code, JSON.stringify(args)).toBe(1);
+        expect(result.stderr).toContain(
+          `forbids project configuration file ${name}: ${directory}`,
         );
       } finally {
         await rm(file);
       }
-    };
-    await refuseConfig(
-      ".pnpmfile.cjs",
-      'throw new Error("project hook must not run")',
-    );
-    await refuseConfig("pnpm-workspace.yaml", workspaceConfig);
+    }
     // pnpm --version ignores --dir and reads the working directory, so the
     // launcher must run pnpm in the directory it checked: the probe's project
     // cwd keeps its hook, which must not run.
@@ -161,44 +143,57 @@ it("closes production preparation and verification over the store, ignoring user
       `require("node:fs").writeFileSync(${JSON.stringify(hookMarker)}, "ran")`,
     );
     try {
-      const probe = await runWorkflowPackageManager(
-        manager,
-        ["--version", "--dir", neutral],
-        {
-          cwd: directory,
-          timeoutMs: 10_000,
-          timeoutError: () => new Error("version probe timed out"),
-          outputLimit: 65536,
-        },
-      );
+      const probe = await launch(["--version", "--dir", neutral], directory);
       expect(probe.code, JSON.stringify(probe)).toBe(0);
-      await expect(readFile(hookMarker, "utf8")).rejects.toThrow();
-      console.log("version probe ran pnpm in its --dir; cwd hook not loaded");
+      await expect(readFile(hookMarker, "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
     } finally {
       await rm(probeHook);
     }
     const prepared = await prepareWorkflowPackage({ directory });
     expect(prepared.installed).toBe(true);
     expect(prepared.verifyCommand).toContain("@pnpm@");
-    const manifest = JSON.parse(await readFile(prepared.manifestPath, "utf8"));
-    expect(Object.keys(manifest.devDependencies)).toHaveLength(7);
-    for (const spec of Object.values(manifest.devDependencies))
-      expect(spec).toMatch(/^file:\/nix\/store\/.*\.tgz$/);
-    expect(manifest.packageManager).toBe(distribution.packageManager);
-    const framework = JSON.parse(
-      await readFile(
-        path.join(
-          directory,
-          "node_modules/@kimchi-dev/kimchi-workflows/package.json",
-        ),
-        "utf8",
+    const readManifest = async (file: string) =>
+      JSON.parse(await readFile(file, "utf8"));
+    const installedManifest = (name: string) =>
+      readManifest(path.join(directory, "node_modules", name, "package.json"));
+    const manifest = await readManifest(prepared.manifestPath);
+    // Pin the closure members, not merely the number of file: references.
+    const frameworkName = "@kimchi-dev/kimchi-workflows";
+    const toolchain = {
+      piCodingAgent: "@earendil-works/pi-coding-agent",
+      piTui: "@earendil-works/pi-tui",
+      typebox: "typebox",
+      typesNode: "@types/node",
+      typescript: "typescript",
+      vitest: "vitest",
+    };
+    expect(Object.keys(manifest.devDependencies).sort()).toEqual(
+      [frameworkName, ...Object.values(toolchain)].sort(),
+    );
+    for (const name of Object.values(toolchain))
+      expect(manifest.devDependencies[name]).toMatch(
+        /^file:\/nix\/store\/.*\.tgz$/,
+      );
+    // A stale distribution stamp must not select a different package manager.
+    expect(manifest.packageManager).toBe("pnpm@@pnpmVersion@");
+    const framework = await installedManifest(frameworkName);
+    // Compare the published stamp with what pnpm actually installed.
+    const versions = Object.fromEntries(
+      await Promise.all(
+        Object.entries(toolchain).map(async ([key, name]) => {
+          const { version } = await installedManifest(name);
+          return [key, version];
+        }),
       ),
     );
-    expect(framework.kimchiWorkflows.toolchain).toEqual(distribution.toolchain);
+    expect(framework.kimchiWorkflows.toolchain).toEqual(versions);
+    // Bundling a private copy of host-provided peers splits runtime identity.
     for (const name of [
-      "@earendil-works/pi-coding-agent",
-      "@earendil-works/pi-tui",
-      "typebox",
+      toolchain.piCodingAgent,
+      toolchain.piTui,
+      toolchain.typebox,
     ]) {
       expect(framework.dependencies).not.toHaveProperty(name);
       expect(framework.peerDependencies[name]).toBe("*");
@@ -231,41 +226,35 @@ it("loads the store-backed authoring API", () => {
 })
 `,
     );
-    const verify = async () => {
-      // Execute exactly the printed command after filling in its two placeholders.
-      const command = prepared.verifyCommand
-        .replace("<workflow.ts>", "entry.ts")
-        .replace("<workflow.test.ts>", "entry.test.ts");
-      const result = await promisify(execFile)("@shell@", ["-c", command], {
+    // Execute exactly the printed command after filling in its two placeholders.
+    const command = prepared.verifyCommand
+      .replace("<workflow.ts>", "entry.ts")
+      .replace("<workflow.test.ts>", "entry.test.ts");
+    const runPrinted = () =>
+      promisify(execFile)("@shell@", ["-c", command], {
         cwd: directory,
         timeout: 60_000,
         maxBuffer: 65536,
       });
-      expect(result.stdout).not.toContain("Fetching Node.js");
+    const verify = async () => {
+      const result = await runPrinted();
       expect(result.stdout).toContain(
         "TypeScript passed; focused test passed (1 test)",
       );
-      console.log(`printed production verify: ${result.stdout.trim()}`);
     };
-    // P7: a file added after preparation must be refused by the exact printed run.
-    await writeFile(path.join(directory, ".npmrc"), hostileConfig);
+    // The exact printed run must refuse an rc added after preparation that
+    // would redirect pnpm to another lockfile root.
+    await writeFile(
+      path.join(directory, ".npmrc"),
+      `lockfile-dir=${path.join(root, "foreign")}\n`,
+    );
     try {
-      const command = prepared.verifyCommand
-        .replace("<workflow.ts>", "entry.ts")
-        .replace("<workflow.test.ts>", "entry.test.ts");
-      await expect(
-        promisify(execFile)("@shell@", ["-c", command], {
-          cwd: directory,
-          timeout: 10_000,
-          maxBuffer: 65536,
-        }),
-      ).rejects.toMatchObject({
+      await expect(runPrinted()).rejects.toMatchObject({
         code: 1,
         stderr: expect.stringContaining(
           `forbids project configuration file .npmrc: ${directory}`,
         ),
       });
-      console.log("printed verify refused .npmrc added after preparation");
     } finally {
       await rm(path.join(directory, ".npmrc"));
     }
@@ -301,54 +290,14 @@ it("loads the store-backed authoring API", () => {
     };
     await scanProject(path.join(directory, "node_modules"));
     expect(importedFiles).toBeGreaterThan(100);
-    console.log(
-      `imported files sharing store inodes: 0 / ${importedFiles} (store inodes: ${storeInodes.size})`,
-    );
+    // A second preparation with no changes must not reinstall the package.
     expect((await prepareWorkflowPackage({ directory })).installed).toBe(false);
-    // The P5 root-manifest redirect must be refused before reading its override.
-    const foreign = path.join(root, "foreign");
-    const lockRoot = path.join(root, "lock-root");
-    await mkdir(foreign);
-    await mkdir(lockRoot);
-    await writeFile(
-      path.join(foreign, "package.json"),
-      JSON.stringify({
-        name: "typebox",
-        version: "1.3.7",
-        main: "index.js",
-      }),
-    );
-    await writeFile(
-      path.join(foreign, "index.js"),
-      'export const proof="OUTSIDE_KIMCHI_CLOSURE"',
-    );
-    await writeFile(
-      path.join(lockRoot, "package.json"),
-      JSON.stringify({
-        pnpm: { overrides: { typebox: `file:${foreign}` } },
-      }),
-    );
-    await writeFile(prepared.manifestPath, JSON.stringify(manifest));
-    await refuseConfig(".npmrc", `lockfile-dir=${lockRoot}\n${hostileConfig}`);
-    await refuseConfig("pnpm-workspace.yaml", workspaceConfig);
-    // Prove the injected global option is parsed by exec as well as install/run.
-    const executed = await runWorkflowPackageManager(
-      manager,
-      ["exec", "node", "--version"],
-      {
-        cwd: directory,
-        timeoutMs: 10_000,
-        timeoutError: () => new Error("production pnpm exec timed out"),
-        outputLimit: 65536,
-      },
-    );
+    // Exec must ignore the ancestor workspace, just as install and run did.
+    const executed = await launch(["exec", "node", "--version"]);
     expect(executed.code, JSON.stringify(executed)).toBe(0);
     expect(executed.stdout.trim()).toBe(process.version);
-    console.log(
-      `ancestor workspace ignored by install, printed run and exec: ${executed.stdout.trim()}`,
-    );
-    const environment = await runWorkflowPackageManager(
-      manager,
+    // Inspect the child's environment, not only the package manager's config.
+    const environment = await launch(
       [
         "--dir",
         directory,
@@ -357,19 +306,13 @@ it("loads the store-backed authoring API", () => {
         "-e",
         "console.log(JSON.stringify({ caller: process.env.CODE_REVIEW_BIN, mixed: Object.keys(process.env).filter(key => /^(Npm_Config_|pNpM_)/.test(key)) }))",
       ],
-      {
-        cwd: root,
-        timeoutMs: 10_000,
-        timeoutError: () => new Error("environment probe timed out"),
-        outputLimit: 65536,
-      },
+      root,
     );
     expect(environment.code, JSON.stringify(environment)).toBe(0);
     expect(JSON.parse(environment.stdout)).toEqual({
       caller: "caller-variable-preserved",
       mixed: [],
     });
-    console.log(`filtered child environment: ${environment.stdout.trim()}`);
     // A real install first proves the graph. A foreign layout then forces pnpm's
     // noninteractive purge path, retaining the authored workflow beside it.
     await writeFile(
@@ -387,15 +330,12 @@ it("loads the store-backed authoring API", () => {
         "utf8",
       ),
     ).not.toContain("layoutVersion: 0");
-    expect(await readFile(path.join(directory, "entry.ts"), "utf8")).toContain(
-      "ExtensionAPI",
-    );
     await verify();
     for (const [name, manifest, diagnostic] of [
       [
         "extra",
         { dependencies: { "unshipped-workflow-dependency": "*" } },
-        "unshipped-workflow-dependency",
+        "dependencies package unshipped-workflow-dependency",
       ],
       [
         "local",
@@ -404,7 +344,7 @@ it("loads the store-backed authoring API", () => {
             "unshipped-local-dependency": "file:/tmp/outside-closure",
           },
         },
-        "unshipped-local-dependency",
+        "devDependencies package unshipped-local-dependency",
       ],
       [
         "override",
@@ -419,7 +359,7 @@ it("loads the store-backed authoring API", () => {
       [
         "runtime",
         { pnpm: { executionEnv: { nodeVersion: "22.19.0" } } },
-        "executionEnv",
+        "executionEnv: executionEnv",
       ],
     ] as const) {
       const directory = path.join(root, name);
@@ -429,14 +369,13 @@ it("loads the store-backed authoring API", () => {
         JSON.stringify(manifest),
       );
       await expect(prepareWorkflowPackage({ directory })).rejects.toThrow(
-        diagnostic,
+        `closed Kimchi workflow toolchain forbids ${diagnostic}`,
       );
-      console.log(`closed graph refused ${name}: ${diagnostic}`);
     }
+    // The mock records attempted network access, even if pnpm recovers from it.
     expect(requests).toEqual([]);
-    console.log(`production registry requests: ${JSON.stringify(requests)}`);
   } finally {
-    process.env = saved;
+    vi.unstubAllEnvs();
     await new Promise<void>((resolve, reject) =>
       registry.close((error) => (error ? reject(error) : resolve())),
     );

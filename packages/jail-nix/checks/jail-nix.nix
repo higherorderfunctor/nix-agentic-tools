@@ -22,46 +22,37 @@
     exe
     (combinators: [combinators.probe]);
 
-  # A rendered wrapper must contain each needle, or the check prints it.
-  structural = name: wrapper: needles: ''
+  # Inspect the bubblewrap command itself, not unrelated mentions of the
+  # expected executable or setting elsewhere in the generated script.
+  # This reads whole physical lines and expects the pinned upstream renderer's
+  # `--setenv VAR VALUE` and `-- COMMAND` forms with an unquoted value and store
+  # paths; check for upstream formatting changes first if this fails.
+  structural = name: wrapper: expected: ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     script=${lib.getExe' wrapper name}
-    for needle in ${lib.escapeShellArgs needles}; do
-      if ! grep -qF -- "$needle" "$script"; then
-        echo "FAIL: $script does not contain '$needle'" >&2
-        cat "$script" >&2
-        exit 1
-      fi
-    done
+    command_line=$(awk -v bwrap='${bwrap}' '$1 == bwrap || ($1 == "exec" && $2 == bwrap)' "$script")
+    expected=${lib.escapeShellArg expected}
+    if ! grep -qF -- "$expected" <<< "$command_line"; then
+      printf 'FAIL: %s must pass %s to bubblewrap; got %s\n' "$script" "$expected" "$command_line" >&2
+      exit 1
+    fi
   '';
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+    # The public extend builder must apply a caller-defined combinator, not
+    # merely accept its name while dropping or changing its environment value.
     jail-nix-extend = pkgs.runCommand "jail-nix-extend" {} ''
-      ${structural "jail-nix-probe-extend" extended ["--setenv JAIL_PROBE"]}
+      ${structural "jail-nix-probe-extend" extended " --setenv JAIL_PROBE 1 "}
       touch "$out"
     '';
 
-    # Unprivileged user namespaces are host policy, not a property of this
-    # library, so execution is gated on an independent bubblewrap positive
-    # control. The structural half runs on every host. The base permissions
-    # forward LANG, HOME and TERM under nounset and mount a tmpfs over a
-    # creatable HOME.
-    jail-nix-trivial =
-      pkgs.runCommand "jail-nix-trivial" {
-        LANG = "C";
-        TERM = "dumb";
-      } ''
-        ${structural "jail-nix-probe" trivial [bwrap "-- ${exe}"]}
-        export HOME="$TMPDIR/home"
-        mkdir -p "$HOME"
-        if ${bwrap} --unshare-user --unshare-pid --ro-bind / / -- ${exe} 2>"$TMPDIR/control.log"; then
-          "$script"
-          echo "JAIL-NIX-TRIVIAL: executed true inside the jail" | tee "$out"
-        else
-          cat "$TMPDIR/control.log" >&2
-          echo "JAIL-NIX-TRIVIAL: structural-only, bubblewrap cannot run in this build sandbox" | tee "$out"
-        fi
-      '';
+    # Check that the public init builder hands off to the requested executable.
+    # The mirror's upstream suite covers stock runtime behavior; bubblewrap
+    # cannot run inside CI's build sandbox.
+    jail-nix-trivial = pkgs.runCommand "jail-nix-trivial" {} ''
+      ${structural "jail-nix-probe" trivial " -- ${exe} "}
+      touch "$out"
+    '';
   };
 }

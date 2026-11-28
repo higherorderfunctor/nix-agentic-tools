@@ -2,12 +2,12 @@
   {
     "callSite": {
       "bundledModule": null,
-      "column": 5,
+      "column": 3,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
       "line": 9
     },
-    "conditionOutcome": true,
+    "conditionOutcome": false,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
@@ -24,32 +24,13 @@
       "column": 3,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
-      "line": 17
-    },
-    "conditionOutcome": false,
-    "guardSite": {
-      "column": 3,
-      "file": "kimchi/src/requests.ts",
       "line": 16
     },
-    "key": "tools.search",
-    "outcome": "truthy",
-    "scope": "intraprocedural",
-    "sourceKind": "resource"
-  },
-  {
-    "callSite": {
-      "bundledModule": null,
-      "column": 3,
-      "file": "kimchi/src/requests.ts",
-      "library": "fetch",
-      "line": 24
-    },
     "conditionOutcome": false,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
-      "line": 23
+      "line": 15
     },
     "key": "tools.search",
     "outcome": "falsy",
@@ -62,13 +43,13 @@
       "column": 3,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
-      "line": 31
+      "line": 23
     },
     "conditionOutcome": false,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
-      "line": 30
+      "line": 22
     },
     "key": "TOKEN",
     "outcome": "truthy",
@@ -81,13 +62,13 @@
       "column": 5,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
-      "line": 40
+      "line": 32
     },
     "conditionOutcome": true,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
-      "line": 39
+      "line": 31
     },
     "key": "telemetry.enabled",
     "outcome": "truthy",
@@ -100,13 +81,13 @@
       "column": 5,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
-      "line": 57
+      "line": 49
     },
     "conditionOutcome": true,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
-      "line": 56
+      "line": 48
     },
     "key": "ONLY_FIRST",
     "outcome": "truthy",
@@ -119,13 +100,13 @@
       "column": 5,
       "file": "kimchi/src/requests.ts",
       "library": "fetch",
-      "line": 119
+      "line": 106
     },
     "conditionOutcome": true,
     "guardSite": {
       "column": 3,
       "file": "kimchi/src/requests.ts",
-      "line": 118
+      "line": 105
     },
     "key": "tools.search",
     "outcome": "truthy",

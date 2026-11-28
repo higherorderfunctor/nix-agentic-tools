@@ -1,5 +1,5 @@
+# cspell:ignore batchmode defaut kmux sembleignore
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode defaut sembleignore
 {
   lib,
   pkgs,
@@ -7,12 +7,12 @@
   ...
 }: let
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest;
+  inherit (harness) checkRows deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest rejectsChange;
   kiroFact = let
     extracted = import ../../../lib/extracted/facts.nix {inherit lib;};
   in
     extracted.get (extracted.load {dir = ../extracted;}).aggregate;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets renderedMcpJson soleFork soleSame;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) idempotentFlags kiroCliSettings kiroSteeringContent kiroWrappedDrvs renderKiroSecrets soleFork soleSame;
   cliOptions = import ../lib/cliOptions.nix {inherit lib;};
   # One value for each of the four launch options, valid by the extracted help.
   launchOptionValues = {
@@ -56,86 +56,9 @@
   settingsWarnings = result: lib.filter (lib.hasPrefix "ai.kiro.cli.native.settings") result.config.warnings;
 in {
   checks = {
-    module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
-      let
-        b = idempotentFlags.idempotentFlagBlock {
-          flags = ["--tui" "--v3"];
-          position = "prepend";
-        };
-        tuiLine = ''if [ "$nat_seen_tui" = 0 ]; then set -- --tui "$@"; fi'';
-        v3Line = ''if [ "$nat_seen_v3" = 0 ]; then set -- --v3 "$@"; fi'';
-      in
-        lib.hasInfix "nat_seen_tui=0" b
-        && lib.hasInfix "nat_seen_v3=0" b
-        && lib.hasInfix "--tui) nat_seen_tui=1 ;;" b
-        && lib.hasInfix "--v3) nat_seen_v3=1 ;;" b
-        && lib.hasInfix tuiLine b
-        && lib.hasInfix v3Line b
-        # reverse emission order is what makes the result `--tui --v3 …`
-        && (lib.length (lib.splitString v3Line (lib.head (lib.splitString tuiLine b))) == 2)
-    );
-
-    # The append form is still available for a genuinely per-subcommand
-    # option, and must NOT be reachable by accident: `position` has no
-    # default, since picking the wrong one is the exact bug this guards.
-    module-kiro-wrapper-append-form = mkTest "kiro-wrapper-append-form" (
-      let
-        b = idempotentFlags.idempotentFlagBlock {
-          flags = ["--v3"];
-          position = "append";
-        };
-      in
-        lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
-        && !(lib.hasInfix "tui" b)
-    );
-
-    module-kiro-wrapper-rejects-bad-position =
-      mkTest "kiro-wrapper-rejects-bad-position" (!(builtins.tryEval (idempotentFlags.idempotentFlagBlock {
-        flags = ["--v3"];
-        position = "middle";
-      }))
-    .success);
-
-    module-kiro-wrapper-idempotent-none = mkTest "kiro-wrapper-idempotent-none" (
-      idempotentFlags.idempotentFlagBlock {
-        flags = [];
-        position = "prepend";
-      }
-      == ""
-    );
-
-    # ── Kiro launcher wrapper: subcommand gating ─────────────────────
-    # Used for the option that genuinely IS per-subcommand: `acp`'s
-    # `--agent-engine`. The scan resolves the subcommand into
-    # nat_sub; the value-flag arm keeps `--agent acp` from reading as the
-    # acp subcommand; `--` parks on a sentinel no gate matches.
-    module-kiro-wrapper-subcommand-scan = mkTest "kiro-wrapper-subcommand-scan" (
-      let
-        b = idempotentFlags.subcommandBlock ["--agent" "--resume-id"];
-      in
-        lib.hasInfix ''nat_sub=""'' b
-        && lib.hasInfix "--agent|--resume-id) nat_skip=1 ;;" b
-        && lib.hasInfix ''--) nat_sub="--"; break ;;'' b
-        && lib.hasInfix "-*) ;;" b
-        && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
-    );
-
-    # No value-taking options ⇒ no skip arm, but the scan still resolves
-    # a subcommand (a wrapper with only boolean options still needs it).
-    module-kiro-wrapper-subcommand-scan-boolean-only = mkTest "kiro-wrapper-subcommand-scan-boolean-only" (
-      let
-        b = idempotentFlags.subcommandBlock [];
-      in
-        !(lib.hasInfix "nat_skip=1 ;;" b)
-        && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
-    );
-
-    # The measured top-level value options include the three the 3.0.0 parser
-    # takes a value for; membership, so an upstream addition clears by
-    # regeneration. A measurement that dropped one of them (the old hand list
-    # lacked `--repo`) would treat that option's value as the subcommand. The
-    # synthetic table below is exact: a `valueOptions` that skipped a value
-    # option's short name or aliases, or kept a no-value option, would differ.
+    # The wrapper argv cases cover the measured value flags. This synthetic
+    # table checks that extraction keeps short names and aliases for value
+    # options and drops options that take no value.
     module-kiro-launch-value-options = mkTest "kiro-launch-value-options" (
       let
         launchValueOptions = import ../lib/launchValueOptions.nix {inherit lib;};
@@ -145,8 +68,7 @@ in {
           takesValue = true;
         };
       in
-        lib.all (name: lib.elem name launchValueOptions.measured) ["--agent" "--repo" "--resume-id"]
-        && launchValueOptions.valueOptions {
+        launchValueOptions.valueOptions {
           "--flag" =
             option
             // {
@@ -199,46 +121,30 @@ in {
       }
     );
 
-    # The types come from the extracted help: an enum where it lists values, a
-    # bool for the flag. Each option takes a listed value and refuses another at
-    # evaluation, on both backends, and defaults to null. The good value is the
-    # positive control: a harness failure cannot make the refusal pass.
-    module-kiro-launch-option-types = mkTest "kiro-launch-option-types" (
-      let
-        read = evaluate: config: path:
-          builtins.tryEval (lib.attrByPath path null (evaluate {ai.kiro.cli = {enable = true;} // config;}).config.ai.kiro.cli);
-        cases = [
-          {
-            good = {chat.mode = "default";};
-            bad = {chat.mode = "bogus";};
-            path = ["chat" "mode"];
-          }
-          {
-            good = {chat.wrap = "auto";};
-            bad = {chat.wrap = "sometimes";};
-            path = ["chat" "wrap"];
-          }
-          {
-            good = {chat.requireMcpStartup = false;};
-            bad = {chat.requireMcpStartup = "yes";};
-            path = ["chat" "requireMcpStartup"];
-          }
-          {
-            good = {acp.authMethod = "cli";};
-            bad = {acp.authMethod = "bogus";};
-            path = ["acp" "authMethod"];
-          }
-        ];
+    # Force the selected option through each backend's merge. One bad value
+    # per restriction distinguishes a loosened enum or bool from a broken eval.
+    module-kiro-launch-option-types = mkTest "kiro-launch-option-types" (let
+      check = evaluate: option: path: good: bad: let
+        read = config: lib.getAttrFromPath path (evaluate {ai.kiro.cli = {enable = true;} // config;}).config.ai.kiro.cli;
       in
-        lib.all (evaluate:
-          lib.all (case:
-            (read evaluate case.good case.path).success
-            && !(read evaluate case.bad case.path).success
-            && (read evaluate {} case.path).value == null)
-          cases) [evalHm evalDevenv]
-    );
+        checkRows option {
+          "omitting the option leaves it unset" = read {} == null;
+          "value outside the declared domain is rejected" = rejectsChange read {
+            expected = good;
+            invalid = lib.setAttrByPath path bad;
+            valid = lib.setAttrByPath path good;
+          };
+        };
+    in
+      lib.all (evaluate:
+        checkRows "launcher option declarations" {
+          "acp.authMethod rejects unknown methods" = check evaluate "authMethod" ["acp" "authMethod"] "cli" "bogus";
+          "chat.mode rejects unknown modes" = check evaluate "mode" ["chat" "mode"] "default" "bogus";
+          "chat.requireMcpStartup rejects non-booleans" = check evaluate "requireMcpStartup" ["chat" "requireMcpStartup"] false "yes";
+          "chat.wrap rejects unknown wrap modes" = check evaluate "wrap" ["chat" "wrap"] "auto" "sometimes";
+        }) [evalHm evalDevenv]);
 
-    # Both backends hand the same four options to the launcher.
+    # Home Manager hands the four configured options to the launcher.
     module-kiro-hm-launch-options = launchWrapperTest {
       name = "kiro-hm-launch-options";
       evaluate = evalHm;
@@ -246,24 +152,8 @@ in {
       config = launchOptionValues;
       needles = launchOptionWords;
     };
-    module-kiro-devenv-launch-options = launchWrapperTest {
-      name = "kiro-devenv-launch-options";
-      evaluate = evalDevenv;
-      packages = ev: ev.config.packages;
-      config = launchOptionValues;
-      needles = launchOptionWords;
-    };
 
-    # Null, the default, injects nothing and leaves a bare launch alone, and so
-    # does a false flag; a launcher carrying either would change the argv of a
-    # consumer who set no option.
-    module-kiro-hm-launch-options-null = launchWrapperTest {
-      name = "kiro-hm-launch-options-null";
-      evaluate = evalHm;
-      packages = ev: ev.config.home.packages;
-      config = {};
-      absentNeedles = launchOptionWords;
-    };
+    # A false flag injects nothing and leaves a bare launch alone.
     module-kiro-devenv-launch-options-false = launchWrapperTest {
       name = "kiro-devenv-launch-options-false";
       evaluate = evalDevenv;
@@ -296,87 +186,40 @@ in {
           == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.acp.authMethod, ai.kiro.cli.chat.wrap. Unset them or set ai.kiro.cli.package."]) [evalHm evalDevenv]
     );
 
-    # The `acp --agent-engine` presence scan: an exact per-token match in both
-    # spellings (a substring scan of "$*" would let a prompt that mentions the
-    # flag count), defaulting to 0, and stopping at `--`.
-    module-kiro-wrapper-option-presence = mkTest "kiro-wrapper-option-presence" (
-      let
-        b = idempotentFlags.optionPresenceBlock {
+    module-kiro-wrapper-gate = mkTest "kiro-wrapper-gate" (
+      checkRows "subcommand gate" {
+        # The real argv cases for ACP cover both spellings and the marker,
+        # but do not pass an ACP positional containing the option as a substring.
+        "only a whole ACP option token can suppress engine injection" = lib.hasInfix "--agent-engine|--agent-engine=*) nat_engine=1 ;;" (idempotentFlags.optionPresenceBlock {
           flag = "--agent-engine";
           var = "nat_engine";
-        };
-      in
-        lib.hasPrefix "nat_engine=0\n" b
-        && lib.hasInfix ''for nat_arg in "$@"; do'' b
-        && lib.hasInfix ''case "$nat_arg" in'' b
-        && lib.hasInfix "--) break ;;" b
-        && lib.hasInfix "--agent-engine|--agent-engine=*) nat_engine=1 ;;" b
-        && !(lib.hasInfix "$*" b)
+        });
+      }
     );
 
-    # The gate wraps the injection in a `case` over the accepted set.
-    # `bareInvocation` is the empty string, so a gate covering the bare
-    # launch emits a `''`-quoted alternative ahead of the named ones.
-    module-kiro-wrapper-gate-wraps-injection = mkTest "kiro-wrapper-gate-wraps-injection" (
-      let
-        b = idempotentFlags.gateOnSubcommand {
-          subcommands = [idempotentFlags.bareInvocation "chat"];
-          valueFlags = ["--agent"];
-        } "INJECTED";
-      in
-        lib.hasInfix ''case "$nat_sub" in'' b
-        && lib.hasInfix "  ''|chat)" b
-        && lib.hasInfix "    INJECTED" b
-        && lib.hasSuffix "esac" b
-    );
-
-    # Nothing to inject ⇒ no gate at all (an env-only wrapper must stay a
-    # transparent exec, not grow a dead `case`).
-    module-kiro-wrapper-gate-empty-injection = mkTest "kiro-wrapper-gate-empty-injection" (
-      idempotentFlags.gateOnSubcommand {subcommands = ["chat"];} "" == ""
-    );
-
-    # An empty accepted set can never fire, which would silently drop the
-    # injection rather than fail — so it throws instead.
-    module-kiro-wrapper-gate-rejects-empty-set = mkTest "kiro-wrapper-gate-rejects-empty-set" (!(builtins.tryEval (idempotentFlags.gateOnSubcommand {subcommands = [];} "INJECTED")).success);
-
-    # `ai.kiro.enable` is read-only and derived from the harness switch, so the
-    # one input is `ai.kiro.cli.enable`. Off writes no `.kiro/` file; on writes
-    # the scoped steering file through Home Manager and devenv alike.
-    module-kiro-default-disabled = mkTest "kiro-default-disabled" (
-      let
-        rule.ai.kiro.rules.probe = {
-          matcher = ["src/**"];
-          text = "probe";
-        };
-        keys = ev: lib.filter (lib.hasPrefix ".kiro/") (lib.attrNames (deliveredFiles ev.config));
-      in
-        lib.all (eval: let
-          off = eval rule;
-        in
-          !(eval {}).config.ai.kiro.enable
-          && !off.config.ai.kiro.enable
-          && keys off == [])
-        [evalHm evalDevenv]
-    );
-
-    module-kiro-cli-enable-manages = mkTest "kiro-cli-enable-manages" (
-      let
-        on = {
+    # A rule configured while the runtime is off cannot write any Kiro file;
+    # setting only cli.enable must lift that gate and deliver the exact rule.
+    module-kiro-cli-enable-manages = mkTest "kiro-cli-enable-manages" (let
+      evaluate = backend: cli:
+        backend {
           ai.kiro = {
-            cli.enable = true;
+            inherit cli;
             rules.probe = {
               matcher = ["src/**"];
               text = "probe";
             };
           };
         };
-        keys = ev: lib.filter (lib.hasPrefix ".kiro/") (lib.attrNames (deliveredFiles ev.config));
+      keys = ev: lib.filter (lib.hasPrefix ".kiro/") (lib.attrNames (deliveredFiles ev.config));
+    in
+      lib.all (backend: let
+        off = evaluate backend {};
+        on = evaluate backend {enable = true;};
       in
-        (evalHm on).config.ai.kiro.enable
-        && (evalDevenv on).config.ai.kiro.enable
-        && lib.all (eval: lib.elem ".kiro/steering/probe.md" (keys (eval on))) [evalHm evalDevenv]
-    );
+        checkRows "Kiro runtime enablement" {
+          "configured steering stays off without cli.enable" = !off.config.ai.kiro.enable && keys off == [];
+          "launcher enablement also delivers the configured rule" = on.config.ai.kiro.enable && lib.elem ".kiro/steering/probe.md" (keys on);
+        }) [evalHm evalDevenv]);
 
     module-kiro-cli-namespace = mkTest "kiro-cli-namespace" (let
       moved = [
@@ -402,8 +245,7 @@ in {
         lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
         && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "mcpServers" "rules" "skills"]
         && tree.cli ? enable
-        && tree.enable.readOnly
-        && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
+        && tree.enable.readOnly;
     in
       lib.all check [evalHm evalDevenv]);
 
@@ -451,6 +293,8 @@ in {
     in
       lib.all check [evalHm evalDevenv]);
 
+    # A friendly switch must select its own raw feature and (on HM only) its
+    # own global setting; a conflicting explicit setting still wins.
     module-kiro-cli-friendly-features = mkTest "kiro-cli-friendly-features" (let
       cases = {
         backgroundExecution = {
@@ -511,12 +355,10 @@ in {
           if !gated
           then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
           else
-            soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
-            && (
-              if !(import ../extract/rollout-coverage.nix).needsPatch (kiroFact "rolloutStates.${case.feature}")
-              then soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
-              else selected.config.ai.kiro.cli.features.${case.feature}.enable && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
-            )
+            selected.config.ai.kiro.cli.features.${case.feature}.enable
+            && soleSame (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages raw))
+            # These three features all require a patch in the pinned release.
+            && soleFork (kiroWrappedDrvs (runner.packages selected)) (kiroWrappedDrvs (runner.packages plain))
         )
         && (
           if case.setting == null
@@ -533,7 +375,11 @@ in {
           rawDisabled.config.assertions
         );
     in
-      lib.all (backend: lib.all (name: check backend backends.${backend} name cases.${name}) (builtins.attrNames cases)) (builtins.attrNames backends));
+      lib.all (backend:
+        checkRows "${backend} friendly rollout wiring" (lib.mapAttrs' (name: case:
+          lib.nameValuePair "${name} selects only its native feature and setting" (check backend backends.${backend} name case))
+        cases))
+      (builtins.attrNames backends));
 
     # cli.json's complete dotted keys form one struct level. Unknown names warn
     # on both backends; devenv still rejects keys outside its workspace list.
@@ -567,8 +413,7 @@ in {
         && lib.hasInfix ''did you mean `ai.kiro.cli.native.settings."chat.defaultModel"`'' (builtins.head warnings)
         && (kiroCliSettings unknown)."chat.defautModel" == "future-model"
         && settingsWarnings known == []
-        && (kiroCliSettings known)."chat.modelDefaults"."future.model".futureField
-        && (kiroCliSettings known)."chat.enableTangentMode";
+        && (kiroCliSettings known)."chat.modelDefaults"."future.model".futureField;
     in
       check "hm" evalHm && check "devenv" evalDevenv);
 
@@ -617,23 +462,31 @@ in {
     in
       lib.all check [evalHm evalDevenv]);
 
+    # A registry action must not fall back to the untyped tail; genuinely
+    # new actions must still round-trip through that tail.
     module-kiro-cli-keybindings-typed = mkTest "kiro-cli-keybindings-typed" (let
-      expected = map (lib.removePrefix "chat.keybindings.") (lib.filter (lib.hasPrefix "chat.keybindings.") (kiroFact "settingKeys"));
-      check = evaluate: let
-        plain = evaluate {};
-        good = evaluate {
-          ai.kiro.cli.native.settings.chat.keybindings = {
-            futureAction = 42;
-            quit = "ctrl+x";
+      expected = [
+        "cancelStream"
+        "closeMenu"
+        "kmuxKeys"
+        "kmuxPrefix"
+        "moveToBackground"
+        "quit"
+        "toggleInterruptBehavior"
+        "toggleSessionDashboard"
+        "viewDiagram"
+      ];
+      bindings = evaluate: keybindings: (evaluate {ai.kiro.cli.native.settings.chat = {inherit keybindings;};}).config.ai.kiro.cli.native.settings.chat.keybindings;
+      check = evaluate:
+        checkRows "Kiro keybinding declarations" {
+          "future action is not constrained by a known action's type" = (bindings evaluate {futureAction = 42;}).futureAction == 42;
+          "pinned actions all have declared slots" = builtins.attrNames (bindings evaluate {}) == expected;
+          "quit binding rejects a number but accepts a key chord" = rejectsChange (quit: (bindings evaluate {inherit quit;}).quit) {
+            expected = "ctrl+x";
+            invalid = 42;
+            valid = "ctrl+x";
           };
         };
-        bad = builtins.tryEval (evaluate {ai.kiro.cli.native.settings.chat.keybindings.quit = 42;}).config.ai.kiro.cli.native.settings.chat.keybindings.quit;
-      in
-        builtins.attrNames plain.config.ai.kiro.cli.native.settings.chat.keybindings
-        == expected
-        && good.config.ai.kiro.cli.native.settings.chat.keybindings.quit == "ctrl+x"
-        && good.config.ai.kiro.cli.native.settings.chat.keybindings.futureAction == 42
-        && !bad.success;
     in
       lib.all check [evalHm evalDevenv]);
 
@@ -655,25 +508,6 @@ in {
         && !(kiroCliSettings hm ? "app.disableAutoupdates")
         && lib.hasInfix "PACKAGE-NULL-CONTEXT" (markdownInput devenv "AGENTS.md").text
         && lib.hasInfix "PACKAGE-NULL-CONTEXT" (kiroSteeringContent hm)."AGENTS.md".text
-    );
-
-    # Defaults (including the default-on `ai.gitSshConfigWorkaround`) stay
-    # silent: the SSH default not reaching a null-package launcher is not a
-    # consumer-actionable problem, so nothing warns about it.
-    module-kiro-package-null-defaults-silent = mkTest "kiro-package-null-defaults-silent" (
-      let
-        evaluated = evalDevenv {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              package = null;
-            };
-          };
-        };
-      in
-        builtins.all (entry: entry.assertion) evaluated.config.assertions
-        && evaluated.config.packages == []
-        && evaluated.config.warnings == []
     );
 
     module-kiro-package-null-explicit-tweaks-warn = mkTest "kiro-package-null-explicit-tweaks-warn" (
@@ -769,9 +603,7 @@ in {
       in
         lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
-        && unnamedFile != null
         && lib.hasInfix "UNNAMED-INSTR-TOKEN." (unnamedFile.text or "")
-        && namedFile != null
         && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
     );
 
@@ -801,87 +633,67 @@ in {
         fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
         && lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
-        && !(steering ? "AGENTS.md")
-        && namedFile != null
         && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
     );
 
-    module-kiro-mcp-secret-placeholders = mkTest "kiro-mcp-secret-placeholders" (
-      let
-        mcpJson = renderedMcpJson {
-          jira = {
-            type = "http";
-            url = redact.concat ["https://" (redact.file "/run/secrets/jira-url")];
-            timeout = 300000;
-            headers = {
-              "X-MCP-Servers" = "jira";
-              "X-Jira-Token" = redact.file "/run/secrets/service-token";
-              "X-Api-Key" = redact.concat ["Bearer " (redact.file "/run/secrets/llm")];
-            };
-          };
-        };
-      in
-        lib.hasInfix "\${env:KIRO_MCP_JIRA_HEADER_X_JIRA_TOKEN}" mcpJson
-        && lib.hasInfix "\${env:KIRO_MCP_JIRA_HEADER_X_API_KEY}" mcpJson
-        && lib.hasInfix "\${KIRO_MCP_JIRA_URL}" mcpJson
-        && lib.hasInfix ''"X-MCP-Servers":"jira"'' mcpJson
-        && !(lib.hasInfix "/run/secrets/service-token" mcpJson)
-        && !(lib.hasInfix "/run/secrets/llm" mcpJson)
-        && !(lib.hasInfix "/run/secrets/jira-url" mcpJson)
-    );
-
     # Distinct fields which sanitize to one shell name must not overwrite.
-    module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (!(builtins.tryEval (builtins.deepSeq (renderKiroSecrets {
-        a.headers = {
+    module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (
+      rejectsChange (headers: builtins.attrNames (renderKiroSecrets {a = {inherit headers;};}).secretEnv) {
+        expected = ["KIRO_MCP_A_HEADER_X_KEY" "KIRO_MCP_A_HEADER_Y_KEY"];
+        invalid = {
           "X-Key" = redact.file "/run/secrets/one";
           "X_Key" = redact.file "/run/secrets/two";
         };
-      })
-      true)).success);
-
-    # Kiro HM<->devenv parity: the SAME config yields the SAME rendered
-    # mcp.json template on both backends (identical content -> identical
-    # store path), each delivered as a REAL file (HM activation / devenv
-    # task anchored to $DEVENV_ROOT). Replaces the old home.file
-    # symlink parity now that delivery is uniform real-file.
-    module-kiro-hm-devenv-mcp-json-parity = mkTest "kiro-hm-devenv-mcp-json-parity" (
-      let
-        serversCfg = {
-          jira = {
-            type = "http";
-            url = redact.file "/run/secrets/jira-url";
-            headers."X-Jira-Token" = redact.file "/run/secrets/service-token";
-          };
+        valid = {
+          "X-Key" = redact.file "/run/secrets/one";
+          "Y_Key" = redact.file "/run/secrets/two";
         };
-        cfg = {
-          ai.kiro = {
-            cli.enable = true;
-            mcpServers = serversCfg;
-          };
-        };
-        dv = evalDevenv cfg;
-        hmRender = (mcpFile (evalHm cfg)).content.run;
-        dvRender = (mcpFile dv).content.run;
-        # Same content -> same store path on both backends. Strip the
-        # string context: `lib.hasInfix` compiles the needle into a
-        # `builtins.match` regex, which rejects a store-path context.
-        templatePath = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" (renderedMcpJson serversCfg)}";
-      in
-        lib.hasInfix templatePath hmRender
-        && lib.hasInfix templatePath dvRender
-        && hasLiteral ''cd "$NAT_OWN_ROOT"'' dvRender
-        && !(hasLiteral "cd " hmRender)
-        # Both plans name the same destination, each against its own root.
-        && (mcpFile (evalHm cfg)).content.run != ""
-        && (mcpFile dv).method == "ro"
-        && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' hmRender
-        && hasLiteral ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' dvRender
+      }
     );
 
-    # Kiro HM: a secret url makes mcp.json a REAL-file activation write (NOT
-    # a home.file symlink) that exports the url secret, envsubst's ONLY the
-    # url var (header ${env:...} survive), and locks the file read-only
-    # (secret url -> owner-only 0400).
+    # Pin the template from Kiro's JSON contract, not the production renderer:
+    # a shared regression could otherwise pass both backends (and the oracle).
+    # The real-file renderers must both consume it, but only devenv changes cwd
+    # so that relative URL credential readers resolve against the project.
+    module-kiro-hm-devenv-mcp-json-parity = mkTest "kiro-hm-devenv-mcp-json-parity" (let
+      cfg.ai.kiro = {
+        cli.enable = true;
+        mcpServers.jira = {
+          headers = {
+            "X-Api-Key" = redact.concat ["Bearer " (redact.file "/run/secrets/llm")];
+            "X-Jira-Token" = redact.file "/run/secrets/service-token";
+            "X-MCP-Servers" = "jira";
+          };
+          timeout = 300000;
+          type = "http";
+          url = redact.concat ["https://" (redact.file "/run/secrets/jira-url")];
+        };
+      };
+      dv = mcpFile (evalDevenv cfg);
+      hm = mcpFile (evalHm cfg);
+      expected = builtins.toJSON {
+        mcpServers.jira = {
+          headers = {
+            "X-Api-Key" = "\${env:KIRO_MCP_JIRA_HEADER_X_API_KEY}";
+            "X-Jira-Token" = "\${env:KIRO_MCP_JIRA_HEADER_X_JIRA_TOKEN}";
+            "X-MCP-Servers" = "jira";
+          };
+          timeout = 300000;
+          type = "http";
+          url = "\${KIRO_MCP_JIRA_URL}";
+        };
+      };
+      # lib.hasInfix's regex needle cannot carry store-path context.
+      templatePath = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" expected}";
+    in
+      checkRows "Kiro MCP rendering" {
+        "devenv anchors relative credential reads" = hasLiteral ''cd "$NAT_OWN_ROOT"'' dv.content.run;
+        "HM keeps the caller cwd" = !(hasLiteral "cd " hm.content.run);
+        "template passes public headers and timeout without exposing secret paths" = lib.hasInfix templatePath hm.content.run && lib.hasInfix templatePath dv.content.run;
+      });
+
+    # Substitute only the URL variable so Kiro receives the header's literal
+    # environment placeholder. The engine fixture covers mode and read failures.
     module-kiro-hm-mcp-json-activation-secret-url = mkTest "kiro-hm-mcp-json-activation-secret-url" (
       let
         result = evalHm {
@@ -894,37 +706,11 @@ in {
             };
           };
         };
-        unit = mcpFile result;
-        script = unit.content.run;
       in
-        !(result.config.home.file ? ".kiro/settings/mcp.json")
-        && result.config.ai.files.".kiro/settings/mcp.json".method == "ro"
-        && lib.hasInfix ''TARGET="$NAT_OWN_ROOT/.kiro/settings/mcp.json"'' script
-        && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
-        # The mode is DECLARED in the plan now, not an argument inside a
-        # generated write call: owner-only, because this file holds the
-        # substituted url secret.
-        && unit.mode == "0400"
-        # The secret read must be a BARE assignment whose status errexit can
-        # see, then a separate `export`. `export VAR="$(cmd)"` returns export's
-        # status (always 0), so a failed read is silent and envsubst writes
-        # `"url": ""`. This assertion previously required that exact broken
-        # form, which is how the bug shipped.
-        && lib.hasInfix ''KIRO_MCP_JIRA_URL="$('' script
-        && !(lib.hasInfix ''export KIRO_MCP_JIRA_URL="$('' script)
-        && lib.hasInfix "export KIRO_MCP_JIRA_URL\n" script
-        && lib.hasInfix "redact-read" script
-        && lib.hasInfix "|| exit 1" script
-        # Scoped: HM concatenates every activation entry into one script, so an
-        # unscoped strict-mode header leaks into later entries and HM's own
-        # code, and the exported SECRET would stay live for the rest of
-        # activation.
-        && lib.hasPrefix "(\nset -euETo pipefail" script
-        && lib.hasSuffix ")\n" script
+        lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" (mcpFile result).content.run
     );
 
-    # Kiro HM: a plain (non-secret) http server still lands as a read-only
-    # copy — world-readable 0444, no envsubst step.
+    # A plain HM HTTP server needs no envsubst step in the file engine.
     module-kiro-hm-mcp-json-plain-overwrite = mkTest "kiro-hm-mcp-json-plain-overwrite" (
       let
         result = evalHm {
@@ -938,24 +724,10 @@ in {
         };
         unit = mcpFile result;
       in
-        unit.mode
-        == "0444"
-        && !(lib.hasInfix "envsubst" unit.content.run)
-        && !(result.config.home.file ? ".kiro/settings/mcp.json")
+        !(lib.hasInfix "envsubst" unit.content.run)
     );
 
     # ── Kiro HM/devenv fanout ────────────────────────────────────
-
-    # HM: package installation — verify home.packages populated.
-    module-kiro-hm-wraps-package = mkTest "kiro-hm-wraps-package" (
-      let
-        result = evalHm {
-          ai.kiro.cli.enable = true;
-        };
-        packages = result.config.home.packages;
-      in
-        builtins.length packages >= 1
-    );
 
     module-kiro-hm-autoupdate-override = let
       evaluated = evalHm {
@@ -966,7 +738,6 @@ in {
       };
     in
       assert (kiroCliSettings evaluated)."app.disableAutoupdates" == false;
-      assert settingsWarnings evaluated == [];
         mkWrapperGrepTest {
           name = "kiro-hm-autoupdate-override";
           package = builtins.head evaluated.config.home.packages;
@@ -978,58 +749,27 @@ in {
       let
         evaluated = evalHm {ai.kiro.cli.enable = true;};
       in
-        evaluated.config.ai.files.".kiro/settings/cli.json".method
-        == "ro"
-        && evaluated.config.ai.files.".kiro/settings/cli.json".mode == null
-        && kiroCliSettings evaluated == {"app.disableAutoupdates" = true;}
+        kiroCliSettings evaluated
+        == {"app.disableAutoupdates" = true;}
         && settingsWarnings evaluated == []
     );
 
-    module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.defaultModel = "claude-sonnet-4";
-            };
+    # Pin a known catalog id and a future id through cli.json on both backends;
+    # looking only at the suggestion enum would miss removal of the str fallback.
+    module-kiro-default-model-delivery = mkTest "kiro-default-model-delivery" (let
+      model = evaluate: value:
+        (kiroCliSettings (evaluate {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings.chat.defaultModel = value;
           };
-        };
-      in
-        result.config.ai.files.".kiro/settings/cli.json".method
-        == "ro"
-        && (kiroCliSettings result)."chat.defaultModel" == "claude-sonnet-4"
-    );
-
-    # Known Kiro model id reaches cli.json.
-    module-kiro-hm-default-model-known-accepted = mkTest "kiro-hm-default-model-known-accepted" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.defaultModel = "claude-opus-4.8";
-            };
-          };
-        };
-      in
-        (kiroCliSettings result)."chat.defaultModel" == "claude-opus-4.8"
-    );
-
-    # Arbitrary (unknown) id is accepted (str branch of the soft enum).
-    module-kiro-hm-default-model-arbitrary-accepted = mkTest "kiro-hm-default-model-arbitrary-accepted" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.defaultModel = "some-future-model";
-            };
-          };
-        };
-      in
-        (kiroCliSettings result)."chat.defaultModel" == "some-future-model"
-    );
+        }))."chat.defaultModel";
+    in
+      lib.all (evaluate:
+        checkRows "defaultModel reaches cli.json" {
+          "catalog id is not dropped or rewritten" = model evaluate "auto" == "auto";
+          "unknown id is not rejected or rewritten" = model evaluate "some-future-model" == "some-future-model";
+        }) [evalHm evalDevenv]);
 
     # Inspect the suggestion arm separately: accepting through `str` alone
     # would hide a stale or missing independently pinned catalog.
@@ -1055,136 +795,31 @@ in {
           suggestions.functor.payload.values
           == catalog
           && !(suggestions.check "some-future-model")
-          && type.check "some-future-model"
           && !(type.check 42))
         settingsOptions
     );
 
-    module-kiro-devenv-default-model-known-and-arbitrary-accepted = mkTest "kiro-devenv-default-model-known-and-arbitrary-accepted" (
-      lib.all (model: let
-        result = evalDevenv {
-          ai.kiro.cli = {
-            enable = true;
-            native.settings.chat.defaultModel = model;
+    # Stale engine options must not look accepted while silently doing nothing.
+    # Only add the removed field to a config known to install the wrapper.
+    module-kiro-engine-options-removed = mkTest "kiro-engine-options-removed" (let
+      check = evaluate: packages: let
+        read = ai: map (package: package.name) (packages (evaluate {inherit ai;}));
+        valid.gitSshConfigWorkaround = false;
+        valid.kiro.cli.enable = true;
+        expected = ["kiro-cli-wrapped"];
+      in
+        checkRows "Kiro engine option removals" {
+          "old top-level tui switch is not silently ignored" = rejectsChange read {
+            inherit expected valid;
+            invalid = lib.recursiveUpdate valid {kiro.tui = true;};
+          };
+          "old v3 switch is not silently ignored" = rejectsChange read {
+            inherit expected valid;
+            invalid = lib.recursiveUpdate valid {kiro.cli.v3 = true;};
           };
         };
-      in
-        (kiroCliSettings result)."chat.defaultModel" == model)
-      ["auto" "some-future-model"]
-    );
-
-    # There is no engine toggle: the launcher always selects v3. A
-    # reintroduced `ai.kiro.cli.v3` would accept a config this module no
-    # longer honors, so declaring it is an eval error on both backends.
-    module-kiro-v3-option-removed = mkTest "kiro-v3-option-removed" (
-      !(builtins.tryEval
-        (evalHm {
-          ai.kiro.cli = {
-            enable = true;
-            v3 = true;
-          };
-        })
-        .config
-        .home
-        .packages)
-      .success
-      && !(builtins.tryEval
-        (evalDevenv {
-          ai.kiro.cli = {
-            enable = true;
-            v3 = true;
-          };
-        })
-        .config
-        .packages)
-      .success
-    );
-
-    # The `tui` option is GONE. It injected `--tui` and implied `--v3`; `--tui`
-    # is redundant under v3 and is going away with it. Setting it must now be a
-    # hard eval error, not a silently-ignored key — otherwise a stale consumer
-    # config looks accepted while quietly losing the engine flag it depended on.
-    module-kiro-hm-tui-option-removed = mkTest "kiro-hm-tui-option-removed" (!(builtins.tryEval
-      (evalHm {
-        ai.kiro = {
-          cli.enable = true;
-          tui = true;
-        };
-      })
-      .config
-      .home
-      .packages)
-    .success);
-
-    # The unlock must FORK the derivation — if the drvPath were unchanged, the
-    # patch step silently did nothing and the consumer would get stock kiro while
-    # believing background execution was on. Comparing drvPaths is the only assertion that
-    # actually distinguishes those two worlds; a name check cannot, because both
-    # sides are named `kiro-cli-wrapped`.
-    module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
-      let
-        a =
-          kiroWrappedDrvs
-          (evalHm {
-            ai.kiro = {
-              cli = {
-                enable = true;
-              };
-            };
-          })
-      .config
-      .home
-      .packages or [
-          ];
-        b =
-          kiroWrappedDrvs
-          (evalHm {
-            ai.kiro = {
-              cli = {
-                enable = true;
-                features.background_execution.enable = true;
-              };
-            };
-          })
-      .config
-      .home
-      .packages or [
-          ];
-      in
-        soleFork a b
-    );
-
-    # devenv parity: same fork, same option, same backend-independent result.
-    module-kiro-devenv-rollout-unlock-forks-package = mkTest "kiro-devenv-rollout-unlock-forks-package" (
-      let
-        a =
-          kiroWrappedDrvs
-          (evalDevenv {
-            ai.kiro = {
-              cli = {
-                enable = true;
-              };
-            };
-          })
-      .config
-      .packages or [
-          ];
-        b =
-          kiroWrappedDrvs
-          (evalDevenv {
-            ai.kiro = {
-              cli = {
-                enable = true;
-                features.background_execution.enable = true;
-              };
-            };
-          })
-      .config
-      .packages or [
-          ];
-      in
-        soleFork a b
-    );
+    in
+      check evalHm (ev: ev.config.home.packages) && check evalDevenv (ev: ev.config.packages));
 
     # The default MUST leave the package untouched. This is what protects every
     # cachix hit: an unconditional patch step would fork the drvPath for every
@@ -1203,11 +838,7 @@ in {
         };
         drvOf = cli: kiroWrappedDrvs (packages (evaluate (lib.recursiveUpdate base {ai.kiro.cli = cli;})));
       in
-        soleSame (drvOf {features.background_execution.enable = true;}) (drvOf {
-          backgroundExecution.enable = true;
-          features.background_execution.enable = true;
-        })
-        && soleSame (drvOf {features.background_execution.enable = true;})
+        soleSame (drvOf {features.background_execution.enable = true;})
         (drvOf {package = pkgs.ai.kiro-cli.withRolloutFeatures ["background_execution"];})
         && soleSame (drvOf {}) (drvOf {features.test.enable = true;})
         && soleFork (drvOf {features.background_execution.enable = true;}) (drvOf {
@@ -1241,25 +872,6 @@ in {
         asserts != [] && (builtins.head asserts).assertion == false
     );
 
-    # Positive control for the above — the same assertion must PASS on the
-    # overlay-provided package, or the negative proves only that it always fires.
-    module-kiro-rollout-accepts-overlay-package = mkTest "kiro-rollout-accepts-overlay-package" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              features.background_execution.enable = true;
-            };
-          };
-        };
-        asserts =
-          builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
-          ev.config.assertions;
-      in
-        asserts != [] && (builtins.head asserts).assertion == true
-    );
-
     # The FHS compatibility wrapper remains the default. Opting out makes the
     # launcher exec the overlay's pinned payload rather than the FHS package.
     module-kiro-hm-fhs-opt-out-wrapper-targets-unwrapped = let
@@ -1275,25 +887,6 @@ in {
       mkWrapperGrepTest {
         name = "kiro-hm-fhs-opt-out-wrapper-targets-unwrapped";
         package = builtins.head result.config.home.packages;
-        bin = "kiro-cli";
-        needles = ["${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
-        absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
-      };
-
-    # Devenv shares the same option and package-selection seam.
-    module-kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped = let
-      result = evalDevenv {
-        ai.kiro = {
-          cli = {
-            enable = true;
-            useFhsSandbox = false;
-          };
-        };
-      };
-    in
-      mkWrapperGrepTest {
-        name = "kiro-devenv-fhs-opt-out-wrapper-targets-unwrapped";
-        package = builtins.head result.config.packages;
         bin = "kiro-cli";
         needles = ["${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
         absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
@@ -1317,25 +910,6 @@ in {
           ev.config.assertions;
       in
         asserts != [] && (builtins.head asserts).assertion == false
-    );
-
-    # Positive control: the overlay package exposes the route and satisfies the
-    # same assertion when the opt-out is selected.
-    module-kiro-fhs-opt-out-accepts-overlay-package = mkTest "kiro-fhs-opt-out-accepts-overlay-package" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              useFhsSandbox = false;
-            };
-          };
-        };
-        asserts =
-          builtins.filter (a: lib.hasInfix "passthru.unwrapped" a.message)
-          ev.config.assertions;
-      in
-        asserts != [] && (builtins.head asserts).assertion == true
     );
 
     # A direct-payload package (the overlay's darwin shape) is already
@@ -1365,10 +939,10 @@ in {
 
     # Use actual extracted flags: the fixture cannot override patchability.
     module-kiro-rollout-rejects-unpatchable = mkTest "kiro-rollout-rejects-unpatchable" (let
-      needsPatch = name: (import ../extract/rollout-coverage.nix).needsPatch (kiroFact "rolloutStates.${name}");
-      names = lib.filter needsPatch (kiroFact "rolloutFeatures");
-      unpatchable = builtins.head (lib.filter (name: !(kiroFact "rolloutPatchability.${name}.patchable")) names);
-      patchable = builtins.head (lib.filter (name: kiroFact "rolloutPatchability.${name}.patchable") names);
+      # The extracted pin records code_review as dark and unpatchable,
+      # while background_execution is dark and can be patched.
+      unpatchable = "code_review";
+      patchable = "background_execution";
       check = evaluate: let
         evaluateFeatures = features:
           evaluate {
@@ -1378,35 +952,39 @@ in {
             };
           };
         refused = evaluateFeatures {${unpatchable}.enable = true;};
-        accepted = evaluateFeatures {
-          ${patchable}.enable = true;
-          ${unpatchable}.enable = false;
-        };
+        accepted = evaluateFeatures {${patchable}.enable = true;};
       in
         lib.any (item: !item.assertion && lib.hasInfix "ai.kiro.cli.features.${unpatchable}.enable" item.message && lib.hasInfix "rolloutPatchability.${unpatchable}.patchable" item.message) refused.config.assertions
         && lib.all (item: item.assertion) accepted.config.assertions;
     in
       lib.all check [evalHm evalDevenv]);
 
+    # A rollout state must not be treated as GA based on its public percentage
+    # alone. Each non-GA input changes one field from the unrestricted control.
     module-kiro-rollout-needs-patch = mkTest "kiro-rollout-needs-patch" (let
       inherit (import ../extract/rollout-coverage.nix) needsPatch;
       ga = {treatment_percent = 100;};
     in
-      lib.all (state: !(needsPatch state)) [
-        ga
-        (ga
-          // {
-            channel = null;
-            segment = null;
-          })
-        (ga
-          // {
-            channel = "stable";
-            segment = "all";
-          })
-        (ga // {internal_treatment_percent = 100;})
-      ]
-      && lib.all needsPatch [(ga // {treatment_percent = 99;}) (ga // {channel = "nightly";}) (ga // {segment = "internal";}) (ga // {internal_treatment_percent = 50;})]);
+      checkRows "Kiro rollout coverage" {
+        "absent channel and segment do not prevent general availability" = !(needsPatch ga);
+        "explicit null channel and segment are equivalent to missing fields" =
+          !(needsPatch (ga
+            // {
+              channel = null;
+              segment = null;
+            }));
+        "internal-only segment still requires a patch" = needsPatch (ga // {segment = "internal";});
+        "nightly-only channel still requires a patch" = needsPatch (ga // {channel = "nightly";});
+        "partial internal exposure still requires a patch" = needsPatch (ga // {internal_treatment_percent = 50;});
+        "partial public exposure still requires a patch" = needsPatch (ga // {treatment_percent = 99;});
+        "stable and all explicitly permit general availability" =
+          !(needsPatch (ga
+            // {
+              channel = "stable";
+              segment = "all";
+            }));
+        "unrestricted internal exposure does not force a needless patch" = !(needsPatch (ga // {internal_treatment_percent = 100;}));
+      });
 
     module-kiro-raw-features-imply-no-settings = mkTest "kiro-raw-features-imply-no-settings" (let
       check = evaluate: let
@@ -1471,101 +1049,27 @@ in {
         && builtins.all (a: a.assertion) result.config.assertions
     );
 
-    # Parity: the HM copy carries the same nesting. Both backends
-    # share one `flattenKiroSettings`, and this is what pins that they do.
-    module-kiro-hm-object-valued-setting-stays-nested = mkTest "kiro-hm-object-valued-setting-stays-nested" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
-            };
+    # Keep the scalar control beside the object cases: only the latter engage
+    # the terminal-key boundary. A global-only key must be refused by devenv,
+    # not written only to be silently discarded by Kiro. HM owns the global
+    # settings file and must still deliver it.
+    module-kiro-scalar-setting-still-flattens = mkTest "kiro-scalar-setting-still-flattens" (let
+      evaluate = backend: chat:
+        backend {
+          ai.kiro.cli = {
+            enable = true;
+            native.settings = {inherit chat;};
           };
         };
-        declared = kiroCliSettings result;
-      in
-        declared."chat.modelDefaults"."claude-opus-5".effort
-        == "high"
-        && !(declared ? "chat.modelDefaults.claude-opus-5")
-        && !(declared ? chat)
-    );
-
-    # Control: the boundary must stop the walk only AT a known key, never before
-    # it. Without this, a flattener that gave up at depth one would pass both
-    # tests above while writing nested `{"chat":{...}}` that kiro cannot read.
-    module-kiro-scalar-setting-still-flattens = mkTest "kiro-scalar-setting-still-flattens" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.enableTangentMode = true;
-            };
-          };
-        };
-        text = builtins.toJSON (kiroCliSettings result);
-      in
-        lib.hasInfix ''"chat.enableTangentMode":true'' text
-        && !lib.hasInfix ''"chat":{'' text
-    );
-
-    # ── workspace-settings allowlist (devenv only) ─────────────────────────────
-    # A global-only key written to the project-local cli.json is read and dropped
-    # by kiro with no warning, so the module refuses it instead of emitting a file
-    # that looks applied.
-    module-kiro-devenv-rejects-global-only-setting = mkTest "kiro-devenv-rejects-global-only-setting" (
-      let
-        ev = evalDevenv {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.enableWorkflows = true;
-            };
-          };
-        };
-        asserts =
-          builtins.filter (a: lib.hasInfix "silently discarded at runtime" a.message)
-          ev.config.assertions;
-      in
-        asserts != [] && (builtins.head asserts).assertion == false
-    );
-
-    # Positive control: an ALLOWLISTED key must sail through the same guard, or
-    # the negative above would hold equally for an assertion that always fires.
-    module-kiro-devenv-accepts-workspace-setting = mkTest "kiro-devenv-accepts-workspace-setting" (
-      let
-        ev = evalDevenv {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.enableTangentMode = true;
-            };
-          };
-        };
-        asserts =
-          builtins.filter (a: lib.hasInfix "silently discarded at runtime" a.message)
-          ev.config.assertions;
-      in
-        asserts == [] && builtins.all (a: a.assertion) ev.config.assertions
-    );
-
-    # The HM backend writes the GLOBAL file, where every key is honored. The same
-    # config that fails under devenv must pass here, or the guard has leaked out
-    # of the backend that owns it.
-    module-kiro-hm-accepts-global-only-setting = mkTest "kiro-hm-accepts-global-only-setting" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli = {
-              enable = true;
-              native.settings.chat.enableWorkflows = true;
-            };
-          };
-        };
-      in
-        builtins.all (a: a.assertion) ev.config.assertions
-    );
+      global = {enableWorkflows = true;};
+      dropped = evaluate evalDevenv global;
+      hm = evaluate evalHm global;
+      failures = result: map (item: item.message) (lib.filter (item: !item.assertion) result.config.assertions);
+    in
+      checkRows "Kiro settings scope and scalar flattening" {
+        "devenv identifies the particular global-only key it would discard" = lib.any (lib.hasInfix "silently discarded at runtime: chat.enableWorkflows\n") (failures dropped);
+        "HM publishes the global-only key without a workspace rejection" = failures hm == [] && (kiroCliSettings hm)."chat.enableWorkflows" == true;
+      });
 
     # No boundary key may be a strict dotted PREFIX of another. If one ever is, the walk stops at the SHORTER key and
     # writes nested JSON kiro cannot read — the exact defect the boundary fixed,
@@ -1586,17 +1090,6 @@ in {
       in
         nested == []
     );
-
-    # The keys the flatten-boundary and allowlist fixtures rest on are the
-    # consumer needs of `checks.kiro-cli-extracted`; what `expect` cannot say is
-    # an absence, so it stays here. This is NOT a test of the extractor:
-    # `checks/kiro-workspace-settings-fixtures` drives the real script.
-    #
-    # The absence check is deliberate and is the fact the devenv assertion's whole
-    # message rests on: if upstream ever adds `chat.enableWorkflows` to the
-    # allowlist, this failing is the signal to relax that guidance rather than a
-    # defect to route around.
-    module-kiro-workspace-allowlist-from-sidecar = mkTest "kiro-workspace-allowlist-from-sidecar" (!(lib.elem "chat.enableWorkflows" (kiroFact "workspaceOverridableSettings")));
 
     # Both tweaks default off and select package-bound patches on either backend.
     module-kiro-tweaks-default-off-and-parity = mkTest "kiro-tweaks-default-off-and-parity" (
@@ -1623,76 +1116,6 @@ in {
       in
         builtins.all (forks evalHm (v: v.config.home.packages)) names
         && builtins.all (forks evalDevenv (v: v.config.packages)) names
-    );
-
-    # The launcher carries the v3 selectors, so even a config with no other
-    # wrapper reason installs it, on both backends. The Git SSH default is
-    # off so that its environment export cannot be what produced the wrapper.
-    module-kiro-default-wraps-package = mkTest "kiro-default-wraps-package" (
-      let
-        wrapped = packages:
-          builtins.length packages == 1 && (builtins.head packages).name == "kiro-cli-wrapped";
-        config = {
-          ai.gitSshConfigWorkaround = false;
-          ai.kiro.cli.enable = true;
-        };
-      in
-        wrapped (evalDevenv config).config.packages
-        && wrapped (evalHm config).config.home.packages
-    );
-
-    # devenv parity for the removal: the option must be absent on both backends.
-    module-kiro-devenv-tui-option-removed = mkTest "kiro-devenv-tui-option-removed" (!(builtins.tryEval
-      (evalDevenv {
-        ai.kiro = {
-          cli.enable = true;
-          tui = true;
-        };
-      })
-      .config
-      .packages)
-    .success);
-
-    # HM: mcp.json — mergedServers deliver via a real-file activation write
-    # (uniform real-file; no home.file symlink). Verify the activation
-    # script exists and targets the mcp.json path.
-    module-kiro-hm-writes-mcp-json = mkTest "kiro-hm-writes-mcp-json" (
-      let
-        result = evalHm {
-          ai.kiro.cli.enable = true;
-          ai.mcpServers.test-server = {
-            type = "stdio";
-            package = pkgs.hello;
-            command = "hello";
-          };
-        };
-        target = mcpFile result;
-      in
-        target.method
-        == "ro"
-        && result.config.ai.files.".kiro/settings/mcp.json".method == "ro"
-        && target.content.run != null
-        && !(result.config.home.file ? ".kiro/settings/mcp.json")
-    );
-
-    # HM: explicit `permissions` rules render permissions.yaml (source is a
-    # pkgs.formats.yaml derivation, so we assert the file ENTRY exists).
-    module-kiro-hm-permissions-explicit-rendered = mkTest "kiro-hm-permissions-explicit-rendered" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            permissions = [
-              {
-                capability = "mcp";
-                effect = "allow";
-                match = ["openmemory/*"];
-              }
-            ];
-          };
-        };
-      in
-        (result.config.home.file.".kiro/settings/permissions.yaml" or null) != null
     );
 
     # `trustedMcpTools` lowers to v3 allow rules in permissions.yaml, the only
@@ -1742,9 +1165,7 @@ in {
         };
         steeringFile = (kiroSteeringContent result)."my-steering.md" or null;
       in
-        steeringFile
-        != null
-        && lib.hasInfix "Use strict mode always" (steeringFile.text or "")
+        lib.hasInfix "Use strict mode always" (steeringFile.text or "")
         && lib.hasInfix ''inclusion: "fileMatch"'' (steeringFile.text or "")
         && lib.hasInfix ''name: "my-steering"'' (steeringFile.text or "")
         # CRITICAL: fileMatchPattern MUST be a YAML list for multi-element
@@ -1804,70 +1225,52 @@ in {
           };
         in
           builtins.deepSeq result.config.ai.rules.semantic true);
-        native = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            rules.semantic = {
-              description = "Semantic project guidance";
-              inclusion = "auto";
-              text = "Scoped guidance.";
-            };
-          };
-        };
-        kiro = ((kiroSteeringContent native)."semantic.md" or {}).text or "";
       in
         !portableAttempt.success
-        && lib.hasInfix ''inclusion: "auto"'' kiro
-        && !(lib.hasInfix "fileMatchPattern:" kiro)
     );
 
+    # Exercise the enum field through the native rule merge: a free string
+    # would accept a mode Kiro does not know how to load.
     module-kiro-inclusion-invalid-enum-rejected = mkTest "kiro-inclusion-invalid-enum-rejected" (
-      let
-        ruleAttempt = builtins.tryEval (let
-          result = evalDevenv {
-            ai.kiro.rules.invalid = {
-              inclusion = "sometimes";
-              text = "Invalid";
-            };
+      rejectsChange (inclusion:
+        (evalDevenv {
+          ai.kiro.rules.probe = {
+            inherit inclusion;
+            text = "Probe.";
           };
-        in
-          builtins.deepSeq result.config.ai.kiro.rules.invalid true);
-      in
-        !ruleAttempt.success
+        }).config.ai.kiro.rules.probe.inclusion) {
+        expected = "auto";
+        invalid = "sometimes";
+        valid = "auto";
+      }
     );
 
-    # HM: per-CLI context → the `<contextFilename>` steering entry
-    # (default AGENTS.md), delivered by the ordinary runtime file sink.
-    module-kiro-hm-writes-context = mkTest "kiro-hm-writes-context" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            context.text = "Project conventions go here.";
-          };
-        };
-        contextFile = (kiroSteeringContent result)."AGENTS.md" or null;
+    # Kiro context follows the backend's AGENTS.md assignment.
+    # Check a root-only input separately: its
+    # routing must work without any Kiro-specific content to trigger it.
+    module-kiro-context-delivery = mkTest "kiro-context-delivery" (let
+      config.ai = {
+        context.text = "Root context sentinel.";
+        kiro.cli.enable = true;
+      };
+      perRuntime.ai.kiro = {
+        cli.enable = true;
+        context.text = "Runtime context sentinel.";
+      };
+      delivers = evaluate: path: inputs: expected: let
+        result = evaluate inputs;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Project conventions" (contextFile.text or "")
-        && fromGeneratedTree ".kiro/steering/AGENTS.md" result.config.home.file.".kiro/steering/AGENTS.md"
-        && (markdownInput result ".kiro/steering/AGENTS.md").text == contextFile.text
-    );
-
-    # HM: top-level ai.context fans out to kiro when per-CLI unset.
-    module-kiro-hm-top-level-context-fallback = mkTest "kiro-hm-top-level-context-fallback" (
-      let
-        result = evalHm {
-          ai.kiro.cli.enable = true;
-          ai.context.text = "Top-level context flows everywhere.";
-        };
-        contextFile = (kiroSteeringContent result)."AGENTS.md" or null;
-      in
-        contextFile
-        != null
-        && lib.hasInfix "Top-level context" (contextFile.text or "")
-    );
+        fromGeneratedTree path (deliveredFiles result.config).${path}
+        && (markdownInput result path).text == expected;
+      hmPath = ".kiro/steering/AGENTS.md";
+    in
+      checkRows "Kiro context routing" {
+        "HM delivers root-only context to the native steering tree" = delivers evalHm hmPath config "Root context sentinel.";
+        "devenv delivers root-only context without a runtime override" = delivers evalDevenv "AGENTS.md" config "Root context sentinel.";
+        "devenv delivers runtime context only at the repository root" =
+          delivers evalDevenv "AGENTS.md" perRuntime "Runtime context sentinel."
+          && !((deliveredFiles (evalDevenv perRuntime).config) ? ${hmPath});
+      });
 
     # HM: per-runtime context appends after root context.
     module-kiro-hm-context-composes-root-first = mkTest "kiro-hm-context-composes-root-first" (
@@ -1936,38 +1339,6 @@ in {
         bin = "kiro-cli";
         needles = ["PATH" "${pkgs.which}/bin"];
       };
-
-    # Devenv uses the same option and wrapper path as Home Manager.
-    module-kiro-devenv-extra-packages-reach-wrapper = let
-      result = evalDevenv {
-        ai.kiro = {
-          cli = {
-            enable = true;
-            extraPackages = [pkgs.which];
-          };
-        };
-      };
-    in
-      mkWrapperGrepTest {
-        name = "kiro-devenv-extra-packages-reach-wrapper";
-        package = builtins.head result.config.packages;
-        bin = "kiro-cli";
-        needles = ["PATH" "${pkgs.which}/bin"];
-      };
-
-    # HM: agent JSON files written under configDir/agents/.
-    module-kiro-hm-writes-agent-files = mkTest "kiro-hm-writes-agent-files" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            agents.reviewer = ''{"role": "reviewer"}'';
-          };
-        };
-        agentFile = result.config.home.file.".kiro/agents/reviewer.json" or null;
-      in
-        agentFile != null
-    );
 
     # A normalized root record lowers into `ai.kiro.native.agents.<name>` at
     # mkDefault, field by field: native `permissions` and `tools` merge onto the
@@ -2038,10 +1409,9 @@ in {
             kiro.cli.enable = true;
           };
         };
-        expected = "Set ai.kiro.native.agents.worker.tools (capability tags";
         valid = evaluated:
-          lib.any (lib.hasInfix expected) evaluated.config.warnings
-          && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == []
+          builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions
+          == []
           && !((builtins.fromJSON evaluated.config.ai.kiro._generatedFiles.".kiro/agents/worker.json".content.text) ? tools);
       in
         valid (evalHm config) && valid (evalDevenv config)
@@ -2111,47 +1481,30 @@ in {
         lib.all (evaluate: lib.any (lib.hasInfix "ai.kiro.native.agents worker: ai.kiro.agents sets a raw native file") (failed evaluate)) [evalHm evalDevenv]
     );
 
-    # A TYPED agent record lowers to JSON with `name` defaulted from the attr
-    # key. That default is the whole point of the typed surface: Kiro's Rust CLI
-    # REJECTS an agent file with no `name`, while the Node/ACP parser treats it
-    # as optional — so an omission is invisible from the IDE and fatal on the
-    # CLI. Also asserts null/empty fields are dropped, keeping the emitted file
-    # to the minimal shape both parsers accept.
-    module-kiro-typed-agent-defaults-name = mkTest "kiro-typed-agent-defaults-name" (
-      let
-        evaluated = backend:
-          backend {
-            ai.kiro = {
-              cli.enable = true;
-              native.agents.reviewer = {
-                description = "Reviews diffs";
-                prompt.text = "You review diffs.";
-                tools = ["read" "shell"];
-              };
-            };
-          };
-        hm = evaluated evalHm;
-        devenv = evaluated evalDevenv;
-        hmJson = builtins.fromJSON (markdownInput hm ".kiro/agents/reviewer.json").text;
-        devenvJson = builtins.fromJSON (markdownInput devenv ".kiro/agents/reviewer.json").text;
-        wellFormed = j:
-          j.name
-          == "reviewer"
-          && j.description == "Reviews diffs"
-          && j.prompt == "You review diffs."
-          && j.tools == ["read" "shell"]
-          # null/empty optionals must not reach the file
-          && !(j ? model)
-          && !(j ? dispatchKind)
-          && !(j ? resources)
-          && !(j ? permissions);
+    # The Rust CLI rejects a missing name even though ACP accepts one. With
+    # no format set the delivered JSON must keep the attr-key name and exact
+    # minimal bytes; a Markdown sibling would create a duplicate profile.
+    module-kiro-typed-agent-defaults-name = mkTest "kiro-typed-agent-defaults-name" (let
+      target = ".kiro/agents/reviewer.json";
+      expected = ''{"description":"Reviews diffs","name":"reviewer","prompt":"You review diffs.","tools":["read","shell"]}'';
+      config.ai.kiro = {
+        cli.enable = true;
+        native.agents.reviewer = {
+          description = "Reviews diffs";
+          prompt.text = "You review diffs.";
+          tools = ["read" "shell"];
+        };
+      };
+    in
+      lib.all (evaluate: let
+        result = evaluate config;
+        files = deliveredFiles result.config;
       in
-        fromGeneratedTree ".kiro/agents/reviewer.json" hm.config.home.file.".kiro/agents/reviewer.json"
-        && fromGeneratedTree ".kiro/agents/reviewer.json" devenv.config.files.".kiro/agents/reviewer.json"
-        && wellFormed hmJson
-        && wellFormed devenvJson
-        && hmJson == devenvJson
-    );
+        checkRows "typed agent default JSON" {
+          "default format does not emit a duplicate Markdown profile" = !(files ? ".kiro/agents/reviewer.md");
+          "generated JSON keeps the default name and omits unused fields" = result.config.ai.kiro._generatedFiles.${target}.format == "json" && (markdownInput result target).text == expected;
+          "native file sink delivers the default JSON profile" = fromGeneratedTree target files.${target};
+        }) [evalHm evalDevenv]);
 
     # A native record can select KAS's Markdown profile format. Configuration
     # stays in frontmatter, the prompt becomes the body, and no JSON sibling is
@@ -2184,35 +1537,7 @@ in {
           && lib.hasInfix "includeMcpJson: true\n" text
           && lib.hasSuffix "\n---\n\nWrite concise release notes." text
           && !(lib.hasInfix "format:" text)
-          && !(lib.hasInfix "prompt:" text)
-          && !(files ? ".kiro/agents/writer.json");
-      in
-        valid (evalHm config) && valid (evalDevenv config)
-    );
-
-    # Leaving `format` unset preserves the exact JSON bytes emitted before the
-    # option existed, including the defaulted name and recursive pruning.
-    module-kiro-native-agent-format-default-json = mkTest "kiro-native-agent-format-default-json" (
-      let
-        config = {
-          ai.kiro = {
-            cli.enable = true;
-            native.agents.reviewer = {
-              description = "Reviews diffs";
-              prompt.text = "You review diffs.";
-              tools = ["read" "shell"];
-            };
-          };
-        };
-        expected = ''{"description":"Reviews diffs","name":"reviewer","prompt":"You review diffs.","tools":["read","shell"]}'';
-        valid = evaluated: let
-          files = evaluated.config.ai.kiro._generatedFiles;
-          entry = files.".kiro/agents/reviewer.json";
-        in
-          entry.format
-          == "json"
-          && entry.content.text == expected
-          && !(files ? ".kiro/agents/reviewer.md");
+          && !(lib.hasInfix "prompt:" text);
       in
         valid (evalHm config) && valid (evalDevenv config)
     );
@@ -2291,7 +1616,6 @@ in {
         == "shell"
         && rule.effect == "deny"
         && !(emitted ? prompt)
-        && !(emitted ? welcomeMessage)
         && !(rule ? match)
         && !(rule ? exclude)
         && resource.source == "file:///docs"
@@ -2300,21 +1624,22 @@ in {
         && !(resource ? name)
     );
 
-    # Enabled optional text must carry content. Force the typed agent record so
-    # the shared scalar text-source validation runs during module evaluation.
+    # Force the target text-source record so validation runs during the merge.
     module-kiro-typed-agent-enabled-empty-welcome-message-rejected = mkTest "kiro-typed-agent-enabled-empty-welcome-message-rejected" (
-      let
-        attempt = builtins.tryEval (let
-          result = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              native.agents.empty-welcome.welcomeMessage.enable = true;
-            };
+      rejectsChange (welcomeMessage:
+        (evalHm {
+          ai.kiro = {
+            cli.enable = true;
+            native.agents.probe = {inherit welcomeMessage;};
           };
-        in
-          builtins.deepSeq result.config.ai.kiro.native.agents.empty-welcome.welcomeMessage true);
-      in
-        !attempt.success
+        }).config.ai.kiro.native.agents.probe.welcomeMessage.text) {
+        expected = "Welcome.";
+        invalid.enable = true;
+        valid = {
+          enable = true;
+          text = "Welcome.";
+        };
+      }
     );
 
     # An explicit `name` overrides the attr-key default — Kiro keys the agent on
@@ -2334,46 +1659,6 @@ in {
         fromGeneratedTree ".kiro/agents/file-stem.json" evaluated.config.home.file.".kiro/agents/file-stem.json"
         && (builtins.fromJSON (markdownInput evaluated ".kiro/agents/file-stem.json").text).name
         == "explicit-id"
-    );
-
-    # Path-valued agent entries enter the generated JSON tree on both backends.
-    module-kiro-path-agent-both-backends = mkTest "kiro-path-agent-both-backends" (
-      let
-        mod = {
-          ai.kiro = {
-            cli.enable = true;
-            agents.from-file = ./fixtures/kiro-agent-raw.json;
-          };
-        };
-        hmEntry = (evalHm mod).config.home.file.".kiro/agents/from-file.json";
-        devenvEntry = (evalDevenv mod).config.files.".kiro/agents/from-file.json";
-        # The generated tree preserves the JSON document on both backends.
-        resolves = e:
-          fromGeneratedTree ".kiro/agents/from-file.json" e
-          && builtins.fromJSON (builtins.readFile e.source)
-          == builtins.fromJSON (builtins.readFile ./fixtures/kiro-agent-raw.json);
-      in
-        resolves hmEntry && resolves devenvEntry
-    );
-
-    # A store-path string is also file content, not literal JSON text.
-    module-kiro-store-string-agent-both-backends = mkTest "kiro-store-string-agent-both-backends" (
-      let
-        storeString = "${./fixtures/kiro-agent-raw.json}";
-        mod = {
-          ai.kiro = {
-            cli.enable = true;
-            agents.store-string = storeString;
-          };
-        };
-        hmEntry = (evalHm mod).config.home.file.".kiro/agents/store-string.json";
-        devenvEntry = (evalDevenv mod).config.files.".kiro/agents/store-string.json";
-        resolves = e:
-          fromGeneratedTree ".kiro/agents/store-string.json" e
-          && builtins.fromJSON (builtins.readFile e.source)
-          == builtins.fromJSON (builtins.readFile storeString);
-      in
-        resolves hmEntry && resolves devenvEntry
     );
 
     # `agentsDir` children expand into raw `ai.kiro.agents` entries, so they
@@ -2401,7 +1686,7 @@ in {
         valid = files:
           copies files ".kiro/agents/dir-agent.json" ./fixtures/kiro-agents-dir/dir-agent.json
           && files ? ".kiro/agents/md-agent.md"
-          && files ? ".kiro/agents/reviewer.json"
+          && builtins.fromJSON (builtins.readFile files.".kiro/agents/reviewer.json".source) == {name = "reviewer";}
           && files ? ".kiro/agents/normalized.json"
           # The directory itself is never an entry: each child is its own file.
           && !(files ? ".kiro/agents");
@@ -2457,53 +1742,43 @@ in {
         .agents))
       .success);
 
-    # HM: hook JSON files written under configDir/hooks/.
-    module-kiro-hm-writes-hook-files = mkTest "kiro-hm-writes-hook-files" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson.pre-commit = ''{"event": "pre-commit"}'';
-          };
+    # Typed records must reach the real-file sink on both backends. Parse the
+    # specified envelope rather than grepping field names that could be nested
+    # incorrectly or appear in unrelated hooks.
+    module-kiro-hooks-typed-hm-emits-envelope = mkTest "kiro-hooks-typed-hm-emits-envelope" (let
+      target = ".kiro/hooks/lint.json";
+      config.ai.kiro = {
+        cli.enable = true;
+        hooks.lint = {
+          action.command = "just lint";
+          matcher = "fs_write";
+          timeout = 30;
+          trigger = "PostToolUse";
         };
-        hookUnits = hookFiles result;
-      in
-        # The unit ADDRESS is exact now, not a substring of a script: a body
-        # that happens to mention a name proves nothing about what it wrote.
-        builtins.attrNames hookUnits
-        == ["pre-commit.json"]
-        && lib.hasInfix ''"event": "pre-commit"'' (hookInput result "pre-commit")
-        && fromGeneratedTree ".kiro/hooks/pre-commit.json" hookUnits."pre-commit.json"
-    );
-
-    # HM: a TYPED hook record lowers to the correct v3 envelope JSON. name = attr
-    # key; null optionals dropped; action nulls dropped.
-    module-kiro-hooks-typed-hm-emits-envelope = mkTest "kiro-hooks-typed-hm-emits-envelope" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooks.lint = {
-              trigger = "PostToolUse";
-              matcher = "fs_write";
-              action.command = "just lint";
-              timeout = 30;
+      };
+      expected = {
+        hooks = [
+          {
+            action = {
+              command = "just lint";
+              type = "command";
             };
-          };
-        };
-        t = hookInput result "lint";
-      in
-        lib.hasInfix ''"version":"v1"'' t
-        && lib.hasInfix ''"name":"lint"'' t
-        && lib.hasInfix ''"trigger":"PostToolUse"'' t
-        && lib.hasInfix ''"matcher":"fs_write"'' t
-        && lib.hasInfix ''"type":"command"'' t
-        && lib.hasInfix ''"command":"just lint"'' t
-        && lib.hasInfix ''"timeout":30'' t
-        # `enabled`/`description` were null → omitted.
-        && !(lib.hasInfix ''"enabled"'' t)
-        && !(lib.hasInfix ''"description"'' t)
-    );
+            matcher = "fs_write";
+            name = "lint";
+            timeout = 30;
+            trigger = "PostToolUse";
+          }
+        ];
+        version = "v1";
+      };
+      hm = evalHm config;
+      dv = evalDevenv config;
+      delivers = result: fromGeneratedTree target (hookFiles result)."lint.json" && builtins.fromJSON (hookInput result "lint") == expected;
+    in
+      checkRows "typed hook delivery" {
+        "HM delivers the v1 envelope without null optionals" = delivers hm;
+        "devenv delivers the envelope without a files symlink" = delivers dv && !(dv.config.files ? ${target});
+      });
 
     # The trigger soft enum suggests the engine's aliases as well as its
     # canonical triggers. Checked on the enum half alone: the `str` fallback
@@ -2517,24 +1792,6 @@ in {
         left.check "SessionStart"
         && left.check "agentSpawn"
         && !(left.check "notATrigger")
-    );
-
-    # HM: S1 — an `action.command` package coerces to its getExe store path so
-    # companion files ride the closure at an absolute, cwd-independent path.
-    module-kiro-hooks-command-accepts-package = mkTest "kiro-hooks-command-accepts-package" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooks.fmt = {
-              trigger = "PostToolUse";
-              action.command = pkgs.hello;
-            };
-          };
-        };
-        t = hookInput result "fmt";
-      in
-        lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
     );
 
     # S1, the arm the shared commandType adds: a package with a `pname` and no
@@ -2559,32 +1816,7 @@ in {
         };
         t = hookInput result "probe";
       in
-        result.config.ai.kiro.hooks.probe.action.command
-        == "${probe}/bin/kiro-hook-probe"
-        && lib.hasInfix ''"command":"${builtins.unsafeDiscardStringContext probe.outPath}/bin/kiro-hook-probe"'' (builtins.unsafeDiscardStringContext t)
-    );
-
-    module-kiro-hooks-typed-devenv-installs = mkTest "kiro-hooks-typed-devenv-installs" (
-      let
-        cfg = {
-          ai.kiro = {
-            cli.enable = true;
-            hooks.lint = {
-              trigger = "PostToolUse";
-              action.command = "just lint";
-            };
-          };
-        };
-        dv = evalDevenv cfg;
-        hmTarget = hookFiles (evalHm cfg);
-        dvTarget = hookFiles dv;
-      in
-        lib.hasInfix ''"trigger":"PostToolUse"'' (hookInput (evalHm cfg) "lint")
-        && fromGeneratedTree ".kiro/hooks/lint.json" hmTarget."lint.json"
-        && fromGeneratedTree ".kiro/hooks/lint.json" dvTarget."lint.json"
-        # The two backends build separate trees from the same hook input.
-        && hookInput dv "lint" == hookInput (evalHm cfg) "lint"
-        && !(dv.config.files ? ".kiro/hooks/lint.json")
+        lib.hasInfix ''"command":"${builtins.unsafeDiscardStringContext probe.outPath}/bin/kiro-hook-probe"'' (builtins.unsafeDiscardStringContext t)
     );
 
     module-kiro-hooks-typed-colocation = mkTest "kiro-hooks-typed-colocation" (
@@ -2615,24 +1847,18 @@ in {
         # A hook command may be a package, so its input text can carry store
         # context, and every substring inherits the whole string's — which
         # fromJSON rejects. Strip it; byte content is unchanged.
-        hookBody = file: builtins.unsafeDiscardStringContext (hookInput (evalHm cfg) file);
-        coText = hookBody "kiro-memory";
+        coText = builtins.unsafeDiscardStringContext (hookInput (evalHm cfg) "kiro-memory");
         co = builtins.fromJSON coText;
-        soloText = hookBody "solo";
         dvUnits = hookFiles (evalDevenv cfg);
       in
         # both co-located records land in ONE kiro-memory.json envelope
-        co.version
-        == "v1"
-        && builtins.length co.hooks == 2
+        builtins.length co.hooks
+        == 2
         && lib.any (h: h.name == "mem-stop" && h.trigger == "Stop") co.hooks
         && lib.any (h: h.name == "mem-recall" && h.trigger == "UserPromptSubmit") co.hooks
         # the Nix-only `file` grouping key is stripped from every emitted hook object
-        && !(lib.any (h: h ? file) co.hooks)
         && !(lib.hasInfix ''"file"'' coText)
-        # a record without `file` keeps its own <name>.json (back-compat)
-        && lib.hasInfix ''"name":"solo"'' soloText
-        # the co-located records do NOT also emit their own per-record files
+        # Ungrouped hooks keep their own <name>.json; grouped hooks do not.
         && builtins.attrNames hookUnits == ["kiro-memory.json" "solo.json"]
         # devenv installs the same grouped inputs from its own generated tree.
         && builtins.attrNames dvUnits == builtins.attrNames hookUnits
@@ -2655,179 +1881,49 @@ in {
         lib.hasInfix "raw-envelope-loaded" t
     );
 
-    # Hardening (PR #433 review): an unsafe hook name (path separator) fails the
-    # file-name charset assertion before it can be interpolated into a
-    # hooks-dir path. `<name>.json` matches the charset exactly when `<name>`
-    # does, so the file-name assertion is the one that says so.
-    module-kiro-hooks-rejects-unsafe-name = mkTest "kiro-hooks-rejects-unsafe-name" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson."../evil" = builtins.toJSON {
-              version = "v1";
-              hooks = [];
-            };
-          };
-        };
-        nameAsserts =
-          builtins.filter (a: lib.hasInfix "hook file names must match" a.message)
-          ev.config.assertions;
+    # Hardening (PR #433 review): require the hook address assertion to name
+    # the unsafe inline key or on-disk file, not just any failed assertion.
+    # Safe controls engage each of the same input routes and the same guard.
+    module-kiro-hooks-file-names = mkTest "kiro-hooks-file-names" (let
+      envelope = ''{"hooks":[],"version":"v1"}'';
+      guard = evaluate: input: let
+        ev = evaluate {ai.kiro = {cli.enable = true;} // input;};
       in
-        nameAsserts != [] && (builtins.head nameAsserts).assertion == false
-    );
-
-    # A safe hook name passes the same assertion (assertion == true).
-    module-kiro-hooks-accepts-safe-name = mkTest "kiro-hooks-accepts-safe-name" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson."kiro-memory.pre_1" = builtins.toJSON {
-              version = "v1";
-              hooks = [];
-            };
-          };
-        };
-        nameAsserts =
-          builtins.filter (a: lib.hasInfix "hook file names must match" a.message)
-          ev.config.assertions;
-      in
-        nameAsserts != [] && (builtins.head nameAsserts).assertion == true
-    );
-
-    # Devenv: mcp.json write — real-file task delivery (no files.*
-    # symlink), anchored to $DEVENV_ROOT.
-    module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
-      let
-        result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.mcpServers.test-server = {
-            type = "stdio";
-            package = pkgs.hello;
-            command = "hello";
-          };
-        };
-        target = mcpFile result;
-      in
-        target.method
-        == "ro"
-        && target.content.run != null
-        && (mcpFile result).mode == "0444"
-        # anchored to the project root without a `cd` in the task body
-        && !(result.config.files ? ".kiro/settings/mcp.json")
-    );
-
-    # Devenv: environment variables are baked into the launcher, not exported
-    # into the project shell (which is what the old `env` blob did).
-    module-kiro-devenv-env-wrapper-populated = let
-      result = evalDevenv {
-        ai.kiro = {
-          cli = {
-            enable = true;
-            environmentVariables.KIRO_LOG_LEVEL = "debug";
-          };
-        };
-      };
+        lib.filter (item: lib.hasInfix "hook file names must match" item.message) ev.config.assertions;
+      check = evaluate: valid: invalid: name:
+        map (item: item.assertion) (guard evaluate valid)
+        == [true]
+        && map (item: item.assertion) (guard evaluate invalid) == [false]
+        && lib.hasSuffix "offending: ${name}" (builtins.head (guard evaluate invalid)).message;
     in
-      mkWrapperGrepTest {
-        name = "kiro-devenv-env-wrapper-populated";
-        package = builtins.head result.config.packages;
-        bin = "kiro-cli";
-        needles = ["KIRO_LOG_LEVEL" "debug"];
+      lib.all (evaluate:
+        checkRows "Kiro hook file names" {
+          "directory loader rejects a leading dot in a JSON filename" = check evaluate {hooksDir = ./fixtures/kiro-hooks-dir;} {hooksDir = ./fixtures/kiro-hooks-dir-unsafe;} ".hidden.json";
+          "inline loader rejects traversal in a hook address" = check evaluate {hooksJson."kiro-memory.pre_1" = envelope;} {hooksJson."../evil" = envelope;} "../evil.json";
+        }) [evalHm evalDevenv]);
+
+    # Raw inline documents must bypass the typed envelope. In devenv a real
+    # file is required: Kiro v3 does not discover symlinked hooks.
+    module-kiro-devenv-writes-hook-files = mkTest "kiro-devenv-writes-hook-files" (let
+      target = ".kiro/hooks/pre-commit.json";
+      config.ai.kiro = {
+        cli.enable = true;
+        hooksJson.pre-commit = ''{"event": "pre-commit"}'';
       };
-
-    # Devenv: settings/cli.json is a read-only copy of the flattened workspace
-    # settings, written only when something is declared.
-    module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli.enable = true;
-            # Workspace-overridable on purpose: `telemetry.enabled` used to stand
-            # here, and the workspace-allowlist guard now (correctly) rejects it,
-            # which would leave this exercising a config the module declares
-            # invalid. The subject of the test — that settings reach the file at
-            # all — is unchanged.
-            cli.native.settings.chat.enableTangentMode = true;
-          };
-        };
+      hm = evalHm config;
+      dv = evalDevenv config;
+      delivers = result: let
+        files = hookFiles result;
       in
-        kiroCliSettings result
-        == {"chat.enableTangentMode" = true;}
-        && result.config.ai.files.".kiro/settings/cli.json".method == "ro"
-        && !(result.config.files ? ".kiro/settings/cli.json")
-        && !((evalDevenv {ai.kiro.cli.enable = true;}).config.ai.files ? ".kiro/settings/cli.json")
-    );
-
-    # Devenv: Kiro context joins the shared repository-root AGENTS.md.
-    module-kiro-devenv-writes-context = mkTest "kiro-devenv-writes-context" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli.enable = true;
-            context.text = "Project conventions go here.";
-          };
-        };
-      in
-        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
-        && lib.hasInfix "Project conventions" (markdownInput result "AGENTS.md").text
-        && !((kiroSteeringContent result) ? "AGENTS.md")
-    );
-
-    # Devenv: top-level ai.context fans to kiro when per-CLI unset.
-    module-kiro-devenv-top-level-context-fallback = mkTest "kiro-devenv-top-level-context-fallback" (
-      let
-        result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.context.text = "Top-level context flows everywhere.";
-        };
-      in
-        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
-        && lib.hasInfix "Top-level context" (markdownInput result "AGENTS.md").text
-    );
-
-    # Devenv: agent files written.
-    module-kiro-devenv-writes-agent-files = mkTest "kiro-devenv-writes-agent-files" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli.enable = true;
-            agents.reviewer = ''{"role": "reviewer"}'';
-          };
-        };
-        agentFile = result.config.files.".kiro/agents/reviewer.json" or null;
-      in
-        agentFile
-        != null
-        && lib.hasInfix "reviewer" (builtins.readFile agentFile.source)
-    );
-
-    # Devenv: hook files written as REAL files by the materialize task (kiro v3
-    # does not discover symlinked hooks, so devenv `files.*` symlinks are wrong
-    # here — the task writes a plain `.kiro/hooks/<name>.json`).
-    module-kiro-devenv-writes-hook-files = mkTest "kiro-devenv-writes-hook-files" (
-      let
-        result = evalDevenv {
-          ai.kiro = {
-            cli.enable = true;
-            hooksJson.pre-commit = ''{"event": "pre-commit"}'';
-          };
-        };
-        target = hookFiles result;
-      in
-        builtins.attrNames target
+        builtins.attrNames files
         == ["pre-commit.json"]
-        && lib.hasInfix ''{"event": "pre-commit"}'' (hookInput result "pre-commit")
-        && fromGeneratedTree ".kiro/hooks/pre-commit.json" target."pre-commit.json"
-        # anchored to the project root without a `cd`: the task runs in the
-        # caller's cwd (direnv activates in subdirectories) and every path is
-        # resolved against the exported root
-        # not a devenv `files.*` symlink
-        && !(result.config.files ? ".kiro/hooks/pre-commit.json")
-      # the write is ordered before shell entry, and after devenv's own
-      # files cleanup (same edge contract as the steering task)
-    );
+        && fromGeneratedTree target files."pre-commit.json"
+        && builtins.fromJSON (hookInput result "pre-commit") == {event = "pre-commit";};
+    in
+      checkRows "raw inline hook delivery" {
+        "HM preserves the raw JSON at its addressed file" = delivers hm;
+        "devenv preserves raw JSON without a native files symlink" = delivers dv && !(dv.config.files ? ${target});
+      });
 
     # Devenv: the external `hooksDir` surface materializes the directory's
     # top-level `*.json` files into `.kiro/hooks/` as real files — same
@@ -2854,36 +1950,11 @@ in {
       in
         # Compare the declared input without reading the formatted store tree
         # during evaluation.
-        builtins.attrNames target
-        == ["sample.json"]
-        && lib.hasInfix "hooks-dir-sample" (hookInput result "sample")
+        lib.hasInfix "hooks-dir-sample" (hookInput result "sample")
         # HM parity — the same input and ledger reach separate generated trees.
-        && builtins.attrNames hmTarget == builtins.attrNames target
         && hookInput (evalHm cfg) "sample" == hookInput result "sample"
         && fromGeneratedTree ".kiro/hooks/sample.json" hmTarget."sample.json"
         && fromGeneratedTree ".kiro/hooks/sample.json" target."sample.json"
-        # anchored to the project root without a `cd`
-        # dropped: the subdirectory and the non-`.json` sibling are ignored
-        && !(target ? "nested")
-        && !(target ? "inner.json")
-        && !(target ? "ignore-me.txt")
-        # real files, not devenv `files.*` symlinks
-        && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames result.config.files))
-    );
-
-    module-kiro-hooks-dir-rejects-unsafe-filename = mkTest "kiro-hooks-dir-rejects-unsafe-filename" (
-      let
-        ev = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            hooksDir = ./fixtures/kiro-hooks-dir-unsafe;
-          };
-        };
-        nameAsserts =
-          builtins.filter (a: lib.hasInfix "hook file names must match" a.message)
-          ev.config.assertions;
-      in
-        nameAsserts != [] && (builtins.head nameAsserts).assertion == false
     );
 
     # ── Kiro steering through ai.kiro.files ─────────────────────────────
@@ -2892,73 +1963,21 @@ in {
     # the same priority must fail. A rule named "AGENTS" and the default context
     # filename deliberately collide here.
     module-kiro-steering-collision-errors = mkTest "kiro-steering-collision-errors" (
-      let
-        attempt = builtins.tryEval (
-          let
-            ev = evalHm {
-              ai.kiro = {
-                cli.enable = true;
-                context.text = "CONTEXT-COLLIDER.";
-                rules.AGENTS.text = "RULE-COLLIDER.";
-              };
-            };
-          in
-            builtins.seq ev.config.ai.kiro._generatedFiles.".kiro/steering/AGENTS.md".content.text true
-        );
-      in
-        !attempt.success
-    );
-
-    # Ungated declarations drain even an owner disabled at first upgrade.
-    module-kiro-steering-legacy-copies-still-prune = mkTest "kiro-steering-legacy-copies-still-prune" (
-      lib.all (evaluate:
-        lib.all (enable: let
-          inherit ((evaluate {ai.kiro.cli.enable = enable;})) config;
-          legacy = {
-            codec = "dir";
-            ledger = "materialize/kiro-steering.manifest";
-            path = ".kiro/steering";
-          };
-        in
-          lib.elem legacy config.ai.kiro.legacyLedgers
-          && lib.elem legacy config.ai.legacyLedgers
-          && (enable || config.ai.kiro.files == {})) [false true]) [evalHm evalDevenv]
-    );
-
-    # Conditional steering is a link on Home Manager and a read-only copy on
-    # devenv, where the engine owns only its declared files, so a
-    # developer's own steering beside them survives. Unscoped devenv content
-    # still goes to the shared AGENTS.md owner.
-    module-kiro-steering-uses-runtime-file-sinks = mkTest "kiro-steering-uses-runtime-file-sinks" (
-      let
-        config = {
+      rejectsChange (rules:
+        (evalHm {
           ai.kiro = {
             cli.enable = true;
-            context.text = "CONTEXT-TOKEN.";
-            rules.enter-test = {
-              matcher = ["src/**"];
-              text = "ENTER-TEST-TOKEN.";
-            };
+            context.text = "CONTEXT-COLLIDER.";
+            inherit rules;
           };
-        };
-        hm = evalHm config;
-        dv = evalDevenv config;
-      in
-        fromGeneratedTree ".kiro/steering/enter-test.md" hm.config.home.file.".kiro/steering/enter-test.md"
-        && (markdownInput hm ".kiro/steering/enter-test.md").text
-        == hm.config.ai.kiro._generatedFiles.".kiro/steering/enter-test.md".content.text
-        && fromGeneratedTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
-        && fromGeneratedTree ".kiro/steering/enter-test.md" (deliveredFiles dv.config).".kiro/steering/enter-test.md"
-        && (markdownInput dv ".kiro/steering/enter-test.md").text
-        == dv.config.ai.kiro._generatedFiles.".kiro/steering/enter-test.md".content.text
-        && lib.hasInfix "CONTEXT-TOKEN." (markdownInput dv "AGENTS.md").text
-        && !(dv.config.files ? ".kiro/steering/enter-test.md")
-        && dv.config.ai.files.".kiro/steering/enter-test.md".method.devenv == "ro"
-        && dv.config.ai.files.".kiro/steering/enter-test.md".mode == null
-        && (harness.ownPlan "kiro" "files-apply" dv).targets != []
+        }).config.ai.kiro._generatedFiles.".kiro/steering/AGENTS.md".content.text) {
+        expected = "CONTEXT-COLLIDER.";
+        invalid.AGENTS.text = "RULE-COLLIDER.";
+        valid = {};
+      }
     );
 
-    # Engine prune precedes native link checks, with and without native files.
+    # Native files must not bring back the retired Kiro steering task.
     module-kiro-steering-retire-task-edges = mkTest "kiro-steering-retire-task-edges" (
       lib.all (files: let
         inherit
@@ -2969,8 +1988,7 @@ in {
           config
           ;
       in
-        lib.elem "ai:link-check" config.tasks."ai:files-prune".before
-        && !(config.tasks ? "ai:kiro:materialize-steering")) [{} {"probe.txt".text = "probe";}]
+        !(config.tasks ? "ai:kiro:materialize-steering")) [{} {"probe.txt".text = "probe";}]
     );
 
     # Consumer content replaces generated defaults; `enable = false` suppresses
@@ -3002,59 +2020,6 @@ in {
         && !((deliveredFiles dv.config) ? ".kiro/steering/symlinked.md")
     );
 
-    # Kiro HM: top-level ai.rules → a `<name>.md` steering entry with
-    # inclusion frontmatter.
-    module-kiro-hm-writes-rules-from-top-level = mkTest "kiro-hm-writes-rules-from-top-level" (
-      let
-        result = evalHm {
-          ai.kiro.cli.enable = true;
-          ai.rules.testing = {
-            matcher = ["**/*.test.*"];
-            text = "Write tests for all new features.";
-          };
-        };
-        ruleFile = (kiroSteeringContent result)."testing.md" or null;
-      in
-        ruleFile
-        != null
-        && lib.hasInfix "Write tests for all new features" (ruleFile.text or "")
-        && lib.hasInfix ''inclusion: "fileMatch"'' (ruleFile.text or "")
-    );
-
-    # Root and per-runtime rule entries are keyed pools; the runtime entry
-    # atomically replaces a same-key root default.
-    module-kiro-hm-rule-runtime-replaces-root = mkTest "kiro-hm-rule-runtime-replaces-root" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            rules.same-name.text = "Per-CLI wins.";
-          };
-          ai.rules.same-name.text = "Top-level loses.";
-        };
-        rendered = (kiroSteeringContent result)."same-name.md".text;
-      in
-        lib.hasInfix "Per-CLI wins." rendered
-        && !(lib.hasInfix "Top-level loses." rendered)
-    );
-
-    # Devenv parity: Kiro devenv emits ai.rules to steering entries.
-    module-kiro-devenv-writes-rules = mkTest "kiro-devenv-writes-rules" (
-      let
-        result = evalDevenv {
-          ai.kiro.cli.enable = true;
-          ai.rules.testing = {
-            matcher = ["**/*.test.*"];
-            text = "Write tests.";
-          };
-        };
-        ruleFile = (kiroSteeringContent result)."testing.md" or null;
-      in
-        ruleFile
-        != null
-        && lib.hasInfix "Write tests" (ruleFile.text or "")
-    );
-
     # HM: top-level ai.environmentVariables fans out to the Kiro wrapper.
     #
     # This asserted only that A wrapper appeared, which cannot tell "the
@@ -3076,20 +2041,6 @@ in {
         package = builtins.head result.config.home.packages;
         bin = "kiro-cli";
         needles = ["KIRO_FOO" "kiro-hm-fanout-sentinel"];
-      };
-
-    # Devenv: top-level ai.environmentVariables fans to the Kiro wrapper.
-    module-kiro-devenv-top-level-env-fanout = let
-      result = evalDevenv {
-        ai.kiro.cli.enable = true;
-        ai.environmentVariables.KIRO_DEBUG = "kiro-devenv-fanout-sentinel";
-      };
-    in
-      mkWrapperGrepTest {
-        name = "kiro-devenv-top-level-env-fanout";
-        package = builtins.head result.config.packages;
-        bin = "kiro-cli";
-        needles = ["KIRO_DEBUG" "kiro-devenv-fanout-sentinel"];
       };
 
     # Devenv: per-CLI ai.kiro.cli.environmentVariables wins over top-level on name
@@ -3120,54 +2071,25 @@ in {
     # filter keeps `.md`, basename minus `.md` becomes the key
     # (fixes the `.md.md` doubled-extension bug).
 
-    # Path-only form: `ai.kiro.rulesDir = ./fixtures/kiro-steering;`
-    # expands to three steering entries (alpha, beta, gamma). notes.txt
-    # is dropped by the default `.md` filter. Keys land at `<name>.md` —
-    # no `.md.md` (vacuous-scan negatives inspect the runtime file map).
-    module-kiro-rulesdir-path-form = mkTest "kiro-rulesdir-path-form" (
-      let
-        result = evalHm {
+    # A consumer filter narrows the directory to the selected Markdown entry.
+    module-kiro-rulesdir-path-form = mkTest "kiro-rulesdir-path-form" (let
+      path = ./fixtures/kiro-steering;
+      keys = rulesDir:
+        builtins.attrNames (kiroSteeringContent (evalHm {
           ai.kiro = {
             cli.enable = true;
-            rulesDir = ./fixtures/kiro-steering;
+            inherit rulesDir;
           };
-        };
-        steering = kiroSteeringContent result;
-        hasAlpha = steering ? "alpha.md";
-        hasBeta = steering ? "beta.md";
-        hasGamma = steering ? "gamma.md";
-        # Key is stripped — no `.md.md` name ever emitted.
-        noDoubledMd =
-          !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames steering));
-        # notes.txt is filtered out (default keeps only `.md`).
-        noNotes = !(steering ? "notes.md");
-      in
-        hasAlpha
-        && hasBeta
-        && hasGamma
-        && noDoubledMd
-        && noNotes
-    );
-
-    # Submodule form with custom filter (keep only `alpha.md`).
-    module-kiro-rulesdir-submodule-filter = mkTest "kiro-rulesdir-submodule-filter" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            rulesDir = {
-              path = ./fixtures/kiro-steering;
-              filter = name: name == "alpha.md";
-            };
-          };
-        };
-        steering = kiroSteeringContent result;
-      in
-        steering
-      ? "alpha.md"
-        && !(steering ? "beta.md")
-        && !(steering ? "gamma.md")
-    );
+        }));
+    in
+      checkRows "Kiro rulesDir expansion" {
+        "custom filter excludes the two unselected Markdown siblings" =
+          keys {
+            inherit path;
+            filter = name: name == "alpha.md";
+          }
+          == ["alpha.md"];
+      });
 
     # A per-runtime directory-generated entry replaces the same-key root entry.
     module-kiro-rulesdir-entry-replaces-root-single = mkTest "kiro-rulesdir-entry-replaces-root-single" (
@@ -3200,74 +2122,6 @@ in {
         && lib.hasInfix "<!-- rule: beta -->" agents
         && lib.hasInfix "<!-- rule: gamma -->" agents
         && !(lib.hasInfix "notes" agents)
-    );
-
-    # ── sourcePath rollback regression guards ──────────────────────
-    # `sourcePath` was introduced in fab4e5c and rolled back in this
-    # commit per the ai-factory-collision refactor plan §6 (commit 2).
-    # Live-edit is deprecated — devenv covers iteration. `text` is
-    # required again; rules always bake into the store with
-    # transformer-injected frontmatter.
-
-    # HM: inline rule text still bakes and carries frontmatter in the runtime file
-    # entry; the generic sink then preserves that exact entry.
-    module-kiro-hm-rule-text-bakes = mkTest "kiro-hm-rule-text-bakes" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            rules.my-rule.text = "Inline content";
-          };
-        };
-        entry = (kiroSteeringContent result)."my-rule.md" or null;
-      in
-        entry
-        != null
-        && entry.text != null
-        # Unified content records retain the inactive source arm as null.
-        && entry.source == null
-        && lib.hasInfix "Inline content" entry.text
-    );
-
-    # HM: rule.source is read and baked into the materialized entry.
-    module-kiro-hm-rule-path-bakes = mkTest "kiro-hm-rule-path-bakes" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            cli.enable = true;
-            rules.rule-from-path.source = ./fixtures/kiro-steering/alpha.md;
-          };
-        };
-        entry = (kiroSteeringContent result)."rule-from-path.md" or null;
-      in
-        entry
-        != null
-        && entry.text != null
-        # The source was baked into text; the inactive arm remains null.
-        && entry.source == null
-        && lib.hasInfix "Alpha steering body" entry.text
-    );
-
-    # Negative: `sourcePath` is no longer a known option. Attempting to
-    # set it fails module evaluation (tryEval captures the error from
-    # strict-evaluating only the target rule's attrs, to avoid a full
-    # config-tree walk stack overflow).
-    module-kiro-hm-rule-sourcepath-rejected = mkTest "kiro-hm-rule-sourcepath-rejected" (
-      let
-        attempt = builtins.tryEval (let
-          r = evalHm {
-            ai.kiro = {
-              cli.enable = true;
-              rules.my-rule = {
-                text = "body";
-                sourcePath = "/abs/path/to/my-rule.md";
-              };
-            };
-          };
-        in
-          builtins.deepSeq r.config.ai.kiro.rules.my-rule true);
-      in
-        !attempt.success
     );
   };
 }

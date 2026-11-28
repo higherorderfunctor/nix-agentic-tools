@@ -7,13 +7,13 @@
   "block_roles": [],
   "env": {},
   "expected": {
-    "description": "Documented safety requirement holds",
+    "description": "Out-of-order merge recovery fetches again before rewriting only the still-unmerged commits",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "R1-09",
   "kind": "static",
   "path": "skills/stack-submit/SKILL.md",
-  "pattern": "Out-of-order merge recovery[\\s\\S]*re-run pre-flight",
+  "pattern": "^### Out-of-order merge recovery\\n(?:(?!^#).)*re-run pre-flight step 5 \\(it fetches\\), then run the squash-merge recipe above\\s+with `\\$SELECTED` limited to what remains",
   "present": true,
   "topology": "T4"
 }

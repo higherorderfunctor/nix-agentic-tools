@@ -1,9 +1,11 @@
+# cspell:ignore nonloopback
 {
   harness,
   lib,
   pkgs,
   ...
 }: let
+  inherit (harness) checkRows rejectsChange;
   redact = import ../../../lib/redact {inherit lib;};
   backend = import ./backend.nix {inherit harness lib;};
   inherit (backend) account;
@@ -31,7 +33,7 @@
     };
   };
   configs = lib.mapAttrs (name: case: (evaluate name case.accounts).config) cases;
-  proxy = import ./proxy.nix {inherit harness lib pkgs;};
+  proxy = import ./proxy.nix {inherit harness lib;};
   wrapper = config: name: builtins.head config.ai.services.${name}.command;
   snapshot = config: name: {
     activation = builtins.attrNames config.ai.mcp-oauth.activation;
@@ -42,54 +44,102 @@
     restartOnChange = config.ai.services.${name}.restartOnChange;
     services = builtins.attrNames config.ai.mcp-oauth.services;
   };
-  # Each bad declaration must fail while forcing the option, before a wrapper
-  # or daemon can consume it. The valid control uses the identical forcing.
-  accepts = backend: accounts: (builtins.tryEval (builtins.deepSeq (evaluate backend accounts).config.ai.mcp-oauth.accounts true)).success;
-  refused =
-    [
-      {"../escape" = account;}
-      {work = account // {clientId = "plaintext-canary";};}
-      {work = account // {clientId = redact.command "/bin/read-secret";};}
-      {work = account // {clientSecret = account.clientId;};}
-      {work = account // {redirectUri = "https://localhost:8080/callback";};}
-      {work = account // {redirectUri = "http://example.com:8080/callback";};}
-      {work = account // {redirectUri = "http://localhost:0/callback";};}
-      {work = account // {redirectUri = "http://localhost:65536/callback";};}
-      {work = account // {redirectUri = "http://localhost:8080";};}
-      {work = account // {redirectUri = "http://localhost:8080/callback?code=x";};}
-      {work = account // {scopes = [];};}
-      {work = account // {scopes = ["data:read injected"];};}
-      {work = account // {provider = account.provider // {extraScopes = ["keys:read injected"];};};}
-      {work = account // {provider = account.provider // {authorizeUrl = 42;};};}
-      {work = account // {provider = account.provider // {tokenUrl = 42;};};}
-    ]
-    # Required credentials, provider endpoints and scopes have no implicit fallback.
-    ++ map (field: {work = builtins.removeAttrs account [field];}) ["clientId" "clientSecret" "provider" "scopes"]
-    ++ map (field: {work = account // {provider = builtins.removeAttrs account.provider [field];};}) ["authorizeUrl" "tokenUrl"]
-    # Reject non-positive lifetimes and values outside the nullable integer contract.
-    ++ map (value: {work = account // {provider = account.provider // {loginLifetimeDays = value;};};}) [0 (-1) "30" 1.5 true [] {}];
-  valid = backend:
-    accepts backend {work = account;}
-    && accepts backend {work = account // {redirectUri = "http://[::1]:8080/callback";};}
-    && accepts backend {work = cases.devenv.accounts.work;};
-  mountedAccepts = name: extra: let
-    instances = (backend.mounted name extra).config.ai.sample.instances;
+  # Force just the option that owns the restriction; these checks do not
+  # depend on manifest or service generation succeeding for a bad declaration.
+  accountRows = backendName: let
+    accounts = declarations: (evaluate backendName declarations).config.ai.mcp-oauth.accounts;
+    reject = path: valid: invalid:
+      rejectsChange (declaration: lib.attrByPath path null (accounts {work = declaration;}).work) {
+        inherit invalid valid;
+        expected = lib.getAttrFromPath path valid;
+      };
+    field = name: invalid: reject [name] account (account // {${name} = invalid;});
+    provider = name: valid: invalid:
+      reject ["provider" name]
+      (account // {provider = account.provider // {${name} = valid;};})
+      (account // {provider = account.provider // {${name} = invalid;};});
+    redirect = invalid:
+      rejectsChange (value: (accounts {work = account // {redirectUri = value;};}).work.redirectUri) {
+        inherit invalid;
+        valid = "http://localhost:8080/callback";
+        expected = "http://localhost:8080/callback";
+      };
+    lifetime = provider "loginLifetimeDays" 30;
   in
-    (builtins.tryEval (builtins.deepSeq (lib.filterAttrs (_: instance: instance.enable) instances) true)).success;
+    {
+      "account IDs cannot traverse directories" = rejectsChange (name: (accounts {${name} = account;}).${name}.clientId) {
+        valid = "work";
+        invalid = "../escape";
+        expected = account.clientId;
+      };
+      "client ID cannot use a command reference" = field "clientId" (redact.command "/bin/read-secret");
+      "client ID cannot use plaintext" = field "clientId" "plaintext-canary";
+      "credential files cannot be shared" = field "clientSecret" account.clientId;
+      "extra scopes cannot contain spaces" = provider "extraScopes" ["keys:read"] ["keys:read injected"];
+      "login lifetime cannot be fractional" = lifetime 1.5;
+      "login lifetime cannot be negative" = lifetime (-1);
+      "login lifetime cannot be text" = lifetime "30";
+      "login lifetime cannot be zero" = lifetime 0;
+      "redirect accepts bracketed IPv6 loopback" =
+        (accounts {work = account // {redirectUri = "http://[::1]:8080/callback";};}).work.redirectUri
+        == "http://[::1]:8080/callback";
+      "redirect cannot omit callback path" = redirect "http://localhost:8080";
+      "redirect cannot use HTTPS" = redirect "https://localhost:8080/callback";
+      "redirect cannot use a nonloopback host" = redirect "http://example.com:8080/callback";
+      "redirect cannot use a query" = redirect "http://localhost:8080/callback?code=x";
+      "redirect cannot use port 0" = redirect "http://localhost:0/callback";
+      "redirect cannot use port 65536" = redirect "http://localhost:65536/callback";
+      "scopes cannot be empty" = field "scopes" [];
+      "scopes cannot contain spaces" = field "scopes" ["data:read injected"];
+    }
+    // lib.listToAttrs (map (name:
+        lib.nameValuePair "account requires ${name}" (reject [name] account (builtins.removeAttrs account [name]))) ["clientId" "clientSecret" "scopes"])
+    // {
+      "account requires a provider" = reject ["provider" "authorizeUrl"] account (builtins.removeAttrs account ["provider"]);
+    }
+    // lib.listToAttrs (lib.concatMap (name: [
+      (lib.nameValuePair "provider requires ${name}" (reject ["provider" name] account (account
+        // {
+          provider = builtins.removeAttrs account.provider [name];
+        })))
+      (lib.nameValuePair "provider ${name} must be a string" (provider name account.provider.${name} 42))
+    ]) ["authorizeUrl" "tokenUrl"]);
+  mountedRows = backendName: let
+    instances = extra: (backend.mounted backendName extra).config.ai.sample.instances;
+    reject = read: expected: invalid:
+      rejectsChange (extra: read (instances extra)) {
+        inherit expected invalid;
+        valid = {};
+      };
+    # Unknown options are reported by the submodule merge, not by reading a
+    # declared child (which can remain lazy). Force the OAuth record itself.
+    mountCredentials = instances: builtins.deepSeq instances.work.oauth (builtins.attrNames instances.work.oauth);
+    rejectOverride = reject mountCredentials ["clientId" "clientSecret" "scopes"];
+  in {
+    "disabled instance IDs cannot traverse directories" =
+      reject (instances: lib.mapAttrs (_: instance: instance.enable) instances)
+      {
+        disabled = false;
+        personal = true;
+        work = true;
+      }
+      {ai.sample.instances."../bad".enable = false;};
+    "instance credentials cannot share a file" =
+      reject (instances: instances.work.oauth.clientSecret) (redact.file "/run/secrets/work-secret")
+      {ai.sample.instances.work.oauth.clientSecret = lib.mkForce (redact.file "/run/secrets/work-id");};
+    "instance scopes cannot be empty" =
+      reject (instances: instances.work.oauth.scopes) ["override:read"]
+      {ai.sample.instances.work.oauth.scopes = lib.mkForce [];};
+    "mounted provider is not consumer configurable" = rejectOverride {ai.sample.instances.work.oauth.provider.name = "override";};
+    "mounted redirect is not consumer configurable" = rejectOverride {ai.sample.instances.work.oauth.redirectUri = "http://localhost:8081/callback";};
+  };
   checks =
-    lib.all (backend: valid backend && !(lib.any (accepts backend) refused)) ["devenv" "hm"]
-    && (evaluate "hm" {}).config.ai.mcp-oauth.services == {}
-    && lib.all (config: lib.all (entry: entry.assertion) config.assertions) (builtins.attrValues configs)
-    && proxy.checks
-    && lib.all (name:
-      mountedAccepts name {}
-      && lib.all (extra: !(mountedAccepts name extra)) [
-        {ai.sample.instances."../bad".enable = false;}
-        {ai.sample.instances.work.oauth.clientSecret = lib.mkForce (redact.file "/run/secrets/work-id");}
-        {ai.sample.instances.work.oauth.scopes = lib.mkForce [];}
-        {ai.sample.instances.work.oauth.redirectUri = "http://localhost:8081/callback";}
-        {ai.sample.instances.work.oauth.provider.name = "override";}
-      ]) ["devenv" "hm"];
+    checkRows "OAuth account declarations (devenv)" (accountRows "devenv")
+    && checkRows "OAuth mounted declarations (devenv)" (mountedRows "devenv")
+    && checkRows "OAuth backend integration" {
+      "configured backends satisfy module assertions" = lib.all (config: lib.all (entry: entry.assertion) config.assertions) (builtins.attrValues configs);
+    }
+    && proxy.checks;
   fixture = pkgs.writeText "mcp-oauth-backends.json" (builtins.toJSON {
     backends = lib.mapAttrs (backend: config: let
       name = "mcp-oauth-${cases.${backend}.name}";

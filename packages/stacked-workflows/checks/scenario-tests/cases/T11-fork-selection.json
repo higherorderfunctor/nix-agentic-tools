@@ -10,7 +10,7 @@
   "block_roles": ["selection", "selection"],
   "env": {},
   "expected": {
-    "description": "Safety invariants and scenario endpoint hold",
+    "description": "Both skills must retain the inactive fork descended from the current stack root, not the unrelated sibling",
     "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
   },
   "id": "T11-fork-selection",

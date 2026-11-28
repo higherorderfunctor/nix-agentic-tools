@@ -7,7 +7,110 @@
   ...
 }: let
   redact = import ../../../lib/redact {inherit lib;};
-  inherit (harness) evalHm launchdAgentRunsLauncher mcpLib mkTest;
+  inherit (harness) checkRows evalHm launchdAgentRunsLauncher mkTest;
+
+  defaultConfig = (evalHm {}).config.services.mcp-servers;
+  serverNames = [
+    "chrome-devtools-mcp"
+    "context7-mcp"
+    "effect-mcp"
+    "git-intel-mcp"
+    "github-mcp"
+    "gitlab-mcp"
+    "kagi-mcp"
+    "nixos-mcp"
+  ];
+
+  twoManagedServers = context7Overrides:
+    (evalHm {
+      services.mcp-servers.servers = {
+        context7-mcp = {enable = true;} // context7Overrides;
+        effect-mcp.enable = true;
+      };
+    }).config;
+
+  # tryEval cannot expose throw messages. Follow facet-mock-negative by
+  # evaluating a subprocess and checking its stderr, with a passing control.
+  # Read settings directly so a renderer-local throw cannot satisfy the checks.
+  settingsCheck = name: server: rows: let
+    source = lib.fileset.toSource {
+      root = ../../..;
+      fileset = lib.fileset.unions [
+        ../../../lib/mcp.nix
+        ../../../lib/open-keys
+        ../../../lib/redact
+        ../../../packages/git-intel-mcp/modules/mcp-server.nix
+        ../../../packages/gitlab-mcp/modules/mcp-server.nix
+      ];
+    };
+    probe = pkgs.writeText "${name}.nix" ''
+      { row }:
+      let
+        lib = import ${pkgs.path}/lib;
+        mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
+        case = (builtins.fromJSON ${builtins.toJSON (builtins.toJSON rows)}).''${row};
+        result = mcpLib.evalSettings ${builtins.toJSON server} case.settings;
+      in
+        if case ? expected then
+          let observed = if case.exact or false then result else builtins.intersectAttrs case.expected result;
+          in builtins.deepSeq result (
+            assert !(result ? assertions);
+            assert observed == case.expected;
+            true
+          )
+        else result
+    '';
+  in
+    pkgs.runCommandLocal "module-test-${name}" {nativeBuildInputs = [pkgs.nix];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      export USER="''${USER:-nixbld}"
+      export NIX_STATE_DIR="$TMPDIR/nix-state"
+      mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+      run_case() {
+        echo "CASE: $1"
+        nix-instantiate --eval --strict ${probe} --argstr row "$1"
+      }
+      ${lib.concatStringsSep "\n" (lib.mapAttrsToList (label: row: let
+        argument = lib.escapeShellArg label;
+      in
+        if row ? expected
+        then "run_case ${argument}"
+        else ''
+          if run_case ${argument} 2>actual.stderr; then
+            echo "FAIL: expected a settings assertion failure" >&2
+            exit 1
+          fi
+          ${lib.concatMapStringsSep "\n" (message: ''
+            if ! grep -F -- ${lib.escapeShellArg message} actual.stderr; then
+              cat actual.stderr >&2
+              exit 1
+            fi
+          '') (["MCP server ${server} settings assertions failed:"] ++ row.required)}
+          ${lib.concatMapStringsSep "\n" (message: ''
+            if grep -F -- ${lib.escapeShellArg message} actual.stderr; then
+              echo "FAIL: diagnostic includes a passing assertion" >&2
+              exit 1
+            fi
+          '') (row.forbidden or [])}
+        '')
+      rows)}
+      echo "PASS: ${name}" > "$out"
+    '';
+
+  gitlabInstance = "https://gitlab.example.com";
+  gitlabMutexMessage = "gitlab-mcp: settings.instanceUrl and settings.apiUrl are mutually exclusive";
+  gitlabControl = settings: expected: {inherit expected settings;};
+  gitlabConflict = apiUrl: {
+    required = [gitlabMutexMessage];
+    settings = {
+      inherit apiUrl;
+      instanceUrl = gitlabInstance;
+    };
+  };
+  gitlabReferencePath = "/run/secrets/gitlab-url";
+  gitlabCommand = redact.command gitlabReferencePath;
+  gitlabFile = redact.file gitlabReferencePath;
 
   assertionSettings = passing: {
     assertions = [
@@ -25,301 +128,149 @@
       }
     ];
   };
-  expectedSettings = {
-    repository = null;
-  };
 in {
   checks =
     {
-      # Evaluate settings directly so a renderer-local throw cannot satisfy this test.
-      module-mcp-gitlab-settings-mutex = let
-        source = lib.fileset.toSource {
-          root = ../../..;
-          fileset = lib.fileset.unions [
-            ../../../lib/mcp.nix
-            ../../../lib/open-keys
-            ../../../lib/redact
-            ../../../packages/gitlab-mcp/modules/mcp-server.nix
+      module-mcp-gitlab-settings-mutex = settingsCheck "mcp-gitlab-settings-mutex" "gitlab-mcp" {
+        "a passing endpoint assertion cannot mask the caller failure" = {
+          forbidden = [gitlabMutexMessage];
+          required = ["gitlab caller assertion failed"];
+          settings.assertions = [
+            {
+              assertion = false;
+              message = "gitlab caller assertion failed";
+            }
           ];
         };
-        probe = pkgs.writeText "gitlab-settings-mutex.nix" ''
-          { credential ? "none", instance ? false, callerPassing ? true }:
-          let
-            lib = import ${pkgs.path}/lib;
-            mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
-            redact = import ${source}/lib/redact { inherit lib; };
-            settings = {
-              assertions = [{ assertion = callerPassing; message = "gitlab caller assertion failed"; }];
-              instanceUrl = if instance then "https://gitlab.example.com" else null;
-            } // lib.optionalAttrs (credential != "none") {
-              apiUrl = if credential == "file" then redact.file "/run/secrets/gitlab-url" else redact.command "/run/secrets/gitlab-url";
-            };
-            result = mcpLib.evalSettings "gitlab-mcp" settings;
-          in
-            builtins.deepSeq result (
-              assert !(result ? assertions);
-              assert result.instanceUrl == settings.instanceUrl;
-              assert credential == "none" || result.apiUrl == settings.apiUrl;
-              true
-            )
-        '';
-      in
-        pkgs.runCommandLocal "module-test-mcp-gitlab-settings-mutex" {
-          nativeBuildInputs = [pkgs.nix];
-        } ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          export USER="''${USER:-nixbld}"
-          export NIX_STATE_DIR="$TMPDIR/nix-state"
-          mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
-          for credential in none file command; do
-            nix-instantiate --eval --strict ${probe} --argstr credential "$credential"
-          done
-          nix-instantiate --eval --strict ${probe} --arg instance true
-          for credential in file command; do
-            if nix-instantiate --eval --strict ${probe} --argstr credential "$credential" --arg instance true >actual.stdout 2>actual.stderr; then
-              echo "FAIL: gitlab instanceUrl + apiUrl.$credential unexpectedly succeeded" >&2
-              exit 1
-            fi
-            grep -F 'MCP server gitlab-mcp settings assertions failed:' actual.stderr
-            grep -F 'settings.instanceUrl and settings.apiUrl are mutually exclusive' actual.stderr
-          done
-          # The server's passing assertion must not hide a failing caller assertion.
-          if nix-instantiate --eval --strict ${probe} --arg callerPassing false >actual.stdout 2>actual.stderr; then
-            echo "FAIL: gitlab caller assertion unexpectedly succeeded" >&2
-            exit 1
-          fi
-          grep -F 'gitlab caller assertion failed' actual.stderr
-          if grep -F 'mutually exclusive' actual.stderr; then
-            echo "FAIL: diagnostic includes a passing server assertion" >&2
-            exit 1
-          fi
-          echo "PASS: gitlab mutex rejects file/command conflicts; valid settings and caller assertions verified" | tee "$out"
-        '';
+        "command reference alone survives settings evaluation" = gitlabControl {apiUrl = gitlabCommand;} {
+          apiUrl = gitlabCommand;
+          instanceUrl = null;
+        };
+        "command reference cannot bypass the endpoint mutex" = gitlabConflict gitlabCommand;
+        "file reference alone survives settings evaluation" = gitlabControl {apiUrl = gitlabFile;} {
+          apiUrl = gitlabFile;
+          instanceUrl = null;
+        };
+        "file reference cannot bypass the endpoint mutex" = gitlabConflict gitlabFile;
+        "public instance URL works without a reference" = gitlabControl {instanceUrl = gitlabInstance;} {
+          apiUrl = null;
+          instanceUrl = gitlabInstance;
+        };
+      };
 
       # The bridge owns the listener; its stdio child must not receive HTTP args.
-      module-mcp-services-bridge-pins-bind-host = mkTest "mcp-services-bridge-pins-bind-host" (
-        lib.all (
-          host: let
-            result = evalHm {
-              services.mcp-servers.servers.context7-mcp =
-                {
-                  enable = true;
-                  args = ["--extra"];
-                }
-                // lib.optionalAttrs (host != "127.0.0.1") {service.host = host;};
-            };
-            service = result.config.ai.services.mcp-context7-mcp;
-            server = result.config.services.mcp-servers.servers.context7-mcp;
-          in
-            service.command
-            == [
-              (lib.getExe result.config.ai.internal.packages.mcpServers.mcp-proxy)
-              "--pass-environment"
-              "--host"
-              host
-              "--port"
-              "19750"
-              "--"
-              "${server.package}/bin/context7-mcp"
-              "--transport"
-              "stdio"
-              "--extra"
-            ]
-            && result.config.services.mcp-servers.mcpConfig.mcpServers.context7-mcp.url == "http://${host}:19750/mcp"
-        ) ["127.0.0.1" "127.0.0.2"]
-      );
-
-      # Default: all servers are disabled.
-      module-mcp-services-default-disabled = mkTest "mcp-services-default-disabled" (
-        let
-          result = evalHm {};
-          inherit (result.config.services.mcp-servers) servers;
-        in
-          # Presence does not prove the owner chose a disabled default.
-          !(servers.chrome-devtools-mcp.enable or true)
-          && !(servers.context7-mcp.enable or true)
-          && !(servers.github-mcp.enable or true)
-          && !(servers.kagi-mcp.enable or true)
-      );
-
-      # mcpConfig output is empty when no servers enabled.
-      module-mcp-services-mcpconfig-empty-when-disabled = mkTest "mcp-services-mcpconfig-empty-when-disabled" (
-        let
-          result = evalHm {};
-        in
-          result.config.services.mcp-servers.mcpConfig.mcpServers == {}
-      );
-
-      module-mcp-services-native-command = mkTest "mcp-services-native-command" (
-        let
+      module-mcp-services-bridge-pins-bind-host = mkTest "mcp-services-bridge-pins-bind-host" (let
+        bridgeCase = serverOverrides: expectedHost: let
           result = evalHm {
-            services.mcp-servers.servers.nixos-mcp = {
-              enable = true;
-              service.host = "127.0.0.2";
-            };
-          };
-          service = result.config.ai.services.mcp-nixos-mcp;
-          server = result.config.services.mcp-servers.servers.nixos-mcp;
-        in
-          service.command
-          == ["${server.package}/bin/mcp-nixos"]
-          && service.environment
-          == {
-            MCP_NIXOS_HOST = "127.0.0.2";
-            MCP_NIXOS_PORT = "19752";
-            MCP_NIXOS_TRANSPORT = "http";
-          }
-          && result.config.services.mcp-servers.mcpConfig.mcpServers.nixos-mcp.url == "http://127.0.0.2:19752/mcp"
-      );
-
-      # Server option tree has expected structure.
-      module-mcp-services-option-tree = mkTest "mcp-services-option-tree" (
-        let
-          result = evalHm {};
-          inherit (result.config.services.mcp-servers) servers;
-        in
-          servers ? chrome-devtools-mcp
-          && servers ? context7-mcp
-          && servers ? effect-mcp
-          && servers ? git-intel-mcp
-          && servers ? github-mcp
-          && servers ? gitlab-mcp
-          && servers ? kagi-mcp
-          && servers ? nixos-mcp
-      );
-
-      module-mcp-services-port-collision = mkTest "mcp-services-port-collision" (
-        let
-          result = evalHm {
-            services.mcp-servers.servers = {
-              context7-mcp = {
+            services.mcp-servers.servers.context7-mcp =
+              {
+                args = ["--extra"];
                 enable = true;
-                service.port = 19754;
-              };
-              effect-mcp.enable = true;
-            };
+              }
+              // serverOverrides;
           };
+          inherit (result.config) ai services;
+          server = services.mcp-servers.servers.context7-mcp;
         in
-          map (entry: entry.message) (builtins.filter (entry: !entry.assertion) result.config.assertions)
-          == ["ai.claims.port.19754: claimed by mcp-services:mcp-context7-mcp.ports.main and mcp-services:mcp-effect-mcp.ports.main"]
-      );
-
-      # tools output is empty when no servers enabled.
-      module-mcp-services-tools-empty-when-disabled = mkTest "mcp-services-tools-empty-when-disabled" (
-        let
-          result = evalHm {};
-        in
-          result.config.services.mcp-servers.tools == {}
-      );
-
-      # tryEval cannot expose throw messages. Follow facet-mock-negative by
-      # evaluating a subprocess and checking its stderr, with a passing control.
-      module-mcp-settings-assertion-messages = let
-        source = lib.fileset.toSource {
-          root = ../../..;
-          fileset = lib.fileset.unions [
-            ../../../lib/mcp.nix
-            ../../../packages/git-intel-mcp/modules/mcp-server.nix
-          ];
-        };
-        probe = pkgs.writeText "mcp-settings-assertions.nix" ''
-          { passing ? false }:
-          let
-            lib = import ${pkgs.path}/lib;
-            mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
-            settings = builtins.fromJSON (
-              if passing
-              then ${builtins.toJSON (builtins.toJSON (assertionSettings true))}
-              else ${builtins.toJSON (builtins.toJSON (assertionSettings false))}
-            );
-            result = mcpLib.evalSettings "git-intel-mcp" settings;
-          in
-            if passing
-            then assert result == builtins.fromJSON ${builtins.toJSON (builtins.toJSON expectedSettings)}; true
-            else result
-        '';
+          ai.services.mcp-context7-mcp.command
+          == [
+            (lib.getExe ai.internal.packages.mcpServers.mcp-proxy)
+            "--pass-environment"
+            "--host"
+            expectedHost
+            "--port"
+            "19750"
+            "--"
+            "${server.package}/bin/context7-mcp"
+            "--transport"
+            "stdio"
+            "--extra"
+          ]
+          && services.mcp-servers.mcpConfig.mcpServers.context7-mcp.url == "http://${expectedHost}:19750/mcp";
       in
-        pkgs.runCommandLocal "module-test-mcp-settings-assertion-messages" {
-          nativeBuildInputs = [pkgs.nix];
-        } ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          export USER="''${USER:-nixbld}"
-          export NIX_STATE_DIR="$TMPDIR/nix-state"
-          mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
-          nix-instantiate --eval --strict ${probe} --arg passing true
-          if nix-instantiate --eval --strict ${probe} --arg passing false >actual.stdout 2>actual.stderr; then
-            echo "FAIL: failing MCP assertions unexpectedly succeeded" >&2
-            exit 1
-          fi
-          ${lib.concatMapStringsSep "\n" (message: ''
-            if ! grep -F -- ${lib.escapeShellArg message} actual.stderr; then
-              cat actual.stderr >&2
-              exit 1
-            fi
-          '') (["MCP server git-intel-mcp settings assertions failed:"] ++ map (entry: entry.message) (builtins.filter (entry: !entry.assertion) (assertionSettings false).assertions))}
-          if grep -F -- "passing assertion must not appear" actual.stderr; then
-            echo "FAIL: diagnostic includes a passing assertion" >&2
-            exit 1
-          fi
-          echo "PASS: MCP assertion diagnostics contain both failing messages" > "$out"
-        '';
+        checkRows "managed MCP bridge listener and client URL" {
+          "a host override reaches both the proxy and the client" = bridgeCase {service.host = "127.0.0.2";} "127.0.0.2";
+          "omitting the host keeps both proxy and client on loopback" = bridgeCase {} "127.0.0.1";
+        });
 
-      # Exercise the same settings in both arms; equality also rejects leaked metadata.
-      module-mcp-settings-assertions = mkTest "mcp-settings-assertions" (
-        let
-          passing = builtins.tryEval (mcpLib.evalSettings "git-intel-mcp" (assertionSettings true) == expectedSettings);
-          failing = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "git-intel-mcp" (assertionSettings false)) true);
-        in
-          passing.success && passing.value && !failing.success
-      );
+      module-mcp-services-native-command = mkTest "mcp-services-native-command" (let
+        result = evalHm {
+          services.mcp-servers.servers.nixos-mcp = {
+            enable = true;
+            service.host = "127.0.0.2";
+          };
+        };
+        service = result.config.ai.services.mcp-nixos-mcp;
+        server = result.config.services.mcp-servers.servers.nixos-mcp;
+      in
+        checkRows "managed MCP native listener" {
+          "client uses the native listener override and MCP path" = result.config.services.mcp-servers.mcpConfig.mcpServers.nixos-mcp.url == "http://127.0.0.2:19752/mcp";
+          "daemon receives host, port and HTTP mode through its environment" =
+            service.environment
+            == {
+              MCP_NIXOS_HOST = "127.0.0.2";
+              MCP_NIXOS_PORT = "19752";
+              MCP_NIXOS_TRANSPORT = "http";
+            };
+          "native daemon launches directly without a bridge" = service.command == ["${server.package}/bin/mcp-nixos"];
+        });
+
+      module-mcp-services-option-tree = mkTest "mcp-services-option-tree" (checkRows "default MCP server registry" {
+        "clients receive no endpoints before a server is enabled" = defaultConfig.mcpConfig.mcpServers == {};
+        "disabled servers cannot advertise tools to auto-approval consumers" = defaultConfig.tools == {};
+        "registration neither loses a supported server nor exposes an unexpected one" = builtins.attrNames defaultConfig.servers == serverNames;
+      });
+
+      module-mcp-services-port-collision = mkTest "mcp-services-port-collision" (let
+        failureMessages = config: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) config.assertions);
+      in
+        checkRows "managed MCP port claims" {
+          "matching ports identify both daemon claims" =
+            failureMessages (twoManagedServers {service.port = 19754;})
+            == ["ai.claims.port.19754: claimed by mcp-services:mcp-context7-mcp.ports.main and mcp-services:mcp-effect-mcp.ports.main"];
+        });
+
+      module-mcp-settings-assertion-messages = settingsCheck "mcp-settings-assertion-messages" "git-intel-mcp" {
+        "all passing assertions leave only the settings payload" = {
+          exact = true;
+          expected.repository = null;
+          settings = assertionSettings true;
+        };
+        "failure reports both caller messages and omits the passing one" = {
+          forbidden = ["passing assertion must not appear"];
+          required = ["first caller assertion failed" "second caller assertion failed"];
+          settings = assertionSettings false;
+        };
+      };
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-      # ── services.mcp-servers module ──────────────────────────────────
-
-      module-mcp-services-owner-forwarding = mkTest "mcp-services-owner-forwarding" (
-        let
-          result = evalHm {
-            services.mcp-servers.servers.github-mcp = {
-              enable = true;
-              settings.credentials = redact.file "/run/secrets/gh-token";
-            };
+      module-mcp-services-owner-forwarding = mkTest "mcp-services-owner-forwarding" (let
+        secretPath = "/run/secrets/gh-token";
+        result = evalHm {
+          services.mcp-servers.servers.github-mcp = {
+            enable = true;
+            settings.credentials = redact.file secretPath;
           };
-          inherit (result) config;
-          service = config.ai.services.mcp-github-mcp;
-          unit = config.systemd.user.services.mcp-github-mcp;
-          services = import ../../ai-module/lib/services.nix {inherit lib;};
-        in
-          service
-          == config.ai.mcp-services.services.mcp-github-mcp
-          && service.environment
-          == {
-            GITHUB_PERSONAL_ACCESS_TOKEN = redact.file "/run/secrets/gh-token";
-          }
-          && services.triggers service == ["/run/secrets/gh-token"]
-          && service.restart == "on-failure"
-          && config.ai.claims.port."19751" == ["mcp-services:mcp-github-mcp.ports.main"]
-          && config.ai.claims.service.mcp-github-mcp == ["mcp-services"]
-          && lib.hasSuffix "/bin/ai-service-mcp-github-mcp" unit.Service.ExecStart
-          && unit.Unit.Description == "mcp-github-mcp (ai.services)"
-          && !(unit.Service ? Environment)
-      );
+        };
+        inherit (result) config;
+        service = config.ai.services.mcp-github-mcp;
+        unit = config.systemd.user.services.mcp-github-mcp;
+      in
+        checkRows "managed GitHub MCP service forwarding" {
+          "credential remains a launcher reference under the upstream variable" = service.environment == {GITHUB_PERSONAL_ACCESS_TOKEN = redact.file secretPath;};
+          "forwarding does not drop owner service fields" = service == config.ai.mcp-services.services.mcp-github-mcp;
+          "port claims keep the daemon and named port attribution" = config.ai.claims.port."19751" == ["mcp-services:mcp-github-mcp.ports.main"];
+          "systemd launches via the secret-resolving launcher" = lib.hasSuffix "/bin/ai-service-mcp-github-mcp" unit.Service.ExecStart;
+        });
     }
     // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
       # Fails when a server's service is missing from launchd or runs something other than its launcher.
-      module-mcp-services-darwin-launchd = mkTest "mcp-services-darwin-launchd" (
-        let
-          result = evalHm {
-            services.mcp-servers.servers = {
-              context7-mcp.enable = true;
-              effect-mcp.enable = true;
-            };
-          };
-        in
-          result.config.systemd.user.services
-          == {}
-          && lib.all (launchdAgentRunsLauncher result.config) ["mcp-context7-mcp" "mcp-effect-mcp"]
-      );
+      module-mcp-services-darwin-launchd = mkTest "mcp-services-darwin-launchd" (let
+        config = twoManagedServers {};
+      in
+        checkRows "managed MCP services on Darwin" {
+          "context7-mcp uses its launchd launcher" = launchdAgentRunsLauncher config "mcp-context7-mcp";
+          "effect-mcp also uses its own launcher when enabled alongside context7-mcp" = launchdAgentRunsLauncher config "mcp-effect-mcp";
+        });
     };
 }

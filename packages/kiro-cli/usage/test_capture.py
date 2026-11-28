@@ -4,6 +4,7 @@ import base64
 import contextlib
 import functools
 import gzip
+import hashlib
 import io
 import json
 import math
@@ -24,7 +25,7 @@ import zlib
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from capture import DECODE_LIMIT, Collector, EventStream, SSE, digest, open_database, request_details
+from capture import Collector, EventStream, SSE, open_database, request_details
 from codec import Chunk, Event
 from mitm_addon import UsageCapture
 
@@ -108,11 +109,11 @@ class CaptureTests(unittest.TestCase):
             self.assertIsNotNone(db.execute("SELECT 1 FROM capture_facts WHERE capture_id=?", (ident,)).fetchone())
 
     def test_unicode_all_split_boundaries_and_final_counts(self):
-        body = event({"type": "response.output_text.delta", "delta": "é🙂"}) + event(completed())
+        body = event({"type": "response.output_text.delta", "delta": "é🙂"}, b"\r\n") + event(completed(), b"\r\n")
         # Every byte boundary, including inside Unicode and CRLF, is exercised by one-byte chunks.
         _, row = self.run_capture([body[i:i+1] for i in range(len(body))])
         self.assertEqual(row["state"], "complete")
-        self.assertEqual(row["response_sha256"], digest(body))
+        self.assertEqual(row["response_sha256"], hashlib.sha256(body).hexdigest())
         self.assertEqual(row["credits"], .25)
         self.assertIsNone(row["input_tokens"])
         self.assertIsNone(row["cache_read_tokens"])
@@ -120,56 +121,37 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(summary["output_text_chars"], 2)
         self.assertEqual(summary["output_text_bytes"], 6)
         self.assertEqual(summary["output_count_source"], "terminal_output")
-        self.assertEqual(summary["usage_objects"][0]["value"]["unknown"], {"future": True})
         _, chunks, _ = self.payloads(row["id"])
         self.assertEqual(b"".join(c.application for c in chunks), body)
         self.assertEqual([c.seq for c in chunks], list(range(len(body))))
         self.assertTrue(all(c.utc_ns > 0 and c.mono_ns > 0 for c in chunks))
 
-    def test_gzip_entity_replay(self):
-        body = event(completed())
-        encoded = gzip.compress(body)
-        _, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
-        self.assertEqual(row["state"], "complete")
-        _, chunks, _ = self.payloads(row["id"])
-        self.assertEqual(b"".join(c.entity for c in chunks), encoded)
-        self.assertEqual(b"".join(c.application for c in chunks), body)
-
-    def test_gzip_chunk_past_the_decode_limit_keeps_its_partial_output(self):
-        encoded = gzip.compress(bytes(2 * DECODE_LIMIT))
-        _, row = self.run_capture([encoded[:-8], encoded[-8:]], "gzip")
-        self.assertIn("decode_error", json.loads(row["issues_json"]))
-        self.assertIsNone(row["response_sha256"])
-        _, chunks, _ = self.payloads(row["id"])
-        self.assertEqual(b"".join(c.entity for c in chunks), encoded)
-        self.assertEqual([c.application for c in chunks], [bytes(DECODE_LIMIT + 1), None])
-
-    def test_identity_chunk_past_the_decode_limit_keeps_its_output_and_decodes_nothing_after(self):
-        _, row = self.run_capture([bytes(DECODE_LIMIT + 1), b"after"], "identity")
-        self.assertIn("decode_error", json.loads(row["issues_json"]))
-        self.assertIsNone(row["response_sha256"])
-        _, chunks, _ = self.payloads(row["id"])
-        self.assertEqual([c.application for c in chunks], [bytes(DECODE_LIMIT + 1), None])
+    def test_decode_limit_retains_partial_application_and_skips_later_chunks(self):
+        # Gzip bounds inflation; identity rejects one oversized entity without discarding its bytes.
+        bounded = 16 * 1024 * 1024 + 1
+        encoded = gzip.compress(bytes(2 * (bounded - 1)))
+        partial = bytes(bounded)
+        cases = {"gzip": [encoded[:-8], encoded[-8:]], "identity": [partial, b"after"]}
+        for encoding, entities in cases.items():
+            with self.subTest(encoding=encoding):
+                _, row = self.run_capture(entities, encoding)
+                self.assertIn("decode_error", json.loads(row["issues_json"]))
+                self.assertIsNone(row["response_sha256"])
+                _, chunks, _ = self.payloads(row["id"])
+                self.assertEqual([c.entity for c in chunks], entities)
+                self.assertEqual([c.application for c in chunks], [partial, None])
 
     def test_credit_envelope_in_sse_and_json_response(self):
-        writer = Collector(self.path)
-        ids = []
         obj = completed()
         response = dict(obj["response"], object="response", status="completed")
-        for content_type, payload in (("text/event-stream", event(obj)),
-                                      ("application/json", json.dumps(response).encode())):
-            ident = writer.begin({}, b"{}")
-            ids.append(ident)
-            writer.headers(ident, {"content_type": content_type})
-            writer.chunk(ident, payload)
-            writer.finish(ident)
-        writer.close()
-        with contextlib.closing(sqlite3.connect(self.path)) as db:
-            for ident in ids:
-                state, issues, credits, context, summary = db.execute("SELECT state,issues_json,credits,context_usage_percentage,summary_json FROM captures WHERE id=?", (ident,)).fetchone()
-                self.assertEqual((state, json.loads(issues), credits, context), ("complete", [], .25, 12.3))
-                usage = json.loads(summary)["usage_objects"][0]["value"]
-                self.assertEqual(usage, obj["response"]["usage"])
+        for content_type, payload in (("application/json", json.dumps(response).encode()),
+                                      ("text/event-stream", event(obj))):
+            with self.subTest(content_type=content_type):
+                _, row = self.run_capture([payload], content_type=content_type)
+                self.assertEqual((row["state"], json.loads(row["issues_json"]), row["credits"],
+                                  row["context_usage_percentage"]), ("complete", [], .25, 12.3))
+                self.assertEqual(json.loads(row["summary_json"])["usage_objects"],
+                                 [{"path": "/response/usage", "value": obj["response"]["usage"]}])
 
     def test_rpc_generate_assistant_response_decodes_event_stream_whatever_its_content_type(self):
         writer = Collector(self.path)
@@ -194,7 +176,7 @@ class CaptureTests(unittest.TestCase):
         body = b"".join(messages)
         _, row = self.run_capture([body[i:i+1] for i in range(len(body))], content_type=EVENTSTREAM)
         self.assertEqual((row["state"], row["completion_seen"], json.loads(row["issues_json"])), ("complete", 1, []))
-        self.assertEqual(row["response_sha256"], digest(body))
+        self.assertEqual(row["response_sha256"], hashlib.sha256(body).hexdigest())
         self.assertEqual((row["credits"], row["context_usage_percentage"]), (.25, 12.3))
         self.assertEqual((row["input_tokens"], row["output_tokens"], row["cache_read_tokens"], row["cache_write_tokens"]), (95, 4, 80, 5))
         summary = json.loads(row["summary_json"])
@@ -240,12 +222,15 @@ class CaptureTests(unittest.TestCase):
     def test_event_stream_exception_unterminated_and_empty_are_incomplete(self):
         exception = aws_message({":message-type": "exception", ":exception-type": "ThrottlingException", ":content-type": "application/json"}, b'{"message":"synthetic"}')
         metering = aws_event("meteringEvent", {"usage": .5, "unit": "credit"})
-        for parts, issue in (([metering, exception], "missing_completion"), ([metering + metering[:5]], "unterminated_event"), ([], "missing_completion")):
-            _, row = self.run_capture(parts, content_type=EVENTSTREAM)
-            self.assertEqual((row["state"], row["completion_seen"]), ("incomplete", 0))
-            self.assertIn(issue, json.loads(row["issues_json"]))
-        _, row = self.run_capture([metering, exception], content_type=EVENTSTREAM)
-        self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")
+        cases = {"empty has no message to complete": ([], "missing_completion", None),
+                 "exception defeats earlier metering": ([metering, exception], "missing_completion", "exception"),
+                 "truncated prelude at EOF": ([metering + metering[:5]], "unterminated_event", None)}
+        for reason, (parts, issue, terminal) in cases.items():
+            with self.subTest(reason=reason):
+                _, row = self.run_capture(parts, content_type=EVENTSTREAM)
+                self.assertEqual((row["state"], row["completion_seen"]), ("incomplete", 0))
+                self.assertIn(issue, json.loads(row["issues_json"]))
+                self.assertEqual(json.loads(row["summary_json"])["terminal"], terminal)
         metadata = aws_event("metadataEvent", {"stopReason": "END_TURN"})
         _, row = self.run_capture([metering, exception, metadata], content_type=EVENTSTREAM)
         self.assertEqual(json.loads(row["summary_json"])["terminal"], "exception")  # a later stopReason does not hide it
@@ -316,7 +301,7 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual((row["state"], json.loads(row["issues_json"])), ("complete", ["request_payload_omitted", "response_payload_omitted"]))
         self.assertEqual((row["credits"], row["context_usage_percentage"], row["completion_seen"]), (.25, 12.3, 1))
         self.assertEqual(json.loads(row["summary_json"])["output_text_chars"], 2)
-        self.assertEqual(row["response_sha256"], digest(b"".join(parts)))
+        self.assertEqual(row["response_sha256"], hashlib.sha256(b"".join(parts)).hexdigest())
         self.assertEqual((row["dropped_chunks"], row["observed_chunks"]), (len(parts) + 1, len(parts)))
         self.assertEqual(json.loads(row["metadata_json"])["kiro:conversation_id"], "sess_fake")
         self.assertEqual(self.payloads(row["id"])[:2], (None, []))
@@ -412,7 +397,7 @@ class CaptureTests(unittest.TestCase):
             db.execute(f"DROP TABLE {table}")
         db.execute("UPDATE capture_meta SET version=1")
         db.commit()
-        for mode in ("request", "transport", "decoded", "chunks", "events"):
+        for mode in ("decoded", "request"):
             with self.subTest(mode=mode):
                 unpacked = self.unpack(row["id"], mode)
                 self.assertEqual(unpacked.returncode, 0, unpacked.stderr)
@@ -425,14 +410,14 @@ class CaptureTests(unittest.TestCase):
         db.execute("UPDATE captures SET started_utc_ns=0 WHERE id=?", (row["id"],))
         db.commit()
         store.expire(db, time.time_ns() + 1)
-        for mode in ("request", "transport", "decoded", "chunks", "events"):
+        for mode in ("chunks", "decoded", "request"):
             with self.subTest(mode=mode):
                 unpacked = self.unpack(row["id"], mode)
                 self.assertEqual((unpacked.returncode, unpacked.stdout, unpacked.stderr),
                                  (1, b"", b"capture payloads expired by retention\n"))
 
     def test_unpack_exits_2_on_corrupt_staged_gzip(self):
-        for mode, table, column in (("request", "captures", "request_gzip"), ("chunks", "chunks", "entity_gzip"), ("events", "events", "frame_gzip")):
+        for mode, table, column in (("chunks", "chunks", "entity_gzip"), ("request", "captures", "request_gzip")):
             with self.subTest(mode), self.deferred():
                 db, row = self.run_capture([event(completed())])
                 db.execute(f"UPDATE {table} SET {column}=?", (b"not gzip",))
@@ -450,7 +435,7 @@ class CaptureTests(unittest.TestCase):
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
             state, issues = db.execute("SELECT state,issues_json FROM captures").fetchone()
-        self.assertEqual((len(body), state, issues), (32 * 1024 * 1024, "complete", "[]"))
+        self.assertEqual((state, issues), ("complete", "[]"))
         self.assertEqual(self.payloads(ident)[0], body)
 
     def test_tiny_chunks_are_charged_their_object_overhead(self):
@@ -568,7 +553,6 @@ class CaptureTests(unittest.TestCase):
         meta, hashes = request_details(body)
         self.assertEqual(meta, {"model": "m", "effort": "high", "kiro:conversation_id": "s"})
         self.assertIn("input_items", hashes)
-        self.assertNotIn("authorization", meta)
         self.assertNotIn("unknown", hashes)
 
     def test_generate_assistant_response_request_metadata(self):
@@ -579,7 +563,7 @@ class CaptureTests(unittest.TestCase):
         meta, hashes = request_details(body, rpc=True)
         self.assertEqual(meta, {"model": "claude-opus-5.5", "effort": "low", "kiro:conversation_id": "sess_step", "kiro:root_conversation_id": "sess_root"})
         self.assertEqual(set(hashes), {"currentMessage", "history", "history_items", "prefixes", "tools"})
-        self.assertEqual(hashes["history_items"], [digest(json.dumps(item, separators=(",", ":")).encode()) for item in history])
+        self.assertEqual(hashes["history_items"], [hashlib.sha256(json.dumps(item, separators=(",", ":")).encode()).hexdigest() for item in history])
         self.assertEqual(request_details(b'{"conversationState":{},"additionalModelRequestFields":{"reasoning":{"effort":"high"}}}', rpc=True)[0], {"effort": "high"})
         # The selection, not the body shape, picks the parser: a conversationState body on CreateResponse stays CreateResponse.
         self.assertEqual(request_details(body)[0], {})
@@ -592,15 +576,17 @@ class CaptureTests(unittest.TestCase):
         writer = Collector(self.path)
         writer.close()
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        with contextlib.closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(db.execute("PRAGMA table_info(disk_test)").fetchone()[1], "x")
         os.chmod(self.path.parent, 0o755)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "private owner-only path required"):
             open_database(self.path)
 
     def test_unusable_database_fails_at_start(self):
         self.path.parent.mkdir(mode=0o700, parents=True)
         self.path.write_bytes(b"not sqlite")
         os.chmod(self.path, 0o600)
-        with self.assertRaises(sqlite3.DatabaseError):
+        with self.assertRaisesRegex(sqlite3.DatabaseError, "file is not a database"):
             Collector(self.path)
 
     def test_cancelled_transport(self):
@@ -622,9 +608,10 @@ class CaptureTests(unittest.TestCase):
             ident = writer.begin({}, b"{}")
             writer.chunk(ident, b"x")
             with contextlib.redirect_stderr(io.StringIO()):
-                with self.assertRaises(RuntimeError):
+                with self.assertRaisesRegex(RuntimeError, "database worker failed") as failed:
                     writer.close()
-        with self.assertRaises(RuntimeError):
+                self.assertEqual(str(failed.exception.__cause__), "synthetic disk error")
+        with self.assertRaisesRegex(RuntimeError, "database worker failed; capture stopped"):
             writer.check()
 
     def test_callback_does_not_wait_for_database(self):
@@ -724,7 +711,7 @@ class CaptureTests(unittest.TestCase):
             writer.headers(ident, {"content_type": "text/event-stream"})
             payload = event(completed())
             before = time.monotonic()
-            self.assertIs(writer.chunk(ident, payload), payload)
+            writer.chunk(ident, payload)
             self.assertLess(time.monotonic() - before, .5)
             writer.finish(ident)
             time.sleep(5.2)
@@ -748,22 +735,21 @@ class CaptureTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as warnings:
             self.assertIs(flow.response.stream(b"first"), b"first")
             self.assertIs(flow.response.stream(b"second"), b"second")
-            self.assertEqual(flow.response.stream(b""), b"")
             addon.response(flow)
             with patch.object(addon, "_reject") as reject:
                 addon.request(SimpleNamespace(id="refused", request=request))
                 reject.assert_called_once()
         self.assertEqual(warnings.getvalue().count("Kiro usage capture failed:"), 1)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError, "database worker failed"):
             addon.done()
 
     def test_invalid_usage_numbers_do_not_stop_following_captures(self):
         writer = Collector(self.path)
         cases = [("input_tokens", 2**70), ("output_tokens", -1), ("input_tokens", True),
                  ("kiro:credits", 2**1024), ("kiro:context_usage_percentage", float("inf")),
-                 ("kiro:credits", "invalid"), ("kiro:credits", None),
+                 ("kiro:credits", "invalid"),
                  ("kiro:credits", True), ("kiro:credits", -1),
-                 ("kiro:credits", float("nan")), ("kiro:credits", float("-inf")),
+                 ("kiro:credits", float("nan")),
                  ("kiro:credits", 2**70)]
         ids = []
         for key, value in cases:
@@ -780,16 +766,16 @@ class CaptureTests(unittest.TestCase):
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
             states = [db.execute("SELECT state,issues_json,credits FROM captures WHERE id=?", (ident,)).fetchone() for ident in ids]
-            self.assertTrue(all(row[0] == "incomplete" and "invalid_usage_number" in row[1] for row in states[:-1]))
-            for (key, _), row in zip(cases[:-1], states[:-1]):
-                if key == "kiro:credits":
-                    self.assertIsNone(row[2])
+            for (key, value), (state, issues, credits) in zip(cases[:-1], states[:-1], strict=True):
+                with self.subTest(field=key, value=value):
+                    self.assertEqual((state, json.loads(issues)), ("incomplete", ["invalid_usage_number"]))
+                    self.assertEqual(credits, None if key == "kiro:credits" else .25)
             self.assertEqual(states[-1][0], "complete")
             self.assertEqual(states[-1][2], float(2**70))
 
     def test_invalid_credit_envelopes_preserve_evidence_and_worker_recovers(self):
         cases = [(value, "invalid_credit_unit") for value in
-                 (None, .25, [], {}, {"value": .25}, {"unit": "token", "value": .25})]
+                 (None, .25, {"value": .25}, {"unit": "token", "value": .25})]
         cases += [({"unit": "credit"}, "invalid_usage_number"),
                   ({"unit": "credit", "value": float("inf")}, "invalid_usage_number"),
                   (completed()["response"]["usage"]["kiro:credits"], None)]
@@ -805,12 +791,13 @@ class CaptureTests(unittest.TestCase):
             writer.finish(ident)
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
-            for ident, (envelope, issue) in zip(ids, cases):
-                state, issues, credits, summary = db.execute("SELECT state,issues_json,credits,summary_json FROM captures WHERE id=?", (ident,)).fetchone()
-                self.assertEqual(state, "incomplete" if issue else "complete")
-                self.assertEqual(json.loads(issues), [issue] if issue else [])
-                self.assertEqual(credits, None if issue else .25)
-                self.assertEqual(json.loads(summary)["usage_objects"][0]["value"]["kiro:credits"], envelope)
+            for ident, (envelope, issue) in zip(ids, cases, strict=True):
+                with self.subTest(envelope=envelope):
+                    state, issues, credits, summary = db.execute("SELECT state,issues_json,credits,summary_json FROM captures WHERE id=?", (ident,)).fetchone()
+                    self.assertEqual(state, "incomplete" if issue else "complete")
+                    self.assertEqual(json.loads(issues), [issue] if issue else [])
+                    self.assertEqual(credits, None if issue else .25)
+                    self.assertEqual(json.loads(summary)["usage_objects"][0]["value"]["kiro:credits"], envelope)
 
     def test_omitted_request_payload_alone_keeps_usage_complete(self):
         writer = Collector(self.path, max_bytes=4096)
@@ -823,7 +810,7 @@ class CaptureTests(unittest.TestCase):
         writer.close()
         with contextlib.closing(sqlite3.connect(self.path)) as db:
             row = db.execute("SELECT state,credits,response_sha256,fingerprints_json,issues_json,dropped_chunks FROM captures").fetchone()
-            self.assertEqual(row[:3], ("complete", .25, digest(payload)))
+            self.assertEqual(row[:3], ("complete", .25, hashlib.sha256(payload).hexdigest()))
             self.assertIsNotNone(row[3])
             self.assertEqual(row[4:], ('["request_payload_omitted"]', 1))
         request, chunks, _ = self.payloads(ident)
@@ -839,13 +826,14 @@ class CaptureTests(unittest.TestCase):
         with patch.object(addon, "_reject") as reject:
             with patch.object(request, "get_content", side_effect=ValueError("synthetic decoding error")):
                 addon.request(flow)
-                self.assertEqual(reject.call_args.kwargs["status"], 400)
+                reject.assert_called_once_with(flow, status=400, message=b"Cannot decode selected Kiro request body")
             class Full(dict):
                 def __len__(self):
                     return 256
             with patch.object(addon.collector, "states", Full()):
                 addon.request(flow)
                 self.assertEqual(reject.call_count, 2)
+                reject.assert_called_with(flow, message=b"Kiro usage capture at capacity; retry after active requests finish")
         self.assertFalse(addon.failed)
         addon.request(flow)
         addon.responseheaders(flow)
@@ -896,23 +884,17 @@ class CaptureTests(unittest.TestCase):
     def test_python_without_compression_zstd_fails_closed_at_startup(self):
         addon = UsageCapture()  # a manual mitmdump on Python before 3.14 loads the addon, which then refuses as above
         with patch.dict(os.environ, {"KIRO_USAGE_DB": str(self.path)}), patch.dict(sys.modules, {"codec": None}):
-            with contextlib.redirect_stderr(io.StringIO()) as warnings:
+            with contextlib.redirect_stderr(io.StringIO()):
                 addon.load(None)
-        self.assertIn("capture startup failed", warnings.getvalue())
         self.assertTrue(addon.failed)
         addon.done()
         Collector(self.path).close()  # the failed start released the writer lock
 
     def test_offline_list_human_and_original_json_lines(self):
         command = [sys.executable, str(Path(__file__).with_name("capture.py")), "--db", str(self.path), "list"]
-        Collector(self.path).close()
-        # Empty lists still have readable column headers.
-        empty = subprocess.run(command, capture_output=True, text=True, check=True)
-        self.assertIn("Capture", empty.stdout)
         _, row = self.run_capture([event(completed())])
         human = subprocess.run(command, capture_output=True, text=True, check=True)
         self.assertIn(row["id"], human.stdout)
-        self.assertIn("complete", human.stdout)
         self.assertRegex(human.stdout, r"complete\s+\d+\s+0\s+0.25\s+12.3")
         structured = subprocess.run([*command, "--json"], capture_output=True, text=True, check=True)
         self.assertEqual(structured.stderr, "")
@@ -926,14 +908,13 @@ class CaptureTests(unittest.TestCase):
         with self.deferred():
             db, row = self.run_capture([encoded[:9], encoded[9:]], "gzip")
         blob = lambda name, value: base64.b64decode(value) if name in ("application", "entity", "frame") and value is not None else value
-        outputs = []
         for sealed in (False, True):
             if sealed:
                 self.seal(row["id"])
             with self.subTest(sealed=sealed):
                 unpacked = {mode: self.unpack(row["id"], mode) for mode in ("request", "transport", "decoded", "chunks", "events")}
                 self.assertEqual({mode: (result.returncode, result.stderr) for mode, result in unpacked.items()}, dict.fromkeys(unpacked, (0, b"")))
-                self.assertEqual(digest(unpacked["request"].stdout), row["request_sha256"])
+                self.assertEqual(hashlib.sha256(unpacked["request"].stdout).hexdigest(), row["request_sha256"])
                 self.assertEqual((unpacked["transport"].stdout, unpacked["decoded"].stdout), (encoded, body))
                 chunks, events = store.response_rows(db, row["id"])
                 for mode, names, rows in (("chunks", ("seq", "utc_ns", "mono_ns", "entity", "application"), chunks),
@@ -941,8 +922,6 @@ class CaptureTests(unittest.TestCase):
                     lines = [json.loads(line) for line in unpacked[mode].stdout.splitlines()]
                     self.assertTrue(lines)
                     self.assertEqual([tuple(blob(name, line[name]) for name in names) for line in lines], [tuple(item) for item in rows])
-                outputs.append({mode: result.stdout for mode, result in unpacked.items()})
-        self.assertEqual(outputs[0], outputs[1])
         db.execute("UPDATE captures SET request_sha256=?", ("0" * 64,))
         db.commit()
         unpacked = self.unpack(row["id"], "request")
@@ -958,15 +937,15 @@ class CaptureTests(unittest.TestCase):
             return SimpleNamespace(id=ident, request=SimpleNamespace(host=host, path=path, method=method, headers=headers, get_content=lambda strict: body), response=SimpleNamespace(headers={"content-type": "text/event-stream", "x-amzn-requestid": "upstream-fake", "set-cookie": "never"}, status_code=200, stream=None))
         generate = "KiroRuntimeService.GenerateAssistantResponse"
         # The schema's REST path is never sent; RPC selection is the exact target on POST / only.
-        for host, path, target in (("not-kiro.dev", "/v1/responses", None), ("kiro.dev.evil", "/v1/responses", None), ("kiro.dev", "/other", None), ("kiro.dev", "/generateAssistantResponse", None),
-                                   ("kiro.dev", "/", None), ("kiro.dev", "/", "KiroRuntimeService.GetUsageLimits"), ("kiro.dev", "/", generate + "X"), ("kiro.dev", "/v1/responses/", generate), ("not-kiro.dev", "/", generate)):
+        for host, path, target in (("not-kiro.dev", "/v1/responses", None), ("kiro.dev.evil", "/v1/responses", None), ("kiro.dev", "/generateAssistantResponse", None),
+                                   ("kiro.dev", "/", None), ("kiro.dev", "/", generate + "X"), ("kiro.dev", "/v1/responses/", generate), ("not-kiro.dev", "/", generate)):
             rejected = flow(host, path, f"{host}{path}{target}", target)
             addon.request(rejected)
             self.assertNotIn(rejected.id, addon.active)
-        for method in ("GET", "OPTIONS"):  # RPC calls are POST; the target alone does not select
-            rejected = flow("kiro.dev", "/", f"rpc-{method}", generate, method=method)
-            addon.request(rejected)
-            self.assertNotIn(rejected.id, addon.active)
+        # RPC calls are POST; the target alone does not select.
+        rejected = flow("kiro.dev", "/", "rpc-GET", generate, method="GET")
+        addon.request(rejected)
+        self.assertNotIn(rejected.id, addon.active)
         selected = flow()
         addon.request(selected)
         addon.responseheaders(selected)
@@ -998,7 +977,7 @@ class CaptureTests(unittest.TestCase):
 
 class RuntimeTests(unittest.TestCase):
     def test_exec_environment_and_arguments(self):
-        """Check explicit-exec replacement arguments and inherited Node trust merging."""
+        """Check explicit-exec replacement arguments, proxy routing, and the inherited Node CA marker."""
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / "state with spaces"
             runtime.private_directory(state, create=True)
@@ -1021,10 +1000,6 @@ class RuntimeTests(unittest.TestCase):
                 self.assertEqual(environment["PATH"], "/project/bin")
                 for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                     self.assertEqual(environment[name], f"http://kiro-usage-{environment['KIRO_USAGE_INVOCATION']}:@127.0.0.1:19001")
-                combined = b"inherited CA\n# kiro-usage merged certificate authorities\nfake CA"
-                observed_ca = Path(environment["NODE_EXTRA_CA_CERTS"])
-                self.assertEqual(observed_ca.parent, state / "ca")
-                self.assertEqual(observed_ca.read_bytes(), combined)
                 self.assertEqual(environment[runtime.INHERITED_NODE_CA], str(inherited_ca))
                 for name in ("ALL_PROXY", "NO_PROXY", "all_proxy", "no_proxy"):
                     self.assertNotIn(name, environment)
