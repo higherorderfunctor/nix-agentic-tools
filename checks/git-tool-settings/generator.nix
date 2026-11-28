@@ -4,11 +4,12 @@
 #
 #   fixtures  the generator over small hand sidecars: a field it does not
 #             know FAILS (an extractor that learns a fact must teach the
-#             generator, or the fact is dropped), `minimum` narrows the int
-#             type, and each optional field reaches the option description.
-#   owners    every owner that exports `lib.<owner>.settings` (discovered, so
-#             a new tool is covered on arrival): its real sidecar maps every
-#             type, nests no keys, and its hand tables are current.
+#             generator, or the fact is dropped), integers keep their type
+#             at module merge, and measured prose reaches option descriptions.
+#   owners    discover `lib.<owner>.settings` exports and check their type
+#             mappings and hand tables unless the owner already does so.
+#             Git module parity forces the option tree (including path collision
+#             rejection); checks/modules/options-doc.nix forces its prose.
 #
 # Tool-specific behavior (git-branchless's refinements and exclusions) is
 # the owner's own check; see packages/git-branchless/checks/settings-options.nix.
@@ -39,7 +40,6 @@
   };
   one = node: sidecar {"probe.key" = read // node;};
   optionOf = extracted: (generate extracted).options.probe.key;
-  describes = node: fragment: lib.hasInfix fragment (optionOf (one node)).description;
 
   # Reading the option forces the whole sidecar's schema, including entries
   # that never become options. Each rejection changes only the named field.
@@ -89,67 +89,77 @@
       "sidecar rejects unknown aliases field".aliases = [];
     }
     // {
+      # Dropping `deadKeys` from `schema.required` alone changes the diagnostic, not the rejection this row pins.
       "sidecar rejects missing deadKeys" = rejectsSidecar (builtins.removeAttrs validSidecar ["deadKeys"]);
     };
 
-  readInt = bounds: value:
+  plainInt = value:
     (lib.evalModules {
       modules = [
-        {inherit (generate (one ({type = "int";} // bounds))) options;}
+        {inherit (generate (one {type = "int";})) options;}
         {config.probe.key = value;}
       ];
     }).config.probe.key;
-  plainInt = readInt {};
-  positiveInt = readInt {minimum = 1;};
-  rejectsInt = readValue: valid: invalid:
-    rejectsChange readValue {
-      inherit invalid valid;
-      expected = valid;
-    };
   rangeCases = {
-    "minimum 1 accepts null" = positiveInt null == null;
-    "minimum 1 rejects zero" = rejectsInt positiveInt 1 0;
-    "plain int rejects above signed 32-bit maximum" = rejectsInt plainInt (-5) 2147483648;
+    # The bounded and refined integers in checks/git-config/module-eval.nix
+    # don't exercise the plain int type: it must be signed and 32-bit too.
+    "plain int rejects above signed 32-bit maximum" = rejectsChange plainInt {
+      expected = -5;
+      invalid = 2147483648;
+      valid = -5;
+    };
   };
 
   # Descriptions tell users the upstream behavior, not Nix's unset default.
-  fixtures = {
-    cli-or-semantics-are-described = describes {
+  descriptionCases = lib.mapAttrs (_: {fragment, ...} @ fixture:
+    lib.hasInfix fragment (optionOf (one (builtins.removeAttrs fixture ["fragment"]))).description) {
+    "CLI flag and its alias can only turn the setting on" = {
       inherit cli;
-      default = false;
+      fragment = "`--probe` (also set by `--force`) (\"Do it\") is ORed with this setting: it can only turn it on for one run";
       type = "bool";
-    } "`--probe` (also set by `--force`) (\"Do it\") is ORed with this setting";
-    computed-terminal-default-is-described = describes {
+    };
+    "computed default is shown at the end of a fallback chain" = {
       defaultExpr = "rr_cache.is_dir()";
       fallback = ["rerere.enabled"];
+      fragment = "uses the value of `rerere.enabled`; when that is unset too, whatever `rr_cache.is_dir()` computes";
       type = "bool";
-    } "whatever `rr_cache.is_dir()` computes";
-    fallback-is-described = describes {
-      default = false;
-      fallback = ["rebase.autoSquash"];
-      type = "bool";
-    } "uses the value of `rebase.autoSquash`; when that is unset too, `false`";
-    foreign-keys-are-not-options = let
-      surface = generate validSidecar;
-    in
-      !(surface.options ? core) && map (leaf: leaf.key) surface.leaves == ["probe.choice" "probe.key"];
-    overrides-are-described = describes {
+    };
+    "explicit override flags can beat the setting" = {
+      fragment = "flags `--probe`, `--no-probe` override it";
       overriddenBy = ["--probe" "--no-probe"];
       type = "bool";
-    } "flags `--probe`, `--no-probe` override it";
-    revset-functions-are-optional = (generate (one {type = "bool";})).revsetFunctions == [];
-    silent-fallback-on-invalid-is-described = describes {
+    };
+    "fallback reads another key before using a literal default" = {
+      default = false;
+      fallback = ["rebase.autoSquash"];
+      fragment = "uses the value of `rebase.autoSquash`; when that is unset too, `false`";
+      type = "bool";
+    };
+    "invalid int silently chooses the default, not the fallback" = {
+      fragment = "replaces a value it cannot parse with the default, silently";
       invalid = "default";
       type = "int";
-    } "replaces a value it cannot parse with the default";
-    special-values-are-described = describes {
+    };
+    "special values include the empty string, not just auto" = {
+      fragment = ''`""`, `"auto"`'';
       specialValues = ["" "auto"];
       type = "string";
-    } "`\"\"`, `\"auto\"`";
-    undocumented-is-described = describes {
+    };
+    "undocumented setting does not pass for upstream documentation" = {
       documented = false;
+      fragment = "Undocumented upstream";
       type = "bool";
-    } "Undocumented upstream";
+    };
+  };
+
+  surfaceCases = let
+    surface = generate validSidecar;
+  in {
+    "core.editor is not declared as an option" =
+      builtins.attrNames surface.options
+      == ["probe"]
+      && builtins.attrNames surface.options.probe == ["choice" "key"];
+    "tools without a revsetFunctions field expose an empty list" = surface.revsetFunctions == [];
   };
 
   owners = lib.filterAttrs (_: exported: builtins.isAttrs exported && exported ? settings) self.lib;
@@ -157,17 +167,22 @@
     lib.concatMapAttrs (owner: exported: let
       surface = exported.settings {inherit lib;};
     in {
-      "${owner}-hand-tables-are-current" = surface.report.staleExclusions == [] && surface.report.staleRefinements == [];
-      "${owner}-keys-do-not-nest" = surface.report.collisions == [];
-      "${owner}-options-evaluate" = (builtins.tryEval (builtins.deepSeq surface.options true)).success;
-      "${owner}-types-are-mapped" = surface.report.untyped == [];
+      "${owner}: hand tables do not name removed or retyped keys" = surface.report.staleExclusions == [] && surface.report.staleRefinements == [];
+      "${owner}: no read option falls back to an unspecified type" = surface.report.untyped == [];
     })
-    owners;
+    # packages/git-branchless/checks/settings-options.nix checks these reports on the same sidecar.
+    (builtins.removeAttrs owners ["git-branchless"])
+    // {
+      # Discover future owners, but don't let a lost export silently shrink the check.
+      "all three shipped git tool settings exports are discovered" =
+        lib.all (owner: owners ? ${owner}) ["git-absorb" "git-branchless" "git-revise"];
+    };
 in {
   checks.git-tool-settings-generator = mkTest "git-tool-settings-generator" (
     checkRows "sidecar schema" schemaCases
     && checkRows "integer option definitions" rangeCases
-    && checkRows "generated options" fixtures
+    && checkRows "option descriptions" descriptionCases
+    && checkRows "generated options" surfaceCases
     && checkRows "owner sidecars" ownerCases
   );
 }

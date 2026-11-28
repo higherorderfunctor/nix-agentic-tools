@@ -1,2 +1,0 @@
-{writeText}:
-writeText "facet-shared" ""

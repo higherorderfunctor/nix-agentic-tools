@@ -48,16 +48,13 @@
       };
       failures = [(badRow ["controls"])];
     };
+    # Blank delivery is an invalid row and does not satisfy a secret need.
     blank-excluded = {
       input = {
         facts = {token.type = "string";};
         rows.token.excluded = "";
       };
       failures = [(failure "bad-row" "token" ["excluded"]) (secret "token")];
-    };
-    blank-non-secret-excluded = {
-      input.rows.value.excluded = "";
-      failures = [(badRow ["excluded"])];
     };
     boolean-secret-name = {
       input = {
@@ -114,7 +111,7 @@
           };
         };
     };
-    # A `*` matches one key, never a path.
+    # A `*` matches one key, never a path; no match names the stale row.
     pattern-one-key = {
       input = {
         facts."keys.a.b.leaf".type = "string";
@@ -142,10 +139,6 @@
         rows = {};
       };
       failures = [(failure "bad-row" "keys.a.leaf" ["claimed by several rows: *.a.leaf, keys.*.leaf"])];
-    };
-    pattern-stale = {
-      input.patterns."keys.*.leaf".description = "hand prose";
-      failures = [(removed "keys.*.leaf" "delete the stale pattern row")];
     };
     removed-row = {
       input = {

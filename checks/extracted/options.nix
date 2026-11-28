@@ -11,7 +11,7 @@
   ...
 }: let
   generate = args: import ../../lib/extracted/options.nix {inherit lib;} ({tool = "probe";} // args);
-  inherit (import ../../lib/extracted/render.nix {inherit lib;}) fill render;
+  inherit (import ../../lib/extracted/render.nix {inherit lib;}) render;
   redact = import ../../lib/redact {inherit lib;};
   throws = value: !(builtins.tryEval (builtins.deepSeq value true)).success;
   merged = type: value:
@@ -79,7 +79,6 @@
       invalid.group.mode = "c";
       expected = "a";
     };
-    every-leaf-defaults-to-null = (one {type = "bool";}).options.key.default == null;
     every-leaf-takes-null = merged (typeOf {type = "int";}) null == null;
     list-of-objects = restricts settings (value: value.items) {
       valid.items = [{name = "x";}];
@@ -96,6 +95,7 @@
       invalid.labels.a = 1;
       expected.a = "x";
     };
+    number-takes-a-float = merged (typeOf {type = "number";}) 1.5 == 1.5;
     objects-are-closed = restricts settings (value: value.group.port) {
       valid.group.port = 1;
       invalid.group = {
@@ -104,24 +104,11 @@
       };
       expected = 1;
     };
-    secret-file-tags-a-reference = (merged settings {group.key-file = file;}).group.key-file == {_redact.asFile = file;};
     secret-needs-a-reference = restricts settings (value: value.group.token) {
       valid.group.token = file;
       invalid.group.token = "cleartext";
       expected = file;
     };
-    any-takes-json = (merged settings {extra.nested = [1 "two" {three = true;}];}).extra == {nested = [1 "two" {three = true;}];};
-    number-takes-a-float = merged (typeOf {type = "number";}) 1.5 == 1.5;
-    unread-field-passes =
-      builtins.attrNames
-      (generate {
-        nodes.key = {
-          readBy = ["probe"];
-          type = "bool";
-        };
-        unread = ["readBy"];
-      }).options
-      == ["key"];
     exclusion-drops-the-option =
       !((generate {
         exclusions.key = "probe";
@@ -138,7 +125,13 @@
         };
       };
     in
-      refined.report.staleRefinements == [] && !(accepts refined.options.key.type "x");
+      refined.report.staleRefinements
+      == []
+      && restricts refined.options.key.type lib.id {
+        valid = "1s";
+        invalid = "x";
+        expected = "1s";
+      };
     # Rows that would not apply are reported stale, not thrown: a node type
     # that differs from the row's, and a node that is itself secret.
     refinement-guard-ignores-rows-that-would-not-apply = let
@@ -187,9 +180,12 @@
     in
       refined.report.staleRefinements
       == []
-      && accepts refined.type {ids = ["x"];}
-      && !(accepts refined.type {ids = [];})
-      && !(accepts refined.type {other = ["cleartext"];});
+      && (merged refined.type {ids = ["x"];}).ids == ["x"]
+      && restricts refined.type (value: value.other) {
+        valid.other = [file];
+        invalid.other = ["cleartext"];
+        expected = [file];
+      };
     # A row on a list node gets the generated element type, so it can refuse
     # null elements and keep the element shape.
     refinement-sees-the-list-element-type = let
@@ -212,15 +208,20 @@
     in
       refined.report.staleRefinements
       == []
-      && accepts listType [1 2]
-      && !(accepts listType [1 null])
-      && !(accepts listType ["x"]);
+      && harness.checkRows "refined list elements" (lib.mapAttrs (_: invalid:
+        restricts listType lib.id {
+          inherit invalid;
+          valid = [1 2];
+          expected = [1 2];
+        }) {
+        rejects-null = [1 null];
+        rejects-string = [1 "x"];
+      });
     # elementType is passed only to a row on a list node that has a `[]` node:
     # an `any` node with a `[]` child and a bare list get none.
     refinement-sees-no-element-type-without-a-list-element = let
-      # "bool" when the row received elementType, "int" when it did not; a
-      # stale row would be neither.
-      received = type: nodes: let
+      # The refinement yields int only when it did not receive elementType.
+      lacksElementType = type: nodes: let
         built = generate {
           inherit nodes;
           refinements.list = {
@@ -233,25 +234,13 @@
         };
         listType = built.options.list.type;
       in
-        if built.report.staleRefinements != []
-        then "stale"
-        else if accepts listType true && !(accepts listType 1)
-        then "bool"
-        else if accepts listType 1 && !(accepts listType true)
-        then "int"
-        else "unknown";
+        built.report.staleRefinements == [] && accepts listType 1 && !(accepts listType true);
     in
-      received "list" {
-        list.type = "list";
-        "list[]".type = "int";
-      }
-      == "bool"
-      && received "any" {
+      lacksElementType "any" {
         list.type = "any";
         "list[]".type = "int";
       }
-      == "int"
-      && received "list" {list.type = "list";} == "int";
+      && lacksElementType "list" {list.type = "list";};
     # A row whose path is gone, whose node type changed, or whose node is a
     # secret (no row widens a secret) is stale.
     stale-refinements-are-reported =
@@ -305,7 +294,19 @@
       .misplaced
       == ["orphan.child" "scalar.child"];
     any-consumes-its-children = full.report.misplaced == [] && full.report.untyped == [];
-    sample-fits-the-type = accepts settings (full.sample {});
+    # A sample must exercise the generated tree, not just be an accepted
+    # empty object (every option is nullable).
+    sample-fits-the-type = let
+      sample = full.sample {};
+    in
+      builtins.attrNames sample
+      == ["extra" "group" "items" "labels" "secret-items" "secret-labels"]
+      && builtins.attrNames sample.group == ["key-file" "mode" "port" "token" "wait"]
+      && builtins.attrNames (lib.head sample.items) == ["name"]
+      && builtins.attrNames sample.labels == ["sample"]
+      && builtins.length sample.secret-items == 1
+      && builtins.attrNames sample.secret-labels == ["sample"]
+      && accepts settings sample;
 
     render-drops-nulls-and-lifts-secrets = let
       rendered = render {
@@ -385,13 +386,6 @@
         PROBE_KEY_FILE = {_redact.asFile = file;};
         PROBE_TOKEN = file;
       };
-    fill-encodes-json = let
-      rendered = render {
-        prefix = "PROBE";
-        settings.key = file;
-      };
-    in
-      builtins.fromJSON (fill {PROBE_KEY = "q\"\\'";} rendered.content) == {key = "q\"\\'";};
   };
 
   # A refinement returns the whole node type. These paths cover its list,

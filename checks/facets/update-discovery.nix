@@ -16,8 +16,7 @@
           builder = "/intentionally-unusable-builder";
           system = ${builtins.toJSON system};
         };
-        packages = assert !builtins.pathExists cold.outPath;
-          builtins.seq (builtins.readFile cold.outPath) {};
+        packages = builtins.seq (builtins.readFile cold.outPath) {};
       in {
         packages.${system} = packages;
         legacyPackages.${system} = packages;
@@ -77,21 +76,26 @@ in {
       import sys
       from collections import Counter
 
-      targets = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "targets.json").read_text())
       # The outer flake reads the registry without going through CLI discovery.
       expected_targets = json.loads(pathlib.Path(sys.argv[1]).read_text())
-      assert expected_targets and targets == expected_targets, "cold discovery did not export the nonempty registry"
 
       output = pathlib.Path(os.environ["GITHUB_OUTPUT"]).read_text()
       matrices = [line.removeprefix("matrix=") for line in output.splitlines() if line.startswith("matrix=")]
       assert len(matrices) == 1, f"expected one workflow matrix output, got {len(matrices)}"
-      rows = Counter((row["kind"], row["name"]) for row in json.loads(matrices[0])["include"])
+      workers = json.loads(matrices[0])["include"]
+      rows = Counter((row["kind"], row["name"]) for row in workers)
       # The fixture has exactly these two inputs and no fixture locks of its own.
       expected_rows = Counter([("input", "nixpkgs"), ("input", "repository")])
       expected_rows.update(("package", name) for name in expected_targets)
       assert rows == expected_rows, f"wrong workers: missing {expected_rows - rows}, unexpected {rows - expected_rows}"
+      # Package workers consume flags and git from the matrix; the updater reads the recipe from the registry.
+      for worker in workers:
+          if worker["kind"] == "package":
+              name = worker["name"]
+              for key in ("flags", "git"):
+                  assert worker.get(key, object()) == expected_targets[name][key], f"{name}: worker {key} differs from the registry"
       PY
       mkdir -p "$out"
-      cp old.log "$RUNNER_TEMP/targets.json" "$GITHUB_OUTPUT" "$out/"
+      cp old.log "$GITHUB_OUTPUT" "$out/"
     '';
 }

@@ -34,12 +34,21 @@ in {
       cp "$hooks_dir/post-commit" post-commit.before
 
       ( cd worktree; ${pkgs.lib.getExe isolator} )
-      cmp post-commit.before "$hooks_dir/post-commit"
-      test "$(stat --format=%a "$hooks_dir/pre-commit")" = 755
+      if ! cmp post-commit.before "$hooks_dir/post-commit"; then
+        echo "non-prek post-commit hook was rewritten" >&2
+        exit 1
+      fi
+      if [ "$(stat --format=%a "$hooks_dir/pre-commit")" != 755 ]; then
+        echo "rewriting pre-commit did not preserve mode 0755" >&2
+        exit 1
+      fi
 
       cp "$hooks_dir/pre-commit" first-generation
       ( cd primary; ${pkgs.lib.getExe isolator} )
-      cmp first-generation "$hooks_dir/pre-commit"
+      if ! cmp first-generation "$hooks_dir/pre-commit"; then
+        echo "rerunning the rewrite from primary changed the shared hook" >&2
+        exit 1
+      fi
 
       cat > stub/prek <<'STUB'
       #!${pkgs.bash}/bin/bash
@@ -62,7 +71,7 @@ in {
           export DEVENV_ROOT="$root/$1"
         fi
         if [ "$2" = set ]; then
-          GIT_DIR="$(git rev-parse --path-format=absolute --git-dir)"
+          GIT_DIR="$(git rev-parse --path-format=absolute --git-dir)" || exit 2
           export GIT_DIR
         fi
         "$hooks_dir/pre-commit"
@@ -71,21 +80,20 @@ in {
       # No shell (editor or plain-terminal commit) uses the primary. A launch
       # worktree of this repo uses its own config. An unrelated repo never does,
       # even if Git exports a GIT_DIR that would make it look like this repo.
-      while read -r launch git_dir config; do
+      while read -r launch git_dir config regression; do
         rm -f "$PREK_CAPTURE"
-        run_hook "$launch" "$git_dir"
-        if ! printf 'PREK_HOME=%s\nrun\n--config=%s\n' \
+        if ! run_hook "$launch" "$git_dir" || ! printf 'PREK_HOME=%s\nrun\n--config=%s\n' \
           "$root/worktree/.devenv/state/prek" "$root/$config/.pre-commit-config.yaml" \
           | diff -u - "$PREK_CAPTURE"; then
-          echo "wrong hook state or config: launch=$launch GIT_DIR=$git_dir" >&2
+          echo "$regression: wrong hook state or config (launch=$launch GIT_DIR=$git_dir)" >&2
           exit 1
         fi
       done <<'CASES'
-      base unset base
-      none unset primary
-      other set primary
-      other unset primary
-      primary unset primary
+      base unset base Same-repository launch config replaced by fallback
+      none unset primary Editor commit fails to use primary fallback
+      other set primary Inherited GIT_DIR makes unrelated checkout look related
+      other unset primary Unrelated launch config accepted in an ordinary shell
+      primary unset primary Primary launch fails instead of using primary config
       CASES
 
       rm base/.pre-commit-config.yaml "$PREK_CAPTURE"

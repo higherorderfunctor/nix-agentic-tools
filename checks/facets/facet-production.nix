@@ -2,7 +2,7 @@
   checks.facet-owner-relocation = let
     system = pkgs.stdenv.hostPlatform.system;
     probe = pkgs.writeText "facet-owner-relocation.nix" ''
-      {root, collision ? false, policy ? "allow"}: let
+      {root, collision ? false, policy ? "deny"}: let
         pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
         inherit (pkgs) lib;
         repository = import ${../..}/lib/facets/repository.nix {
@@ -13,7 +13,6 @@
         consumerPkgs = import ${pkgs.path} {
           system = ${builtins.toJSON system};
           config = {
-            allowUnfree = policy == "allow";
             allowUnfreePredicate = package:
               policy == "predicate" && lib.getName package == "facet-unfree-control";
           };
@@ -56,11 +55,16 @@
       evaluate > before.json
       mv repository/packages/git-revise repository/packages/relocated-owner
       evaluate > after.json
+      # The check and derivation must follow the owner, while the update target
+      # must change to the new recipe path instead of keeping a stale pointer.
       jq -e -s '
-        (.[0].checks | has("git-revise-package")) and
-        (.[0] | del(.file)) == (.[1] | del(.file)) and
-        .[0].file == "packages/git-revise/packages/ai/gitTools/git-revise/package.nix" and
-        .[1].file == "packages/relocated-owner/packages/ai/gitTools/git-revise/package.nix"
+        if (.[0].checks | has("git-revise-package") | not) then
+          error("the original owner did not register git-revise-package")
+        elif (.[0] | del(.file)) != (.[1] | del(.file)) then
+          error("moving the owner changed a check or the package derivation")
+        elif .[1].file != "packages/relocated-owner/packages/ai/gitTools/git-revise/package.nix" then
+          error("the relocated update target did not follow the owner recipe")
+        else true end
       ' before.json after.json
       if evaluate --arg collision true > collision.json 2> collision.log; then
         echo 'root/owner duplicate check unexpectedly passed' >&2
@@ -78,16 +82,24 @@
         } "touch $out"
       ''} repository/packages/unfree-control/packages/ai/facet-unfree-control/package.nix
       echo '{}' > repository/packages/unfree-control/registry.nix
-      for policy in allow predicate; do
-        evaluate --argstr policy "$policy" > "$policy.json"
-        jq -e '.unfree.drvPath | endswith("facet-unfree-control-1.drv")' "$policy.json"
-      done
-      for policy in deny rejected-predicate; do
-        if evaluate --argstr policy "$policy" > "$policy.json" 2> "$policy.log"; then
-          echo "unfree policy $policy unexpectedly passed" >&2
+      # The consumer's matching predicate must apply through the overlay, and
+      # a consumer that denies unfree must still reject it.
+      for row in deny:rejects predicate:admits; do
+        policy="''${row%:*}"
+        expected="''${row#*:}"
+        status=0
+        evaluate --argstr policy "$policy" > "$policy.json" 2> "$policy.log" || status=$?
+        if [[ "$expected" == admits ]]; then
+          if (( status != 0 )) || ! jq -e '.unfree.drvPath | endswith("facet-unfree-control-1.drv")' "$policy.json"; then
+            echo "unfree policy $policy did not expose the control derivation" >&2
+            cat "$policy.log" >&2
+            exit 1
+          fi
+        elif (( status == 0 )) || ! grep -F 'facet-unfree-control-1' "$policy.log" | grep -F 'unfree license'; then
+          echo "unfree policy $policy did not reject the control for its unfree license" >&2
+          cat "$policy.log" >&2
           exit 1
         fi
-        grep -F 'facet-unfree-control-1' "$policy.log" | grep -F 'unfree license'
       done
       mkdir -p "$out"
       cp before.json after.json "$out/"

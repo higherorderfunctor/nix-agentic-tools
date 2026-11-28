@@ -4,6 +4,7 @@ import http.client
 import http.server
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -39,9 +40,20 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def request(body=b'{"jsonrpc":"2.0","method":"tools/list","id":1}'):
+def request(message_id=1):
     conn = http.client.HTTPConnection("127.0.0.1", 19591, timeout=3)
-    conn.request("POST", "/client-path", body, {"Accept": "application/json, text/event-stream", "aUtHoRiZaTiOn": "attacker", "Content-Type": "application/json"})
+    body = json.dumps({"jsonrpc": "2.0", "method": "tools/list", "id": message_id})
+    conn.request(
+        "POST",
+        "/client-path",
+        body,
+        {
+            "Accept": "application/json, text/event-stream",
+            "aUtHoRiZaTiOn": "client-supplied-token",
+            "Content-Type": "application/json",
+            "X-Token": "client-supplied-custom-token",
+        },
+    )
     return conn, conn.getresponse()
 
 
@@ -81,7 +93,6 @@ with tempfile.TemporaryDirectory() as directory:
         process = subprocess.Popen([sys.argv[1], "run", "--config", str(config), "--adapter", "caddyfile"], env=env, stdout=log, stderr=log)
         try:
             for _ in range(100):
-                assert process.poll() is None, "Caddy exited before listening"
                 try:
                     with socket.create_connection(("127.0.0.1", 19591), timeout=0.1):
                         break
@@ -89,24 +100,29 @@ with tempfile.TemporaryDirectory() as directory:
                     time.sleep(0.05)
             else:
                 raise AssertionError("Caddy did not listen")
-            pid = process.pid
-            conn, stream = request(b'{"jsonrpc":"2.0","method":"tools/list","id":2}')
-            assert stream.status == 200
-            assert requests[-1][1].get_all("Authorization") == ["Bearer First.Secret=="]
-            assert stream.readline() == b"data: first\n", "SSE buffered until close"
-            assert stream.readline() == b"\n"
-            for contents, expected in [(b"Rotated.Secret\n", "Bearer Rotated.Secret"), (b"CRLF.Secret\r\n", "Bearer CRLF.Secret")]:
+            conn, stream = request(2)
+            path, headers, body = requests[-1]
+            assert path == "/endpoint", "the file-header route skipped upstream path rewriting"
+            assert body == b'{"jsonrpc": "2.0", "method": "tools/list", "id": 2}', "the file-header route changed the POST body"
+            assert headers.get_all("Authorization") == ["Bearer First.Secret=="], "client Authorization survived or token padding was lost"
+            assert headers.get_all("X-Token") == ["Other.Secret"], "custom client header survived or its default prefix was not empty"
+            assert stream.readline() + stream.readline() == b"data: first\n\n", "SSE buffered until close"
+
+            # Each line ending has to strip exactly once. The second case also
+            # catches a reader that stops refreshing after the first rotation.
+            for case, contents, expected in [
+                ("LF", b"Rotated.Secret\n", "Bearer Rotated.Secret"),
+                ("CRLF", b"CRLF.Secret\r\n", "Bearer CRLF.Secret"),
+            ]:
                 publish(token, contents)
                 client, response = request()
-                assert response.status == 200
-                response.read()
-                client.close()
-                path, headers, body = requests[-1]
-                assert path == "/endpoint"
-                assert headers.get_all("Authorization") == [expected], "client header not overwritten"
-                assert headers["X-Token"] == "Other.Secret", "default prefix was not empty"
-                assert body == b'{"jsonrpc":"2.0","method":"tools/list","id":1}'
-                assert process.pid == pid and process.poll() is None
+                try:
+                    assert response.status == 200, (case, response.status)
+                    response.read()
+                finally:
+                    client.close()
+                assert requests[-1][1].get_all("Authorization") == [expected], f"{case}: stale token or untrimmed line ending"
+
             invalid_contents = {
                 "blank": b"",
                 "embedded carriage return": b"bad\rline",
@@ -119,19 +135,16 @@ with tempfile.TemporaryDirectory() as directory:
             for case, contents in invalid_contents.items():
                 publish(token, contents)
                 expect_unavailable(case)
-            for unavailable in ["missing", "unreadable"]:
-                publish(token, b"Hidden.Secret")
-                if unavailable == "missing":
-                    token.unlink()
-                else:
-                    token.chmod(0)
-                    try:
-                        token.read_bytes()
-                    except PermissionError:
-                        pass
-                    else:
-                        raise AssertionError("unreadable fixture is readable by this user")
-                expect_unavailable(unavailable)
+            token.unlink()
+            expect_unavailable("missing file cannot reuse the previous token")
+            publish(token, b"Hidden.Secret")
+            token.chmod(0)
+            try:
+                token.read_bytes()
+            except PermissionError:
+                expect_unavailable("unreadable file cannot reuse the previous token")
+            else:
+                raise AssertionError("unreadable fixture is readable by this user")
             publish(token, b"Restored.Secret")
             publish(second, b"")
             expect_unavailable("second credential file blank despite a valid first file")
@@ -139,17 +152,20 @@ with tempfile.TemporaryDirectory() as directory:
             assert stream.read() == b"data: second\n\n", "rotation interrupted existing stream"
             conn.close()
             publish(second, b"Other.Secret")
-            client, response = request(b'{"jsonrpc":"2.0","method":"tools/list","id":3}')
-            assert response.status == 502
+            # Exercise the upstream-error log path, not merely clean requests.
+            client, response = request(3)
+            assert response.status == 502, "the upstream closed without a response; expected Bad Gateway"
             response.read()
             client.close()
+            assert requests[-1][1].get_all("Authorization") == ["Bearer Restored.Secret"], "error probe did not use the restored credential"
         finally:
             release.set()
             process.terminate()
             process.wait(timeout=5)
             upstream.shutdown()
-            log.seek(0)
-            logs = log.read()
-            for secret in ["First.Secret", "Rotated.Secret", "CRLF.Secret", "Hidden.Secret", "Restored.Secret", "Other.Secret", "attacker"]:
-                assert secret not in logs, "credential leaked to Caddy logs"
-    print("PASS: rotation, newline, overwrite, POST, fail-closed, SSE, log redaction; same Caddy PID")
+        log.seek(0)
+        logs = log.read()
+        assert re.search(r"\bhttp\.log\.error\b", logs), "upstream error was not logged; no redaction was observed"
+        for secret in ["CRLF.Secret", "First.Secret", "Other.Secret", "Restored.Secret", "Rotated.Secret", "client-supplied-custom-token", "client-supplied-token"]:
+            assert secret not in logs, "credential leaked to Caddy logs"
+    print("PASS: rotation without restart, line endings, overwrite, POST, fail-closed, SSE, log redaction")

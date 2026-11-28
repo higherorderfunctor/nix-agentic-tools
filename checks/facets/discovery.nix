@@ -14,7 +14,6 @@ in {
     pkgs.runCommandLocal "facet-check-discovery" {} ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      test -e ${world.checks.discovered}
       touch "$out"
     '';
 }

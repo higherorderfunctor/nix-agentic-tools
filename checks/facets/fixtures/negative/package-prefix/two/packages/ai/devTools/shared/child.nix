@@ -1,5 +1,3 @@
-{runCommandLocal}:
-runCommandLocal "facet-prefix-child" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+# Reject a container arriving after another owner already claimed its path as a leaf.
+{writeText}:
+writeText "facet-prefix-child" ""

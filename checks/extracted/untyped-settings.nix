@@ -58,22 +58,26 @@ in
           value = plain;
         };
       };
-  in {
-    "${name}-any-lifts-a-reference" =
-      inspect {nested = [file];}
-      == {
-        secrets.${caller.placeholder} = file;
-        value.nested = [("{" + "$" + caller.placeholder + "}")];
+  in
+    {
+      "${name}-any-lifts-a-reference" =
+        inspect {nested = [file];}
+        == {
+          secrets.${caller.placeholder} = file;
+          value.nested = [("{" + "$" + caller.placeholder + "}")];
+        };
+      "${name}-any-refuses-a-concat-without-a-reference" = refuses {nested = [{_redact.concat = ["literal"];}];};
+      "${name}-any-refuses-a-reference-with-extra-fields" = refuses {
+        nested = [
+          {
+            _redact.file = "/run/secrets/probe";
+            extra = true;
+          }
+        ];
       };
-    "${name}-any-refuses-a-concat-without-a-reference" = refuses {nested = [{_redact.concat = ["literal"];}];};
-    "${name}-any-refuses-a-reference-with-extra-fields" = refuses {
-      nested = [
-        {
-          _redact.file = "/run/secrets/probe";
-          extra = true;
-        }
-      ];
-    };
-    "${name}-any-refuses-non-json" = refuses (value: value);
-  })
+    }
+    # The shared JSON type rejects functions before either renderer runs.
+    // lib.optionalAttrs (name == "cliproxyapi") {
+      "${name}-any-refuses-non-json" = refuses (value: value);
+    })
   callers

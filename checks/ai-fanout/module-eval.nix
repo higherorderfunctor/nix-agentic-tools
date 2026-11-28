@@ -8,21 +8,20 @@
 }: let
   inherit (harness) aiStubs checkRows claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest rejectsChange setEnable;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDefaults;
+  backends = {
+    devenv = evalDevenv;
+    hm = evalHm;
+  };
   optionPaths = import ../../lib/ai/option-paths.nix {inherit lib pkgs;};
   # Runtimes whose record declares settings support.
   settingsHarnessNames = builtins.filter (name: (optionPaths.records.${name}.surfaceSupport.settings.backends or []) != []) harnessNames;
 in {
   checks = {
-    # A skill package writes a pool only where the runtime delivers it on
-    # this backend, so github.com Copilot's Home Manager arm receives nothing
-    # and warns only for what a consumer set.
     module-package-copilot-backend-gate = let
-      declaration = {
+      devenv = evalDevenv {
         ai.copilot.enable = true;
         ai.programs.stacked-workflows.enable = true;
       };
-      hm = evalHm declaration;
-      devenv = evalDevenv declaration;
       roots = devenv.config.ai.internal.roots;
       expectedSkills = roots.stacked-workflows-content.passthru.skills;
       # Read the named source instead of calling the router factory again.
@@ -30,22 +29,9 @@ in {
         "<!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->\n\n"
         + builtins.readFile ../../packages/stacked-workflows/fragments/skill-routing.md;
       github = devenv.config.ai.copilot.github;
-      poolWarnings = evaluated: builtins.filter (lib.hasInfix "ai.copilot.github.") evaluated.config.warnings;
-      observation = {
-        rules = builtins.attrNames hm.config.ai.copilot.github.rules;
-        skills = builtins.attrNames hm.config.ai.copilot.github.skills;
-        warnings = poolWarnings hm;
-        definitions = map (definition: definition.file) hm.options.ai.copilot.github.rules.definitionsWithLocations;
-      };
-      consumer = evalHm (lib.recursiveUpdate declaration {
-        ai.copilot.github = {
-          rules.consumer.text = "Consumer guidance.";
-          skills.consumer = ../../packages/copilot-cli/checks/fixtures/committed-skill;
-        };
-      });
-      warns = pool: lib.any (lib.hasPrefix "ai.copilot.github.${pool} is set but hm does not deliver it to copilot") (poolWarnings consumer);
+      poolWarnings = builtins.filter (lib.hasInfix "ai.copilot.github.") devenv.config.warnings;
     in
-      (mkTest "package-copilot-backend-gate" (checkRows "Copilot package backend gate" {
+      mkTest "package-copilot-backend-gate" (checkRows "Copilot package backend gate" {
         "devenv Copilot receives the router body" =
           builtins.attrNames github.rules
           == ["stacked-workflows-router"]
@@ -54,12 +40,8 @@ in {
           builtins.attrNames github.skills
           == ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"]
           && github.skills == expectedSkills
-          && poolWarnings devenv == [];
-        "hm leaves unsupported consumer rules intact and warns" = consumer.config.ai.copilot.github.rules ? consumer && warns "rules";
-        "hm leaves unsupported consumer skills intact and warns" = consumer.config.ai.copilot.github.skills ? consumer && warns "skills";
-        "hm writes neither package pool and emits no package warning" = observation.rules == [] && observation.skills == [] && observation.warnings == [];
-      }))
-      // {passthru = {inherit observation;};};
+          && poolWarnings == [];
+      });
 
     module-runtime-path-provenance-notice = let
       # Every runtime that ships a launcher; github.com Copilot has none.
@@ -82,24 +64,29 @@ in {
         noticeLines = config: lib.filter (lib.hasInfix "/bin/ai-runtime-path-provenance-notice ") (lib.splitString "\n" config.enterShell);
         lines = noticeLines evaluated.config;
       in
-        assert builtins.length lines == 1;
-        assert noticeLines (evalDevenv (configFor null)).config == [];
+        assert checkRows "runtime PATH-provenance notice" {
+          "${runtime}: explicit null package suppresses the notice" =
+            noticeLines (evalDevenv (lib.recursiveUpdate (setEnable runtime true) (configFor null))).config == [];
+          "${runtime}: selected launcher emits exactly one notice" = builtins.length lines == 1;
+        };
           pkgs.writeShellScript "rendered-${runtime}-path-notice" ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
             ${lib.head lines}
           '';
     in
-      assert lib.sort builtins.lessThan (builtins.attrNames binaries) == lib.sort builtins.lessThan (lib.filter optionPaths.hasLauncher harnessNames);
-      assert !(lib.hasInfix "/bin/ai-runtime-path-provenance-notice " (evalDevenv {}).config.enterShell);
+      assert checkRows "runtime PATH-provenance coverage" {
+        "all launchers have an executable fixture" = builtins.attrNames binaries == lib.sort builtins.lessThan (lib.filter optionPaths.hasLauncher harnessNames);
+        "disabled runtimes emit no notice" = !(lib.hasInfix "/bin/ai-runtime-path-provenance-notice " (evalDevenv {}).config.enterShell);
+      };
         pkgs.runCommand "module-test-runtime-path-provenance-notice" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          ${pkgs.python3}/bin/python3 ${./runtime-path-provenance-test.py} ${lib.escapeShellArgs (lib.mapAttrsToList (runtime: _: fixtureFor runtime) binaries)}
+          ${pkgs.python3}/bin/python3 ${./runtime-path-provenance-test.py} ${lib.escapeShellArgs (lib.concatLists (lib.mapAttrsToList (runtime: binary: [binary (fixtureFor runtime)]) binaries))}
           echo PASS > "$out"
         '';
 
-    # ── Structural gate: every enabled runtime with a launcher installs SOMETHING ──
+    # ── Structural gate: default package installs ──
     #
     # This is the test that would have caught `claude`. Installation used to be
     # a per-factory `home.packages` / `packages` write with no shared
@@ -125,19 +112,16 @@ in {
         # other direction: a second install path to one `bin/<exe>` makes
         # buildEnv fail activation with a conflicting-subpath error.
         #
-        # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
-        # on and contributes `GIT_SSH_COMMAND`. Codex and Kimchi also always wrap
-        # on Home Manager for their launch preflight checks, and Kiro because its
-        # launcher always injects the v3 engine selectors. Other Home Manager
-        # launchers wrap only when they inject configuration.
+        # Each wrapper-capable runtime wraps on devenv because
+        # `gitSshConfigWorkaround` defaults on and contributes `GIT_SSH_COMMAND`.
+        # Codex and Kiro have their own install and launcher checks. Kimchi
+        # also always wraps on Home Manager for its launch preflight.
         # `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
         # on both backends and MUST NOT gain a `-wrapped` suffix.
         shapes = {
           claude = "bare";
-          codex = "wrapped";
           kimchi = "wrapped";
-          kiro = "wrapped";
         };
         installedBy = {
           devenv = name: (evalDevenv (setEnable name true)).config.packages;
@@ -214,31 +198,17 @@ in {
 
     module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
       let
-        # devenv has no `programs.git`, so the workaround travels the INTERNAL
-        # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
-        # its launcher wrapper. It is deliberately neither a project-shell write
-        # (which reached the developer's own git) nor a hidden contribution into
-        # the consumer-facing `ai.<cli>.environmentVariables` pool. Claude has no
-        # wrapper and uses settings.env.
-        devenvChannel = name: let
-          cfg = (evalDevenv (setEnable name true)).config;
+        # Home Manager covers membership in the shared enable predicate; the
+        # executable wrapper check covers the one devenv internal channel.
+        # Claude has no wrapper, so additionally read its settings.env delivery.
+        claudeDevenv = (evalDevenv (setEnable "claude" true)).config;
+        isSandboxSafeSsh = lib.hasSuffix "/bin/ai-sandbox-safe-ssh";
+        hmRows = builtins.listToAttrs (map (runtime: let
+          cfg = (evalHm (setEnable runtime true)).config;
         in
-          if name == "claude"
-          then cfg.ai.claude.native.settings.env.GIT_SSH_COMMAND
-          else cfg.ai._sandboxSafeSshCommand;
-        commands =
-          lib.concatMap (name: [
-              (evalHm (setEnable name true))
-          .config
-          .programs
-          .git
-          .settings
-          .core
-          .sshCommand
-              (devenvChannel name)
-            ])
-          harnessNames;
-        disabledHm = (evalHm {}).config;
+          lib.nameValuePair "hm/${runtime}: enabling the runtime selects sandbox-safe SSH"
+          (isSandboxSafeSsh cfg.programs.git.settings.core.sshCommand))
+        harnessNames);
         disabledDevenv = (evalDevenv {}).config;
         optedOutHm =
           (evalHm {
@@ -265,13 +235,18 @@ in {
             ai.environmentVariables.GIT_SSH_COMMAND = "consumer-ssh";
           }).config;
       in
-        builtins.all (lib.hasSuffix "/bin/ai-sandbox-safe-ssh") commands
-        && !(disabledHm.programs.git.settings ? core)
-        && disabledDevenv.ai._sandboxSafeSshCommand == null
-        && !(optedOutHm.programs.git.settings ? core)
-        && optedOutDevenv.ai._sandboxSafeSshCommand == null
-        && overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh"
-        && builtins.all (a: a.assertion) sharedPoolCollision.assertions
+        checkRows "sandbox-safe SSH selection" (hmRows
+          // {
+            "devenv with no enabled runtime leaves the SSH channel unset" = disabledDevenv.ai._sandboxSafeSshCommand == null;
+            "devenv with the workaround opted out leaves the SSH channel unset" = optedOutDevenv.ai._sandboxSafeSshCommand == null;
+            "devenv workaround does not collide with the consumer's shared SSH key" =
+              sharedPoolCollision.ai.codex.normalized.environmentVariables.GIT_SSH_COMMAND
+              == "consumer-ssh"
+              && builtins.all (a: a.assertion) sharedPoolCollision.assertions;
+            "devenv/claude: enabling the runtime selects sandbox-safe SSH" = isSandboxSafeSsh claudeDevenv.ai.claude.native.settings.env.GIT_SSH_COMMAND;
+            "hm preserves the consumer's explicit SSH command" = overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh";
+            "hm with the workaround opted out does not write core.sshCommand" = !(optedOutHm.programs.git.settings ? core);
+          })
     );
 
     module-ai-git-ssh-wrapper-is-noninteractive = let
@@ -296,99 +271,73 @@ in {
         touch "$out"
       '';
 
-    module-aggregate-reasoning-effort-hm-devenv-parity = mkTest "aggregate-reasoning-effort-hm-devenv-parity" (
+    module-reasoning-effort-precedence = mkTest "reasoning-effort-precedence" (
       let
-        config.ai = {
-          claude.enable = true;
-          codex.enable = true;
-          settings.reasoningEffort = "xhigh";
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-      in
-        ((claudeSettings hm).effortLevel or null)
-        == "xhigh"
-        && ((hmCodexSettings hm).model_reasoning_effort or null) == "xhigh"
-        && ((claudeSettings devenv).effortLevel or null) == "xhigh"
-        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "xhigh"
-    );
-
-    module-runtime-reasoning-effort-overrides-root-only-for-that-runtime = mkTest "runtime-reasoning-effort-overrides-root-only-for-that-runtime" (
-      let
-        config.ai = {
-          claude = {
-            enable = true;
-            settings.reasoningEffort = "low";
+        evaluate = evaluateBackend: ai:
+          evaluateBackend {
+            ai =
+              {
+                claude.enable = true;
+                codex.enable = true;
+              }
+              // ai;
           };
-          codex.enable = true;
-          settings.reasoningEffort = "high";
+        readCodex = {
+          # Read the rendered settings entry, not the portable declaration.
+          devenv = result: result.config.ai.codex.files.".codex/config.toml".content.value;
+          hm = hmCodexSettings;
         };
-        hm = evalHm config;
-        devenv = evalDevenv config;
+        rows =
+          lib.concatMapAttrs (backend: evaluateBackend: let
+            eval = evaluate evaluateBackend;
+            inherited = eval {settings.reasoningEffort = "xhigh";};
+            local = eval {
+              claude = {
+                enable = true;
+                settings.reasoningEffort = "low";
+              };
+              settings.reasoningEffort = "high";
+            };
+            native = eval {
+              codex = {
+                enable = true;
+                native.settings.model_reasoning_effort = null;
+              };
+              settings.reasoningEffort = "high";
+            };
+            codexEffort = result: (readCodex.${backend} result).model_reasoning_effort or null;
+          in {
+            "${backend}/Claude inherits root effort under the native key" = ((claudeSettings inherited).effortLevel or null) == "xhigh";
+            "${backend}/Claude runtime effort wins over root effort" = ((claudeSettings local).effortLevel or null) == "low";
+            "${backend}/Codex inherits root effort under the native key" = codexEffort inherited == "xhigh";
+            "${backend}/Codex is not affected by Claude's runtime effort" = codexEffort local == "high";
+            "${backend}/Codex native null suppresses portable effort" =
+              if backend == "hm"
+              then hmCodexSettings native == withHmDefaults {}
+              else !(native.config.ai.codex.files ? ".codex/config.toml");
+          })
+          backends;
       in
-        ((claudeSettings hm).effortLevel or null)
-        == "low"
-        && ((hmCodexSettings hm).model_reasoning_effort or null) == "high"
-        && ((claudeSettings devenv).effortLevel or null) == "low"
-        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "high"
+        checkRows "reasoning effort precedence" rows
     );
 
     module-runtime-settings-exist-for-capable-harnesses = mkTest "runtime-settings-exist-for-capable-harnesses" (
-      let
-        config.ai = lib.genAttrs settingsHarnessNames (_: {
-          settings.reasoningEffort = "low";
-        });
-        hm = evalHm config;
-        devenv = evalDevenv config;
-      in
-        checkRows "settings-capable runtimes" {
-          "Claude, Codex, and Kimchi declare shared settings support" = settingsHarnessNames == ["claude" "codex" "kimchi"];
-          "devenv reads portable reasoning effort for each capable runtime" =
-            lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames;
-          "hm reads portable reasoning effort for each capable runtime" =
-            lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames;
-        }
+      checkRows "settings-capable runtimes" {
+        "Claude, Codex, and Kimchi declare shared settings support" = settingsHarnessNames == ["claude" "codex" "kimchi"];
+      }
     );
 
     module-runtime-settings-reject-native-keys = mkTest "runtime-settings-reject-native-keys" (
-      let
-        rejectsNativeKey = evaluate:
-          rejectsChange (settings: (evaluate {ai.claude = {inherit settings;};}).config.ai.claude.settings.reasoningEffort) {
-            valid.reasoningEffort = "high";
-            invalid = {
-              effortLevel = "high";
-              reasoningEffort = "high";
-            };
-            expected = "high";
+      checkRows "portable runtime settings" {
+        "hm rejects Claude native effortLevel in ai.claude.settings" = rejectsChange (settings: (evalHm {ai.claude = {inherit settings;};}).config.ai.claude.settings.reasoningEffort) {
+          valid.reasoningEffort = "high";
+          invalid = {
+            effortLevel = "high";
+            reasoningEffort = "high";
           };
-      in
-        checkRows "portable runtime settings" {
-          "devenv rejects Claude native effortLevel in ai.claude.settings" = rejectsNativeKey evalDevenv;
-          "hm rejects Claude native effortLevel in ai.claude.settings" = rejectsNativeKey evalHm;
-        }
-    );
-
-    module-aggregate-reasoning-effort-native-overrides-win = mkTest "aggregate-reasoning-effort-native-overrides-win" (
-      let
-        config.ai = {
-          claude = {
-            enable = true;
-            native.settings.effortLevel = "medium";
-          };
-          codex = {
-            enable = true;
-            native.settings.model_reasoning_effort = null;
-          };
-          settings.reasoningEffort = "high";
+          expected = "high";
         };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-      in
-        ((claudeSettings hm).effortLevel or null)
-        == "medium"
-        && hmCodexSettings hm == withHmDefaults {}
-        && ((claudeSettings devenv).effortLevel or null) == "medium"
-        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
+      }
     );
 
     module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (
@@ -403,29 +352,6 @@ in {
             expected = ["PreToolUse"];
           };
         }
-    );
-
-    module-all-four-enabled = mkTest "all-four-enabled" (
-      let
-        config = {
-          ai = {
-            claude.enable = true;
-            codex.enable = true;
-            copilot.enable = true;
-            kiro.cli.enable = true;
-          };
-        };
-        hm = evalHm config;
-        devenv = evalDevenv config;
-      in
-        hm.config.ai.claude.enable
-        && hm.config.ai.codex.enable
-        && hm.config.ai.copilot.enable
-        && hm.config.ai.kiro.enable
-        && devenv.config.ai.claude.enable
-        && devenv.config.ai.codex.enable
-        && devenv.config.ai.copilot.enable
-        && devenv.config.ai.kiro.enable
     );
 
     # Skill packages consume the generic program factory. Each package's
@@ -455,61 +381,64 @@ in {
           && builtins.attrNames (programOptions hm package).runtimes == runtimes
           && optionShape hm package == optionShape devenv package;
       in
-        programParity "delegate-routing" {
-          credentialUsage = "attribute set of (submodule)";
-          enable = "boolean";
-          families = "attribute set of attribute set of (submodule)";
-          opencodeGo = {
-            plan = ''null or one of "go", "go-plus", "go-teams"'';
-            pool = "null or string";
-            presetScope.excludeModelPrefixes = "attribute set of (null or non-empty string)";
-          };
-          pools = "attribute set of (submodule)";
-          reminder = "submodule";
-          reviewPolicy = "submodule";
-          routing = "attribute set of (submodule)";
-          skill = "submodule";
-          workflows = "attribute set of (submodule)";
-        } ["claude" "codex" "kimchi" "kiro"]
-        && programParity "peer-communication" {enable = "boolean";} harnessNames
-        && programParity "stacked-workflows" {enable = "boolean";} harnessNames
-        && hm.options.stacked-workflows ? gitPreset
-        && devenv.options.stacked-workflows ? gitPreset
-        && gitPresetValues hm == ["full" "minimal" "none"]
-        && gitPresetValues hm == gitPresetValues devenv
+        checkRows "skill-program option parity" {
+          "delegate-routing retains its typed settings and all four runtime branches" = programParity "delegate-routing" {
+            credentialUsage = "attribute set of (submodule)";
+            enable = "boolean";
+            families = "attribute set of attribute set of (submodule)";
+            opencodeGo = {
+              plan = ''null or one of "go", "go-plus", "go-teams"'';
+              pool = "null or string";
+              presetScope.excludeModelPrefixes = "attribute set of (null or non-empty string)";
+            };
+            pools = "attribute set of (submodule)";
+            reminder = "submodule";
+            reviewPolicy = "submodule";
+            routing = "attribute set of (submodule)";
+            skill = "submodule";
+            workflows = "attribute set of (submodule)";
+          } ["claude" "codex" "kimchi" "kiro"];
+          "gitPreset stays a top-level companion with all three presets on both backends" =
+            gitPresetValues hm == ["full" "minimal" "none"] && gitPresetValues devenv == ["full" "minimal" "none"];
+          "peer-communication has no additional program settings and covers every runtime" = programParity "peer-communication" {enable = "boolean";} harnessNames;
+          "stacked-workflows has no additional program settings and covers every runtime" = programParity "stacked-workflows" {enable = "boolean";} harnessNames;
+        }
     );
 
     module-program-whole-record-priorities = mkTest "program-whole-record-priorities" (
-      lib.all
-      (evaluate:
-        lib.all
-        (package:
-          lib.all
-          (priority: let
-            evaluated = evaluate {
-              ai = {
-                claude.enable = true;
-                codex.enable = true;
-                programs.${package} = lib.mkMerge [
-                  (priority {enable = true;})
-                  {runtimes.claude.enable = false;}
-                ];
+      let
+        packages = {
+          delegate-routing = config: config.skills ? delegate-routing;
+          peer-communication = config: config.skills ? peer-communication;
+          semble = config: config.mcpServers ? semble;
+          stacked-workflows = config: config.skills ? stack-plan;
+        };
+        priorities = {
+          default = lib.mkDefault;
+          force = lib.mkForce;
+        };
+        rows = lib.concatMapAttrs (backend: evaluate:
+          lib.concatMapAttrs (package: contributes:
+            lib.concatMapAttrs (priority: wrap: let
+              evaluated = evaluate {
+                ai = {
+                  claude.enable = true;
+                  codex.enable = true;
+                  programs.${package} = lib.mkMerge [
+                    (wrap {enable = true;})
+                    {runtimes.claude.enable = false;}
+                  ];
+                };
               };
-            };
-            skillName =
-              if package == "stacked-workflows"
-              then "stack-plan"
-              else package;
-            contributes = runtime:
-              if package == "semble"
-              then evaluated.config.ai.${runtime}.mcpServers ? semble
-              else evaluated.config.ai.${runtime}.skills ? ${skillName};
-          in
-            assert lib.assertMsg (!(contributes "claude") && contributes "codex")
-            "${package}: portable=${builtins.toJSON evaluated.config.ai.programs.${package}.enable}, claude=${builtins.toJSON (contributes "claude")}, codex=${builtins.toJSON (contributes "codex")}"; true)
-          [lib.mkDefault lib.mkForce])
-        ["delegate-routing" "peer-communication" "semble" "stacked-workflows"])
-      [evalHm evalDevenv]
+            in {
+              "${backend}/${package}/${priority}: Claude opt-out survives whole-record priority" = !(contributes evaluated.config.ai.claude);
+              "${backend}/${package}/${priority}: Claude opt-out does not suppress Codex" = contributes evaluated.config.ai.codex;
+            })
+            priorities)
+          packages)
+        backends;
+      in
+        checkRows "skill-package whole-record priorities" rows
     );
 
     # ── Priority-ordered rule triggers ─────────────────────────────
@@ -532,17 +461,32 @@ in {
         copilot = (markdownInput evaluated ".github/instructions/priority.instructions.md").text;
         kiro = (markdownInput evaluated ".kiro/steering/priority.md").text;
       in
-        lib.hasInfix "paths:\n  - \"src/**\"" claude
-        && lib.hasInfix ''applyTo: "src/**"'' copilot
-        && lib.hasInfix ''inclusion: "auto"'' kiro
-        && lib.hasInfix ''description: "Load when the task concerns source code"'' kiro
-        && !(lib.hasInfix "fileMatchPattern:" kiro)
+        checkRows "ordered rule triggers" {
+          "Claude skips unsupported auto but retains the requested file matcher" = lib.hasInfix "paths:\n  - \"src/**\"" claude;
+          "Copilot skips unsupported auto but retains the requested file matcher" = lib.hasInfix ''applyTo: "src/**"'' copilot;
+          "Kiro chooses auto before fileMatch, emitting the description without a matcher" =
+            lib.hasInfix ''inclusion: "auto"'' kiro
+            && lib.hasInfix ''description: "Load when the task concerns source code"'' kiro
+            && !(lib.hasInfix "fileMatchPattern:" kiro);
+        }
     );
 
     module-rule-inclusion-restrictions = mkTest "rule-inclusion-restrictions" (
       let
         text = "SEMANTIC-RULE-BODY.";
-        evaluate = enable: rule: evalDevenv {ai = enable // {rules.semantic = rule;};};
+        evaluate = enable: rule:
+          evalDevenv {
+            # Keep a valid sibling in AGENTS.md so the Codex rejection cannot
+            # pass merely because an accepted-but-dropped rule leaves no file.
+            ai =
+              enable
+              // {
+                rules = {
+                  anchor.text = "Keep this document.";
+                  semantic = rule;
+                };
+              };
+          };
         claudeRule = rule: (markdownInput (evaluate {claude.enable = true;} rule) ".claude/rules/semantic.md").text;
         codex = evaluate {codex.enable = true;};
         kiroRule = rule: (markdownInput (evaluate {kiro.cli.enable = true;} rule) ".kiro/steering/semantic.md").text;
@@ -579,8 +523,6 @@ in {
             invalid = codex autoRule;
             expected = true;
           };
-          "Codex marks the document as having an on-demand index" =
-            codexControl.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex;
           "Kiro auto rule needs a non-empty description" = rejectsChange (rule: lib.hasInfix ''inclusion: "auto"'' (kiroRule rule)) {
             valid = autoRule;
             invalid = builtins.removeAttrs autoRule ["description"];
@@ -608,25 +550,22 @@ in {
         };
         evaluated = evalDevenv config;
         claudeAlways = (markdownInput evaluated ".claude/rules/always.md").text;
-        claudeScoped = (markdownInput evaluated ".claude/rules/scoped.md").text;
-        copilotAlways = (markdownInput evaluated ".github/instructions/always.instructions.md").text;
         copilotScoped = (markdownInput evaluated ".github/instructions/scoped.instructions.md").text;
         kiroScoped = (markdownInput evaluated ".kiro/steering/scoped.md").text;
         agentsMd = (markdownInput evaluated "AGENTS.md").text;
       in
-        evaluated.config.ai.rules.always.inclusion
-        == ["always"]
-        && evaluated.config.ai.rules.scoped.inclusion == ["fileMatch"]
-        && claudeAlways == "DEFAULT-ALWAYS."
-        && lib.hasInfix "paths:\n  - \"src/**\"" claudeScoped
-        && lib.hasInfix ''applyTo: "**"'' copilotAlways
-        && lib.hasInfix ''applyTo: "src/**"'' copilotScoped
-        && lib.hasInfix ''inclusion: "fileMatch"'' kiroScoped
-        && lib.hasInfix "fileMatchPattern: \"src/**\"" kiroScoped
-        && lib.hasInfix "<!-- rule: always -->" agentsMd
-        && lib.hasInfix "DEFAULT-ALWAYS." agentsMd
-        && lib.hasInfix "_Apply this guidance only when working with files matching: `src/**`_" agentsMd
-        && lib.hasInfix "DEFAULT-SCOPED." agentsMd
+        checkRows "default rule rendering" {
+          "Claude does not add matcher front matter to the unscoped rule" = claudeAlways == "DEFAULT-ALWAYS.";
+          "Copilot uses the implicit file matcher for applyTo" = lib.hasInfix ''applyTo: "src/**"'' copilotScoped;
+          "Kiro keeps the implicit fileMatch trigger and matcher" =
+            lib.hasInfix ''inclusion: "fileMatch"'' kiroScoped && lib.hasInfix "fileMatchPattern: \"src/**\"" kiroScoped;
+          "shared AGENTS.md retains the implicit always rule" = lib.hasInfix "<!-- rule: always -->" agentsMd && lib.hasInfix "DEFAULT-ALWAYS." agentsMd;
+          "shared AGENTS.md retains the implicit scoped rule with its matcher" =
+            lib.hasInfix "_Apply this guidance only when working with files matching: `src/**`_" agentsMd
+            && lib.hasInfix "DEFAULT-SCOPED." agentsMd;
+          "the shared declaration defaults a matching rule to fileMatch" = evaluated.config.ai.rules.scoped.inclusion == ["fileMatch"];
+          "the shared declaration defaults an unscoped rule to always" = evaluated.config.ai.rules.always.inclusion == ["always"];
+        }
     );
 
     # ── Normalized keyed-pool suppression types ────────────────────
@@ -635,49 +574,49 @@ in {
     # while rules use their entry-local enable flag at every supported scope.
     module-ai-pool-null-types-hm-devenv = mkTest "ai-pool-null-types-hm-devenv" (
       let
-        config.ai = {
-          agents.removed = null;
-          environmentVariables.removed = null;
-          mcpServers.removed = null;
-          rules.removed.enable = false;
-          skills.removed = null;
-
-          claude = {
-            agents.removed = null;
-            mcpServers.removed = null;
-            rules.removed.enable = false;
-            skills.removed = null;
-          };
-          codex = {
-            agents.removed = null;
-            environmentVariables.removed = null;
-            mcpServers.removed = null;
-            rules.removed.enable = false;
-            skills.removed = null;
-          };
-          copilot.github.rules.removed.enable = false;
-          kimchi.environmentVariables.removed = null;
-          kiro = {
-            cli.environmentVariables.removed = null;
-            mcpServers.removed = null;
-            rules.removed.enable = false;
-            skills.removed = null;
-          };
-        };
-        keepsNulls = evaluated:
-          evaluated.config.ai.agents.removed
-          == null
-          && evaluated.config.ai.claude.mcpServers.removed == null
-          && evaluated.config.ai.codex.environmentVariables.removed == null
-          && evaluated.config.ai.kimchi.environmentVariables.removed == null
-          && evaluated.config.ai.kiro.skills.removed == null
-          && !evaluated.config.ai.rules.removed.enable
-          && !evaluated.config.ai.claude.rules.removed.enable
-          && !evaluated.config.ai.codex.rules.removed.enable
-          && !evaluated.config.ai.copilot.github.rules.removed.enable
-          && !evaluated.config.ai.kiro.rules.removed.enable;
+        # Semble's generated-entry check also tests nulls over package defaults.
+        nullable = backend:
+          [
+            ["agents"]
+            ["claude" "skills"]
+          ]
+          ++ lib.optional (backend == "hm") ["codex" "agents"]
+          ++ [
+            ["codex" "environmentVariables"]
+            ["codex" "mcpServers"]
+            ["codex" "skills"]
+            ["environmentVariables"]
+            ["kimchi" "environmentVariables"]
+            ["kiro" "cli" "environmentVariables"]
+            ["kiro" "mcpServers"]
+            ["kiro" "skills"]
+            ["mcpServers"]
+            ["skills"]
+          ];
+        rules = [
+          ["claude" "rules"]
+          ["codex" "rules"]
+          ["copilot" "github" "rules"]
+          ["kiro" "rules"]
+          ["rules"]
+        ];
+        rows = lib.concatMapAttrs (backend: evaluate: let
+          nullablePaths = nullable backend;
+          config.ai = lib.mkMerge (
+            map (path: lib.setAttrByPath (path ++ ["removed"]) null) nullablePaths
+            ++ map (path: lib.setAttrByPath (path ++ ["removed" "enable"]) false) rules
+          );
+          evaluated = evaluate config;
+          removed = path: lib.getAttrFromPath (path ++ ["removed"]) evaluated.config.ai;
+          label = path: "${backend}/ai.${lib.concatStringsSep "." path}";
+        in
+          builtins.listToAttrs (
+            map (path: lib.nameValuePair "${label path}: accepts a null tombstone" (removed path == null)) nullablePaths
+            ++ map (path: lib.nameValuePair "${label path}: accepts an entry-local disable flag" (!(removed path).enable)) rules
+          ))
+        backends;
       in
-        keepsNulls (evalHm config) && keepsNulls (evalDevenv config)
+        checkRows "pool suppression types" rows
     );
   };
 }

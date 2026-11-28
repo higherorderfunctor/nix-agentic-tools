@@ -1,3 +1,4 @@
+# Root attribution must see the competing claim activated by this owner.
 {
   facetOwner,
   facetSource,

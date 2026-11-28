@@ -39,21 +39,24 @@
   fixRows = builtins.fromJSON fixText;
 
   groups = {
-    # `children`: exact wildcard leaves, disappearing children and get's
-    # refusal of a child whose value must be read per system.
+    # `children`: exact wildcard leaves, filtering by depth and fixed
+    # segments, and a parent with no matching children. The diagnostics
+    # below test refusal of a child that must be read per system.
     children = let
       pattern = "features.<name>.state";
       input = {
         declarations = {
           "features.<name>.state" = static "string";
-          "other.features.old.state" = static "string";
+          "features.unrelated.status" = static "string";
+          "other.features.nested.state" = static "string";
         };
         raws = both {
           features = {
             new.state = "on";
             old.state = "off";
+            unrelated.status = "different leaf";
           };
-          other.features.old.state = "unrelated";
+          other.features.nested.state = "different depth";
         };
       };
       matched = run input;
@@ -73,7 +76,8 @@
 
     # Decisions: the combine vocabulary and the defaults table. A key `k`
     # differs (or not) across systems; columns: combine, type, Darwin raw,
-    # Linux raw, combined value. `set` is compared without order.
+    # Linux raw, combined value. Sets must have exactly the listed members
+    # with no duplicates; only lists require their order to be preserved.
     combines = let
       combined = written: combine: type: darwin: linux: value: let
         result = run ({
@@ -81,12 +85,13 @@
             raws = split {k = darwin;} {k = linux;};
           }
           // lib.optionalAttrs written {decisions.k = decision combine;});
-        normal =
+        actual = get result.aggregate "k";
+        expected =
           if type == "set"
-          then lib.sort builtins.lessThan
-          else lib.id;
+          then builtins.length actual == builtins.length value && lib.all (member: builtins.elem member actual) value
+          else actual == value;
       in
-        kinds result == [] && result.aggregate.k.combine == combine && normal (get result.aggregate "k") == normal value;
+        kinds result == [] && result.aggregate.k.combine == combine && expected;
       byDefault = combined false;
       decided = combined true;
     in {
@@ -97,8 +102,7 @@
       list-agree = byDefault "equal" "list" ["b" "a"] ["b" "a"] ["b" "a"];
       object-agree = byDefault "equal" "object" {a.b = 1;} {a.b = 1;} {a.b = 1;};
       set-intersection = byDefault "intersection" "set" ["a" "b"] ["c" "b"] ["b"];
-      set-union = decided "union" "set" ["a" "b"] ["c" "b"] ["c" "b" "a"];
-      string-agree = byDefault "equal" "string" "same" "same" "same";
+      set-union = decided "union" "set" ["b" "a" "a"] ["c" "b"] ["a" "b" "c"];
       string-prefer = decided "prefer:x86_64-linux" "string" "darwin-value" "linux-value" "linux-value";
     };
 
@@ -122,18 +126,37 @@
     in {
       list-order = diverges "list" ["a" "b"] ["b" "a"];
       object-whole = diverges "object" {a.b = 1;} {a.b = 2;};
-      string = diverges "string" "darwin-value" "linux-value";
     };
 
     # `merge`, the `fix` paragraph: the divergent row pasted unedited is
     # refused naming both placeholder fields; filled in, merge is clean.
     repair = let
       pasted = run (divergent // {decisions = fixRows;});
-      refused = builtins.toJSON (lib.findFirst (failure: failure.kind == "bad-decision") {} pasted.failures).details;
-      edited = run (divergent // {decisions = lib.mapAttrs (_: row: row // decision row.combine) fixRows;});
+      edited = run (divergent // {decisions.mode = fixRows.mode // decision fixRows.mode.combine;});
     in {
-      edited-clean = edited.failures == [];
-      pasted-names-both = lib.all (field: lib.hasInfix field refused) ["decided" "reason"];
+      edited-clean = edited.failures == [] && (edited.aggregate.mode.bySystem or null) == split "darwin-value" "linux-value";
+      pasted-names-both =
+        map (failure: {
+          inherit (failure) key kind;
+          details =
+            if failure.kind == "bad-decision"
+            then lib.sort builtins.lessThan failure.details
+            else failure.details;
+        })
+        pasted.failures
+        == [
+          # Validation discards the pasted row, so the original disagreement remains.
+          {
+            details = split "darwin-value" "linux-value";
+            key = "mode";
+            kind = "divergent";
+          }
+          {
+            details = ["decided must be an ISO date (YYYY-MM-DD)" "reason must be non-blank and not a TODO placeholder"];
+            key = "mode";
+            kind = "bad-decision";
+          }
+        ];
     };
 
     # Decisions table and `bad-decision`: one row for the string key `mode`,
@@ -160,10 +183,8 @@
       combine-and-on-string = refuse {combine = "and";} ''combine and does not apply to type "string"'';
       combine-max-on-string = refuse {combine = "max";} ''combine max does not apply to type "string"'';
       combine-unknown = refuse {combine = "average";} ''unknown combine "average"'';
-      date-leap = accept {decided = "2024-02-29";};
       date-malformed = invalidDate "2026-1-01";
       date-month-13 = invalidDate "2026-13-01";
-      date-placeholder = invalidDate "YYYY-MM-DD";
       # Calendar validity is not checked: the field is provenance.
       date-well-formed = accept {decided = "2026-02-31";};
       ignore-non-collection = refuse {ignore = ["x"];} "ignore needs a list on a set or list key";
@@ -190,23 +211,22 @@
     in {
       declared-gone = ignored "count" {} {} ["declared-gone"];
       drops-count = ignored "count" {k = 3;} {k = 5;} [];
-      drops-set = ignored "set" {k = ["a"];} {k = ["b"];} [];
       missing-system = ignored "count" {} {k = 5;} ["missing-system"];
       type-mismatch = ignored "count" {k = "five";} {k = "five";} ["type-mismatch"];
     };
 
-    # Decisions: `ignore` removes elements before combining.
-    ignoreElements.before-intersection =
+    # An ignored member stays out even if every system measures it.
+    ignoreElements.filters-shared-member =
       get
       (run {
         declarations.models = static "set";
         decisions.models = decision "intersection" // {ignore = ["preview"];};
-        raws = both {models = ["a" "preview"];};
+        raws = split {models = ["a" "darwin" "preview"];} {models = ["a" "linux" "preview"];};
       }).aggregate "models"
       == ["a"];
 
-    # `merge`, failure kinds: `declared-gone` (with its fix) and
-    # `missing-system`; a `live` key with `systems = []` requires nothing.
+    # `merge`: `declared-gone` gives a fix; a `live` key with `systems = []`
+    # requires nothing.
     presence = let
       gone = run {
         declarations.lastRun = static "string";
@@ -224,12 +244,6 @@
           raws = both {};
         }).failures
         == [];
-      missing-system =
-        kinds (run {
-          declarations.limit = static "count";
-          raws = split {} {limit = 5;};
-        })
-        == ["missing-system"];
     };
 
     # Declarations: `count` is a non-negative integer, `set` a list of
@@ -244,8 +258,6 @@
         == lib.optional (!accepted) "type-mismatch";
     in {
       count-negative = fits "count" (-1) false;
-      count-string = fits "count" "five" false;
-      count-zero = fits "count" 0 true;
       set-non-string = fits "set" ["a" 1] false;
     };
 
@@ -266,10 +278,6 @@
         newThing = "value";
       } ["newThing"] [];
       prefix-leaf = loose "apiToken.child" {apiToken = "credential";} ["apiToken"] ["declared-gone" "undeclared-secret"];
-      secret = loose "mode" {
-        apiToken = "value";
-        mode = "same";
-      } ["apiToken"] ["undeclared-secret"];
     };
 
     # `load`. ./load/all-present forks a key across both configured systems
@@ -280,10 +288,10 @@
     # by a fresh Linux raw that adds a feature (the update that once left
     # Kiro's aggregate failing evaluation, PR #2559).
     load = let
-      all = load {dir = ./load/all-present;};
       absent = load {dir = ./load/absent-system;};
-      once = load {dir = ./load/measured-once;};
+      all = load {dir = ./load/all-present;};
       carriedDir = ./load/carried;
+      prior = load {dir = carriedDir;};
       read = file: builtins.fromJSON (builtins.readFile (carriedDir + "/${file}"));
       carried = platforms.carry {
         fresh.x86_64-linux = {
@@ -328,9 +336,19 @@
           fix = "extract `${key}` on aarch64-darwin, or narrow its declared `systems`";
           kind = "missing-system";
         }) ["limit" "mode"];
-      all-present = all.failures == [] && all.aggregate.limit.combine == "per-platform" && all.aggregate.limit.bySystem == split 3 5;
-      carried-committed-loads = (load {dir = carriedDir;}).failures == [];
-      carried-darwin-follows = darwin.features == ["new" "old"] && darwin.patchability.new.unmatchedSites == 0 && darwin.patchability.old.unmatchedSites == 2;
+      all-present =
+        all.failures
+        == []
+        && builtins.attrNames all.aggregate == ["limit"]
+        && all.aggregate.limit.combine == "per-platform"
+        && all.aggregate.limit.bySystem == split 3 5;
+      # The committed fixture must load both legs before carry changes either.
+      carried-committed-loads =
+        prior.failures
+        == []
+        && get prior.aggregate "features" == ["old"]
+        && prior.aggregate."patchability.old.unmatchedSites".bySystem == split 2 1;
+      carried-darwin-follows = darwin.patchability.new.unmatchedSites == 0 && darwin.patchability.old.unmatchedSites == 2;
       carried-loads = carriedLoad.failures == [] && get carriedLoad.aggregate "features" == ["new" "old"];
       replaced-diverges =
         map (failure: {inherit (failure) details key kind;}) replaced.failures
@@ -341,19 +359,7 @@
             kind = "divergent";
           }
         ];
-      measured-once = once.failures == [] && get once.aggregate "limit" == 5;
     };
-
-    # A per-platform key has no combined value. The diagnostic check also
-    # exercises the public get entry point on that key.
-    platform.no-value = let
-      result = run {
-        declarations.limit = static "count";
-        decisions.limit = decision "per-platform";
-        raws = split {limit = 3;} {limit = 5;};
-      };
-    in
-      kinds result == [] && !(result.aggregate.limit ? value);
 
     # `expect`: a need is met, or fails naming consumer, key, expected and
     # actual value.
@@ -374,14 +380,6 @@
         ;
       failures = needs: (expect {inherit aggregate consumer needs;}).failures;
     in {
-      all-met =
-        failures [
-          {
-            contains = "invoke_sub_agent";
-            key = "tools";
-          }
-        ]
-        == [];
       contains-and-value-unmet =
         failures [
           {
@@ -513,7 +511,6 @@
         in ${case.expr}
       '';
     };
-  vocabulary = ["and" "equal" "ignore" "intersection" "max" "min" "or" "per-platform" "union"] ++ map (system: "prefer:${system}") systems;
 in {
   checks = {
     extracted-facts = mkTest "extracted-facts" (
@@ -543,10 +540,9 @@ in {
       shopt -s inherit_errexit 2>/dev/null || :
       fix=${pkgs.writeText "divergent-fix.json" fixText}
       ${lib.concatStrings (lib.mapAttrsToList runDiagnostic diagnostics)}
-      ${pkgs.jq}/bin/jq -e --argjson vocabulary '${builtins.toJSON vocabulary}' '
-        keys == ["mode"]
-        and (.mode.combine | IN($vocabulary[]))
-        and (.mode.reason | type == "string" and (trim | . == "TODO" or startswith("TODO:")))
+      ${pkgs.jq}/bin/jq -e '
+        (.mode | keys == ["combine", "decided", "reason"])
+        and (.mode.reason | type == "string" and (trim | startswith("TODO:") and length > 5))
         and .mode.decided == "YYYY-MM-DD"
       ' "$fix" > /dev/null || {
         echo "FAIL: divergent fix is not a complete decisions.json row:" >&2

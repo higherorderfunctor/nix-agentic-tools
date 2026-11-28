@@ -1,3 +1,4 @@
+# An unconditional owner override must not supersede the root-owned policy entry.
 {
   facetOwner,
   facetSource,

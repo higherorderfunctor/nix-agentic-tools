@@ -43,187 +43,131 @@
   # stdenv runs the install check.
   frontmatterMutation = {
     name = "frontmatter-value-change-bad";
-    files = markdown "---\nname: \"a\"\n---\n\n# Page\n";
-    treefmt = rewriteFormatter "md" "---\nname: \"b\"\n---\n\n# Page\n";
-    guards = onlyGuards ["parseCompare"];
     fails = "parsed Markdown frontmatter values differ from";
+    files = markdown "---\nname: \"a\"\n---\n\n# Page\n";
+    guards = onlyGuards ["parseCompare"];
+    treefmt = rewriteFormatter "md" "---\nname: \"b\"\n---\n\n# Page\n";
   };
-  cases = [
-    {
-      name = "frontmatter-whole-file-format";
-      files = markdown "---\nname: 'a'\n---\n\n#   Page\n";
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      expected = "---\nname: \"a\"\n---\n\n# Page\n";
-      path = "page.md";
-    }
-    {
-      name = "frontmatter-thematic-break-is-not-a-header";
-      files = markdown "---\n\n#   Title\n\nbody\n";
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      expected = "---\n\n# Title\n\nbody\n";
-      path = "page.md";
-    }
-    {
-      name = "frontmatter-crlf-header-compares-values";
-      files = markdown "---\r\nname: a\r\n---\r\n\r\n# Page\r\n";
-      # Normalize to a known LF header. Ignoring the original CRLF header
-      # would now compare an absent header with a present one and fail.
-      treefmt = rewriteFormatter "md" "---\nname: a\n---\n\n# Page\n";
-      guards = onlyGuards ["parseCompare"];
-      expected = "---\nname: a\n---\n\n# Page\n";
-      path = "page.md";
-    }
-    {
-      name = "format-json-default";
-      files = dataFile "json" ''{"value":true}'';
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      expected = "{ \"value\": true }\n";
-      path = "data.json";
-    }
-    {
-      name = "format-toml-default";
-      files = dataFile "toml" "value=true\n";
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      expected = "value = true\n";
-      path = "data.toml";
-    }
-    {
-      name = "format-yaml-default";
-      files = dataFile "yaml" "value:   true\n";
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      expected = "value: true\n";
-      path = "data.yaml";
-    }
-
-    {
-      name = "table-cells-good";
-      files = markdown goodTable;
-      guards = onlyGuards ["tableCells"];
-    }
-    {
-      name = "table-cells-header-before-format";
-      files = markdown badHeader;
-      # Repair the defect so that a guard moved after formatting misses it.
-      treefmt = rewriteFormatter "md" goodTable;
-      guards = onlyGuards ["tableCells"];
-      fails = "MD056";
-    }
-    {
-      name = "surface-check-fails";
-      files = {
-        "skill.json" = mkFile "json" ''{"value":true}'' // {surface = "skills";};
+  # Each type exercises its own formatter routing and parser dispatch.
+  structured = {
+    json = {
+      formatted = "{ \"value\": true }\n";
+      input = ''{"value":true}'';
+      mutated = ''{"value":false}'';
+    };
+    toml = {
+      formatted = "value = true\n";
+      input = "value=true\n";
+      mutated = "value = false\n";
+    };
+    yaml = {
+      formatted = "value: true\n";
+      input = "value:   true\n";
+      mutated = "value: false\n";
+    };
+  };
+  structuredCases = lib.concatLists (lib.mapAttrsToList (type: row: let
+      common = {
+        files = dataFile type row.input;
+        guards = onlyGuards ["parseCompare"];
       };
-      checks.skills = "exit 7";
-      runtime = "claude";
-      fails = "Generated-file check failed for surface skills in runtime claude (exit 7)";
-    }
-    {
-      name = "split-code-spans-good";
-      files =
-        markdown ''          A `single span` is sound.
-        '';
-      guards = onlyGuards ["splitCodeSpans"];
-    }
-    {
-      name = "split-code-spans-bad";
-      files = markdown ''        A `split
-        span` is broken.
-      '';
-      # Repair the defect so that a guard moved after formatting misses it.
-      treefmt = rewriteFormatter "md" "A `split span` is sound.\n";
-      guards = onlyGuards ["splitCodeSpans"];
-      fails = "ERROR: inline code spans split across a newline.";
-    }
-    {
-      name = "parse-json-good";
-      files = dataFile "json" ''{"value":true}'';
-      guards = onlyGuards ["parseCompare"];
-    }
-    {
-      name = "parse-json-bad";
-      files = dataFile "json" ''{"value":true}'';
-      treefmt = rewriteFormatter "json" ''{"value":false}'';
-      guards = onlyGuards ["parseCompare"];
-      fails = "parsed json values differ from";
-    }
-    {
-      name = "parse-toml-bad";
-      files =
-        dataFile "toml" ''          value = true
-        '';
-      treefmt = rewriteFormatter "toml" "value = false\n";
-      guards = onlyGuards ["parseCompare"];
-      fails = "parsed toml values differ from";
-    }
-    {
-      name = "parse-yaml-bad";
-      files =
-        dataFile "yaml" ''          value: true
-        '';
-      treefmt = rewriteFormatter "yaml" "value: false\n";
-      guards = onlyGuards ["parseCompare"];
-      fails = "parsed yaml values differ from";
-    }
+    in [
+      (common
+        // {
+          name = "format-${type}-default";
+          expected = row.formatted;
+          path = "data.${type}";
+          treefmt = treefmtConfig;
+        })
+      (common
+        // {
+          name = "parse-${type}-rejects-value-change";
+          fails = "parsed ${type} values differ from";
+          treefmt = rewriteFormatter type row.mutated;
+        })
+    ])
+    structured);
+  multilineFlow = ''
+    ---
+    fileMatchPattern: ["one/**",
+      "two/**"]
+    ---
+    # Page
+  '';
+  parseMarkdown = name: input: formatter: expected: {
+    inherit expected name;
+    files = markdown input;
+    guards = onlyGuards ["parseCompare"];
+    path = "page.md";
+    treefmt = formatter;
+  };
+  cases =
+    [
+      # Normalize to a known LF header. Ignoring the original CRLF header
+      # would compare an absent header with a present one and fail.
+      (parseMarkdown "frontmatter-crlf-header-compares-values"
+        "---\r\nname: a\r\n---\r\n\r\n# Page\r\n"
+        (rewriteFormatter "md" "---\nname: a\n---\n\n# Page\n")
+        "---\nname: a\n---\n\n# Page\n")
+      # A thematic break must not switch on YAML parsing.
+      (parseMarkdown "frontmatter-thematic-break-is-not-a-header"
+        "---\n\n#   Title\n\nbody\n"
+        treefmtConfig "---\n\n# Title\n\nbody\n")
+      # Checking raw header bytes would reject the equivalent quote rewrite.
+      (parseMarkdown "frontmatter-whole-file-format"
+        "---\nname: 'a'\n---\n\n#   Page\n"
+        treefmtConfig "---\nname: \"a\"\n---\n\n# Page\n")
 
-    {
-      name = "kiro-frontmatter-flow-bad";
-      files = markdown ''        ---
-        inclusion: fileMatch
-        fileMatchPattern: ["one/**",
-          "two/**"]
-        ---
-        # Page
-      '';
-      guards = onlyGuards ["kiroFrontmatterFlow"];
-      runtime = "kiro";
-      fails = "page.md: Kiro frontmatter flow sequence spans multiple lines";
-    }
-    {
-      name = "kiro-frontmatter-flow-raw-bad";
-      files.".kiro/steering/raw.md" = mkFile "raw" ''
-        ---
-        fileMatchPattern: ["one/**",
-          "two/**"]
-        ---
-        # Raw page
-      '';
-      guards = onlyGuards ["kiroFrontmatterFlow"];
-      runtime = "kiro";
-      fails = ".kiro/steering/raw.md: Kiro frontmatter flow sequence spans multiple lines";
-    }
-    {
-      name = "kiro-frontmatter-flow-disabled";
-      files = markdown ''        ---
-        fileMatchPattern: ["one/**",
-          "two/**"]
-        ---
-        # Page
-      '';
-      guards = {};
-      runtime = "kiro";
-    }
-    {
-      name = "kiro-frontmatter-flow-skips-claude";
-      files = markdown ''        ---
-        fileMatchPattern: ["one/**",
-          "two/**"]
-        ---
-        # Page
-      '';
-      guards = onlyGuards ["kiroFrontmatterFlow"];
-      runtime = "claude";
-    }
-  ];
+      {
+        name = "split-code-spans-rejects-before-repair";
+        fails = "ERROR: inline code spans split across a newline.";
+        files = markdown "A `split\nspan` is broken.\n";
+        guards = onlyGuards ["splitCodeSpans"];
+        # Repair the defect so that a guard moved after formatting misses it.
+        treefmt = rewriteFormatter "md" "A `split span` is sound.\n";
+      }
+      {
+        name = "table-cells-rejects-header-before-repair";
+        fails = "MD056";
+        files = markdown badHeader;
+        guards = onlyGuards ["tableCells"];
+        # Repair the defect so that a guard moved after formatting misses it.
+        treefmt = rewriteFormatter "md" goodTable;
+      }
+
+      {
+        name = "kiro-frontmatter-flow-disabled";
+        files = markdown multilineFlow;
+        guards = {};
+        runtime = "kiro";
+      }
+      {
+        name = "kiro-frontmatter-flow-rejects-formatter-output";
+        fails = "page.md: Kiro frontmatter flow sequence spans multiple lines";
+        files = markdown "# Page\n";
+        guards = onlyGuards ["kiroFrontmatterFlow"];
+        runtime = "kiro";
+        treefmt = rewriteFormatter "md" multilineFlow;
+      }
+      {
+        name = "kiro-frontmatter-flow-rejects-raw-copy";
+        fails = ".kiro/steering/raw.md: Kiro frontmatter flow sequence spans multiple lines";
+        files.".kiro/steering/raw.md" = mkFile "raw" multilineFlow;
+        guards = onlyGuards ["kiroFrontmatterFlow"];
+        runtime = "kiro";
+      }
+      {
+        name = "kiro-frontmatter-flow-skips-claude";
+        files = markdown multilineFlow;
+        guards = onlyGuards ["kiroFrontmatterFlow"];
+        runtime = "claude";
+      }
+    ]
+    ++ structuredCases;
   makeTree = case:
     generated.mkTree {
       name = "generated-fixture-${case.name}";
       inherit (case) files;
-      checks = case.checks or {};
       guards = case.guards or {};
       runtime = case.runtime or "test";
       treefmt = case.treefmt or null;
@@ -242,15 +186,9 @@
     '';
   expectedMutationFailure = pkgs.testers.testBuildFailure (makeTree frontmatterMutation);
   treefmtConfig = (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix {inherit inputs;})).config;
-  treefmtTree = generated.mkTree {
-    name = "generated-fixture-treefmt-eval-module";
-    files = markdown "#   Heading\n";
-    guards = {};
-    runtime = "test";
-    treefmt = treefmtConfig;
-  };
 in {
   checks = {
+    # Raw interpolation into YAML would lose the quote, colon or backslash.
     frontmatter-scalar-round-trip =
       pkgs.runCommandLocal "frontmatter-scalar-round-trip" {
         nativeBuildInputs = [
@@ -274,11 +212,6 @@ in {
         PY
         touch "$out"
       '';
-
-    generated-files-treefmt-eval-module = pkgs.runCommandLocal "generated-files-treefmt-eval-module" {} ''
-      test "$(cat ${treefmtTree}/page.md)" = "# Heading"
-      touch "$out"
-    '';
   };
   checks.generated-files = pkgs.runCommandLocal "generated-files-check" {} ''
     set -euETo pipefail
@@ -288,6 +221,10 @@ in {
     ${lib.concatMapStringsSep "\n" (case: let
         caseName = lib.escapeShellArg case.name;
         script = makeScript case;
+        status =
+          if case ? fails
+          then 1
+          else 0;
       in ''
         mkdir -p "$TMPDIR"/${caseName}
         (
@@ -295,28 +232,18 @@ in {
           export out="$PWD/output"
           rc=0
           ${pkgs.bash}/bin/bash ${script} >probe.log 2>&1 || rc=$?
-          ${
-          if case ? fails
-          then ''
-            if [ "$rc" -eq 0 ]; then
-              echo "FAIL: ${case.name} unexpectedly passed" >&2
-              cat probe.log >&2
-              exit 1
-            fi
-            grep -q -F ${lib.escapeShellArg case.fails} probe.log || {
-              echo "FAIL: ${case.name} failed for the wrong reason" >&2
-              cat probe.log >&2
-              exit 1
-            }
-          ''
-          else ''
-            if [ "$rc" -ne 0 ]; then
-              echo "FAIL: ${case.name} exited $rc" >&2
-              cat probe.log >&2
-              exit 1
-            fi
-          ''
-        }
+          if [ "$rc" -ne ${toString status} ]; then
+            echo "FAIL: ${case.name} expected exit ${toString status}, got $rc" >&2
+            cat probe.log >&2
+            exit 1
+          fi
+          ${lib.optionalString (case ? fails) ''
+          grep -q -F ${lib.escapeShellArg case.fails} probe.log || {
+            echo "FAIL: ${case.name} failed for the wrong reason" >&2
+            cat probe.log >&2
+            exit 1
+          }
+        ''}
           ${lib.optionalString (case ? expected) ''
           printf '%s' ${lib.escapeShellArg case.expected} | cmp - "$out"/${lib.escapeShellArg case.path} \
             || { echo "FAIL: ${case.name} did not preserve its chosen formatter result" >&2; exit 1; }

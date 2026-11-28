@@ -1,5 +1,2 @@
-{pkgs, ...}: {
-  checks = {
-    placeholder = pkgs.runCommandLocal "facet-unsupported-metadata" {} "touch $out";
-  };
-}
+# Give the owner a valid contribution so the unknown sidecar is the only defect.
+{}

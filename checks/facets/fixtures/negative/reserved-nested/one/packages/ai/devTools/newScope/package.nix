@@ -1,5 +1,3 @@
-{runCommandLocal}:
-runCommandLocal "facet-reserved" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+# A nested recipe must not shadow the native scope constructor.
+{writeText}:
+writeText "facet-reserved-new-scope" ""

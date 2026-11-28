@@ -5,11 +5,12 @@
   config,
   lib,
   nativeRegistryMarker,
-  options,
   ...
 }: {
+  # A private import must see the merged activation and module arguments
+  # while retaining the enclosing owner's provenance.
   config.facetMock.entries = lib.optionalAttrs config.facetMock.activate {
-    conditional-child = assert options ? facetMock.activate; {
+    conditional-child = {
       owner = facetOwner;
       payload = nativeRegistryMarker;
       source = toString facetSource;

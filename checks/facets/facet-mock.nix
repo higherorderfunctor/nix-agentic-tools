@@ -110,10 +110,9 @@
       "native-package-namespaces"
       "platform-omission"
     ];
-    localCheckValues = map (name: localChecks.${name}.value) localCheckNames;
     localCheckBuildCommands =
       concatMapStringsSep "\n" (
-        name: "test -e ${localChecks.${name}.value}/passed"
+        name: "expect_passed ${lib.escapeShellArg name} ${localCheckWorld.checks.${name}}"
       )
       localCheckNames;
 
@@ -126,15 +125,14 @@
     gitRevise = packageWorld.packages.ai.gitTools.git-revise;
     supportedControl = packageWorld.packages.ai.devTools.supported-control;
     originalSupportedControl = pkgs.callPackage (productionRoot + "/platform-control/packages/ai/devTools/supported-control/package.nix") {inherit pkgs;};
-    sameValue = left: right: let
-      compared = builtins.tryEval (
-        if lib.isDerivation left && lib.isDerivation right
-        then left.drvPath == right.drvPath
-        else left == right
-      );
-    in
-      compared.success && compared.value;
-    fixturePackageValues = map (claim: lib.getAttrFromPath claim.keyPath packageWorld.packages) packageWorld.eligibleClaims;
+    flatPackages = loader.flattenPackages {
+      inherit packageWorld;
+      pkgs = packageWorld.packages;
+    };
+    # These are the fixture basenames, not a projection of the loader's claims.
+    fixturePackageNames =
+      ["alpha-tool" "ancestor-tool" "fixture_mcp" "git-revise" "literal.name" "name" "sibling_tool" "supported-control"]
+      ++ lib.optional (system == "aarch64-darwin") "unsupported-control";
     packageValues = tree:
       if lib.isDerivation tree
       then [tree]
@@ -142,25 +140,19 @@
       then lib.concatMap packageValues (builtins.attrValues tree)
       else [];
     publicPackageValues = packageValues self.ciPackages.${system};
-    fixtureOverlayValues =
-      map (claim: {
-        inherit (claim) keyPath;
-        value = lib.attrByPath claim.keyPath null overlayResult;
-      })
-      overlayWorld.ownershipClaims;
-
     hasClaimPaths = claims: expected:
       sort builtins.lessThan (map (claim: builtins.toJSON claim.keyPath) claims)
       == map builtins.toJSON expected;
     assertions = {
-      check-config-context =
-        attrNames localChecks
-        == localCheckNames
-        && attrNames localCheckWorld.checks == localCheckNames;
+      # Pin the isolated claim names; localCheckBuildCommands indexes the
+      # combined checks by each expected name.
+      check-config-context = attrNames localChecks == localCheckNames;
+      # The unavailable check throws if either namespace forces sibling values.
       check-laziness =
         lib.isDerivation lazyCheckWorld.checks.available
         && builtins.attrNames lazyCheckWorld.checks == ["available" "unavailable"]
         && builtins.attrNames lazyCheckWorld.claims == ["available" "unavailable"];
+      # Moving or relabeling a contribution must not detach it from its owner.
       deterministic-index =
         ownerNames
         == ["alpha" "git-revise" "namespace-peer" "platform-control"]
@@ -185,60 +177,36 @@
             )
         )
         facetIndex.owners;
-      library-native-interface =
+      # Flattening can lose a nested leaf or confuse a literal dot with a path.
+      flat-package-membership =
+        attrNames flatPackages
+        == fixturePackageNames
+        && flatPackages."literal.name".drvPath == packageWorld.packages.ai.devTools."literal.name".drvPath
+        && flatPackages.name.drvPath == packageWorld.packages.ai.devTools.literal.name.drvPath;
+      # A raw library function must retain its native argument interface.
+      library-function-interface =
         builtins.functionArgs library.ai.mkControl
         == {
           optional = true;
           required = false;
         }
-        && library.ai.mkControl {required = "call";} == "facet-input-sentinel:call:default"
-        && library.ai.rootControl == "root"
-        && library.ai.peerControl == "peer"
-        && lib.isOption library.ai.optionControl
+        && library.ai.mkControl {required = "call";} == "facet-input-sentinel:call:default";
+      # Root and peer contributions must extend the same namespace, not replace it.
+      library-shared-namespace =
+        library.ai.rootControl == "root" && library.ai.peerControl == "peer";
+      # Treating native values as namespaces can strip their types or force the
+      # callable's deliberately throwing internal field.
+      library-value-boundaries =
+        lib.isOption library.ai.optionControl
         && lib.isOptionType library.ai.typeControl
         && library.ai.callableControl "value" == "called:value";
-      package-laziness =
-        lib.isDerivation lazyWorld.packages.ai.available
-        && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"];
-      overlay-order-and-namespace =
-        overlayResult.ai.seed
-        == inputs.fixture.sentinel
-        && overlayResult.ai.gitReviseObserved
-        == "${inputs.fixture.sentinel}:${inputs.fixture.sentinel}:alpha:${inputs.fixture.sentinel}"
-        && overlayResult.ai.devTools.seed == inputs.fixture.sentinel
-        && !(overlayResult.ai.devTools.alpha-tool ? previousPackageOnly);
-      overlay-sparse-leaf =
-        overlayResult.ai.devTools.alpha-note
-        == "${inputs.fixture.sentinel}:alpha-note";
-      package-identity =
-        packageWorld.scopes.git-revise.ai.gitTools.git-revise.drvPath
-        == gitRevise.drvPath
-        && overlayResult.ai.gitTools.git-revise.drvPath == gitRevise.drvPath;
-      public-output-invisibility =
-        all (
-          fixturePackage:
-            all (publicPackage: publicPackage.drvPath != fixturePackage.drvPath) publicPackageValues
-        )
-        fixturePackageValues
-        && !(self.lib ? facets)
-        && !(publicAiLib ? facets)
-        && !(self.overlays ? facet-mock)
-        && all (
-          fixtureLeaf:
-            !sameValue
-            fixtureLeaf.value
-            (lib.attrByPath fixtureLeaf.keyPath null publicOverlayResult)
-        )
-        fixtureOverlayValues
-        && !(self.homeManagerModules ? facet-mock)
-        && !(self.devenvModules ? facet-mock)
-        && all outsideFixture publicHomeManagerImports
-        && all outsideFixture publicDevenvImports;
+      # Package and overlay views must reuse the native scope derivations.
       namespace-identity =
         packageWorld.scopes.alpha.ai.devTools.alpha-tool.drvPath
         == packageWorld.packages.ai.devTools.alpha-tool.drvPath
         && overlayResult.ai.devTools.alpha-tool.drvPath
         == packageWorld.packages.ai.devTools.alpha-tool.drvPath;
+      # Native scope helpers must not become public package namespace members.
       namespace-projection = let
         clean = tree:
           lib.isDerivation tree
@@ -249,29 +217,82 @@
           );
       in
         clean packageWorld.packages;
+      # The later owner observes both the generated package and the earlier overlay.
+      overlay-extension-order =
+        overlayResult.ai.gitReviseObserved
+        == "facet-input-sentinel:facet-input-sentinel:alpha:facet-input-sentinel";
+      # Merging into prev must preserve siblings but replace an old derivation whole.
+      overlay-package-replacement =
+        overlayResult.ai.seed
+        == inputs.fixture.sentinel
+        && overlayResult.ai.devTools.seed == inputs.fixture.sentinel
+        && !(overlayResult.ai.devTools.alpha-tool ? previousPackageOnly);
+      # Listing a native scope's projected packages must not call an unrelated recipe.
+      package-laziness =
+        lib.isDerivation lazyWorld.packages.ai.available
+        && attrNames lazyWorld.packages.ai == ["available" "unavailable"];
+      # Filtering must still call the accepted recipe at its original path.
+      platform-filter-preserves-source =
+        supportedControl.drvPath
+        == originalSupportedControl.drvPath
+        && packageWorld.scopes.platform-control.ai.devTools.supported-control.drvPath == supportedControl.drvPath;
+      # Check the native scope even when the recipe is admitted; the platform
+      # owner tests only the package projection.
       platform-scope-omission =
         if system == "aarch64-darwin"
         then packageWorld.scopes.platform-control.ai.devTools ? unsupported-control
         else
           !(packageWorld.scopes.platform-control.ai.devTools ? unsupported-control)
           && !(overlayResult.ai.devTools ? unsupported-control);
-      platform-filter-preserves-source =
-        supportedControl.drvPath
-        == originalSupportedControl.drvPath
-        && packageWorld.scopes.platform-control.ai.devTools.supported-control.drvPath == supportedControl.drvPath
-        && overlayResult.ai.devTools.supported-control.drvPath == supportedControl.drvPath;
+      # No private fixture may leak into the consumer-facing flake outputs.
+      public-output-invisibility =
+        all (
+          fixturePackage:
+            all (publicPackage: publicPackage.drvPath != fixturePackage.drvPath) publicPackageValues
+        )
+        (builtins.attrValues flatPackages)
+        && !(self.lib ? facets)
+        && !(publicAiLib ? facets)
+        && all (name: !(builtins.hasAttr name publicAiLib)) ["callableControl" "mkControl" "optionControl" "peerControl" "typeControl"]
+        && !(self.overlays ? facet-mock)
+        && all (
+          path: !lib.hasAttrByPath path publicOverlayResult
+        ) (
+          [
+            ["ai" "alpha"]
+            ["ai" "ancestor-tool"]
+            ["ai" "devTools" "alpha-note"]
+            ["ai" "devTools" "alpha-tool"]
+            ["ai" "devTools" "literal" "name"]
+            ["ai" "devTools" "literal.name"]
+            ["ai" "devTools" "sibling_tool"]
+            ["ai" "devTools" "supported-control"]
+            ["ai" "gitReviseObserved"]
+            ["ai" "mcpServers" "modelContextProtocol" "fixture_mcp"]
+          ]
+          ++ lib.optional (system == "aarch64-darwin") ["ai" "devTools" "unsupported-control"]
+        )
+        # The production overlay legitimately exports this name; only the fixture derivation is private.
+        && (publicOverlayResult.ai.gitTools.git-revise.drvPath or null) != gitRevise.drvPath
+        && !(self.homeManagerModules ? facet-mock)
+        && !(self.devenvModules ? facet-mock)
+        && all outsideFixture publicHomeManagerImports
+        && all outsideFixture publicDevenvImports;
+      # Combined registry evaluation must preserve conditional child and root writes
+      # and attribute them to their own boundary rather than the activator.
       registry-native-realization =
         hasClaimPaths registryWorld.ownershipClaims [
           ["facetMock" "entries" "alpha"]
           ["facetMock" "entries" "conditional-child"]
           ["facetMock" "entries" "git-revise"]
         ]
-        && hasClaimPaths registryWorld.rootOwnershipClaims [
-          ["facetMock" "entries" "conditional-root"]
-          ["facetMock" "entries" "root-policy"]
-        ]
         && attrNames registryWorld.config.facetMock.entries == ["alpha" "conditional-child" "conditional-root" "git-revise" "root-policy"]
-        && registryWorld.config.facetMock.entries.root-policy.owner == "root"
+        && registryWorld.config.facetMock.entries.conditional-root
+        == {
+          owner = "root";
+          payload = "conditional-root";
+          source = toString registryModule;
+        }
         && registryWorld.config.facetMock.entries.conditional-child
         == {
           owner = "namespace-peer";
@@ -282,17 +303,24 @@
 
     positiveCheck = assert harness.checkRows "facet mock" assertions;
       pkgs.runCommandLocal "facet-mock" {
-        nativeBuildInputs = localCheckValues;
         passthru.localChecks = localChecks;
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        expect_passed() {
+          local name="$1" artifact="$2"
+          if [[ ! -e "$artifact/passed" ]]; then
+            echo "facet mock lost the owner check marker: $name" >&2
+            return 1
+          fi
+        }
         ${localCheckBuildCommands}
-        test "$(cat ${supportedControl})" = "supported-relative-sidecar"
         mkdir -p "$out"
         touch "$out/passed"
       '';
 
+    # Exact diagnostics (including abort) need the CLI: rejectsChange cannot
+    # distinguish an intended rejection from an unrelated evaluation failure.
     mkProbeExpression = probe:
       pkgs.writeText "facet-mock-${probe.name}-probe.nix" ''
         {facetsDir ? ${probe.facetsDir}}: let
@@ -309,11 +337,14 @@
         in
           ${
           if probe.force == "checks"
-          then "builtins.deepSeq (loader.realizeChecks { inherit context index; }) true"
+          then "builtins.deepSeq (builtins.attrNames (loader.realizeChecks { inherit context index; }).checks) true"
+          else if probe.force == "checks-invalid-value"
+          then "builtins.deepSeq (loader.realizeChecks { inherit context index; }).checks.invalid true"
           else if probe.force == "checks-root"
           then ''
             builtins.deepSeq (loader.realizeChecks {
-              inherit context index;
+              inherit context;
+              index.owners = [];
               rootModules = [
                 { checks.shared = pkgs.runCommand "root-one" {} "touch $out"; }
                 { checks.shared = lib.mkForce (pkgs.runCommand "root-two" {} "touch $out"); }
@@ -343,18 +374,15 @@
               else "builtins.deepSeq result true"
             }
           ''
-          else if probe.force == "overlay-forcing-sibling" || probe.force == "overlay-plain-sibling"
+          else if probe.force == "overlay-forcing-sibling"
           then ''
             let
               world = loader.realizeOverlay { inherit context index; };
               base.ai.seed = inputs.fixture.sentinel;
-              base.ai.devTools.sibling = ${
-              if probe.force == "overlay-forcing-sibling"
-              then ''{type = "derivation"; outPath = abort "overlay claims check forced a sibling outPath";}''
-              else ''"plain"''
-            };
+              base.ai.devTools.sibling = {type = "derivation"; outPath = abort "overlay claims check forced a sibling outPath";};
               result = lib.fix (final: base // world.overlay final base);
-            in assert result.ai.devTools ? sibling; builtins.deepSeq result.ai.devTools.added true
+            in assert result.ai.devTools ? sibling;
+            result.ai.devTools.added == ${builtins.toJSON probe.expectedAdded}
           ''
           else if probe.force == "package-overlay"
           then ''
@@ -415,120 +443,49 @@
       '';
 
     probe = {
-      expected,
+      expected ? [],
+      expectedAdded ? null,
       force,
       name,
       scenario ? name,
       scopeArgs ? {},
     }: {
       facetsDir = negativeRoot + "/${scenario}";
-      inherit expected force name scopeArgs;
+      inherit expected expectedAdded force name scopeArgs;
     };
     probes = [
       (probe {
-        name = "flat-collision";
-        force = "flat-packages";
-        expected = ["facet ownership collision in flat packages" "shared" "/one/packages/ai/first/shared/package.nix" "/two/packages/ai/second/shared/package.nix"];
-      })
-      (probe {
-        name = "flat-root";
-        force = "flat-root";
-        expected = ["facet ownership collision in flat packages" "shared" "<workspace>" "/one/packages/shared/package.nix"];
-      })
-      (probe {
-        name = "library-collision";
-        force = "library";
-        expected = ["facet ownership collision in library" "ai.shared" "/one/lib/default.nix" "/two/lib/default.nix"];
-      })
-      (probe {
-        name = "library-root";
-        force = "library-root";
-        expected = ["facet ownership collision in library" "ai.shared" "<root>" "/one/lib/default.nix"];
-      })
-      (probe {
-        name = "package-invalid-recipe";
-        force = "index";
-        expected = ["package recipe" "must be regular"];
-      })
-      (probe {
-        name = "package-prefix";
-        force = "packages";
-        expected = ["facet ownership collision in packages" "/one/packages/ai/devTools/shared" "/two/packages/ai/devTools/shared"];
-      })
-      (probe {
-        name = "package-prefix-reversed";
-        force = "packages";
-        expected = ["facet ownership collision in packages" "/one/packages/ai/devTools/shared" "/two/packages/ai/devTools/shared"];
-      })
-      (probe {
-        name = "package-nested-collision";
-        force = "packages";
-        expected = ["facet ownership collision in packages" "/one/packages/ai/devTools/shared.nix" "/two/packages/ai/devTools/shared/package.nix"];
-      })
-      (probe {
-        name = "reserved-nested";
-        force = "packages";
-        expected = ["reserved package name 'newScope'" "/one/packages/ai/devTools/newScope/package.nix"];
-      })
-      (probe {
-        name = "reserved-injected";
-        force = "packages";
-        expected = ["reserved package name 'inputs'" "/one/packages/ai/devTools/inputs/package.nix"];
-      })
-      (probe {
-        name = "package-overlay-dispute";
-        force = "package-overlay";
-        expected = ["facet ownership collision in overlay" "/one/packages/ai/devTools/shared/package.nix" "/two/overlay.nix"];
-      })
-      (probe {
-        name = "package-overlay-parent-dispute";
-        force = "package-overlay";
-        expected = ["facet ownership collision in overlay" "/one/packages/ai/devTools/shared/package.nix" "/two/overlay.nix"];
-      })
-      (probe {
-        name = "package-overlay-child-dispute";
-        force = "package-overlay";
-        expected = ["facet ownership collision in overlay" "/one/packages/ai/devTools/shared/package.nix" "/two/overlay.nix"];
-      })
-      (probe {
-        name = "reserved-scope-argument";
-        force = "packages";
-        scopeArgs.reservedControl = true;
-        expected = ["reserved package name 'reservedControl'" "/one/packages/ai/devTools/reservedControl.nix"];
-      })
-      (probe {
-        name = "check-collision";
-        force = "checks";
-        expected = [
-          "facet ownership collision in checks at 'shared'"
-          "/one/checks.nix"
-          "/two/checks.nix"
-        ];
-      })
-      (probe {
+        # Inspecting only the merged checks would hide the normal-priority
+        # owner once the imported check is activated and forces the same key.
         name = "check-conditional";
         force = "checks";
         expected = ["facet ownership collision in checks at 'shared'" "/one/checks.nix" "/two/checks.nix"];
       })
       (probe {
-        name = "check-mixed";
-        force = "checks";
-        expected = ["facet ownership collision in checks at 'shared'" "/one/checks.nix" "/two/checks.nix"];
-      })
-      (probe {
-        name = "check-root";
-        scenario = "check-collision";
-        force = "checks-root";
-        expected = ["facet ownership collision in checks at 'shared'" "<root checks>#0" "<root checks>#1"];
-      })
-      (probe {
+        # The check's name is allowed; evaluating the value must reject its type.
         name = "check-non-derivation";
-        force = "checks";
+        force = "checks-invalid-value";
         expected = [
           "checks.invalid"
           "/one/checks.nix"
           "not of type"
         ];
+      })
+      (probe {
+        name = "check-root";
+        scenario = "check-collision"; # The probe supplies its own workspace modules.
+        force = "checks-root";
+        expected = ["facet ownership collision in checks at 'shared'" "<root checks>#0" "<root checks>#1"];
+      })
+      (probe {
+        name = "flat-collision";
+        force = "flat-packages";
+        expected = ["facet ownership collision in flat packages at 'shared'" "/one/packages/ai/first/shared/package.nix" "/two/packages/ai/second/shared/package.nix"];
+      })
+      (probe {
+        name = "flat-root";
+        force = "flat-root";
+        expected = ["facet ownership collision in flat packages at 'shared'" "<workspace>" "/one/packages/shared/package.nix"];
       })
       (probe {
         name = "invalid-owner";
@@ -537,6 +494,16 @@
           "invalid owner 'Bad'"
           "expected lowercase kebab-case"
         ];
+      })
+      (probe {
+        name = "library-collision";
+        force = "library";
+        expected = ["facet ownership collision in library at 'ai.shared'" "/one/lib/default.nix" "/two/lib/default.nix"];
+      })
+      (probe {
+        name = "library-root";
+        force = "library-root";
+        expected = ["facet ownership collision in library at 'ai.shared'" "<root>" "/one/lib/default.nix"];
       })
       (probe {
         name = "metadata-only";
@@ -605,17 +572,8 @@
           "must contain non-empty lists of non-empty strings"
         ];
       })
-      (probe {
-        name = "overlay-prefix";
-        force = "overlay";
-        expected = [
-          "facet ownership collision in overlay"
-          "/one/overlay.nix"
-          "/two/overlay.nix"
-        ];
-      })
-      # The re-emitting overlay shape walks every sibling it carries, and `==`
-      # on two derivations forces both `outPath`s. Sparse contributions avoid it.
+      # valuesEqual must compare derivations so replacements count as writes.
+      # Re-emitting an aborting sibling catches a shortcut that skips that comparison.
       (probe {
         name = "overlay-re-emit-forcing";
         scenario = "overlay-re-emit";
@@ -638,14 +596,25 @@
           "claims unwritten leaf 'ai.shared'"
         ];
       })
-
       (probe {
-        name = "package-non-directory";
+        name = "package-invalid-recipe";
         force = "index";
-        expected = [
-          "owner 'one'"
-          "is metadata-only"
-        ];
+        expected = ["package recipe" "must be regular"];
+      })
+      (probe {
+        name = "package-nested-collision";
+        force = "packages";
+        expected = ["facet ownership collision in packages at 'ai.devTools.shared'" "/one/packages/ai/devTools/shared.nix" "/two/packages/ai/devTools/shared/package.nix"];
+      })
+      (probe {
+        name = "package-overlay-child-dispute";
+        force = "package-overlay";
+        expected = ["facet ownership collision in overlay" "/one/packages/ai/devTools/shared/package.nix" "/two/overlay.nix"];
+      })
+      (probe {
+        name = "package-overlay-parent-dispute";
+        force = "package-overlay";
+        expected = ["facet ownership collision in overlay" "/one/packages/ai/devTools/shared/package.nix" "/two/overlay.nix"];
       })
       (probe {
         name = "package-platforms-non-regular";
@@ -653,6 +622,20 @@
         expected = [
           "package 'shared' has non-regular platform metadata"
           "/one/packages/shared/platforms.nix"
+        ];
+      })
+      (probe {
+        name = "package-prefix";
+        force = "packages";
+        expected = ["facet ownership collision in packages" "/one/packages/ai/devTools/shared" "/two/packages/ai/devTools/shared"];
+      })
+      (probe {
+        name = "package-prefix-reversed";
+        force = "packages";
+        expected = [
+          "facet ownership collision in packages at 'ai.devTools.shared'"
+          "/one/packages/ai/devTools/shared"
+          "/two/packages/ai/devTools/shared/package.nix"
         ];
       })
       (probe {
@@ -664,23 +647,9 @@
         ];
       })
       (probe {
-        name = "package-collision";
-        force = "packages";
-        expected = [
-          "facet ownership collision in packages at 'shared'"
-          "/one/packages/shared/package.nix"
-          "/two/packages/shared/package.nix"
-        ];
-      })
-      (probe {
         name = "registry-conditional";
         force = "registry";
         expected = ["facet ownership collision in registry at 'facetMock.entries.shared'" "/one/registry.nix" "/two/registry.nix"];
-      })
-      (probe {
-        name = "registry-root-conditional";
-        force = "registry";
-        expected = ["facet ownership collision in registry at 'facetMock.entries.conditional-root'" "root policy" "/one/registry.nix"];
       })
       (probe {
         name = "registry-equal";
@@ -692,13 +661,9 @@
         ];
       })
       (probe {
-        name = "registry-mixed";
+        name = "registry-root-conditional";
         force = "registry";
-        expected = [
-          "facet ownership collision in registry at 'facetMock.entries.shared'"
-          "/one/registry.nix"
-          "/two/registry.nix"
-        ];
+        expected = ["facet ownership collision in registry at 'facetMock.entries.conditional-root'" "root policy" "/one/registry.nix"];
       })
       (probe {
         name = "registry-root-conflict";
@@ -710,6 +675,16 @@
           "one ("
           "/one/registry.nix"
         ];
+      })
+      (probe {
+        name = "reserved-injected";
+        force = "packages";
+        expected = ["reserved package name 'inputs'" "/one/packages/ai/devTools/inputs/package.nix"];
+      })
+      (probe {
+        name = "reserved-nested";
+        force = "packages";
+        expected = ["reserved package name 'newScope'" "/one/packages/ai/devTools/newScope/package.nix"];
       })
       (probe {
         name = "reserved-packages";
@@ -728,6 +703,12 @@
           "owner 'one'"
           "/one/packages/pkgs/package.nix"
         ];
+      })
+      (probe {
+        name = "reserved-scope-argument";
+        force = "packages";
+        scopeArgs.reservedControl = true;
+        expected = ["reserved package name 'reservedControl'" "/one/packages/ai/devTools/reservedControl.nix"];
       })
       (probe {
         name = "reserved-system";
@@ -751,41 +732,25 @@
       (probe {
         name = "overlay-dotted-alias";
         force = "overlay-dotted-alias";
-        expected = [];
-      })
-      (probe {
-        name = "overlay-re-emit-plain";
-        scenario = "overlay-re-emit";
-        force = "overlay-plain-sibling";
-        expected = [];
       })
       (probe {
         name = "overlay-sparse-forcing";
+        expectedAdded = "sparse";
         scenario = "overlay-sparse";
         force = "overlay-forcing-sibling";
-        expected = [];
       })
       (probe {
         name = "package-invalid-name";
         force = "package-invalid-name";
-        expected = [];
       })
       (probe {
         name = "package-missing-recipe";
         force = "package-missing-recipe";
-        expected = [];
       })
     ];
     probeCommands =
-      concatMapStringsSep "\n" (
-        item: "run_probe ${escapeShellArgs ([item.name (toString (mkProbeExpression item)) "${item.facetsDir}"] ++ item.expected)}"
-      )
-      probes;
-    successProbeCommands =
-      concatMapStringsSep "\n" (
-        item: "run_success_probe ${escapeShellArgs [item.name (toString (mkProbeExpression item)) "${item.facetsDir}"]}"
-      )
-      successProbes;
+      concatMapStringsSep "\n" (item: "run_probe ${escapeShellArgs ([item.name (toString (mkProbeExpression item)) "${item.facetsDir}"] ++ item.expected)}")
+      (probes ++ successProbes);
 
     negativeCheck =
       pkgs.runCommandLocal "facet-mock-negative" {
@@ -798,43 +763,36 @@
         mkdir -p "$HOME" "$NIX_STATE_DIR/profiles/per-user/$(id -un)"
 
         run_probe() {
-          local name="$1"
-          local expression="$2"
-          local facets_dir="$3"
+          local name="$1" expression="$2" facets_dir="$3"
           shift 3
+          local status=0
+          nix-instantiate --eval --strict "$expression" --argstr facetsDir "$facets_dir" \
+            >"$name.stdout" 2>"$name.stderr" || status=$?
 
-          if ${pkgs.nix}/bin/nix-instantiate --eval --strict "$expression" --argstr facetsDir "$facets_dir" \
-            >"$name.stdout" 2>"$name.stderr"; then
-            echo "facet mock negative probe unexpectedly succeeded: $name" >&2
-            return 1
-          fi
-
-          local expected
-          for expected in "$@"; do
-            if ! ${pkgs.gnugrep}/bin/grep -F -- "$expected" "$name.stderr" >/dev/null; then
-              echo "facet mock negative probe missed diagnostic '$expected': $name" >&2
-              ${pkgs.coreutils}/bin/cat "$name.stderr" >&2
+          if (( $# == 0 )); then
+            if (( status != 0 )) || [[ "$(cat "$name.stdout")" != true ]]; then
+              echo "facet mock positive probe did not return true: $name" >&2
+              cat "$name.stdout" "$name.stderr" >&2
               return 1
             fi
-          done
-        }
-
-        run_success_probe() {
-          local name="$1"
-          local expression="$2"
-          local facets_dir="$3"
-
-          if ! ${pkgs.nix}/bin/nix-instantiate --eval --strict "$expression" --argstr facetsDir "$facets_dir" \
-            >"$name.stdout" 2>"$name.stderr"; then
-            echo "facet mock positive probe unexpectedly failed: $name" >&2
-            ${pkgs.coreutils}/bin/cat "$name.stderr" >&2
+          elif (( status == 0 )); then
+            echo "facet mock negative probe unexpectedly succeeded: $name" >&2
             return 1
+          else
+            local expected
+            for expected in "$@"; do
+              if ! grep -F -- "$expected" "$name.stderr" >/dev/null; then
+                echo "facet mock negative probe missed diagnostic '$expected': $name" >&2
+                cat "$name.stderr" >&2
+                return 1
+              fi
+            done
           fi
         }
 
         ${probeCommands}
-        ${successProbeCommands}
 
+        # A real symlink is needed to distinguish a regular file from an alias.
         mkdir -p symlink-fixture/one
         ln -s ${productionRoot}/alpha/checks.nix symlink-fixture/one/checks.nix
         run_probe \

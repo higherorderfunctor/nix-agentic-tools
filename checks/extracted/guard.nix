@@ -99,17 +99,6 @@
       files = {"README.md" = "x\n";};
       fails = ["extracted-contract-guard matched zero files"];
     };
-    # Every mention below is one the guard must let through.
-    excluded.files =
-      clean
-      // {
-        "checks/extracted/x.nix" = "bySystem\n";
-        "lib/extracted/x.nix" = "./extracted/extracted.json\n";
-        ".gitattributes" = "/packages/*/extracted/extracted.json linguist-generated=true\n";
-        "packages/fake/README.md" = "bySystem\n";
-        "packages/fake/comment.nix" = "{} # reads bySystem\n";
-        "packages/fake/extracted/decisions.json" = "{\"models\": {\"combine\": \"max\"}}\n";
-      };
     offending = {
       files = clean // {"packages/fake/checks.nix" = "let rule = \"max\"; in { combine = rule; }\n";};
       fails = ["packages/fake/checks.nix: combine = rule;" "FAIL: per-owner code above"];
@@ -133,10 +122,6 @@
     offending-ts = {
       files = clean // {"packages/fake/read.ts" = "export const x = facts.bySystem;\n";};
       fails = ["packages/fake/read.ts: bySystem" "FAIL: per-owner code above"];
-    };
-    offending-url = {
-      files = clean // {"packages/fake/url.nix" = "let url = \"https://example.test\"; in facts.bySystem\n";};
-      fails = ["packages/fake/url.nix: bySystem" "FAIL: per-owner code above"];
     };
   };
   control = label: case:

@@ -28,6 +28,10 @@
     drifted = raw "fresh-drifted" {a = 2;};
     matching = raw "fresh-matching" {a = 1;};
   };
+  staticRaws = {
+    ${host} = fresh.matching;
+    ${other} = fresh.drifted;
+  };
   cases = {
     # A fork is compared through the host's projection, not the stored tree.
     forked-match = {
@@ -40,8 +44,8 @@
         };
         extracted.${host} = fresh.matching;
       };
-      regenerate.names = [fresh.matching];
     };
+    # An absent extractor must not stop the one present from reporting drift.
     per-system-drift = {
       args = {
         committed = committed {a = 1;};
@@ -50,6 +54,7 @@
       fails = [host];
       omits = [other];
     };
+    # The foreign derivation is deliberately unbuildable, unlike a missing raw.
     per-system-skips-foreign = {
       args = {
         committed = committed {a = 1;};
@@ -67,10 +72,7 @@
     static-names-both = {
       args = {
         committed = committed {a = 0;};
-        extracted = {
-          ${host} = fresh.matching;
-          ${other} = fresh.drifted;
-        };
+        extracted = staticRaws;
       };
       fails = [host other];
     };
@@ -79,10 +81,7 @@
     static-names-drifted = {
       args = {
         committed = committed {a = 1;};
-        extracted = {
-          ${host} = fresh.matching;
-          ${other} = fresh.drifted;
-        };
+        extracted = staticRaws;
       };
       fails = [other];
       omits = [host];

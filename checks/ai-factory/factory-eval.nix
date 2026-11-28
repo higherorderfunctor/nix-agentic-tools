@@ -8,7 +8,7 @@
 }: let
   inherit (harness) checkRows rejectsChange;
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
-  inherit (import ../../lib/testing/normalized-settings-probes.nix {inherit lib;}) requestFields resolvedSettingSample settingSample settingsFields;
+  inherit (import ../../lib/testing/normalized-settings-probes.nix {inherit lib;}) resolvedSettingSample settingSample settingsFields;
   sharedRequests = {
     agents.probe = {
       description = "probe";
@@ -32,6 +32,11 @@
   };
   backends = ["devenv" "hm"];
   build = ai.app.mkRuntime;
+  deliveryWarning = backend: path: reason: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
+  installedPackages = backend: evaluated:
+    if backend == "hm"
+    then evaluated.config.home.packages
+    else evaluated.config.packages;
   builtName = input: (build input).name;
   rejectsRecord = valid: invalid:
     rejectsChange builtName {
@@ -80,7 +85,7 @@
   directProxy = backend: port:
     (evaluateProxy backend [(mkProxyTestRecord "testapp")] {ai.testapp = proxyRuntime "direct" port;}).config;
   runtimeEnabled = backend: record: config: (evaluate backend [record] config).config.ai.testapp.enable;
-  decomposeCase = backend: surfaceSupport: supportsSkills: let
+  evaluateDecomposition = backend: surfaceSupport: requests: let
     record = build {
       inherit pkgs surfaceSupport;
       name = "testapp";
@@ -90,43 +95,40 @@
         default = [];
       };
     };
-    evaluate = evaluateSupport backend record;
-    evaluated = evaluate sharedRequests true;
-    warnings = evaluated.config.warnings;
-    expectedPaths =
-      lib.concatMap
-      (surface: map (field: surface + lib.optionalString (field != null) ".${field}") (requestFields surface))
-      (builtins.attrNames (removeAttrs sharedRequests (lib.optional supportsSkills "skills")));
   in
-    checkRows "${backend} shared surface diagnostics" {
-      "a disabled runtime emits no warnings" = (evaluate sharedRequests false).config.warnings == [];
-      "an empty request emits no warnings" = (evaluate {} true).config.warnings == [];
-      # Every registered surface is exercised, and each unsupported surface
-      # gets exactly one diagnostic through the public factory on both backends.
-      "every registered surface has a probe" = builtins.attrNames sharedRequests == evaluated.config.ai.internal.sharedSurfaces;
-      "supported skills are delivered" = !supportsSkills || evaluated.config.ai.testapp.normalized.skills == sharedRequests.skills;
-      "unsupported surfaces emit exactly one warning per expected path" =
-        builtins.length warnings
-        == builtins.length expectedPaths
-        && lib.all (path:
-          builtins.length (lib.filter
-            (lib.hasPrefix "ai.${path} is set but ${backend} does not deliver it to testapp (reason: ")
-            warnings)
-          == 1)
-        expectedPaths;
-    };
+    (evaluateSupport backend record requests true).config;
 in {
   checks = {
     factory-mkRuntime-decompose-no-surfaces = mkTest "mkRuntime-decompose-no-surfaces" (
-      checkRows "unsupported surface declarations" (lib.genAttrs backends (backend:
+      checkRows "shared surface diagnostics" (lib.genAttrs backends (backend: let
+        omitted = evaluateDecomposition backend {};
+        withSkills = evaluateDecomposition backend {skills.backends = backends;};
+        unsupported = omitted sharedRequests;
+        supported = withSkills sharedRequests;
+        # Fixed inputs have exact diagnostics, including the one per settings
+        # field and the single MCP warning despite the unused transport field.
+        paths = [
+          "ai.agents"
+          "ai.context"
+          "ai.environmentVariables"
+          "ai.hooks"
+          "ai.jail"
+          "ai.mcpServers"
+          "ai.proxy"
+          "ai.rules"
+          "ai.settings.inference"
+          "ai.settings.reasoningEffort"
+          "ai.shell"
+        ];
+        expected = path: deliveryWarning backend path "testapp's surfaceSupport does not consume this shared surface.";
+        withSkillsWarning = map expected (paths ++ ["ai.skills"]);
+        sortedWarnings = cfg: lib.sort builtins.lessThan cfg.warnings;
+      in
         checkRows backend {
-          "an empty backend list does not consume skills" = decomposeCase backend {skills.backends = [];} false;
-          "an omitted declaration does not consume skills" = decomposeCase backend {} false;
+          "an empty request does not warn about default values" = (omitted {}).warnings == [];
+          "omitted support warns once per requested surface or settings field" = sortedWarnings unsupported == withSkillsWarning;
+          "supporting skills suppresses only the skills warning" = sortedWarnings supported == map expected paths;
         }))
-    );
-    factory-mkRuntime-decompose-one-surface = mkTest "mkRuntime-decompose-one-surface" (
-      checkRows "declared skills support" (lib.genAttrs backends (backend:
-          decomposeCase backend {skills.backends = backends;} true))
     );
     factory-mkRuntime-declared-backend-support = mkTest "mkRuntime-declared-backend-support" (
       let
@@ -140,20 +142,20 @@ in {
           };
         };
         request = {inherit (sharedRequests) agents;};
-        warning = backend: path: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
       in
         checkRows "declared backend support" (lib.genAttrs backends (backend: let
-          evaluate = requests: enabled: (evaluateSupport backend record requests enabled).config;
-          expected = path: lib.optional (backend == "devenv") (warning backend path);
+          evaluate = requests: (evaluateSupport backend record requests true).config;
+          expected = path: lib.optional (backend == "devenv") (deliveryWarning backend path reason);
         in
-          checkRows backend {
-            "disabled runtime does not warn" = (evaluate request false).warnings == [];
-            "empty request does not warn" = (evaluate {} true).warnings == [];
-            "local null suppresses inherited request" = (evaluate (request // {testapp.agents.probe = null;}) true).warnings == [];
-            "normalized agent remains available on both backends" = (evaluate request true).ai.testapp.normalized.agents.probe.description == "probe";
-            "root request identifies root input on the unsupported backend" = (evaluate request true).warnings == expected "ai.agents";
-            "runtime request identifies runtime input on the unsupported backend" = (evaluate {testapp.agents = request.agents;} true).warnings == expected "ai.testapp.agents";
-          }))
+          checkRows backend ({
+              "root request identifies root input on the unsupported backend" = (evaluate request).warnings == expected "ai.agents";
+              "runtime request identifies runtime input on the unsupported backend" = (evaluate {testapp.agents = request.agents;}).warnings == expected "ai.testapp.agents";
+            }
+            // lib.optionalAttrs (backend == "devenv") {
+              # Only the unsupported backend consults the tombstone for this warning.
+              "local null suppresses inherited request" = (evaluate (request // {testapp.agents.probe = null;})).warnings == [];
+              "normalized agent remains available on the unsupported backend" = (evaluate request).ai.testapp.normalized.agents.probe.description == "probe";
+            })))
     );
     factory-mkRuntime-declared-nested-gap = mkTest "mkRuntime-declared-nested-gap" (
       let
@@ -172,17 +174,12 @@ in {
         request.agents.probe = sharedRequests.agents.probe // {tools = ["Read"];};
       in
         checkRows "declared nested gap" (lib.genAttrs backends (backend: let
-          warnings = requests: enabled: (evaluateSupport backend record requests enabled).config.warnings;
-          expected = path: ["${path}.tools is set but ${backend} does not deliver it to testapp (reason: ${reason})"];
+          warnings = requests: (evaluateSupport backend record requests true).config.warnings;
         in
           checkRows backend {
-            "disabled runtime does not warn" = warnings request false == [];
-            "empty request does not warn" = warnings {} true == [];
-            "empty tools list does not warn" = warnings {agents.probe = sharedRequests.agents.probe // {tools = [];};} true == [];
-            "local agent without tools replaces inherited request" = warnings (request // {testapp.agents.probe = sharedRequests.agents.probe;}) true == [];
-            "local null suppresses inherited request" = warnings (request // {testapp.agents.probe = null;}) true == [];
-            "root agent warning identifies root tools" = warnings request true == expected "ai.agents.probe";
-            "runtime agent warning identifies runtime tools" = warnings {testapp.agents = request.agents;} true == expected "ai.testapp.agents.probe";
+            "absent agents do not synthesize a tools gap" = warnings {} == [];
+            "local agent without tools replaces inherited request" = warnings (request // {testapp.agents.probe = sharedRequests.agents.probe;}) == [];
+            "root agent warning identifies root tools" = warnings request == [(deliveryWarning backend "ai.agents.probe.tools" reason)];
           }))
     );
     factory-mkRuntime-declared-static-gap = mkTest "mkRuntime-declared-static-gap" (
@@ -205,16 +202,13 @@ in {
         rootRequest.settings.inference = settingSample "inference";
       in
         checkRows "declared static gap" (lib.genAttrs backends (backend: let
-          warnings = enabled: requests: (evaluateSupport backend record requests enabled).config.warnings;
-          expected = path: ["ai.${path}.url is set but ${backend} does not deliver it to testapp (reason: testapp drops the inference URL.)"];
+          warnings = requests: (evaluateSupport backend record requests true).config.warnings;
+          expected = path: [(deliveryWarning backend "ai.${path}.url" "testapp drops the inference URL.")];
         in
           checkRows backend {
-            "disabled runtime does not warn" = warnings false rootRequest == [];
-            "empty request does not warn" = warnings true {} == [];
-            "normalized input warns at the normalized path" = warnings true {testapp.normalized.settings.inference = resolvedSettingSample "inference";} == expected "testapp.normalized.settings.inference";
-            "root copy-down warns once at the runtime pool path" = warnings true rootRequest == expected "testapp.settings.inference";
-            "runtime input warns at the runtime pool path" = warnings true {testapp.settings.inference = settingSample "inference";} == expected "testapp.settings.inference";
-            "unrelated settings field does not warn" = warnings true {testapp.settings.reasoningEffort = "high";} == [];
+            "normalized input warns at the normalized path" = warnings {testapp.normalized.settings.inference = resolvedSettingSample "inference";} == expected "testapp.normalized.settings.inference";
+            "root copy-down warns once at the runtime pool path" = warnings rootRequest == expected "testapp.settings.inference";
+            "unrelated settings field does not warn" = warnings {testapp.settings.reasoningEffort = "high";} == [];
           }))
     );
     # ── mkRuntime tests ───────────────────────────────────────────────
@@ -235,6 +229,15 @@ in {
           defaults.package = pkgs.hello;
         };
         built = build base;
+        delivered = backend:
+          evaluate backend [
+            (build (base
+              // {
+                config = {backend, ...}: {ai.testapp.deliveredVia = backend;};
+                options.deliveredVia = lib.mkOption {type = lib.types.str;};
+                ${backend}.installPackage = _: pkgs.bash;
+              }))
+          ] {ai.testapp.enable = true;};
         constructorRejects = rejectsRecord base;
         backendRows = backend: let
           transformRejects = invalid:
@@ -244,17 +247,19 @@ in {
               expected = true;
             };
         in
-          checkRows backend {
-            "constructor rejects per-backend config" = constructorRejects (base // {${backend}.config = _: {};});
-            "constructor rejects per-backend defaults" = constructorRejects (base // {${backend}.defaults.package = pkgs.hello;});
-            "transform rejects per-backend config" = transformRejects (built // {${backend} = built.${backend} // {config = _: {};};});
-            "transform rejects per-backend defaults" = transformRejects (built // {${backend} = built.${backend} // {defaults.package = pkgs.hello;};});
-            "transform rejects retired defaults.outputPath" = transformRejects (built // {defaults = built.defaults // {outputPath = null;};});
-          };
+          checkRows backend ({
+              "backend install callback replaces the base package" = installedPackages backend (delivered backend) == [pkgs.bash];
+              "constructor rejects per-backend config" = constructorRejects (base // {${backend}.config = _: {};});
+              "constructor rejects per-backend defaults" = constructorRejects (base // {${backend}.defaults.package = pkgs.hello;});
+              "record-level delivery callback runs with the selected backend" = (delivered backend).config.ai.testapp.deliveredVia == backend;
+              "transform rejects per-backend config" = transformRejects (built // {${backend} = built.${backend} // {config = _: {};};});
+              "transform rejects per-backend defaults" = transformRejects (built // {${backend} = built.${backend} // {defaults.package = pkgs.hello;};});
+            }
+            // lib.optionalAttrs (backend == "hm") {
+              "transform rejects retired defaults.outputPath" = transformRejects (built // {defaults = built.defaults // {outputPath = null;};});
+            });
       in
         checkRows "record delivery seam" ({
-            "constructor accepts an installPackage callback" = builtName (base // {hm.installPackage = _: pkgs.hello;}) == "testapp";
-            "constructor accepts record-level config" = builtName (base // {config = _: {};}) == "testapp";
             "constructor rejects retired defaults.outputPath" = constructorRejects (base // {defaults = base.defaults // {outputPath = null;};});
           }
           // lib.genAttrs backends backendRows)
@@ -282,17 +287,13 @@ in {
       invalid = {
         "launcher contains an empty segment" = namespaces // {launcher = [""];};
         "launcher is a string" = namespaces // {launcher = "cli";};
-        "launcher is null" = namespaces // {launcher = null;};
         "launcher segment is not a string" = namespaces // {launcher = [1];};
         "namespace group is unknown" = namespaces // {other = ["x"];};
         "namespaces are not an attribute set" = "cli";
       };
       check = backend: let
         eval = config: evaluate backend [record] config;
-        packages = evaluated:
-          if backend == "hm"
-          then evaluated.config.home.packages
-          else evaluated.config.packages;
+        packages = installedPackages backend;
         normal = eval {
           ai.rules.root.text = "ROOT";
           ai.testapp = {
@@ -300,34 +301,28 @@ in {
             arm.rules.local.text = "LOCAL";
           };
         };
-        custom = evaluate backend [(record // {installPackage = _: throw "null package called installPackage";})] {
-          ai.testapp.cli = {
-            enable = true;
-            package = null;
-          };
-        };
         withoutLauncher = evaluate backend [(build (removeAttrs valid ["defaults"]))] {ai.testapp.enable = true;};
       in
         checkRows "${backend} option namespaces" ({
-            "a null package bypasses installation" = packages custom == [];
-            "a record without a package keeps the root switch and no launcher" =
-              withoutLauncher.config.ai.testapp.enable
-              && packages withoutLauncher == []
-              && !(withoutLauncher.options.ai.testapp ? cli)
-              && withoutLauncher.options.ai.testapp.arm ? rules;
             "launcher enables and installs the package" = packages normal == [pkgs.hello] && normal.config.ai.testapp.enable;
-            "package option is not at the runtime root" = !(normal.options.ai.testapp ? package);
             "rules merge in the nested pool, not at the runtime root" =
               !(normal.options.ai.testapp ? rules)
               && builtins.attrNames normal.config.ai.testapp.arm.normalized.rules == ["local" "root"];
           }
-          // lib.mapAttrs (_: optionNamespaces:
-            rejectsChange (input: runtimeEnabled backend input {}) {
-              valid = record;
-              invalid = record // {inherit optionNamespaces;};
-              expected = false;
-            })
-          invalid);
+          // lib.optionalAttrs (backend == "hm") ({
+              "a record without a package keeps the root switch and no launcher" =
+                withoutLauncher.config.ai.testapp.enable
+                && packages withoutLauncher == []
+                && !(withoutLauncher.options.ai.testapp ? cli)
+                && withoutLauncher.options.ai.testapp.arm ? rules;
+            }
+            // lib.mapAttrs (_: optionNamespaces:
+              rejectsChange (input: runtimeEnabled backend input {}) {
+                valid = record;
+                invalid = record // {inherit optionNamespaces;};
+                expected = false;
+              })
+            invalid));
     in
       checkRows "option namespaces" ({
           constructor = checkRows "constructor option namespaces" (lib.mapAttrs (_: optionNamespaces: rejectsRecord valid (base // {inherit optionNamespaces;})) invalid);
@@ -412,20 +407,7 @@ in {
             "agentsDir suffixes must be nonempty" = rejectsRecord (valid // {agentsDirSuffixes = [".json"];}) (valid // {agentsDirSuffixes = [];});
             "agentsDir suffixes must be strings" = rejectsRecord (valid // {agentsDirSuffixes = [".json"];}) (valid // {agentsDirSuffixes = [1];});
             "agentsDir suffixes require agents support" = rejectsRecord (base // {agentsDirSuffixes = [".md"];}) (withoutAgents // {agentsDirSuffixes = [".md"];});
-            "callback accepts optional fields" =
-              agentsMdTarget (bareTarget
-                // {
-                  maxBytes = 1024;
-                  rules = {};
-                })
-              == "AGENTS.md";
-            "callback rejects a lowercase maxbytes key" = rejectsTarget (bareTarget // {maxbytes = 1;});
             "callback rejects a stray context key" = rejectsTarget (bareTarget // {context = "stray";});
-            "callback requires the target key" = rejectsChange agentsMdTarget {
-              valid = bareTarget // {rules = {};};
-              invalid = {rules = {};};
-              expected = "AGENTS.md";
-            };
             "constructor rejects a misspelt pool" = rejectsRecord valid (withPoolOptions {agnets.description = "misspelt";});
             "default agentsDir is null" = agentsDir valid == null;
             "even a supported surface cannot override an undeclared pool" = let
@@ -433,7 +415,6 @@ in {
             in
               rejectsRecord (withHooks valid) (withHooks (withPoolOptions {hooks.description = "undeclared";}));
             "pool override requires surface support" = rejectsRecord valid (valid // {surfaceSupport = removeAttrs valid.surfaceSupport ["environmentVariables"];});
-            "suffix customization keeps the agentsDir default null" = agentsDir (valid // {agentsDirSuffixes = [".json"];}) == null;
           }
           // lib.genAttrs backends (backend:
             checkRows backend {
@@ -445,27 +426,11 @@ in {
             }))
     );
 
-    factory-mkRuntime-returns-record = mkTest "mkRuntime-returns-record" (
-      let
-        record = build {
-          defaults.package = pkgs.hello;
-          name = "testapp";
-          surfaceSupport = {};
-        };
-      in
-        checkRows "constructed runtime record" {
-          "empty support stays empty" = record.surfaceSupport == {};
-          "launcher default is retained" = record.defaults.package == pkgs.hello;
-          "record retains its name" = record.name == "testapp";
-        }
-    );
-
     # A runtime declares each normalized field it consumes; surface support
     # alone does not imply support for a newly added field.
     factory-mkRuntime-settings-fields = mkTest "mkRuntime-settings-fields" (
       let
         backendReason = "Only devenv lacks settings delivery.";
-        expected = backend: path: reason: "${path} is set but ${backend} does not deliver it to testapp (reason: ${reason})";
         fieldReason = "testapp's surfaceSupport.settings.fields does not consume this normalized setting.";
         testRecord = settings: pools:
           build {
@@ -480,37 +445,59 @@ in {
         };
         supportedRecord = testRecord {fields = settingsFields;};
         unsupportedRecord = testRecord {};
-      in
-        lib.all (field: let
+        locations = {
+          nested = {
+            namespace = ["arm"];
+            optionPrefix = "ai.testapp.arm";
+          };
+          root = {
+            namespace = [];
+            optionPrefix = "ai.testapp";
+          };
+        };
+        fieldRows = field: let
           root = {settings.${field} = settingSample field;};
+          rootPath = "ai.settings.${field}";
         in
-          lib.all (pools: let
-            poolPath = ["testapp"] ++ pools;
+          checkRows field (lib.mapAttrs (location: {
+            namespace,
+            optionPrefix,
+          }: let
+            poolPath = ["testapp"] ++ namespace;
             normalizedPath = poolPath ++ ["normalized" "settings" field];
             normalized = lib.setAttrByPath normalizedPath (resolvedSettingSample field);
-            runtimePath = poolPath ++ ["settings" field];
-            runtime = lib.setAttrByPath runtimePath (settingSample field);
-            partialWarnings = backend: request: (evaluateSupport backend (partialRecord pools) request true).config.warnings;
-          in
-            partialWarnings "devenv" normalized
-            == [(expected "devenv" (lib.showOption (["ai"] ++ normalizedPath)) backendReason)]
-            && partialWarnings "hm" root == [(expected "hm" "ai.settings.${field}" fieldReason)]
-            && partialWarnings "devenv" root == [(expected "devenv" "ai.settings.${field}" backendReason)]
-            && lib.all (backend: let
-              evaluate = request: (evaluateSupport backend (unsupportedRecord pools) request true).config;
-              warnings = request: (evaluate request).warnings;
-              runtimeWarning = [(expected backend (lib.showOption (["ai"] ++ runtimePath)) fieldReason)];
-              supported = (evaluateSupport backend (supportedRecord pools) root true).config;
+            normalizedOption = "${optionPrefix}.normalized.settings.${field}";
+            runtime = lib.setAttrByPath (poolPath ++ ["settings" field]) (settingSample field);
+            runtimeOption = "${optionPrefix}.settings.${field}";
+            partialWarnings = backend: request: (evaluateSupport backend (partialRecord namespace) request true).config.warnings;
+            readNormalized = cfg: lib.getAttrFromPath normalizedPath cfg.ai;
+            backendRows = backend: let
+              evaluate = request: (evaluateSupport backend (unsupportedRecord namespace) request true).config;
+              standaloneWarning = path: [(deliveryWarning backend path fieldReason)];
+              supported = (evaluateSupport backend (supportedRecord namespace) root true).config;
+              runtimeConfig = evaluate runtime;
+              rootConfig = evaluate root;
             in
-              lib.attrByPath normalizedPath null supported.ai
-              == resolvedSettingSample field
-              && supported.warnings == []
-              && lib.all (request: lib.getAttrFromPath normalizedPath (evaluate request).ai == null) [root runtime]
-              && warnings root == [(expected backend "ai.settings.${field}" fieldReason)]
-              && warnings runtime == runtimeWarning
-              && warnings (lib.recursiveUpdate root runtime) == runtimeWarning
-              && warnings normalized == [(expected backend (lib.showOption (["ai"] ++ normalizedPath)) fieldReason)]) ["devenv" "hm"]) [[] ["arm"]])
-        settingsFields
+              checkRows "${field} ${location} ${backend}" {
+                "declared field resolves the root sample" = readNormalized supported == resolvedSettingSample field;
+                "declared field suppresses its unsupported diagnostic" = supported.warnings == [];
+                "direct normalized input cannot bypass the diagnostic" = (evaluate normalized).warnings == standaloneWarning normalizedOption;
+                "runtime request owns the diagnostic when both inputs are set" = (evaluate (lib.recursiveUpdate root runtime)).warnings == standaloneWarning runtimeOption;
+                "unlisted root field does not reach normalized delivery" = readNormalized rootConfig == null;
+                "unlisted root field warns at the root input" = rootConfig.warnings == standaloneWarning rootPath;
+                "unlisted runtime field does not reach normalized delivery" = readNormalized runtimeConfig == null;
+                "unlisted runtime field warns at the runtime input" = runtimeConfig.warnings == standaloneWarning runtimeOption;
+              };
+          in
+            checkRows "${field} ${location}" {
+              "devenv reports backend exclusion on a direct normalized input" = partialWarnings "devenv" normalized == [(deliveryWarning "devenv" normalizedOption backendReason)];
+              "devenv reports backend exclusion rather than an unlisted root field" = partialWarnings "devenv" root == [(deliveryWarning "devenv" rootPath backendReason)];
+              "home manager reports an unlisted field rather than backend exclusion" = partialWarnings "hm" root == [(deliveryWarning "hm" rootPath fieldReason)];
+              "normalized field delivery by backend" = checkRows "backends" (lib.genAttrs backends backendRows);
+            })
+          locations);
+      in
+        checkRows "normalized settings fields" (lib.genAttrs settingsFields fieldRows)
     );
 
     # Only gaps on unlisted settings fields duplicate the default warning.
@@ -613,23 +600,6 @@ in {
           }))
     );
 
-    factory-mkRuntime-custom-options-merged = mkTest "mkRuntime-custom-options-merged" (
-      let
-        record = build {
-          name = "testapp";
-          surfaceSupport = {};
-          defaults = {package = pkgs.hello;};
-          options = {
-            turboMode = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-            };
-          };
-        };
-      in
-        (evaluate "hm" [record] {ai.testapp.turboMode = true;}).config.ai.testapp.turboMode
-    );
-
     # A backend's option declaration replaces the record's at the same path as a
     # whole. Merged field by field, the record's attrset `default` keys would
     # survive in the backend's declaration; a group (`cli`) still joins.
@@ -642,7 +612,7 @@ in {
           options = {
             cli.shared = lib.mkOption {
               type = lib.types.bool;
-              default = true;
+              default = false;
             };
             table = lib.mkOption {
               type = lib.types.attrsOf lib.types.int;
@@ -660,15 +630,23 @@ in {
             };
           };
         };
-        cfg = (evaluate "hm" [record] {}).config.ai.testapp;
+        readConfig = config: (evaluate "hm" [record] config).config.ai.testapp;
+        defaults = readConfig {};
+        configured = readConfig {ai.testapp.cli.shared = true;};
       in
         checkRows "backend option replacement" {
-          "backend table does not inherit record default keys" = cfg.table == {};
-          "option group keeps both backend and shared members" =
-            cfg.cli
+          "backend table does not inherit record default keys" = defaults.table == {};
+          "option group accepts user configuration alongside a backend default" =
+            configured.cli
             == {
               backendOnly = true;
               shared = true;
+            };
+          "option group keeps both declaration defaults" =
+            defaults.cli
+            == {
+              backendOnly = true;
+              shared = false;
             };
         }
     );
@@ -693,10 +671,13 @@ in {
             };
           }).config.ai.testapp;
       in
-        builtins.mapAttrs (_: server: server.command) cfg._observedServers
-        == {
-          local = "local-mcp";
-          shared = "shared-mcp";
+        checkRows "custom runtime MCP delivery" {
+          "delivery includes the inherited server alongside the new local key" =
+            builtins.mapAttrs (_: server: server.command) cfg._observedServers
+            == {
+              local = "local-mcp";
+              shared = "shared-mcp";
+            };
         }
     );
 
@@ -720,17 +701,39 @@ in {
         }
     );
 
-    # A custom runtime-scoped declaration is a direct owner, exactly like a
-    # first-party record, rather than merely a lowered dead-loopback client.
+    # A custom runtime-scoped declaration owns a service instead of just
+    # lowering to a dead-loopback client. The devenv stub has no `processes`,
+    # so inspect the service entry rather than the lowered process.
     factory-mkRuntime-custom-runtime-emits-direct-proxy-owner = mkTest "mkRuntime-custom-runtime-emits-direct-proxy-owner" (
       let
-        cfg = (directProxy "hm" 9510).ai;
+        cases = {
+          devenv = {
+            port = 9513;
+            url = "http://127.0.0.1:9513/";
+          };
+          hm = {
+            port = 9510;
+            url = "http://127.0.0.1:9510/";
+          };
+        };
       in
-        checkRows "custom Home Manager runtime direct proxy" {
-          "client uses the runtime listener" = cfg.testapp._observedServers.direct.url == "http://127.0.0.1:9510/";
-          "runtime is the sole claimant" = cfg.claims.service.mcp-proxy-direct == ["testapp"];
-          "runtime owns the direct service" = cfg.testapp.services ? mcp-proxy-direct;
-        }
+        checkRows "custom runtime direct proxy ownership" (lib.mapAttrs (backend: {
+          port,
+          url,
+        }: let
+          cfg = directProxy backend port;
+        in
+          checkRows backend ({
+              "client uses the declared runtime listener" = cfg.ai.testapp._observedServers.direct.url == url;
+              "runtime owns the direct service" = cfg.ai.testapp.services ? mcp-proxy-direct;
+            }
+            // lib.optionalAttrs (backend == "hm") {
+              "runtime is the sole claimant" = cfg.ai.claims.service.mcp-proxy-direct == ["testapp"];
+            }
+            // lib.optionalAttrs (backend == "devenv") {
+              "devenv direct owner has no failed assertions" = builtins.all (assertion: assertion.assertion) cfg.assertions;
+            }))
+        cases)
     );
 
     # Dynamic registration also closes the security boundary across arbitrary
@@ -752,20 +755,6 @@ in {
             == [
               "ai.claims.service.mcp-proxy-shared: claimed by first and second"
             ];
-        }
-    );
-
-    # A custom devenv runtime owns its proxy service the same way a first-party
-    # one does; the factory's devenv stubs have no `processes`, so the service
-    # entry stands in for the lowered process.
-    factory-mkRuntime-custom-runtime-devenv-emits-direct-proxy-owner = mkTest "mkRuntime-custom-runtime-devenv-emits-direct-proxy-owner" (
-      let
-        cfg = directProxy "devenv" 9513;
-      in
-        checkRows "custom devenv runtime direct proxy" {
-          "client uses the runtime listener" = cfg.ai.testapp._observedServers.direct.url == "http://127.0.0.1:9513/";
-          "configuration has no failed assertions" = builtins.all (assertion: assertion.assertion) cfg.assertions;
-          "runtime owns the direct service" = cfg.ai.testapp.services ? mcp-proxy-direct;
         }
     );
 

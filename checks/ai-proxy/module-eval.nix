@@ -14,245 +14,126 @@
   https = "http://secure.invalid:8443";
   instanceHttp = "http://instance.invalid:8080";
   local = "http://runtime.invalid:8000";
+  onMain = fields: fields // {instance = "main";};
+  protocols = http: https: {inherit http https;};
+  # Fixed answers: do not derive the expected sibling or instance from the input.
+  # The root null rows check every runtime's wiring on both backends; selected
+  # cases exercise the shared resolution path with one runtime per backend.
   cases = {
-    both = {
-      root = {inherit http https;};
-      expected = {inherit http https;};
+    "an explicit root HTTP null blocks sibling fallback" = {
+      root = protocols null https;
+      expected = protocols null https;
     };
-    default-priority = {
-      root.http = lib.mkDefault http;
-      expected = {
-        inherit http;
-        https = http;
-      };
+    "an explicit root HTTPS null blocks sibling fallback" = {
+      root = protocols http null;
+      expected = protocols http null;
     };
-    empty = {
-      root = {};
-      expected = {
-        http = null;
-        https = null;
-      };
-    };
-    http = {
-      root = {inherit http;};
-      expected = {
-        inherit http;
-        https = http;
-      };
-    };
-    https = {
-      root = {inherit https;};
-      expected = {
-        http = https;
-        inherit https;
-      };
-    };
-    instance-http = {
-      root = {
-        inherit http;
-        instance = "main";
-      };
-      expected = {inherit http https;};
-      expectedInstance = "main";
-    };
-    instance-null-https = {
-      root = {
-        inherit http;
-        instance = "main";
-        https = null;
-      };
-      expected = {
-        inherit http;
-        https = null;
-      };
-      expectedInstance = "main";
-    };
-    instance-null-peer = {
-      root = {
-        instance = "main";
-        http = null;
-      };
-      expected = {
-        http = null;
-        inherit https;
-      };
-      expectedInstance = "main";
-    };
-    instance-peer-fallback = {
-      root = {
-        https = local;
-        instance = "main";
-      };
-      expected = {
-        http = instanceHttp;
-        https = local;
-      };
-      expectedInstance = "main";
-    };
-    null-http = {
-      root = {
-        http = null;
-        inherit https;
-      };
-      expected = {
-        http = null;
-        inherit https;
-      };
-    };
-    null-https = {
-      root = {
-        inherit http;
-        https = null;
-      };
-      expected = {
-        inherit http;
-        https = null;
-      };
-    };
-    runtime-http = {
-      root = {inherit http https;};
-      runtime.http = local;
-      expected = {
-        http = local;
-        inherit https;
-      };
-    };
-    runtime-https = {
-      root = {inherit http https;};
-      runtime.https = local;
-      expected = {
-        inherit http;
-        https = local;
-      };
-    };
-    runtime-instance-http = {
-      root = {};
-      runtime = {
-        inherit http;
-        instance = "main";
-      };
-      expected = {inherit http https;};
-      expectedInstance = "main";
-    };
-    runtime-instance-null = {
-      root.instance = "main";
-      runtime.instance = null;
-      expected = {
-        http = null;
-        https = null;
-      };
-      expectedInstance = null;
-    };
-    runtime-instance-null-keeps-root-protocols = {
-      root = {
-        http = null;
-        inherit https;
-        instance = "main";
-      };
-      runtime.instance = null;
-      expected = {
-        http = null;
-        inherit https;
-      };
-      expectedInstance = null;
-    };
-    runtime-instance-null-peer = {
-      root = {};
-      runtime = {
-        instance = "main";
-        http = null;
-      };
-      expected = {
-        http = null;
-        inherit https;
-      };
-      expectedInstance = "main";
-    };
-    runtime-instance-overrides-root-instance = {
-      root = {
-        inherit http;
-        instance = "main";
-      };
-      runtime.instance = "other";
-      expected = {
-        inherit http;
-        https = local;
-      };
-      expectedInstance = "other";
-    };
-    runtime-instance-root-http = {
-      root = {inherit http;};
-      runtime.instance = "main";
-      expected = {inherit http https;};
-      expectedInstance = "main";
-    };
-    runtime-null-http = {
+    "an explicit runtime HTTP null leaves the already inherited HTTPS fallback" = {
       root = {inherit http;};
       runtime.http = null;
-      expected = {
-        http = null;
-        https = http;
-      };
+      expected = protocols null http;
+      runtimes = ["claude"];
     };
-    runtime-null-https = {
+    "an explicit runtime HTTPS null leaves the already inherited HTTP fallback" = {
       root = {inherit https;};
       runtime.https = null;
-      expected = {
-        http = https;
-        https = null;
-      };
+      expected = protocols https null;
+      runtimes = ["kiro"];
     };
-    runtime-null-inherited-instance-https = {
-      root = {
-        inherit http;
-        instance = "main";
-      };
+    "an explicit runtime HTTPS null overrides the inherited instance default" = {
+      root = onMain {inherit http;};
       runtime.https = null;
-      expected = {
-        inherit http;
-        https = null;
-      };
+      expected = protocols http null;
       expectedInstance = "main";
     };
-    runtime-only-http = {
-      root = {};
-      runtime = {inherit http;};
-      expected = {
+    "root HTTP from mkDefault still supplies a sibling fallback" = {
+      root.http = lib.mkDefault http;
+      expected = protocols http http;
+      runtimes = ["codex"];
+    };
+    "root HTTP null blocks only the HTTP instance origin" = {
+      root = onMain {http = null;};
+      expected = protocols null https;
+      expectedInstance = "main";
+      runtimes = ["kimchi"];
+    };
+    "root HTTP wins over a root instance while HTTPS uses the instance" = {
+      root = onMain {inherit http;};
+      expected = protocols http https;
+      expectedInstance = "main";
+      # Airlock checks Claude's root HTTP override on both backends.
+      runtimes = ["codex" "kimchi" "kiro"];
+    };
+    "root HTTP wins over the runtime instance without filling HTTPS" = {
+      root = {inherit http;};
+      runtime.instance = "main";
+      expected = protocols http https;
+      expectedInstance = "main";
+      runtimes = ["kiro"];
+    };
+    "root HTTPS null blocks only the HTTPS instance origin" = {
+      root = onMain {
         inherit http;
-        https = http;
+        https = null;
       };
+      expected = protocols http null;
+      expectedInstance = "main";
     };
-    runtime-only-https = {
-      root = {};
-      runtime = {inherit https;};
-      expected = {
-        http = https;
-        inherit https;
-      };
+    "root HTTPS supplies HTTP in the absence of an instance" = {
+      root = {inherit https;};
+      expected = protocols https https;
+      runtimes = ["claude"];
     };
-    runtime-peer-keeps-root-null = {
-      root = {
-        http = null;
-        inherit https;
-      };
+    "root HTTPS wins over a root instance while HTTP uses the instance" = {
+      root = onMain {https = local;};
+      expected = protocols instanceHttp local;
+      expectedInstance = "main";
+    };
+    "runtime HTTP null blocks its own instance's HTTP origin" = {
+      runtime = onMain {http = null;};
+      expected = protocols null https;
+      expectedInstance = "main";
+    };
+    "runtime HTTP overrides only root HTTP" = {
+      root = protocols http https;
+      runtime.http = local;
+      expected = protocols local https;
+    };
+    "runtime HTTP supplies HTTPS without a root definition or instance" = {
+      runtime = {inherit http;};
+      expected = protocols http http;
+    };
+    "runtime HTTP wins over its own instance without filling HTTPS" = {
+      runtime = onMain {inherit http;};
+      expected = protocols http https;
+      expectedInstance = "main";
+    };
+    "runtime HTTPS overrides only root HTTPS" = {
+      root = protocols http https;
       runtime.https = local;
-      expected = {
-        http = null;
-        https = local;
-      };
+      expected = protocols http local;
     };
-    runtime-reselect-keeps-root-protocols = {
-      root = {
-        http = null;
-        inherit https;
-        instance = "main";
-      };
+    "runtime HTTPS supplies HTTP without a root definition or instance" = {
+      runtime = {inherit https;};
+      expected = protocols https https;
+    };
+    "runtime instance null clears both instance origins" = {
+      root.instance = "main";
+      runtime.instance = null;
+      expected = protocols null null;
+      runtimes = ["codex"];
+    };
+    "runtime instance null does not clear explicit root protocols" = {
+      root = onMain (protocols null https);
+      runtime.instance = null;
+      expected = protocols null https;
+    };
+    "runtime instance reselection replaces the old instance origin but not the explicit root origin" = {
+      root = onMain {inherit http;};
       runtime.instance = "other";
-      expected = {
-        http = null;
-        inherit https;
-      };
+      expected = protocols http local;
       expectedInstance = "other";
+      runtimes = ["kiro"];
     };
   };
   semantics = lib.mapAttrs' (backend: evaluate: let
@@ -266,25 +147,22 @@
                 http = instanceHttp;
                 inherit https;
               };
-              other = {
-                http = local;
-                https = local;
-              };
+              other = protocols local local;
             };
-            proxy = test.root;
+            proxy = test.root or {};
           }
           // lib.genAttrs runtimes (_: {proxy = test.runtime or {};});
       }).config.ai;
     rows = lib.mapAttrsToList (scenario: test: let
       actual = observe test;
     in
-      lib.concatMap (runtime: [
-        (lib.nameValuePair "${scenario}: ${runtime} resolves protocols and instance"
-          (actual.${runtime}.proxy == test.expected // {instance = test.expectedInstance or null;}))
-        (lib.nameValuePair "${scenario}: ${runtime} normalizes only the resolved protocols"
-          (actual.${runtime}.normalized.proxy == test.expected))
-      ])
-      runtimes)
+      map (runtime:
+        lib.nameValuePair "${runtime}: ${scenario}; resolved protocols, instance and normalization match" (
+          actual.${runtime}.proxy
+          == test.expected // {instance = test.expectedInstance or null;}
+          && actual.${runtime}.normalized.proxy == test.expected
+        ))
+      (test.runtimes or runtimes))
     cases;
     # Force just the defining field: otherwise an unrelated module error could
     # satisfy the rejection. Each control travels through the same merge.
@@ -297,12 +175,17 @@
   in
     lib.nameValuePair "module-${name}" (mkTest name (checkRows name (
       builtins.listToAttrs (lib.concatLists rows)
-      // {
+      // lib.optionalAttrs (backend == "hm") {
         "ai.kiro.proxy.https rejects an empty string" = rejectsEmpty ["ai" "kiro" "proxy" "https"] https;
         "ai.proxy.http rejects an empty string" = rejectsEmpty ["ai" "proxy" "http"] http;
       }
     ))))
   backends;
+  executable = {
+    codex = "codex";
+    kimchi = "kimchi";
+    kiro = "kiro-cli";
+  };
   # The actual installed launcher executes this sentinel. No inference or
   # credentials are needed, and an absent default is observably different.
   sentinel = pkgs.runCommand "proxy-environment-sentinel" {} ''
@@ -321,31 +204,23 @@
     printf '%s\n' "''${HTTP_PROXY-absent}" "''${HTTPS_PROXY-absent}" "''${https_proxy-absent}"
     EOF
     chmod +x "$out/bin/proxy-sentinel"
-    for name in codex kimchi kiro-cli; do
+    for name in ${lib.escapeShellArgs (builtins.attrValues executable)}; do
       ln -s proxy-sentinel "$out/bin/$name"
     done
   '';
-  executable = {
-    codex = "codex";
-    kimchi = "kimchi";
-    kiro = "kiro-cli";
-  };
-  launcherConfig = runtime: env: proxy:
+  launcherConfig = runtime: environmentVariables: proxy: let
+    native = {
+      inherit environmentVariables;
+      package = sentinel;
+    };
+  in
     lib.recursiveUpdate (harness.setEnable runtime true) {
       ai = {
         inherit proxy;
         ${runtime} =
           if runtime == "kiro"
-          then {
-            cli = {
-              package = sentinel;
-              environmentVariables = env;
-            };
-          }
-          else {
-            package = sentinel;
-            environmentVariables = env;
-          };
+          then {cli = native;}
+          else native;
       };
     };
   launchers = lib.concatMapAttrs (backend: evaluate:
@@ -398,12 +273,17 @@
           shift 4
           check_output "$row" "$expected" "$@"
         }
-        check_output 'instance supplies loopback NO_PROXY' '127.0.0.1,localhost,::1' \
-          env -u NO_PROXY -u no_proxy PROXY_SENTINEL_MODE=no-proxy ${selectedInstance}/bin/${exe}
+        # Kiro installs the same wrapper on both backends; HM checks its loopback default.
+        ${lib.optionalString (backend == "hm" || runtime != "kiro") ''
+          check_output 'instance supplies loopback NO_PROXY' '127.0.0.1,localhost,::1' \
+            env -u NO_PROXY -u no_proxy PROXY_SENTINEL_MODE=no-proxy ${selectedInstance}/bin/${exe}
+        ''}
         check_proxy 'both unset protocols use their configured defaults' ${lib.escapeShellArg http} ${lib.escapeShellArg https} absent \
           env -u HTTP_PROXY -u HTTPS_PROXY ${ordinary}/bin/${exe}
-        check_proxy 'ambient lowercase HTTP suppresses only the uppercase HTTP default' absent ${lib.escapeShellArg https} absent \
-          env -u HTTP_PROXY -u HTTPS_PROXY http_proxy=ambient ${ordinary}/bin/${exe}
+        ${lib.optionalString (backend == "hm" || runtime == "kiro") ''
+          check_proxy 'ambient lowercase HTTP suppresses only the uppercase HTTP default' absent ${lib.escapeShellArg https} absent \
+            env -u HTTP_PROXY -u HTTPS_PROXY http_proxy=ambient ${ordinary}/bin/${exe}
+        ''}
         check_proxy 'single configured HTTP origin reaches both protocol variables' ${lib.escapeShellArg http} ${lib.escapeShellArg http} absent \
           env -u HTTP_PROXY -u HTTPS_PROXY ${sameProtocol}/bin/${exe}
         check_proxy 'ambient uppercase values win even when empty' ambient "" absent \
@@ -425,7 +305,7 @@
       name = "ai-proxy-${backend}-${runtime}-null-package-warning";
       warning = "ai.proxy is set but ai.${runtime}.package is null; the proxy is delivered only through the managed launcher.";
       proxyWarnings = extra: package: proxy:
-        lib.filter (lib.hasPrefix "ai.proxy is set but ai.${runtime}.package is null;")
+        lib.filter (lib.hasPrefix "ai.proxy ")
         (evaluate {
           ai = {
             inherit proxy;
@@ -440,13 +320,8 @@
       warnings = proxyWarnings {};
       rows =
         {
-          "absent proxy is silent without a package" = warnings null {} == [];
           "explicit null protocols are silent without a package" =
-            warnings null {
-              http = null;
-              https = null;
-            }
-            == [];
+            warnings null (protocols null null) == [];
           "managed launcher delivers the proxy without warning" = warnings sentinel {inherit http;} == [];
           "unmanaged launcher warns about undelivered proxy" = warnings null {inherit http;} == [warning];
         }
@@ -470,14 +345,6 @@
           };
         };
       })).env;
-    copilot = proxy:
-      lib.filter (lib.hasInfix "ai.proxy is set but ${backend} does not deliver it to copilot")
-      (evaluate {
-        ai = {
-          inherit proxy;
-          copilot.enable = true;
-        };
-      }).config.warnings;
     blocked = claude {
       http = null;
       inherit https;
@@ -492,13 +359,6 @@
       "Claude delivers both configured origins in settings" = shared.HTTP_PROXY == http && shared.HTTPS_PROXY == https;
       "Claude explicit null HTTP omits only HTTP_PROXY" = !(blocked ? HTTP_PROXY) && blocked.HTTPS_PROXY == https;
       "Claude native env wins for both protocols" = overridden.HTTP_PROXY == local && overridden.HTTPS_PROXY == local;
-      "Copilot explicit null protocols are not a delivery request" =
-        copilot {
-          http = null;
-          https = null;
-        }
-        == [];
-      "Copilot omitted proxy fields do not warn" = copilot {} == [];
     })))
   backends;
   usageTracking = lib.mapAttrs' (backend: evaluate: let
@@ -518,20 +378,14 @@
             };
           };
         }).config.assertions);
-    inherited = failures {inherit http;} {};
-    optOut = {
-      http = null;
-      https = null;
-    };
+    optOut = protocols null null;
   in
     lib.nameValuePair "module-${name}" (mkTest name (checkRows name {
       "explicit null protocols permit tracking with a root instance" = failures {instance = "main";} optOut == [];
       "explicit null protocols permit tracking with a root protocol" = failures {inherit http;} optOut == [];
       "inherited HTTP proxy reports the tracking conflict and opt-out remedy" =
-        builtins.length inherited
-        == 1
-        && lib.hasPrefix "ai.kiro.cli.usageTracking owns HTTP(S)/ALL/NO_PROXY" (builtins.head inherited)
-        && lib.hasInfix "ai.kiro.proxy = {http = null; https = null;}" (builtins.head inherited);
+        failures {inherit http;} {}
+        == ["ai.kiro.cli.usageTracking owns HTTP(S)/ALL/NO_PROXY (both cases) and NODE_EXTRA_CA_CERTS; remove conflicting ai.environmentVariables / ai.kiro.cli.environmentVariables entries, or opt out of ai.proxy with ai.kiro.proxy = {http = null; https = null;}."];
     })))
   backends;
 in {
@@ -544,8 +398,8 @@ in {
     // {
       module-ai-proxy-kimchi-native-priority = let
         name = "ai-proxy-kimchi-native-priority";
-        evaluate = backend: native:
-          backends.${backend} {
+        delivered = native: let
+          result = evalHm {
             ai = {
               proxy = {inherit http;};
               kimchi = {
@@ -554,18 +408,13 @@ in {
               };
             };
           };
-        delivered = native: let
-          result = evaluate "hm" native;
           path = "${result.config.ai.kimchi.configDir}/harness/settings.json";
         in
-          result.config.ai.files.${path}.content.value.httpProxy or null;
+          result.config.ai.files.${path}.content.value;
       in
         mkTest name (checkRows name {
-          "devenv shared proxy leaves native httpProxy unset" = (evaluate "devenv" {}).config.ai.kimchi.native.harnessSettings.httpProxy == null;
-          "home manager shared proxy leaves native httpProxy unset" = (evaluate "hm" {}).config.ai.kimchi.native.harnessSettings.httpProxy == null;
-          "native null does not deliver a proxy origin in settings" = delivered {httpProxy = null;} == null;
-          "native proxy reaches settings instead of the shared origin" = delivered {httpProxy = local;} == local;
-          "shared proxy is not written to native settings" = delivered {} == null;
+          "native proxy reaches settings instead of the shared origin" = (delivered {httpProxy = local;}).httpProxy == local;
+          "shared proxy is not written to native settings" = !(delivered {} ? httpProxy);
         });
     };
 }

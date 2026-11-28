@@ -22,12 +22,15 @@
 
   config.facetMock.entries =
     {
+      # The unconditional claim isolates ordinary root/owner collisions.
       root-policy = {
         owner = "root";
         payload = "root-policy";
         source = toString ./registry.nix;
       };
     }
+    # Inspecting only the winning value would hide a competing owner when
+    # another module activates this forced root claim.
     // lib.optionalAttrs config.facetMock.activate {
       conditional-root = lib.mkForce {
         owner = "root";

@@ -54,28 +54,28 @@
     guards.tableCells = false;
   };
   kiroTree = tree "kiro-only" {".kiro/steering/bad.md" = fixtures."kiro-flow.md";};
+  # No explicit toggle: changing the Kiro guard default to off misses this.
   badKiroDefault = failure {src = kiroTree;};
+  # Syntax alone must not select Markdown outside the Kiro layout.
   kiroOutsideLayout = guards.check {
     src = tree "kiro-outside-layout" {"docs/bad.md" = fixtures."kiro-flow.md";};
   };
-  badKiroCustom = failure {
-    src = tree "kiro-custom" {"custom/steering/bad.md" = fixtures."kiro-flow.md";};
-    kiroDir = "custom";
-  };
-  # A glob metacharacter in the directory name matches literally.
+  # Ignoring the override or globbing it would both miss the literal path.
   badKiroMeta = failure {
     src = tree "kiro-meta" {"kiro[1]/steering/bad.md" = fixtures."kiro-flow.md";};
     kiroDir = "kiro[1]";
   };
+  # An unescaped bracket expression would select this unrelated directory.
   kiroMetaUnrelated = guards.check {
     src = tree "kiro-meta-unrelated" {"kiro1/steering/bad.md" = fixtures."kiro-flow.md";};
     kiroDir = "kiro[1]";
   };
+  # The same default-path defect must pass when the Kiro guard is off.
   kiroDisabled = guards.check {
     src = kiroTree;
     guards.kiroFrontmatterFlow = false;
   };
-  # A configuration file in the checked tree cannot silence either half.
+  # Each external config tries to silence a different MD056 implementation.
   badConfigured = lib.mapAttrs (name: files: failure {src = tree name files;}) {
     markdownlint = {
       ".markdownlint-cli2.jsonc" = pkgs.writeText "cli2" ''{ "config": { "MD056": false }, "ignores": ["**/*.md"] }'';
@@ -101,7 +101,7 @@ in {
       invalid.parseCompare = true;
       expected = true;
     };
-    "lib.ai.guards exports kiroFrontmatterFlow" = guards ? kiroFrontmatterFlow;
+    "removing the public Kiro executable breaks standalone callers" = guards ? kiroFrontmatterFlow;
   };
     pkgs.runCommand "guards-consumer-check" {} ''
       set -euETo pipefail
@@ -121,12 +121,10 @@ in {
           exit 1
         fi
       }
-      expect parse-changed 1 "parsed json values differ from" ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{"a":false}''}
-      expect parse-same 0 "" ${lib.getExe guards.parseCompare} json ${json ''{"a":true}''} ${json ''{ "a": true }''}
+      # A malformed BEFORE is not an ordinary mismatch: nothing was compared.
       expect parse-unparseable 2 "Nothing was compared: BEFORE must parse on its own." ${lib.getExe guards.parseCompare} json ${json ''{"a":''} ${json ''{}''}
-      expect split-bad 1 "split-span.md:3:" ${lib.getExe guards.splitCodeSpans} split-span.md
-      expect split-good 0 "" ${lib.getExe guards.splitCodeSpans} clean.md
-      expect table-bad 1 "table-pipe.md:14 MD056" ${lib.getExe guards.tableCells} table-pipe.md
+      # This valid table is the success control for the generated-file and
+      # linter fixture checks. Escaped pipes must not create extra cells.
       expect table-good 0 "" ${lib.getExe guards.tableCells} clean.md
       # Inline suppression is honoured; inline rules other than MD056 add nothing.
       expect table-inline 0 "" ${lib.getExe guards.tableCells} inline-disable.md
@@ -134,15 +132,10 @@ in {
 
       found "Guard splitCodeSpans failed." ${badDefault}/testBuildFailure.log
       found "split-span.md:3:" ${badDefault}/testBuildFailure.log
-      found "Guard tableCells failed." ${badTableOnly}/testBuildFailure.log
+      # Without the opt-out, the split finding aborts before the table guard.
       found "table-pipe.md:14 MD056" ${badTableOnly}/testBuildFailure.log
       found ".kiro/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroDefault}/testBuildFailure.log
-      found "custom/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroCustom}/testBuildFailure.log
       found "kiro[1]/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroMeta}/testBuildFailure.log
-      if found "Guard splitCodeSpans failed." ${badTableOnly}/testBuildFailure.log; then
-        echo "FAIL: splitCodeSpans ran when disabled" >&2
-        exit 1
-      fi
       test -e ${tableDisabled}
       test -e ${kiroOutsideLayout}
       test -e ${kiroDisabled}

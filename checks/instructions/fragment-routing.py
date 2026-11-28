@@ -22,28 +22,25 @@ for reference, owner in [
         for member in rule["references"]
         if member == reference
     ]
-    assert memberships == [owner], (reference, memberships)
+    assert memberships == [owner], (reference, [owner], memberships)
 
-# Real consumers cover literal paths, backend globs, nested engine paths and
-# both sides of the directory-helper split. Adjacent names are negative inputs.
-for path, expected_contracts, expected_helpers in [
-    (".github/workflows/devenv-test.yml", 1, 0),
-    ("checks/ai-context/module-eval.nix", 1, 1),
-    ("checks/ai-factory/factory-eval.nix", 0, 1),
-    ("checks/glab/module-eval.nix", 1, 0),
-    ("devenv.nix", 1, 0),
-    ("devenv.nix.bak", 0, 0),
-    ("lib/ai/app/mkBackendTransform.nix", 1, 1),
-    ("lib/ai/dir-helpers.nix", 0, 1),
-    ("lib/ai/hm-helpers.nix", 1, 0),
-    ("lib/markdown/guards.nix", 1, 0),
-    ("packages/ai-module/lib/files/default.nix", 1, 0),
-    ("packages/chatgpt-codex/lib/mkCodex.nix", 1, 1),
-    ("packages/claude-code/modules/devenv/default.nix", 1, 0),
-    ("packages/claude-code/modules/homeManager/default.nix", 1, 0),
-    ("packages/glab/lib/mkGlab.nix", 0, 0),
-    ("packages/glab/modules/devenv/default.nix", 1, 0),
-    ("packages/glab/modules/homeManager/default.nix", 1, 0),
+# Expected counts are (contract, directory helpers). Each real consumer names
+# the scope regression it detects.
+for path, expected, regression in [
+    (".github/workflows/devenv-test.yml", (1, 0), "devenv test workflow loses its literal scope"),
+    ("checks/ai-context/module-eval.nix", (1, 1), "context check loses either side of the split"),
+    ("checks/ai-factory/factory-eval.nix", (0, 1), "factory check receives the general contract"),
+    ("devenv.nix", (1, 0), "devenv root loses its literal scope"),
+    ("devenv.nix.bak", (0, 0), "devenv root scope matches backups"),
+    ("lib/ai/app/mkBackendTransform.nix", (1, 1), "backend transform loses either side of the split"),
+    ("lib/ai/dir-helpers.nix", (0, 1), "directory ingestion receives the general contract"),
+    ("lib/ai/hm-helpers.nix", (1, 0), "home-manager helper loses the devenv contract scope"),
+    ("lib/markdown/guards.nix", (1, 0), "markdown guards lose the markdown library scope"),
+    ("packages/ai-module/lib/files/default.nix", (1, 0), "engine glob stops descending into files"),
+    ("packages/chatgpt-codex/lib/mkCodex.nix", (1, 1), "named runtime factory loses either reference"),
+    ("packages/glab/lib/mkGlab.nix", (0, 0), "runtime factory scope widens to MCP factories"),
+    ("packages/glab/modules/devenv/default.nix", (1, 0), "devenv module glob narrows to runtimes"),
+    ("packages/glab/modules/homeManager/default.nix", (1, 0), "home-manager module glob narrows to runtimes"),
 ]:
     matches = [
         reference
@@ -52,6 +49,6 @@ for path, expected_contracts, expected_helpers in [
         for reference in rule["references"]
     ]
     actual = (matches.count(contract), matches.count(directory_helpers))
-    assert actual == (expected_contracts, expected_helpers), (path, actual)
+    assert actual == expected, (regression, path, expected, actual)
 
-print("PASS: unique contract/helper sources and 17 routing inputs")
+print("PASS: unique contract/helper sources and representative routing inputs")

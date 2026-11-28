@@ -32,7 +32,17 @@
       };
       same = {deep = true;};
     };
-  merged = merge raws;
+  # Independent committed shape: shared nodes stay plain, differing leaves
+  # and whole arrays fork, and the Darwin-only key has no Linux leg.
+  stored = {
+    flags = fork ["--a" "--b"] ["--a"];
+    nested = {
+      count = fork 2 1;
+      same = "x";
+    };
+    only.__platforms.aarch64-darwin = "darwin";
+    same.deep = true;
+  };
   committed = {
     count = fork 2 1;
     features = ["old"];
@@ -68,34 +78,6 @@
     }) "aarch64-darwin";
 
   rows = {
-    agreement-stored-once = merged.same == {deep = true;} && merged.nested.same == "x";
-    smallest-node-forks = merged.nested.count == fork 2 1;
-    whole-array-forks = merged.flags == fork ["--a" "--b"] ["--a"];
-    one-platform-only = merged.only == {__platforms.aarch64-darwin = "darwin";} && !(project merged "x86_64-linux" ? only);
-    round-trip = lib.all (system: project merged system == raws.${system}) systems;
-    single-raw-unforked = merge {inherit (raws) x86_64-linux;} == raws.x86_64-linux;
-    # carry: the fresh system's side is replaced; the other keeps its forks
-    # and follows every unforked node, new and removed keys included.
-    carry-follows =
-      carry {
-        fresh.x86_64-linux = {
-          count = 1;
-          features = ["new" "old"];
-        };
-        merged = committed;
-        inherit systems;
-      }
-      == {
-        count = fork 2 1;
-        features = ["new" "old"];
-      };
-    carry-drops-removed =
-      carry {
-        fresh.x86_64-linux.count = 1;
-        merged = committed;
-        inherit systems;
-      }
-      == {count = fork 2 1;};
     carry-collapses-agreement =
       carry {
         fresh.x86_64-linux = committed // {count = 2;};
@@ -103,24 +85,7 @@
         inherit systems;
       }
       == committed // {count = 2;};
-    carry-every-system-merges =
-      carry {
-        fresh = raws;
-        merged = committed;
-        inherit systems;
-      }
-      == {
-        flags = fork ["--a" "--b"] ["--a"];
-        nested = {
-          count = fork 2 1;
-          same = "x";
-        };
-        only.__platforms.aarch64-darwin = "darwin";
-        same.deep = true;
-      };
-    # Only the base system's carry makes the others follow: a Darwin carry
-    # leaves Linux's projection as committed and forms the fork, which the
-    # next Linux carry keeps.
+    # A Darwin carry leaves Linux as committed and forms a fork.
     carry-darwin-forms-fork =
       darwinCarried
       == {
@@ -132,6 +97,32 @@
         flags = ["--a"];
         same = 1;
       };
+    # When all systems are fresh, the prior tree must not leak into the result.
+    carry-every-system-merges =
+      carry {
+        fresh = raws;
+        merged = committed;
+        inherit systems;
+      }
+      == stored;
+    # One Linux carry replaces changed unforked data, adds a new key and
+    # drops a removed key, without changing the other leg of `count`.
+    carry-follows =
+      carry {
+        fresh.x86_64-linux = {
+          added = true;
+          count = 1;
+          features = ["new" "old"];
+        };
+        merged = committed // {removed = true;};
+        inherit systems;
+      }
+      == {
+        added = true;
+        count = fork 2 1;
+        features = ["new" "old"];
+      };
+    # The next Linux carry keeps the Darwin fork but updates shared data.
     carry-linux-keeps-darwin-fork =
       carry {
         fresh.x86_64-linux = {
@@ -154,6 +145,10 @@
         other = 1;
       };
     carry-retyped-parent-kept-whole = darwinAfter {cmd = "gone";} == {cmd = darwinCommand;};
+    # Projection uses a fixed committed tree, so a matching bug in `merge`
+    # cannot hide a lost leg or a key incorrectly present on Linux.
+    project-restores-each-raw = lib.all (system: project stored system == raws.${system}) systems;
+    single-raw-unforked = merge {inherit (raws) x86_64-linux;} == raws.x86_64-linux;
   };
   refused = {
     carry-two-fresh = {

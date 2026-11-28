@@ -1,5 +1,2 @@
-{runCommandLocal}:
-runCommandLocal "facet-prefix-child" {} ''
-  mkdir -p "$out"
-  touch "$out/passed"
-''
+{writeText}:
+writeText "facet-prefix-child" ""
