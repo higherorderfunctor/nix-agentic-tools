@@ -403,24 +403,28 @@ evaluation. The independent CI drift check requires every built-in edit to match
 real vendor data on each platform even when a consumer disables it, and compares
 each of the four selections with expectations written in the check.
 
-`ai.kiro.cli.prompts` is the consumer's own edits: an attribute set whose
-entries are `{ target; match; replace; }`. `target` is one of the three promoted
+`ai.kiro.cli.prompts` holds the consumer's own edits: an attribute set of
+`{ target; match; replace; }` entries. `target` is one of the three promoted
 prompts (`agents.workflow.creator`, `agents.workflow.planner`,
 `workflow.orchestration`), `match` is non-empty, and an empty `replace` deletes
-the match. The option is declared once in the shared Kiro record, so the lib
-factory, Home Manager and devenv take the same entries. `lib/mkKiro.nix` lowers
-the enabled tweaks and the entries into one manifest. An empty `prompts` set, or
-an empty selection passed straight to `withBundlePatches`, equals stock: the
-stock server stays selected, the package keeps its stock name and nothing warns.
-A refused entry names itself, and an entry with no managed package warns. A
-custom selection dispatches to its own server with `--set`, so an inherited
-server path cannot override it. The patcher edits each entry as `prompts.<key>`
-under the same checks as the tweaks, including intersection with a tweak's edit.
-`{{primary}}` and `{{repo}}` are not resolved at evaluation or build; the
-per-session fill is separate work, so an entry carrying them delivers the
-literal text until it lands. `module-kiro-custom-prompts-parity` pins that both
-backends build the wrapper the literal manifest builds, that both empty forms
-equal stock, and that a custom-only selection dispatches with `--set`.
+the match. The lib factory, Home Manager and devenv take the same entries. An
+empty `prompts` set, or an empty selection passed straight to
+`withBundlePatches`, equals stock: the stock server stays selected, the package
+keeps its stock name and nothing warns. A refused entry names itself, and an
+entry with no managed package warns. A custom selection dispatches to its own
+server with `--set`, so an inherited server path cannot override it. Entries
+obey the tweaks' checks, including no overlap with a tweak's edit.
+
+`{{primary}}` and `{{repo}}` in a `replace` are filled once per session, from
+the session's working directory, before Kiro renders the prompt. `{{primary}}`
+is the primary checkout, also from a linked worktree, and `{{repo}}` is its
+directory name. A session with no such checkout (not a git directory, a bare
+repository, a separate Git directory or a submodule) keeps the original text for
+every entry that uses a placeholder; entries without placeholders always apply.
+Nothing is remembered between sessions, and Kiro's own `{{...}}` variables in
+the prompt are left for Kiro. A `{{primary}}` or `{{repo}}` entry must select an
+agent's body, not its front matter, and must stay unique once the other entries
+are applied; the build refuses it otherwise.
 
 All tweaks still default off. Delegate routing supplies `mkDefault true` for
 workflow tweaks only on its reached managed workflow CLI; explicit false wins.
