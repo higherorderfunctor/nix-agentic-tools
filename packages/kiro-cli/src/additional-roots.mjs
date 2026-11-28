@@ -5,7 +5,8 @@ import { basename, dirname, join, resolve } from "node:path";
 // Adds the directories named by `chat.additionalDirectories` to a session's
 // roots. `patch-session-roots.mjs` installs this module beside the KAS bundle
 // and calls it where Kiro derives a session's workspace paths, where it starts
-// a workflow step, and where it hands roots to the MCP configuration reader.
+// a workflow step, where it loads a cold session, and where it hands roots to
+// the MCP configuration reader.
 // Settings are read from the global `cli.json` and from the one under the
 // session's cwd; both lists add to the roots the host sent. A configured root
 // is membership only: it grants no write and contributes no `mcp.json`.
@@ -105,3 +106,9 @@ export function stepRoots(extras, owner, ownerPaths) {
   const held = new Set(ownerPaths.map(canonical));
   return extras.filter((root) => held.has(canonical(root)));
 }
+
+// The roots an on-demand load may take from a session's saved record. Nothing
+// vouches for them: a root the settings once added is saved as if a client had
+// sent it, so only the cwd survives and the load derives the current
+// configured roots afresh.
+export const savedRoots = (paths) => paths.slice(0, 1);

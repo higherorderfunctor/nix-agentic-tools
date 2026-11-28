@@ -1,7 +1,10 @@
 {pkgs, ...}: let
   package = pkgs.ai.kiro-cli;
+  replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  # The drift check compares the packaged bundle with the two tweaks alone.
+  tweaked = package.withBundlePatches {inherit replace;};
   patched = package.withBundlePatches {
-    replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+    inherit replace;
     sessionRoots = ["additionalDirectories"];
   };
   wrap = package:
@@ -102,8 +105,8 @@ in {
         ${extractPrompts} ${server package.kas} > stock-leaves.json
         python3 ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json --check
         python3 ${./kas-vendor-patches.py} ${../lib/kiro-bundle-patch.py} ${server package.kas} stock-leaves.json \
-          ${extractPrompts} ${package.kas} ${patched.kas}
-        python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server patched.kas}
+          ${extractPrompts} ${package.kas} ${tweaked.kas}
+        python3 ${./kas-smoke.py} ${pkgs.nodejs}/bin/node ${server tweaked.kas}
         touch "$out"
       '';
   };

@@ -74,9 +74,13 @@ treated as configured). A workflow step keeps only the extra roots its owning
 session holds, and refuses to start when its owner is named but not loaded.
 `src/patch-session-roots.mjs` finds these sites by AST and refuses the build
 when a release moves one; `kiro-additional-roots` runs the vendor functions
-involved. Not measured: how the vendor applies the relative read allow under an
-added root, and session fork and send-message loads, which still start from
-roots saved with the session. With the key unset the stock bundle runs.
+involved. A session loaded on demand (a workflow wake or a send-message to a
+cold session) keeps only its saved cwd, so a root since removed from the
+settings cannot return as a client root; the roots the settings still list are
+added afresh, and extra roots a client sent are not restored on that path. Fork
+takes its roots from the request or the live parent, never from the saved
+record, so it needs no check. Not measured: how the vendor applies the relative
+read allow under an added root. With the key unset the stock bundle runs.
 
 ### The boundary is extracted, not guessed
 

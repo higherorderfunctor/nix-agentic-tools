@@ -4,10 +4,11 @@ import { createRequire } from "node:module";
 // Routes the KAS bundle's session roots through `additional-roots.mjs`, in
 // place. Input: the bundle and the TypeScript library. `lib/kas.nix` runs it
 // at build time when `chat.additionalDirectories` is configured. It finds the
-// three places by AST, never by minified name, and refuses the build when a
+// four places by AST, never by minified name, and refuses the build when a
 // release has moved one: where a session's workspace paths are derived, where
-// the MCP configuration reader takes a session's roots, and where a workflow
-// step is created or loaded with its saved roots.
+// the MCP configuration reader takes a session's roots, where a workflow step
+// is created or loaded with its saved roots, and where a cold session is loaded
+// on demand from its saved roots.
 const [path, typescript] = process.argv.slice(2);
 const ts = createRequire(import.meta.url)(typescript);
 const source = readFileSync(path, "utf8");
@@ -106,6 +107,20 @@ const options = text(load.parameters[4]);
 insert(
   load.body.getStart(file) + 1,
   `${options}=${options}&&{...${options},additionalDirectories:__nixRoots.stepRoots(${options}.additionalDirectories,${options}.ownerSessionId,this.host.getSession(${options}.ownerSessionId)?.workspacePaths)};`,
+);
+
+// An on-demand load starts from the roots saved with the session.
+const onDemand = only(
+  (n) =>
+    ts.isMethodDeclaration(n) &&
+    text(n.name) === "loadSessionOnDemand" &&
+    n.parameters.length === 2,
+  "loadSessionOnDemand",
+);
+const saved = text(onDemand.parameters[1]);
+insert(
+  onDemand.body.getStart(file) + 1,
+  `${saved}=__nixRoots.savedRoots(${saved});`,
 );
 
 // Static imports hoist, so the line sits below the bundle's shebang.

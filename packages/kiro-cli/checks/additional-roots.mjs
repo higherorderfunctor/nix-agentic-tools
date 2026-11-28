@@ -204,14 +204,33 @@ for (const name of ["createWorkflowStepSession", "loadStepSession"])
     ).slice(0, 200),
     /__nixRoots\.stepRoots/,
   );
+// A cold load takes the saved cwd and none of the saved extras, so a revoked configured root cannot come back as a client root.
+const coldLoad = (source) => {
+  const loaded = [];
+  const vendor = run(`({${method(source, "loadSessionOnDemand", 2)}})`, {
+    b: { warn() {} },
+  });
+  vendor.loadSessionOnDemand.call(
+    { host: { loadSession: (r) => loaded.push(r), getSession() {} } },
+    "s",
+    [repo, repoRoot],
+  );
+  return loaded[0].additionalDirectories;
+};
+assert.deepEqual(
+  coldLoad(stockSource),
+  [repoRoot],
+  "stock reloads saved roots",
+);
+assert.deepEqual(coldLoad(patchedSource), []);
 assert.equal(
   patchedSource.match(/__nixRoots\.\w+/g).length,
-  4,
-  "four sites, no others",
+  5,
+  "five sites, no others",
 );
 assert.deepEqual(
   Object.keys(roots).sort(),
-  ["mcpRoots", "stepRoots", "withConfiguredRoots"],
+  ["mcpRoots", "savedRoots", "stepRoots", "withConfiguredRoots"],
   "the module grants no permission",
 );
 
