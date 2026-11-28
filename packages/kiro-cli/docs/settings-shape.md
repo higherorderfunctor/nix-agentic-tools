@@ -71,9 +71,11 @@ A configured root is membership and nothing else. Kiro's default policy allows
 `.kiro/settings/mcp.json` is not read: the MCP reader receives the cwd and the
 client's roots only (a root that is both configured and sent by the client is
 treated as configured; the derivation that adds the roots also records which are
-configured, so a later settings edit cannot reclassify them). A workflow step
-must have its cwd held by its owning session and keeps only the extra roots that
-session holds; it refuses to start when its owner is absent or not loaded.
+configured, so a later settings edit cannot reclassify them; an array the
+derivation did not make, such as a copy, withholds every root ever configured in
+the process and every root configured now). A workflow step must have its cwd
+held by its owning session and keeps only the extra roots that session holds; it
+refuses to start when its owner is absent or not loaded.
 `src/patch-session-roots.mjs` finds these sites by AST and refuses the build
 when a release moves one; `kiro-additional-roots` runs the vendor functions
 involved. A session loaded on demand (a workflow wake or a send-message to a
@@ -83,6 +85,10 @@ added afresh, and extra roots a client sent are not restored on that path. Fork
 takes its roots from the request or the live parent, never from the saved
 record, so it needs no check. Not measured: how the vendor applies the relative
 read allow under an added root. With the key unset the stock bundle runs.
+
+A project's `.kiro/settings/cli.json` may add any directory, and no guard checks
+it: entries in a repository's own settings file are trusted like the rest of
+that file, and isolating an untrusted repository is a sandbox's job.
 
 ### The boundary is extracted, not guessed
 

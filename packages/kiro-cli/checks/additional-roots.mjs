@@ -113,7 +113,10 @@ const [repo, globalRoot, repoRoot, hostRoot] = [
   "global-root",
   "repo-root",
   "host-root",
-].map((n) => (fs.mkdirSync(at(n)), at(n)));
+].map((n) => {
+  fs.mkdirSync(at(n));
+  return at(n);
+});
 fs.symlinkSync(repoRoot, at("link"));
 const listed = (file, entries) =>
   write(file, { "chat.additionalDirectories": entries });
@@ -174,7 +177,7 @@ const vendor = run(
   { Ncn: path, FHr: "mcp.json", $Hr: (v) => v ?? {} },
 );
 const self = {
-  items: { openSession: (id, paths) => opened.push(paths) },
+  items: { openSession: (_id, paths) => opened.push(paths) },
   configWatcher: { addWorkspacePaths() {} },
   readAndMergeFileConfigs: () => false,
   readParsedConfig: (file) =>
@@ -203,6 +206,11 @@ listed(repoSettings, []);
 opened.length = 0;
 vendor.setWorkspacePaths.call(self, effective, "s", {});
 assert.ok(effective.includes(repoRoot));
+assert.deepEqual(opened, [[repo, hostRoot]]);
+// A copy has no provenance and settings no longer list the root, yet the root
+// this module once derived as configured is still withheld.
+opened.length = 0;
+vendor.setWorkspacePaths.call(self, [...effective], "s", {});
 assert.deepEqual(opened, [[repo, hostRoot]]);
 
 // Workflow steps: both host functions run beside stubs that capture the request

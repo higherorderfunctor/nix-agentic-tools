@@ -72,6 +72,10 @@ const derived = new WeakMap();
 // MCP seam learns which roots are configured from the derivation that made
 // them, not from settings read again later.
 const configuredOf = new WeakMap();
+// Every configured identity this module has derived in this process. An array
+// it did not derive (a vendor copy) is judged against this set, so a root the
+// settings have since dropped stays withheld from the MCP reader.
+const everConfigured = new Set();
 
 // `[cwd, ...host roots]` followed by each configured root the list does not
 // already hold; the first spelling of a root wins and host roots are untouched.
@@ -88,7 +92,9 @@ export function withConfiguredRoots(request, paths) {
       }
     }
     const roots = [...paths, ...added];
-    configuredOf.set(roots, new Set(configured.map(canonical)));
+    const identities = configured.map(canonical);
+    for (const key of identities) everConfigured.add(key);
+    configuredOf.set(roots, new Set(identities));
     derived.set(request, roots);
   }
   return derived.get(request);
@@ -96,13 +102,14 @@ export function withConfiguredRoots(request, paths) {
 
 // A session's roots minus the configured ones, except its cwd, for the MCP
 // reader: a configured root is not a place to take server definitions from.
-// An array this module did not derive carries no provenance, so only then are
-// the settings read for it.
+// An array this module did not derive carries no provenance, so it fails
+// closed: every root ever configured here, and every one configured now, is
+// withheld.
 export function mcpRoots(paths) {
   if (paths.length === 0) return paths;
   const configured =
     configuredOf.get(paths) ??
-    new Set(configuredRoots(paths[0]).map(canonical));
+    new Set([...everConfigured, ...configuredRoots(paths[0]).map(canonical)]);
   return paths.filter(
     (root, at) => at === 0 || !configured.has(canonical(root)),
   );
