@@ -77,7 +77,10 @@
     httpProxy = "http://proxy.invalid:3128";
     lastTerminalWarnings.kitty = "0.35.0";
     sessionNameModel = "custom-title-model";
-    statusLine.pinned = ["model"];
+    statusLine = {
+      hidden = [];
+      pinned = ["model"];
+    };
   };
   userScopeOnlyHarnessSettingValue = key:
     if (get aggregate "harness.keys.${key}").type == "boolean"
