@@ -94,10 +94,8 @@ for (const [key, [kind, text]] of Object.entries(expected)) {
   );
 }
 
-// One case per guard. Each edits the valid bundle (`[from, to]` pairs; a case
-// whose `from` is absent fails, so a fixture change cannot silently void it).
-// A refusing case must exit 1 naming `key` and `reason`; a case with a null
-// reason must still resolve the creator to the valid bundle's text.
+// A case whose `from` is absent fails, so a fixture change cannot silently
+// void it.
 const notStatic = "not one static string";
 const table = "var table";
 const binding = { [creator]: "Cr", [orchestration]: "Orch", [planner]: "Pl" };
@@ -127,9 +125,8 @@ const cases = [
     "Cr,Pl,",
     'Cr="late",Pl,',
   ]),
-  // Each gives `Cr` a second, dynamic write. `Cr++`, `Cr+=` and `Cr||=` are
-  // writes only through ts.isWriteAccess; the destructuring and loop targets
-  // below are writes only through isAssignmentTarget.
+  // Each gives `Cr` a second, dynamic write. The rest target in a for-of head
+  // is the one shape ts.isWriteAccess misses.
   ...[
     "Cr++",
     "Cr+='x'",
@@ -149,8 +146,7 @@ const cases = [
   ].map((write) =>
     refuse(creator, notStatic, `write ${write}`, beforeTable(write)),
   ),
-  // The only write is the destructuring target's own default, whose value is
-  // the bundle's literal but whose source is `dyn()`.
+  // The only write is a default inside a destructuring target fed by `dyn()`.
   refuse(creator, notStatic, "only write is a target default", dropCrWrite, [
     table,
     `[Cr="creator"]=dyn();${table}`,
@@ -199,8 +195,6 @@ const cases = [
     "heading tagged template",
     "tag`# Workflow Orchestration\\n`",
   ),
-  // Every declaration of `Cr` must be a plain variable declaration, whatever
-  // else shares its symbol.
   refuse(
     creator,
     notStatic,
