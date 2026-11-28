@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,14 +7,19 @@ import path from "node:path";
 // Checks extract/prompts.mjs on a synthetic bundle shaped like the engine's
 // (lazy initializer writes, an aliased agent id, shadowed bindings, decoys, a
 // non-ASCII prefix) and then on the pinned real bundle.
-// Usage: `node prompt-extract.mjs <typescript> <acp-server.js>`.
-const [typescript, pinnedPath] = process.argv.slice(2);
+// Usage: `node prompt-extract.mjs <typescript> <acp-server.js> [<prompts.mjs>]`;
+// the extractor defaults to its sibling in the source tree, and the Nix check
+// passes it explicitly because the check file alone is copied to the store.
+const [
+  typescript,
+  pinnedPath,
+  extractor = path.join(import.meta.dirname, "../extract/prompts.mjs"),
+] = process.argv.slice(2);
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "prompt-extract-"));
-const run = (bundle) => {
+const run = (bundle, ...flags) => {
   const file = path.join(scratch, "bundle.js");
   fs.writeFileSync(file, bundle);
-  const extractor = path.join(import.meta.dirname, "../extract/prompts.mjs");
-  return spawnSync(process.execPath, [extractor, file, typescript], {
+  return spawnSync(process.execPath, [extractor, file, typescript, ...flags], {
     encoding: "utf8",
     maxBuffer: 1 << 26,
   });
@@ -70,6 +76,21 @@ for (const [key, [kind, text]] of Object.entries(expected)) {
     key,
     JSON.stringify(found[key]) === want,
     `got ${JSON.stringify(found[key])}`,
+  );
+}
+
+// `--digest` keeps the spans and kind, drops the text, and adds the SHA-256 of
+// the text's UTF-8 bytes (the raw literal's escapes decoded first), which the
+// committed facts carry instead of vendor text.
+const digested = facts(run(good, "--digest"));
+for (const [key, [kind, text]] of Object.entries(expected)) {
+  const { end, start } = found[key];
+  const sha256 = createHash("sha256").update(text).digest("hex");
+  expect(
+    `${key} digest`,
+    JSON.stringify(digested[key]) ===
+      JSON.stringify({ end, kind, sha256, start }),
+    `got ${JSON.stringify(digested[key])}`,
   );
 }
 

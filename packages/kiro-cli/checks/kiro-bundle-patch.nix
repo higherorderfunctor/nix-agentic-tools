@@ -56,6 +56,16 @@ in {
           ${pkgs.lib.getLib pkgs.zstd}/lib/libzstd${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} ${pkgs.zstd}/bin/zstd
         touch "$out"
       '';
+    # The prompt extractor on synthetic bundles, then on the pinned real one.
+    kiro-prompt-extract =
+      pkgs.runCommandLocal "kiro-cli-prompt-extract-check" {
+        nativeBuildInputs = [pkgs.nodejs];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        node ${./prompt-extract.mjs} ${pkgs.typescript_5}/lib/node_modules/typescript ${server package.kas} ${../extract/prompts.mjs}
+        touch "$out"
+      '';
     # Real release data on BOTH native builders, never a user cache or final
     # native output dependency. The selected installed tree has no stock-tree
     # reference; the check may compare both as independent build inputs.

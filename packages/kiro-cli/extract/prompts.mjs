@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 
@@ -7,7 +8,9 @@ import { createRequire } from "node:module";
 // Prints `{ <fact key>: { kind, start, end, text } }` as JSON, where `text` is
 // the decoded literal and `start`/`end` are the UTF-8 byte span of the whole
 // literal including its quotes (end exclusive), so a later unit can scope a
-// find/replace to one prompt. The bundle is only parsed, never run. Every
+// find/replace to one prompt. With `--digest`, `text` is replaced by `sha256`,
+// the hex digest of the text's UTF-8 bytes, so the committed facts carry no
+// vendor text. The bundle is only parsed, never run. Every
 // prompt is found by what it is (a heading, an id in the agent registration
 // table), never by its minified binding name, and any prompt that is missing,
 // duplicated or not a single static string fails the run naming its fact key.
@@ -165,13 +168,17 @@ try {
 
   // Byte offsets, because consumers patch UTF-8 and TypeScript counts UTF-16.
   const utf8Offset = (position) => Buffer.byteLength(source.slice(0, position));
+  const digestOnly = process.argv[4] === "--digest";
   const fact = (literal) => ({
     end: utf8Offset(literal.end),
     kind: ts.isStringLiteral(literal)
       ? "StringLiteral"
       : "NoSubstitutionTemplateLiteral",
+    ...(digestOnly
+      ? { sha256: createHash("sha256").update(literal.text).digest("hex") }
+      : {}),
     start: utf8Offset(literal.getStart(file)),
-    text: literal.text,
+    ...(digestOnly ? {} : { text: literal.text }),
   });
 
   function agentBody(agentId, factKey) {

@@ -482,6 +482,26 @@ availability only. Typed `cli.native.settings.chat.keybindings` declarations
 follow the extracted registry, which includes `quit` on 3.2.1. For example,
 `cli.native.settings.chat.keybindings.quit = "ctrl+x"` overrides that binding.
 
+## Workflow prompt facts
+
+`extract/prompts.mjs` finds the three workflow prompts in the KAS bundle:
+`workflow.orchestration`, `agents.workflow.creator` and
+`agents.workflow.planner`. It parses the bundle and never runs it. Each prompt
+is found by what it is (a heading, an agent id in the registration table), not
+by a minified name, and a prompt that is missing or not one plain string fails
+the run naming its key.
+
+`extracted/` commits three things per prompt: the literal's kind, its UTF-8 byte
+start and end in `acp-server.js`, and the SHA-256 of the decoded text. It does
+not commit the text. `@kiro/agent` is AWS-IPL, so the prompts stay out of the
+repository and out of the cache; the spans and digests are enough to tell when
+one changed and where to look.
+
+`kiro-cli-extracted` fails when a new release moves or edits a prompt, because
+the fresh digest and span no longer match the committed ones. The failure prints
+the diff and the regenerate command. `kiro-prompt-extract` runs the extractor on
+synthetic bundles (one bad case per guard) and on the pinned bundle.
+
 ## Re-measuring on a version bump
 
 Run against the **unwrapped** binary — a bare `PATH` lookup finds the wrapper,
